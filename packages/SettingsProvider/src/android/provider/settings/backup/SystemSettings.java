@@ -140,5 +140,6 @@ public class SystemSettings {
         Settings.System.ENABLE_FLOATING_ROTATION_BUTTON,
         Settings.System.NAVIGATION_BAR_INVERSE,
         Settings.System.NAVBAR_LAYOUT_VIEWS,
+        Settings.System.VOLUME_KEY_CURSOR_CONTROL,
     };
 }
