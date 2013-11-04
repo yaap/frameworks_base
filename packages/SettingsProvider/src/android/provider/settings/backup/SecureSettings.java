@@ -207,6 +207,7 @@ public class SecureSettings {
         Settings.Secure.LOCK_SCREEN_SHOW_QR_CODE_SCANNER,
         Settings.Secure.LOCKSCREEN_USE_DOUBLE_LINE_CLOCK,
         Settings.Secure.STATUS_BAR_SHOW_VIBRATE_ICON,
-        Settings.Secure.DOZE_ON_CHARGE
+        Settings.Secure.DOZE_ON_CHARGE,
+        Settings.Secure.VOLUME_LINK_NOTIFICATION,
     };
 }
