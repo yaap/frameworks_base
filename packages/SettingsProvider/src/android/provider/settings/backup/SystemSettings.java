@@ -151,5 +151,6 @@ public class SystemSettings {
         Settings.System.STATUSBAR_CLOCK_POSITION,
         Settings.System.NOTIFICATION_VIBRATION_PATTERN,
         Settings.System.CUSTOM_NOTIFICATION_VIBRATION_PATTERN,
+        Settings.System.STATUS_BAR_NOTIF_COUNT,
     };
 }
