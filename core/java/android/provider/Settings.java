@@ -6175,6 +6175,14 @@ public final class Settings {
         public static final String CUSTOM_NOTIFICATION_VIBRATION_PATTERN = "custom_notification_vibration_pattern";
 
         /**
+         * Show the pending notification counts as overlays on the status bar
+         * Default 0
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_NOTIF_COUNT = "status_bar_notif_count";
+
+        /**
          * These are all public system settings
          *
          * @hide
