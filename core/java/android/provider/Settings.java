@@ -6167,6 +6167,14 @@ public final class Settings {
         public static final String DEFAULT_NOTIFICATION_TORCH = "default_notification_torch";
 
         /**
+         * Show the pending notification counts as overlays on the status bar
+         * Default 0
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_NOTIF_COUNT = "status_bar_notif_count";
+
+        /**
          * These are all public system settings
          *
          * @hide
