@@ -152,5 +152,6 @@ public class SystemSettings {
         Settings.System.STATUS_BAR_BATTERY_STYLE,
         Settings.System.SHOW_BATTERY_PERCENT_INSIDE,
         Settings.System.SCREENSHOT_GESTURE_DELAY,
+        Settings.System.VOLUME_BUTTON_MUSIC_CONTROL,
     };
 }
