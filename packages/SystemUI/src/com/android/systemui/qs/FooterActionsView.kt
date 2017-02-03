@@ -41,6 +41,7 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
     private lateinit var settingsContainer: View
     private lateinit var multiUserSwitch: MultiUserSwitch
     private lateinit var multiUserAvatar: ImageView
+    private lateinit var runningServicesContainer: View
 
     private var qsDisabled = false
     private var expansionAmount = 0f
@@ -50,6 +51,7 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
         settingsContainer = findViewById(R.id.settings_button_container)
         multiUserSwitch = findViewById(R.id.multi_user_switch)
         multiUserAvatar = multiUserSwitch.findViewById(R.id.multi_user_avatar)
+        runningServicesContainer = findViewById(R.id.running_services_button_container)
 
         // RenderThread is doing more harm than good when touching the header (to expand quick
         // settings), so disable it for this view
@@ -82,6 +84,8 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
     private fun updateClickabilities() {
         multiUserSwitch.isClickable = multiUserSwitch.visibility == VISIBLE
         settingsContainer.isClickable = settingsContainer.visibility == VISIBLE
+        runningServicesContainer.isClickable = settingsContainer.visibility == VISIBLE
+                && runningServicesContainer.visibility == VISIBLE
     }
 
     private fun updateVisibilities(
@@ -89,6 +93,7 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
     ) {
         settingsContainer.visibility = if (qsDisabled) GONE else VISIBLE
         multiUserSwitch.visibility = if (multiUserEnabled) VISIBLE else GONE
+        runningServicesContainer.visibility = if (qsDisabled) GONE else VISIBLE
         val isDemo = UserManager.isDeviceInDemoMode(context)
         settingsContainer.visibility = if (isDemo) INVISIBLE else VISIBLE
     }

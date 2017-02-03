@@ -91,6 +91,7 @@ internal class FooterActionsController @Inject constructor(
     private val settingsButtonContainer: View = view.findViewById(R.id.settings_button_container)
     private val securityFootersContainer: ViewGroup? =
         view.findViewById(R.id.security_footers_container)
+    private val runningServicesContainer: View = view.findViewById(R.id.running_services_button_container)
     private val powerMenuLite: View = view.findViewById(R.id.pm_lite)
     private val multiUserSwitchController = multiUserSwitchControllerFactory.create(view)
 
@@ -130,6 +131,9 @@ internal class FooterActionsController @Inject constructor(
         } else if (v === powerMenuLite) {
             uiEventLogger.log(GlobalActionsDialogLite.GlobalActionsEvent.GA_OPEN_QS)
             globalActionsDialog?.showOrHideDialog(false, true, v)
+        } else if (v === runningServicesContainer) {
+            metricsLogger.action(MetricsProto.MetricsEvent.ACTION_QS_EXPANDED_SETTINGS_LAUNCH)
+            startRunningServicesActivity()
         }
     }
 
@@ -183,6 +187,16 @@ internal class FooterActionsController @Inject constructor(
                 true /* dismissShade */, animationController)
     }
 
+    private fun startRunningServicesActivity() {
+        val animationController = runningServicesContainer?.let {
+            ActivityLaunchAnimator.Controller.fromView(
+                    it,
+                    InteractionJankMonitor.CUJ_SHADE_APP_LAUNCH_FROM_SETTINGS_BUTTON)
+            }
+        activityStarter.startActivity(Intent("android.settings.RUNNING_SERVICES"),
+                true /* dismissShade */, animationController)
+    }
+
     @VisibleForTesting
     public override fun onViewAttached() {
         globalActionsDialog = globalActionsDialogProvider.get()
@@ -194,6 +208,7 @@ internal class FooterActionsController @Inject constructor(
         }
         settingsButtonContainer.setOnClickListener(onClickListener)
         settingsButtonContainer.setOnLongClickListener(onLongClickListener)
+        runningServicesContainer.setOnClickListener(onClickListener)
         multiUserSetting.isListening = true
 
         val securityFooter = securityFooterController.view
