@@ -92,5 +92,6 @@ public class SystemSettings {
         Settings.System.GAMING_MODE_MEDIA_ENABLED,
         Settings.System.GAMING_MODE_MEDIA,
         Settings.System.DOZE_ON_CHARGE,
+        Settings.System.DOUBLE_TAP_SLEEP_GESTURE,
     };
 }
