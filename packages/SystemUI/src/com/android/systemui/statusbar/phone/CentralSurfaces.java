@@ -575,6 +575,8 @@ public interface CentralSurfaces extends Dumpable, ActivityStarter, LifecycleOwn
 
     void extendDozePulse();
 
+    void toggleCameraFlash();
+
     public static class KeyboardShortcutsMessage {
         final int mDeviceId;
 

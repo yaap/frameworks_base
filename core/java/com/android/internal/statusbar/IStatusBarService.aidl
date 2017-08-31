@@ -231,3 +231,9 @@ interface IStatusBarService
      * Starts the default assistant app.
      */
     void startAssist(in Bundle args);
+
+    /**
+     * YAAP extensions
+     */
+    void toggleCameraFlash();
+}
