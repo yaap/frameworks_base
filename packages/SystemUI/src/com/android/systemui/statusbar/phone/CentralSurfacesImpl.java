@@ -60,6 +60,7 @@ import android.app.admin.DevicePolicyManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentCallbacks2;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -67,6 +68,7 @@ import android.content.pm.IPackageManager;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.hardware.devicestate.DeviceStateManager;
@@ -240,6 +242,7 @@ import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.MessageRouter;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.volume.VolumeComponent;
 import com.android.systemui.wmshell.BubblesManager;
 import com.android.wm.shell.bubbles.Bubbles;
@@ -680,6 +683,7 @@ public class CentralSurfacesImpl extends CoreStartable implements
 
     private final InteractionJankMonitor mJankMonitor;
 
+    private final SystemSettings mSystemSettings;
 
     /**
      * Public constructor for CentralSurfaces.
@@ -786,7 +790,8 @@ public class CentralSurfacesImpl extends CoreStartable implements
             DreamOverlayStateController dreamOverlayStateController,
             WiredChargingRippleController wiredChargingRippleController,
             IDreamManager dreamManager,
-            BurnInProtectionController burnInProtectionController) {
+            BurnInProtectionController burnInProtectionController,
+            SystemSettings systemSettings) {
         super(context);
         mNotificationsController = notificationsController;
         mFragmentService = fragmentService;
@@ -885,6 +890,8 @@ public class CentralSurfacesImpl extends CoreStartable implements
 
         mBurnInProtectionController = burnInProtectionController;
 
+        mSystemSettings = systemSettings;
+
         mPanelExpansionStateManager.addExpansionListener(this::onPanelExpansionChanged);
 
         mBubbleExpandListener =
@@ -973,6 +980,9 @@ public class CentralSurfacesImpl extends CoreStartable implements
         } else if (DEBUG) {
             Log.v(TAG, "start(): no wallpaper service ");
         }
+
+        mSbSettingsObserver.update();
+        mSbSettingsObserver.observe();
 
         // Set up the initial notification state. This needs to happen before CommandQueue.disable()
         setUpPresenter();
@@ -4016,6 +4026,37 @@ public class CentralSurfacesImpl extends CoreStartable implements
     @Override
     public boolean isDeviceInteractive() {
         return mDeviceInteractive;
+    }
+
+    private final SbSettingsObserver mSbSettingsObserver = new SbSettingsObserver();
+
+    private class SbSettingsObserver extends ContentObserver {
+        SbSettingsObserver() {
+            super(mMainHandler);
+        }
+
+        void observe() {
+            mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, this);
+        }
+
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            if (uri.getLastPathSegment().equals(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN)) {
+                setLockscreenDoubleTapToSleep();
+            }
+        }
+
+        void update() {
+            setLockscreenDoubleTapToSleep();
+        }
+
+        private void setLockscreenDoubleTapToSleep() {
+            if (mNotificationPanelViewController != null) {
+                mNotificationPanelViewController.setLockscreenDoubleTapToSleep(
+                    mSystemSettings.getInt(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, 0) == 1
+                );
+            }
+        }
     }
 
     private final BroadcastReceiver mBannerActionBroadcastReceiver = new BroadcastReceiver() {
