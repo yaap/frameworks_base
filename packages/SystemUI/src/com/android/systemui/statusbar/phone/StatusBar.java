@@ -60,6 +60,7 @@ import android.app.admin.DevicePolicyManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentCallbacks2;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -68,6 +69,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.metrics.LogMaker;
@@ -241,6 +243,7 @@ import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.MessageRouter;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.volume.VolumeComponent;
 import com.android.systemui.wmshell.BubblesManager;
 import com.android.wm.shell.bubbles.Bubbles;
@@ -685,6 +688,7 @@ public class StatusBar extends SystemUI implements
     private final ColorExtractor.OnColorsChangedListener mOnColorsChangedListener =
             (extractor, which) -> updateTheme();
 
+    private final SystemSettings mSystemSettings;
 
     /**
      * Public constructor for StatusBar.
@@ -795,7 +799,8 @@ public class StatusBar extends SystemUI implements
             TunerService tunerService,
             DumpManager dumpManager,
             ActivityLaunchAnimator activityLaunchAnimator,
-            BurnInProtectionController burnInProtectionController) {
+            BurnInProtectionController burnInProtectionController,
+            SystemSettings systemSettings) {
         super(context);
         mNotificationsController = notificationsController;
         mFragmentService = fragmentService;
@@ -895,6 +900,7 @@ public class StatusBar extends SystemUI implements
         mLockscreenShadeTransitionController = lockscreenShadeTransitionController;
         mStartingSurfaceOptional = startingSurfaceOptional;
         mBurnInProtectionController = burnInProtectionController;
+        mSystemSettings = systemSettings;
         lockscreenShadeTransitionController.setStatusbar(this);
 
         mPanelExpansionStateManager.addExpansionListener(this::onPanelExpansionChanged);
@@ -985,6 +991,9 @@ public class StatusBar extends SystemUI implements
         } else if (DEBUG) {
             Log.v(TAG, "start(): no wallpaper service ");
         }
+
+        mSbSettingsObserver.update();
+        mSbSettingsObserver.observe();
 
         // Set up the initial notification state. This needs to happen before CommandQueue.disable()
         setUpPresenter();
@@ -3869,6 +3878,37 @@ public class StatusBar extends SystemUI implements
 
     public boolean isDeviceInteractive() {
         return mDeviceInteractive;
+    }
+
+    private final SbSettingsObserver mSbSettingsObserver = new SbSettingsObserver();
+
+    private class SbSettingsObserver extends ContentObserver {
+        SbSettingsObserver() {
+            super(mMainHandler);
+        }
+
+        void observe() {
+            mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, this);
+        }
+
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            if (uri.getLastPathSegment().equals(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN)) {
+                setLockscreenDoubleTapToSleep();
+            }
+        }
+
+        void update() {
+            setLockscreenDoubleTapToSleep();
+        }
+
+        private void setLockscreenDoubleTapToSleep() {
+            if (mNotificationPanelViewController != null) {
+                mNotificationPanelViewController.setLockscreenDoubleTapToSleep(
+                    mSystemSettings.getInt(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, 0) == 1
+                );
+            }
+        }
     }
 
     private final BroadcastReceiver mBannerActionBroadcastReceiver = new BroadcastReceiver() {
