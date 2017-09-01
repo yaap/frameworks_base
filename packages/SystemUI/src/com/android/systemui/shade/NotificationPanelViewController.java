@@ -70,6 +70,7 @@ import android.provider.Settings;
 import android.util.IndentingPrintWriter;
 import android.util.Log;
 import android.util.MathUtils;
+import android.view.GestureDetector;
 import android.view.InputDevice;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -95,6 +96,7 @@ import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.internal.policy.SystemBarUtils;
 import com.android.internal.util.LatencyTracker;
+import com.android.internal.util.yaap.YaapUtils;
 import com.android.keyguard.ActiveUnlockConfig;
 import com.android.keyguard.FaceAuthApiRequestReason;
 import com.android.keyguard.KeyguardClockSwitch.ClockSize;
@@ -407,6 +409,9 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
     private int mDisplayTopInset = 0; // in pixels
     private int mDisplayRightInset = 0; // in pixels
     private int mDisplayLeftInset = 0; // in pixels
+
+    private final GestureDetector mLockscreenDoubleTapToSleep;
+    private boolean mIsLockscreenDoubleTapEnabled;
 
     @VisibleForTesting
     KeyguardClockPositionAlgorithm
@@ -924,6 +929,14 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
                 },
                 mFalsingManager);
         mActivityStarter = activityStarter;
+        mLockscreenDoubleTapToSleep = new GestureDetector(context,
+                new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                YaapUtils.switchScreenOff(context);
+                return true;
+            }
+        });
         onFinishInflate();
         keyguardUnlockAnimationController.addKeyguardUnlockAnimationListener(
                 new KeyguardUnlockAnimationController.KeyguardUnlockAnimationListener() {
@@ -2803,6 +2816,10 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
                 }
                 break;
         }
+    }
+
+    public void setLockscreenDoubleTapToSleep(boolean isDoubleTapEnabled) {
+        mIsLockscreenDoubleTapEnabled = isDoubleTapEnabled;
     }
 
     @Override
@@ -4800,6 +4817,12 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
             if (mLastEventSynthesizedDown && event.getAction() == MotionEvent.ACTION_UP) {
                 expand(true /* animate */);
             }
+
+            if (mIsLockscreenDoubleTapEnabled && !mPulsing && !mDozing
+                    && mStatusBarState == StatusBarState.KEYGUARD) {
+                mLockscreenDoubleTapToSleep.onTouchEvent(event);
+            }
+
             initDownStates(event);
 
             // If pulse is expanding already, let's give it the touch. There are situations
@@ -5097,4 +5120,3 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
         void onOpenStarted();
     }
 }
-

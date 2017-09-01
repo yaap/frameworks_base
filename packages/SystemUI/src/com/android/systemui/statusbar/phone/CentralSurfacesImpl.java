@@ -55,12 +55,14 @@ import android.app.WallpaperManager;
 import android.app.admin.DevicePolicyManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Point;
 import android.hardware.devicestate.DeviceStateManager;
 import android.hardware.fingerprint.FingerprintManager;
@@ -252,6 +254,7 @@ import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.MessageRouter;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.volume.VolumeComponent;
 import com.android.wm.shell.bubbles.Bubbles;
 import com.android.wm.shell.startingsurface.SplashscreenContentDrawer;
@@ -523,6 +526,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     /** Controller for the Shade. */
     @VisibleForTesting
     ShadeSurface mShadeSurface;
+    NotificationPanelViewController mNotificationPanelViewController;
     private final ShadeLogger mShadeLogger;
 
     // settings
@@ -690,6 +694,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
     private final InteractionJankMonitor mJankMonitor;
 
+    private final SystemSettings mSystemSettings;
+
     /** Existing callback that handles back gesture invoked for the Shade. */
     private final OnBackInvokedCallback mOnBackInvokedCallback = () -> {
         if (DEBUG) {
@@ -831,7 +837,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             UserTracker userTracker,
             Provider<FingerprintManager> fingerprintManager,
             ActivityStarter activityStarter,
-            BurnInProtectionController burnInProtectionController
+            BurnInProtectionController burnInProtectionController,
+            SystemSettings systemSettings
     ) {
         mContext = context;
         mNotificationsController = notificationsController;
@@ -938,6 +945,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         mBurnInProtectionController = burnInProtectionController;
 
+        mSystemSettings = systemSettings;
+
         mActivityIntentHelper = new ActivityIntentHelper(mContext);
         mActivityLaunchAnimator = activityLaunchAnimator;
 
@@ -1035,6 +1044,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         } else if (DEBUG) {
             Log.v(TAG, "start(): no wallpaper service ");
         }
+
+        mSbSettingsObserver.update();
+        mSbSettingsObserver.observe();
 
         // Set up the initial notification state. This needs to happen before CommandQueue.disable()
         setUpPresenter();
@@ -1690,6 +1702,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mNotificationShadeWindowViewController.setupExpandedStatusBar();
         NotificationPanelViewController npvc =
                 mCentralSurfacesComponent.getNotificationPanelViewController();
+        mNotificationPanelViewController = npvc;
         mShadeSurface = npvc;
         mShadeController.setNotificationPanelViewController(npvc);
         mShadeController.setNotificationShadeWindowViewController(
@@ -3658,6 +3671,37 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     @Override
     public boolean isDeviceInteractive() {
         return mDeviceInteractive;
+    }
+
+    private final SbSettingsObserver mSbSettingsObserver = new SbSettingsObserver();
+
+    private class SbSettingsObserver extends ContentObserver {
+        SbSettingsObserver() {
+            super(mMainHandler);
+        }
+
+        void observe() {
+            mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, this);
+        }
+
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            if (uri.getLastPathSegment().equals(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN)) {
+                setLockscreenDoubleTapToSleep();
+            }
+        }
+
+        void update() {
+            setLockscreenDoubleTapToSleep();
+        }
+
+        private void setLockscreenDoubleTapToSleep() {
+            if (mNotificationPanelViewController != null) {
+                mNotificationPanelViewController.setLockscreenDoubleTapToSleep(
+                    mSystemSettings.getInt(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, 0) == 1
+                );
+            }
+        }
     }
 
     private final BroadcastReceiver mBannerActionBroadcastReceiver = new BroadcastReceiver() {
