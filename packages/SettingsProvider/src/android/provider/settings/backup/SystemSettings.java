@@ -128,5 +128,12 @@ public class SystemSettings {
         Settings.System.FLASHLIGHT_ON_CALL_RATE,
         Settings.System.SMART_SPACE,
         Settings.System.VOLUME_DIALOG_TIMEOUT,
+        Settings.System.BATTERY_LIGHT_ENABLED,
+        Settings.System.BATTERY_LIGHT_ALLOW_ON_DND,
+        Settings.System.BATTERY_LIGHT_LOW_BLINKING,
+        Settings.System.BATTERY_LIGHT_LOW_COLOR,
+        Settings.System.BATTERY_LIGHT_MEDIUM_COLOR,
+        Settings.System.BATTERY_LIGHT_FULL_COLOR,
+        Settings.System.BATTERY_LIGHT_REALLYFULL_COLOR,
     };
 }
