@@ -40,9 +40,12 @@
     <java-symbol name="reboot_system_message" type="string" />
     <java-symbol type="array" name="config_rebootActionsList" />
 
-     <!-- Package Manager -->
-     <java-symbol type="array" name="config_deviceDisabledComponents" />
-     <java-symbol type="array" name="config_globallyDisabledComponents" />
-     <java-symbol type="array" name="config_forceEnabledComponents" />
+    <!-- Package Manager -->
+    <java-symbol type="array" name="config_deviceDisabledComponents" />
+    <java-symbol type="array" name="config_globallyDisabledComponents" />
+    <java-symbol type="array" name="config_forceEnabledComponents" />
+
+    <!-- Vendor platform signatures -->
+    <java-symbol type="array" name="config_vendorPlatformSignatures" />
 
 </resources>
