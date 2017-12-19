@@ -106,6 +106,27 @@ public class ImageExporterTest extends SysuiTestCase {
     }
 
     @Test
+    public void testImageFilenamePkg() {
+        assertEquals("image file name", "Screenshot_20201215-131500_appName.png",
+                ImageExporter.createFilename(CAPTURE_TIME, CompressFormat.PNG,
+                    Display.DEFAULT_DISPLAY, "appName"));
+    }
+
+    @Test
+    public void testImageFilenamePkg_secondaryDisplay1() {
+        assertEquals("image file name", "Screenshot_20201215-131500-display-1_appName.png",
+                ImageExporter.createFilename(CAPTURE_TIME, CompressFormat.PNG,
+                    /* displayId= */ 1, "appName"));
+    }
+
+    @Test
+    public void testImageFilenamePkg_secondaryDisplay2() {
+        assertEquals("image file name", "Screenshot_20201215-131500-display-2_appName.png",
+                ImageExporter.createFilename(CAPTURE_TIME, CompressFormat.PNG,
+                    /* displayId= */ 2, "appName"));
+    }
+
+    @Test
     public void testUpdateExifAttributes_timeZoneUTC() throws IOException {
         ExifInterface exifInterface = new ExifInterface(new ByteArrayInputStream(EXIF_FILE_TAG),
                 ExifInterface.STREAM_TYPE_EXIF_DATA_ONLY);
