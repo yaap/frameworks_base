@@ -94,6 +94,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     private boolean mCharging;
     private boolean mIsBatteryDefender;
     private boolean mDisplayShieldEnabled;
+    private boolean mPCharging;
     // Error state where we know nothing about the current battery state
     private boolean mBatteryStateUnknown;
     // Lazily-loaded since this is expected to be a rare-if-ever state
@@ -305,8 +306,14 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             // Setting text actually triggers a layout pass (because the text view is set to
             // wrap_content width and TextView always relayouts for this). Avoid needless
             // relayout if the text didn't actually change.
-            if (!TextUtils.equals(mBatteryPercentView.getText(), percentText)) {
-                mBatteryPercentView.setText(percentText);
+            if (!TextUtils.equals(mBatteryPercentView.getText(), percentText) || mPCharging != mCharging) {
+                mPCharging = mCharging;
+                // Use the high voltage symbol ⚡ (u26A1 unicode) but prevent the system
+                // to load its emoji colored variant with the uFE0E flag
+                // only use it when there is no batt icon showing
+                String indication = mCharging && (mBatteryStyle == BATTERY_STYLE_TEXT)
+                        ? "\u26A1\uFE0E " : "";
+                mBatteryPercentView.setText(indication + percentText);
             }
         }
 
