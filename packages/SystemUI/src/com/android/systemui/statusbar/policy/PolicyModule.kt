@@ -16,6 +16,7 @@ package com.android.systemui.statusbar.policy
 
 import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.tiles.AlarmTile
+import com.android.systemui.qs.tiles.AODTile
 import com.android.systemui.qs.tiles.CaffeineTile
 import com.android.systemui.qs.tiles.CameraToggleTile
 import com.android.systemui.qs.tiles.CompassTile
@@ -77,6 +78,11 @@ interface PolicyModule {
     @IntoMap
     @StringKey(UiModeNightTile.TILE_SPEC)
     fun bindUiModeNightTile(uiModeNightTile: UiModeNightTile): QSTileImpl<*>
+
+    @Binds
+    @IntoMap
+    @StringKey(AODTile.TILE_SPEC)
+    fun bindAODTile(aodTile: AODTile): QSTileImpl<*>
 
     @Binds
     @IntoMap
