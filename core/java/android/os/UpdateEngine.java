@@ -429,6 +429,7 @@ public class UpdateEngine {
     }
 
     /**
+<<<<<<< HEAD
      * Sets the A/B slot switch for the next boot after applying an ota update. If
      * {@link #applyPayload} hasn't switched the slot, the updater APP can call
      * this API to switch the slot and apply the update on next boot.
@@ -456,6 +457,17 @@ public class UpdateEngine {
     public void resetShouldSwitchSlotOnReboot() {
         try {
             mUpdateEngine.resetShouldSwitchSlotOnReboot();
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+    * @hide
+    */
+    public void setPerformanceMode(boolean enable) {
+        try {
+            mUpdateEngine.setPerformanceMode(enable);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
