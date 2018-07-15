@@ -5654,6 +5654,16 @@ public final class Settings {
         public static final String ENABLE_FLOATING_ROTATION_BUTTON = "enable_floating_rotation_button";
 
         /**
+         * Position to show statusbar clock
+         * 0 = Left (Default)
+         * 1 = Center
+         * 2 = Right
+         * @hide
+         */
+        @Readable
+        public static final String STATUSBAR_CLOCK_POSITION = "statusbar_clock_position";
+
+        /**
          * IMPORTANT: If you add a new public settings you also have to add it to
          * PUBLIC_SETTINGS below. If the new setting is hidden you have to add
          * it to PRIVATE_SETTINGS below. Also add a validator that can validate

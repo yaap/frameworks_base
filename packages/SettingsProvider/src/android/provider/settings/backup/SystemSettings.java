@@ -138,5 +138,6 @@ public class SystemSettings {
         Settings.System.KEYGAURD_MEDIA_ART,
         Settings.System.QS_SHOW_BATTERY_ESTIMATE,
         Settings.System.ENABLE_FLOATING_ROTATION_BUTTON,
+        Settings.System.STATUSBAR_CLOCK_POSITION,
     };
 }
