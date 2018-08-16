@@ -103,5 +103,6 @@ public class SystemSettings {
         Settings.System.OMNI_ADVANCED_REBOOT,
         Settings.System.QS_FOOTER_TEXT_SHOW,
         Settings.System.QS_FOOTER_TEXT_STRING,
+        Settings.System.LOCKSCREEN_BATTERY_INFO,
     };
 }
