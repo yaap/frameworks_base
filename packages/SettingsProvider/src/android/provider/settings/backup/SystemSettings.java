@@ -104,5 +104,6 @@ public class SystemSettings {
         Settings.System.NOTIFICATION_HEADERS,
         Settings.System.TORCH_LONG_PRESS_POWER_GESTURE,
         Settings.System.TORCH_LONG_PRESS_POWER_TIMEOUT,
+        Settings.System.LOCKSCREEN_BATTERY_INFO,
     };
 }
