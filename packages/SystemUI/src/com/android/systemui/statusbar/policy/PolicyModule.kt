@@ -22,6 +22,7 @@ import com.android.systemui.qs.tiles.CameraToggleTile
 import com.android.systemui.qs.tiles.CompassTile
 import com.android.systemui.qs.tiles.DndTile
 import com.android.systemui.qs.tiles.FlashlightTile
+import com.android.systemui.qs.tiles.GamingModeTile
 import com.android.systemui.qs.tiles.HeadsUpTile
 import com.android.systemui.qs.tiles.LocationTile
 import com.android.systemui.qs.tiles.MicrophoneToggleTile
@@ -93,6 +94,11 @@ interface PolicyModule {
     @IntoMap
     @StringKey(CompassTile.TILE_SPEC)
     fun bindCompassTile(compassTile: CompassTile): QSTileImpl<*>
+
+    @Binds
+    @IntoMap
+    @StringKey(GamingModeTile.TILE_SPEC)
+    fun bindGamingModeTile(gamingModeTile: GamingModeTile): QSTileImpl<*>
 
     @Binds
     @IntoMap
