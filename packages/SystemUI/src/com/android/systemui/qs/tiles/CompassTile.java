@@ -149,6 +149,7 @@ public class CompassTile extends QSTileImpl<BooleanState> implements SensorEvent
         state.value = mActive;
 
         if (state.value) {
+            state.state = Tile.STATE_ACTIVE;
             state.icon = ResourceIcon.get(R.drawable.ic_qs_compass_on);
             if (arg != null) {
                 state.label = formatValueWithCardinalDirection(degrees);
@@ -170,6 +171,7 @@ public class CompassTile extends QSTileImpl<BooleanState> implements SensorEvent
             state.label = mContext.getString(R.string.quick_settings_compass_label);
             state.contentDescription = mContext.getString(
                     R.string.accessibility_quick_settings_compass_off);
+            state.state = Tile.STATE_INACTIVE;
             if (mImage != null) {
                 mImage.setRotation(0);
             }
