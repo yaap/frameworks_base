@@ -97,6 +97,10 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             enableGamingMode();
             return;
         }
+        showGamingModeWhatsThisDialog();
+    }
+
+    private void showGamingModeWhatsThisDialog() {
         SystemUIDialog dialog = new SystemUIDialog(mContext);
         dialog.setTitle(R.string.gaming_mode_dialog_title);
         dialog.setMessage(R.string.gaming_mode_dialog_message);
@@ -120,6 +124,11 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     @Override
     public Intent getLongClickIntent() {
         return null;
+    }
+
+    @Override
+    protected void handleLongClick(@Nullable View view) {
+        showGamingModeWhatsThisDialog();
     }
 
     private void handleState(boolean enabled) {
