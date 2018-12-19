@@ -151,5 +151,6 @@ public class SystemSettings {
         Settings.System.VOLUME_BUTTON_QUICK_MUTE,
         Settings.System.VOLUME_BUTTON_QUICK_MUTE_DELAY,
         Settings.System.BACK_GESTURE_HEIGHT,
+        Settings.System.VOLUME_PANEL_ON_LEFT,
     };
 }
