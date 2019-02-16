@@ -21,6 +21,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
+import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
 import android.provider.Settings.Global;
@@ -83,7 +84,7 @@ public class AirplaneModeTile extends QSTileImpl<BooleanState> {
             return;
         }
 
-        if (mKeyguard.isMethodSecure() && mKeyguard.isShowing()) {
+        if (mKeyguard.isMethodSecure() && mKeyguard.isShowing() && isUnlockingRequired()) {
             mActivityStarter.postQSRunnableDismissingKeyguard(() -> {
                 setEnabled(!airplaneModeEnabled);
             });
@@ -96,6 +97,12 @@ public class AirplaneModeTile extends QSTileImpl<BooleanState> {
         final ConnectivityManager mgr =
                 (ConnectivityManager) mContext.getSystemService(Context.CONNECTIVITY_SERVICE);
         mgr.setAirplaneMode(enabled);
+    }
+
+    private boolean isUnlockingRequired() {
+        return (Settings.Secure.getIntForUser(
+                mContext.getContentResolver(), Settings.Secure.QSTILE_REQUIRES_UNLOCKING, 1,
+                UserHandle.USER_CURRENT) == 1);
     }
 
     @Override

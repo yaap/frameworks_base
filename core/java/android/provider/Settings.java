@@ -9438,6 +9438,13 @@ public final class Settings {
         public static final String ADVANCED_REBOOT_KEYGUARD = "advanced_reboot_keyguard";
 
         /**
+         * Whether user has to unlock the secured lock screen before they can use a quick settings tile.
+         * @hide
+         */
+        public static final String QSTILE_REQUIRES_UNLOCKING =
+                "qstile_requires_unlocking";
+
+        /**
          * Magnification mode value that magnifies whole display.
          * @hide
          */
