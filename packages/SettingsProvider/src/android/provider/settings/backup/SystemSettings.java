@@ -94,5 +94,8 @@ public class SystemSettings {
         Settings.System.DOZE_ON_CHARGE,
         Settings.System.DOUBLE_TAP_SLEEP_GESTURE,
         Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN,
+        Settings.System.OMNI_QS_LAYOUT_COLUMNS_LANDSCAPE,
+        Settings.System.OMNI_QS_LAYOUT_COLUMNS,
+        Settings.System.OMNI_QS_TILE_TITLE_VISIBILITY,
     };
 }

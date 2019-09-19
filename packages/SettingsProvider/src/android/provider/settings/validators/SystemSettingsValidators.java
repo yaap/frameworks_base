@@ -226,5 +226,8 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.DOZE_ON_CHARGE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.DOUBLE_TAP_SLEEP_GESTURE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.DOUBLE_TAP_SLEEP_LOCKSCREEN, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.OMNI_QS_LAYOUT_COLUMNS_LANDSCAPE, new InclusiveIntegerRangeValidator(4, 8));
+        VALIDATORS.put(System.OMNI_QS_LAYOUT_COLUMNS, new InclusiveIntegerRangeValidator(3, 8));
+        VALIDATORS.put(System.OMNI_QS_TILE_TITLE_VISIBILITY, BOOLEAN_VALIDATOR);
     }
 }
