@@ -144,6 +144,7 @@ public class SystemSettings {
         Settings.System.AOD_NOTIFICATION_PULSE_TIMEOUT,
         Settings.System.NOTIFICATION_PULSE_DURATION,
         Settings.System.NAVIGATION_BAR_ARROW_KEYS,
+        Settings.System.NAVIGATION_BAR_INVERSE,
         Settings.System.QS_MEDIA_PLAYER,
         Settings.System.KEYGAURD_MEDIA_ART,
         Settings.System.STATUS_BAR_BATTERY_STYLE,
