@@ -36,7 +36,9 @@ import android.os.Looper;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.SystemProperties;
+import android.os.UserHandle;
 import android.provider.DeviceConfig;
+import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
@@ -293,6 +295,7 @@ public class EdgeBackGestureHandler extends CurrentUserTracker
         }
     };
 
+    private int mEdgeHeight;
 
     EdgeBackGestureHandler(Context context, OverviewProxyService overviewProxyService,
             SysUiState sysUiState, PluginManager pluginManager, @Main Executor executor,
@@ -396,6 +399,18 @@ public class EdgeBackGestureHandler extends CurrentUserTracker
         updateCurrentUserResources();
     }
 
+    private void updateEdgeHeightValue() {
+        if (mDisplaySize == null) {
+            return;
+        }
+        int edgeHeightSetting = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.BACK_GESTURE_HEIGHT, 0, UserHandle.USER_CURRENT);
+        // subtracting sixths of mDisplaySize.y according to edgeHeightSetting
+        // 0 means full, 1 means one sixth and so on up till 5/6
+        mEdgeHeight = Math.round((float) mDisplaySize.y -
+                ((float) mDisplaySize.y) * ((float) edgeHeightSetting / 6));
+    }
+
     /**
      * @see NavigationBarView#onAttachedToWindow()
      */
@@ -431,6 +446,10 @@ public class EdgeBackGestureHandler extends CurrentUserTracker
 
     public void onNavBarTransientStateChanged(boolean isTransient) {
         mIsNavBarShownTransiently = isTransient;
+    }
+
+    public void onNavigationHeightChanged() {
+        updateEdgeHeightValue();
     }
 
     private void disposeInputChannel() {
@@ -637,6 +656,11 @@ public class EdgeBackGestureHandler extends CurrentUserTracker
         if (y >= (mDisplaySize.y - mBottomGestureHeight)) {
             return false;
         }
+        if (mEdgeHeight != 0 &&
+                y < (mDisplaySize.y - mBottomGestureHeight - mEdgeHeight)) {
+            return false;
+        }
+
         // If the point is way too far (twice the margin), it is
         // not interesting to us for logging purposes, nor we
         // should process it.  Simply return false and keep
@@ -867,6 +891,7 @@ public class EdgeBackGestureHandler extends CurrentUserTracker
         if (mEdgeBackPlugin != null) {
             mEdgeBackPlugin.setDisplaySize(mDisplaySize);
         }
+        updateEdgeHeightValue();
     }
 
     private boolean sendEvent(int action, int code) {
