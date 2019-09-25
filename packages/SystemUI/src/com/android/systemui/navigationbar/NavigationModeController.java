@@ -17,6 +17,7 @@
 package com.android.systemui.navigationbar;
 
 import static android.content.Intent.ACTION_OVERLAY_CHANGED;
+import static android.provider.Settings.System.BACK_GESTURE_HEIGHT;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -35,6 +36,7 @@ import android.provider.Settings;
 import android.provider.Settings.Secure;
 import android.util.Log;
 
+import com.android.systemui.Dependency;
 import com.android.systemui.Dumpable;
 import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.dagger.qualifiers.Main;
@@ -64,6 +66,7 @@ public class NavigationModeController implements Dumpable {
         void onNavigationModeChanged(int mode);
         default void onNavBarLayoutInverseChanged(boolean inverse) {}
         default void onNavBarCustomLayoutChanged(String layout) {}
+        default void onNavigationHeightChanged() {}
     }
 
     private final Context mContext;
@@ -154,6 +157,15 @@ public class NavigationModeController implements Dumpable {
                     mListeners.forEach(listener ->
                         listener.onNavBarCustomLayoutChanged(
                             getCustomNavbarLayout()));
+                }
+            }, UserHandle.USER_ALL);
+        mSystemSettings.registerContentObserverForUser(
+            Settings.System.BACK_GESTURE_HEIGHT,
+            new ContentObserver(mainHandler) {
+                @Override
+                public void onChange(boolean selfChange) {
+                    mListeners.forEach(listener ->
+                        listener.onNavigationHeightChanged());
                 }
             }, UserHandle.USER_ALL);
 

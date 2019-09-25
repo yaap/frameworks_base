@@ -308,5 +308,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.SHOW_BATTERY_PERCENT_INSIDE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.VOLUME_BUTTON_QUICK_MUTE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.VOLUME_BUTTON_QUICK_MUTE_DELAY, new InclusiveIntegerRangeValidator(300, 1500));
+        VALIDATORS.put(System.BACK_GESTURE_HEIGHT, new InclusiveIntegerRangeValidator(0, 5));
     }
 }
