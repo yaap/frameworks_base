@@ -65,6 +65,7 @@ import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.settingslib.Utils;
+import com.android.systemui.Dependency;
 import com.android.systemui.Gefingerpoken;
 import com.android.systemui.R;
 import com.android.systemui.animation.Interpolators;
@@ -98,7 +99,8 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 /** */
-public class NavigationBarView extends FrameLayout {
+public class NavigationBarView extends FrameLayout
+        implements NavigationModeController.ModeChangedListener {
     final static boolean DEBUG = false;
     final static String TAG = "NavBarView";
 
@@ -332,6 +334,9 @@ public class NavigationBarView extends FrameLayout {
         mButtonDispatchers.put(R.id.accessibility_button, accessibilityButton);
         mButtonDispatchers.put(R.id.menu_container, mContextualButtonGroup);
         mDeadZone = new DeadZone(this);
+
+        final NavigationModeController controller = Dependency.get(NavigationModeController.class);
+        controller.addListener(this);
     }
 
     public void setEdgeBackGestureHandler(EdgeBackGestureHandler edgeBackGestureHandler) {
@@ -829,6 +834,14 @@ public class NavigationBarView extends FrameLayout {
         mEdgeBackGestureHandler.onNavigationModeChanged(mNavBarMode);
         updateRotationButton();
     }
+
+    @Override
+    public void onNavigationHeightChanged() {
+        mEdgeBackGestureHandler.onNavigationHeightChanged();
+    }
+
+    @Override
+    public void onNavigationModeChanged(int mode) { /* Do nothing */ }
 
     public void setAccessibilityButtonState(final boolean visible, final boolean longClickable) {
         mLongClickableAccessibilityButton = longClickable;
