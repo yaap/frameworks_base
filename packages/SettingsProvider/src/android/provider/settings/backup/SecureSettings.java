@@ -246,6 +246,7 @@ public class SecureSettings {
         Settings.Secure.EXTRA_DIM_AUTO_MODE,
         Settings.Secure.EXTRA_DIM_AUTO_TIME,
         Settings.Secure.DC_DIM_AUTO_MODE,
-        Settings.Secure.DC_DIM_AUTO_TIME
+        Settings.Secure.DC_DIM_AUTO_TIME,
+        Settings.Secure.DOZE_ON_CHARGE
     };
 }
