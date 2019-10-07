@@ -669,6 +669,9 @@ public final class PowerManagerService extends SystemService
     // but the DreamService has not yet been told to start (it's an async process).
     private boolean mDozeStartInProgress;
 
+    // doze on charge
+    private boolean mDozeOnChargeEnabled;
+
     private final class PowerGroupWakefulnessChangeListener implements
             PowerGroup.PowerGroupListener {
         @GuardedBy("mLock")
@@ -1232,6 +1235,10 @@ public final class PowerManagerService extends SystemService
     private void systemReady() {
         synchronized (mLock) {
             mSystemReady = true;
+            // set initial value
+            Settings.Secure.putIntForUser(mContext.getContentResolver(),
+                    Settings.Secure.DOZE_ON_CHARGE_NOW, 0, UserHandle.USER_CURRENT);
+
             mDreamManager = getLocalService(DreamManagerInternal.class);
             mDisplayManagerInternal = getLocalService(DisplayManagerInternal.class);
             mPolicy = getLocalService(WindowManagerPolicy.class);
@@ -1332,6 +1339,9 @@ public final class PowerManagerService extends SystemService
         resolver.registerContentObserver(Settings.Global.getUriFor(
                 Settings.Global.DEVICE_DEMO_MODE),
                 false, mSettingsObserver, UserHandle.USER_SYSTEM);
+        resolver.registerContentObserver(Settings.Secure.getUriFor(
+                Settings.Secure.DOZE_ON_CHARGE),
+                false, mSettingsObserver, UserHandle.USER_ALL);
         IVrManager vrManager = IVrManager.Stub.asInterface(getBinderService(Context.VR_SERVICE));
         if (vrManager != null) {
             try {
@@ -1435,9 +1445,11 @@ public final class PowerManagerService extends SystemService
                 UserHandle.USER_CURRENT);
         mStayOnWhilePluggedInSetting = Settings.Global.getInt(resolver,
                 Settings.Global.STAY_ON_WHILE_PLUGGED_IN, BatteryManager.BATTERY_PLUGGED_AC);
-        mTheaterModeEnabled = Settings.Global.getInt(mContext.getContentResolver(),
+        mTheaterModeEnabled = Settings.Global.getInt(resolver,
                 Settings.Global.THEATER_MODE_ON, 0) == 1;
         mAlwaysOnEnabled = mAmbientDisplayConfiguration.alwaysOnEnabled(UserHandle.USER_CURRENT);
+        mDozeOnChargeEnabled = Settings.Secure.getIntForUser(resolver,
+                Settings.Secure.DOZE_ON_CHARGE, 0, UserHandle.USER_CURRENT) != 0;
 
         if (mSupportsDoubleTapWakeConfig) {
             boolean doubleTapWakeEnabled = Settings.Secure.getIntForUser(resolver,
@@ -2437,6 +2449,11 @@ public final class PowerManagerService extends SystemService
                 final boolean dockedOnWirelessCharger = mWirelessChargerDetector.update(
                         mIsPowered, mPlugType);
 
+                if (mDozeOnChargeEnabled) {
+                    Settings.Secure.putIntForUser(mContext.getContentResolver(),
+                            Settings.Secure.DOZE_ON_CHARGE_NOW, mIsPowered ? 1 : 0,
+                            UserHandle.USER_CURRENT);
+                }
                 // Treat plugging and unplugging the devices as a user activity.
                 // Users find it disconcerting when they plug or unplug the device
                 // and it shuts off right away.
