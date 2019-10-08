@@ -18,6 +18,7 @@ package com.android.systemui.navigationbar;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_3BUTTON;
+import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_GESTURAL;
 
 import android.annotation.Nullable;
 import android.content.Context;
@@ -109,6 +110,7 @@ public class NavigationBarInflaterView extends FrameLayout {
     @VisibleForTesting
     SparseArray<ButtonDispatcher> mButtonDispatchers;
     private String mCurrentLayout;
+    private String mCustomLayout;
 
     private View mLastPortrait;
     private View mLastLandscape;
@@ -116,6 +118,7 @@ public class NavigationBarInflaterView extends FrameLayout {
     private boolean mIsVertical;
     private boolean mAlternativeOrder;
     private boolean mNavBarLayoutInverse;
+    private boolean mUsingCustomLayout;
 
     private OverviewProxyService mOverviewProxyService;
     private int mNavBarMode = NAV_BAR_MODE_3BUTTON;
@@ -126,8 +129,10 @@ public class NavigationBarInflaterView extends FrameLayout {
         mOverviewProxyService = Dependency.get(OverviewProxyService.class);
         mListener = new Listener(this);
         final NavigationModeController controller = Dependency.get(NavigationModeController.class);
-        mNavBarMode = controller.addListener(this);
+        mNavBarMode = Dependency.get(NavigationModeController.class).addListener(mListener);
         mNavBarLayoutInverse = controller.shouldInvertNavBarLayout();
+        mCustomLayout = controller.getCustomNavbarLayout();
+        mUsingCustomLayout = mCustomLayout != null && !mCustomLayout.equals("default");
         updateLayoutInversion();
     }
 
@@ -146,6 +151,7 @@ public class NavigationBarInflaterView extends FrameLayout {
         inflateChildren();
         clearViews();
         inflateLayout(getDefaultLayout());
+        onNavBarCustomLayoutChanged(mCustomLayout);
     }
 
     private void inflateChildren() {
@@ -170,9 +176,10 @@ public class NavigationBarInflaterView extends FrameLayout {
 
     private void onNavigationModeChanged(int mode) {
         mNavBarMode = mode;
+        onLikelyDefaultLayoutChange();
+        onNavBarCustomLayoutChanged(mCustomLayout);
     }
 
-    @Override
     public void onNavBarLayoutInverseChanged(boolean inverse) {
         if (mNavBarLayoutInverse == inverse) return;
         mNavBarLayoutInverse = inverse;
@@ -192,6 +199,16 @@ public class NavigationBarInflaterView extends FrameLayout {
         }
     }
 
+    public void onNavBarCustomLayoutChanged(String layout) {
+        if (mNavBarMode == NAV_BAR_MODE_GESTURAL) return;
+        if (mCurrentLayout == null || !mCurrentLayout.equals(layout)) {
+            mUsingCustomLayout = layout != null && !layout.equals("default");
+            mCustomLayout = layout;
+            clearViews();
+            inflateLayout(mUsingCustomLayout ? layout : getDefaultLayout());
+        }
+    }
+
     @Override
     protected void onDetachedFromWindow() {
         Dependency.get(NavigationModeController.class).removeListener(mListener);
@@ -205,6 +222,9 @@ public class NavigationBarInflaterView extends FrameLayout {
     }
 
     public void onLikelyDefaultLayoutChange() {
+        // Don't override custom layouts unless we're using full gestures
+        if (mUsingCustomLayout && mNavBarMode != NAV_BAR_MODE_GESTURAL) return;
+
         // Reevaluate new layout
         final String newValue = getDefaultLayout();
         if (!Objects.equals(mCurrentLayout, newValue)) {

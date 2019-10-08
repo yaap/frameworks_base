@@ -282,5 +282,26 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.QS_SHOW_BATTERY_ESTIMATE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.ENABLE_FLOATING_ROTATION_BUTTON, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.NAVIGATION_BAR_INVERSE, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.NAVBAR_LAYOUT_VIEWS,
+                new Validator() {
+                    @Override
+                    public boolean validate(String value) {
+                        if (value.equals("default")) return true;
+                        int scCount = value.length() - value.replace(";", "").length();
+                        if (scCount != 2) return false;
+                        value = value.replace(";", ",");
+                        String[] args = value.split(",", 0);
+                        for (String str : args) {
+                            if (!str.equals("left") &&
+                                !str.equals("right") &&
+                                !str.equals("back") &&
+                                !str.equals("home") &&
+                                !str.equals("recent") &&
+                                !str.equals("space"))
+                                return false;
+                        }
+                        return true;
+                    }
+                });
     }
 }

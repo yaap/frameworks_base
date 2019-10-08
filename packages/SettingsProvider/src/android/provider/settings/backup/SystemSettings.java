@@ -139,5 +139,6 @@ public class SystemSettings {
         Settings.System.QS_SHOW_BATTERY_ESTIMATE,
         Settings.System.ENABLE_FLOATING_ROTATION_BUTTON,
         Settings.System.NAVIGATION_BAR_INVERSE,
+        Settings.System.NAVBAR_LAYOUT_VIEWS,
     };
 }
