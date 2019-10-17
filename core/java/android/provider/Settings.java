@@ -5767,6 +5767,13 @@ public final class Settings {
          */
         @Readable
         public static final String OMNI_ADVANCED_REBOOT = "advanced_reboot";
+ 
+        /**
+	 * Whether to show qs footer text
+         * @hide
+         */
+        @Readable
+        public static final String QS_FOOTER_TEXT_SHOW = "qs_footer_text_show";
 
         /**
          * IMPORTANT: If you add a new public settings you also have to add it to

@@ -101,5 +101,6 @@ public class SystemSettings {
         Settings.System.SCREEN_FLASH_NOTIFICATION,
         Settings.System.SCREEN_FLASH_NOTIFICATION_COLOR,
         Settings.System.OMNI_ADVANCED_REBOOT,
+        Settings.System.QS_FOOTER_TEXT_SHOW,
     };
 }
