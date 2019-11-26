@@ -60,6 +60,7 @@ import com.android.systemui.qs.tiles.ScreenRecordTile;
 import com.android.systemui.qs.tiles.UiModeNightTile;
 import com.android.systemui.qs.tiles.WifiTile;
 import com.android.systemui.qs.tiles.WorkModeTile;
+import com.android.systemui.qs.tiles.DataSwitchTile;
 import com.android.systemui.util.leak.GarbageMonitor;
 
 import javax.inject.Inject;
@@ -106,6 +107,7 @@ public class QSFactoryImpl implements QSFactory {
     private final Provider<HeadsUpTile> mHeadsUpTileProvider;
     private final Provider<AODTile> mAODTileProvider;
     private final Provider<GamingModeTile> mGamingModeTileProvider;
+    private final Provider<DataSwitchTile> mDataSwitchTileProvider;
 
     private final Lazy<QSHost> mQsHostLazy;
     private final Provider<CustomTile.Builder> mCustomTileBuilderProvider;
@@ -147,7 +149,8 @@ public class QSFactoryImpl implements QSFactory {
             Provider<CompassTile> compassTileProvider,
             Provider<HeadsUpTile> headsupTileProvider,
             Provider<AODTile> aodTileProvider,
-            Provider<GamingModeTile> gamingModeTileProvider) {
+            Provider<GamingModeTile> gamingModeTileProvider,
+            Provider<DataSwitchTile> dataSwitchTileProvider) {
         mQsHostLazy = qsHostLazy;
         mCustomTileBuilderProvider = customTileBuilderProvider;
 
@@ -185,6 +188,7 @@ public class QSFactoryImpl implements QSFactory {
         mHeadsUpTileProvider = headsupTileProvider;
         mAODTileProvider = aodTileProvider;
         mGamingModeTileProvider = gamingModeTileProvider;
+        mDataSwitchTileProvider = dataSwitchTileProvider;
     }
 
     /** Creates a tile with a type based on {@code tileSpec} */
@@ -268,6 +272,8 @@ public class QSFactoryImpl implements QSFactory {
                 return mAODTileProvider.get();
             case "gaming":
                 return mGamingModeTileProvider.get();
+            case "dataswitch":
+                return mDataSwitchTileProvider.get();
         }
 
         // Custom tiles
