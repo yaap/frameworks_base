@@ -16,6 +16,7 @@
 
 package android.provider.settings.validators;
 
+import static android.provider.settings.validators.SettingsValidators.ANY_STRING_VALIDATOR;
 import static android.provider.settings.validators.SettingsValidators.BOOLEAN_VALIDATOR;
 import static android.provider.settings.validators.SettingsValidators.COMPONENT_NAME_VALIDATOR;
 import static android.provider.settings.validators.SettingsValidators.DATE_FORMAT_VALIDATOR;
@@ -230,5 +231,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.OMNI_QS_LAYOUT_COLUMNS, new InclusiveIntegerRangeValidator(3, 8));
         VALIDATORS.put(System.OMNI_QS_TILE_TITLE_VISIBILITY, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.QS_FOOTER_TEXT_SHOW, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.QS_FOOTER_TEXT_STRING, ANY_STRING_VALIDATOR);
     }
 }
