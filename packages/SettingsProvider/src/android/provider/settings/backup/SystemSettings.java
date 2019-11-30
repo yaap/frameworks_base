@@ -141,5 +141,6 @@ public class SystemSettings {
         Settings.System.NAVIGATION_BAR_INVERSE,
         Settings.System.NAVBAR_LAYOUT_VIEWS,
         Settings.System.VOLUME_KEY_CURSOR_CONTROL,
+        Settings.System.STATUS_BAR_BATTERY_STYLE,
     };
 }
