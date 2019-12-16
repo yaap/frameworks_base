@@ -151,5 +151,6 @@ public class SystemSettings {
         Settings.System.NOTIFICATION_VIBRATION_PATTERN,
         Settings.System.CUSTOM_NOTIFICATION_VIBRATION_PATTERN,
         Settings.System.STATUS_BAR_NOTIF_COUNT,
+        Settings.System.FLASHLIGHT_ON_CALL,
     };
 }
