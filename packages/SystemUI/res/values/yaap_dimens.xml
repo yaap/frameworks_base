@@ -15,4 +15,6 @@
 
     <dimen name="qs_tile_height_wo_label">48dp</dimen>
 
+    <dimen name="volume_dialog_panel_transparent_padding_left">4dp</dimen>
+
 </resources>
