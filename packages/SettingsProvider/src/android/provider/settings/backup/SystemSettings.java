@@ -117,5 +117,6 @@ public class SystemSettings {
         Settings.System.NETWORK_TRAFFIC_ARROW,
         Settings.System.NETWORK_TRAFFIC_FONT_SIZE,
         Settings.System.NETWORK_TRAFFIC_VIEW_LOCATION,
+        Settings.System.RINGTONE_VIBRATION_PATTERN,
     };
 }
