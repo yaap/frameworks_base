@@ -11702,6 +11702,14 @@ public final class Settings {
                 "theme_customization_overlay_packages";
 
         /**
+         * Indicates whether Panic should be shown in global actions
+         * <p>Type: int (0 for false, 1 for true)
+         *
+         * @hide
+         */
+        public static final String PANIC_IN_POWER_MENU = "panic_in_power_menu";
+
+        /**
          * Indicates whether the nav bar is forced to always be visible, even in immersive mode.
          * <p>Type: int (0 for false, 1 for true)
          *
