@@ -23,6 +23,8 @@ import static android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_STOP;
 
 import static com.android.systemui.DejankUtils.whitelistIpcs;
 
+import static com.android.systemui.util.Utils.getFODHeight;
+
 import static java.lang.Integer.max;
 
 import android.animation.Animator;
@@ -517,8 +519,6 @@ public class KeyguardSecurityContainer extends FrameLayout implements KeyguardSe
 
         // Consume bottom insets because we're setting the padding locally (for IME and navbar.)
         int inset;
-        int minBottomMargin = getResources().getDimensionPixelSize(
-                R.dimen.kg_security_container_min_bottom_margin);
 
         if (sNewInsetsMode == NEW_INSETS_MODE_FULL) {
             int bottomInset = insets.getInsetsIgnoringVisibility(systemBars()).bottom;
@@ -527,8 +527,9 @@ public class KeyguardSecurityContainer extends FrameLayout implements KeyguardSe
         } else {
             inset = insets.getSystemWindowInsetBottom();
         }
-        setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(),
-               minBottomMargin > inset ? minBottomMargin : inset);
+        inset = mUpdateMonitor.isUnlockingWithBiometricsPossible(mUpdateMonitor.getCurrentUser()) ?
+                max(getFODHeight(mContext, false), inset) : inset;
+        setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), inset);
         return insets.inset(0, 0, 0, inset);
     }
 
