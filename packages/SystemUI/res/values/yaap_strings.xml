@@ -115,4 +115,8 @@
     <string name="accessibility_dpad_left">Cursor left</string>
     <string name="accessibility_dpad_right">Cursor right</string>
 
+    <!-- Name of the additional status bar icons also exposed with SystemUI Tuner -->
+    <string name="status_bar_camera">Camera</string>
+    <string name="status_bar_microphone">Microphone</string>
+
 </resources>
