@@ -573,6 +573,9 @@ public class VolumeDialogImpl implements VolumeDialog,
         }
         setVisOrGone(AudioManager.STREAM_RING, expand);
         setVisOrGone(STREAM_ALARM, expand);
+        if (!isNotificationStreamLinked()) {
+            setVisOrGone(AudioManager.STREAM_NOTIFICATION, expand);
+        }
     }
 
     private void animateExpandedRowsChange(boolean expand) {
@@ -609,6 +612,11 @@ public class VolumeDialogImpl implements VolumeDialog,
                 : new SystemUIInterpolators.LogAccelerateInterpolator());
         animator.setDuration(UPDATE_ANIMATION_DURATION);
         animator.start();
+    }
+
+    private boolean isNotificationStreamLinked() {
+        return Settings.Secure.getInt(mContext.getContentResolver(),
+                    Settings.Secure.VOLUME_LINK_NOTIFICATION, 1) == 1;
     }
 
     public void initSettingsH() {
