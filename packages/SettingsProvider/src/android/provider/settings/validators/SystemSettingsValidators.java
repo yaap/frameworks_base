@@ -301,6 +301,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.NOTIFICATION_VIBRATION_PATTERN, new InclusiveIntegerRangeValidator(0, 5));
         VALIDATORS.put(System.CUSTOM_NOTIFICATION_VIBRATION_PATTERN, CUSTOM_VIBRATION_PATTERN_VALIDATOR);
         VALIDATORS.put(System.STATUS_BAR_NOTIF_COUNT, BOOLEAN_VALIDATOR);
-        VALIDATORS.put(System.FLASHLIGHT_ON_CALL, new InclusiveIntegerRangeValidator(0, 3));
+        VALIDATORS.put(System.FLASHLIGHT_ON_CALL, new InclusiveIntegerRangeValidator(0, 4));
     }
 }
