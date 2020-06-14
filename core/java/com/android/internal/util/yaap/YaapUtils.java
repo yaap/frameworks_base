@@ -31,6 +31,7 @@ import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.provider.Settings;
+import android.util.TypedValue;
 import android.view.InputDevice;
 import android.view.IWindowManager;
 import android.view.KeyCharacterMap;
@@ -149,5 +150,11 @@ public class YaapUtils {
         } else {
             return hasNavigationBar == 1;
         }
+    }
+
+    public static int getThemeAccentColor(final Context context) {
+        final TypedValue value = new TypedValue ();
+        context.getTheme().resolveAttribute(android.R.attr.colorAccent, value, true);
+        return value.data;
     }
 }
