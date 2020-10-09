@@ -101,5 +101,6 @@ public class SystemSettings {
         Settings.System.QS_FOOTER_TEXT_STRING,
         Settings.System.QS_SHOW_BRIGHTNESS,
         Settings.System.QS_BRIGHTNESS_POSITION_BOTTOM,
+        Settings.System.NOTIFICATION_HEADERS,
     };
 }
