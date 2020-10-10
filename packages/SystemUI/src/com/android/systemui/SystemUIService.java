@@ -69,11 +69,11 @@ public class SystemUIService extends Service {
         mLogBufferFreezer.attach(mBroadcastDispatcher);
 
         // For debugging RescueParty
-        if (Build.IS_DEBUGGABLE && SystemProperties.getBoolean("debug.crash_sysui", false)) {
+        if (Build.IS_ENG && SystemProperties.getBoolean("debug.crash_sysui", false)) {
             throw new RuntimeException();
         }
 
-        if (Build.IS_DEBUGGABLE) {
+        if (Build.IS_ENG) {
             // b/71353150 - looking for leaked binder proxies
             BinderInternal.nSetBinderProxyCountEnabled(true);
             BinderInternal.nSetBinderProxyCountWatermarks(1000,900);
