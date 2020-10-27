@@ -17,30 +17,17 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE := frameworks-base-overlays
 LOCAL_REQUIRED_MODULES := \
-	AccentColorBlackOverlay \
-	AccentColorCinnamonOverlay \
-	AccentColorOceanOverlay \
-	AccentColorOrchidOverlay \
-	AccentColorSpaceOverlay \
-	AccentColorGreenOverlay \
-	AccentColorPurpleOverlay \
-	AccentColorPaletteOverlay \
-	AccentColorCarbonOverlay \
-	AccentColorSandOverlay \
-	AccentColorAmethystOverlay \
-	AccentColorAquamarineOverlay \
-	AccentColorTangerineOverlay \
-	DisplayCutoutEmulationCornerOverlay \
-	DisplayCutoutEmulationDoubleOverlay \
+    DisplayCutoutEmulationCornerOverlay \
+    DisplayCutoutEmulationDoubleOverlay \
     DisplayCutoutEmulationHoleOverlay \
-	DisplayCutoutEmulationTallOverlay \
-	DisplayCutoutEmulationWaterfallOverlay \
-	IconPackCircularAndroidOverlay \
-	IconPackCircularLauncherOverlay \
-	IconPackCircularSettingsOverlay \
-	IconPackCircularSystemUIOverlay \
-	IconPackCircularThemePickerOverlay \
-	IconPackVictorAndroidOverlay \
+    DisplayCutoutEmulationTallOverlay \
+    DisplayCutoutEmulationWaterfallOverlay \
+    IconPackCircularAndroidOverlay \
+    IconPackCircularLauncherOverlay \
+    IconPackCircularSettingsOverlay \
+    IconPackCircularSystemUIOverlay \
+    IconPackCircularThemePickerOverlay \
+    IconPackVictorAndroidOverlay \
     IconPackVictorLauncherOverlay \
     IconPackVictorSettingsOverlay \
     IconPackVictorSystemUIOverlay \
@@ -55,23 +42,23 @@ LOCAL_REQUIRED_MODULES := \
     IconPackKaiSettingsOverlay \
     IconPackKaiSystemUIOverlay \
     IconPackKaiThemePickerOverlay \
-	IconPackFilledAndroidOverlay \
-	IconPackFilledLauncherOverlay \
-	IconPackFilledSettingsOverlay \
-	IconPackFilledSystemUIOverlay \
-	IconPackFilledThemePickerOverlay \
-	IconPackRoundedAndroidOverlay \
-	IconPackRoundedLauncherOverlay \
-	IconPackRoundedSettingsOverlay \
-	IconPackRoundedSystemUIOverlay \
-	IconPackRoundedThemePickerOverlay \
-	NavigationBarMode2ButtonOverlay \
-	NavigationBarMode3ButtonOverlay \
-	NavigationBarModeGesturalOverlay \
-	NavigationBarModeGesturalOverlayNarrowBack \
-	NavigationBarModeGesturalOverlayWideBack \
-	NavigationBarModeGesturalOverlayExtraWideBack \
-	preinstalled-packages-platform-overlays.xml
+    IconPackFilledAndroidOverlay \
+    IconPackFilledLauncherOverlay \
+    IconPackFilledSettingsOverlay \
+    IconPackFilledSystemUIOverlay \
+    IconPackFilledThemePickerOverlay \
+    IconPackRoundedAndroidOverlay \
+    IconPackRoundedLauncherOverlay \
+    IconPackRoundedSettingsOverlay \
+    IconPackRoundedSystemUIOverlay \
+    IconPackRoundedThemePickerOverlay \
+    NavigationBarMode2ButtonOverlay \
+    NavigationBarMode3ButtonOverlay \
+    NavigationBarModeGesturalOverlay \
+    NavigationBarModeGesturalOverlayNarrowBack \
+    NavigationBarModeGesturalOverlayWideBack \
+    NavigationBarModeGesturalOverlayExtraWideBack \
+    preinstalled-packages-platform-overlays.xml
 
 include $(BUILD_PHONY_PACKAGE)
 include $(CLEAR_VARS)
