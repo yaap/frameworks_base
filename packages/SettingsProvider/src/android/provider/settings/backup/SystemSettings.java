@@ -129,5 +129,6 @@ public class SystemSettings {
         Settings.System.VIBRATE_ON_CONNECT,
         Settings.System.VIBRATE_ON_CALLWAITING,
         Settings.System.VIBRATE_ON_DISCONNECT,
+        Settings.System.VOLUME_DIALOG_TIMEOUT,
     };
 }
