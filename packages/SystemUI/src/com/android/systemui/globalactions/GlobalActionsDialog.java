@@ -260,6 +260,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
     private CurrentUserContextTracker mCurrentUserContextTracker;
     @VisibleForTesting
     boolean mShowLockScreenCardsAndControls = false;
+    boolean mShowAdvancedRebootOnKeyguard = false;
 
     @VisibleForTesting
     public enum GlobalActionsEvent implements UiEventLogger.UiEventEnum {
@@ -418,6 +419,15 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
         onPowerMenuLockScreenSettingsChanged();
         mContext.getContentResolver().registerContentObserver(
                 Settings.Secure.getUriFor(Settings.Secure.POWER_MENU_LOCKED_SHOW_CONTENT),
+                false /* notifyForDescendants */,
+                new ContentObserver(mMainHandler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        onPowerMenuLockScreenSettingsChanged();
+                    }
+                });
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ADVANCED_REBOOT_KEYGUARD),
                 false /* notifyForDescendants */,
                 new ContentObserver(mMainHandler) {
                     @Override
@@ -613,7 +623,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
                 mWindowManagerFuncs, mHandler) {
 
             public boolean showDuringKeyguard() {
-                return true;
+                return mShowAdvancedRebootOnKeyguard;
             }
 
             public boolean showBeforeProvisioning() {
@@ -628,7 +638,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
                 mWindowManagerFuncs, mHandler) {
 
             public boolean showDuringKeyguard() {
-                return true;
+                return mShowAdvancedRebootOnKeyguard;
             }
 
             public boolean showBeforeProvisioning() {
@@ -643,7 +653,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
                 mWindowManagerFuncs, mHandler) {
 
             public boolean showDuringKeyguard() {
-                return true;
+                return mShowAdvancedRebootOnKeyguard;
             }
 
             public boolean showBeforeProvisioning() {
@@ -716,7 +726,8 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
             addedKeys.add(actionKey);
         }
 
-        if (tempActions.contains(restartAction)) {
+        // do only if at least one advanced restart item was added
+        if (tempActions.contains(restartAction) && tempActions.contains(restartBootloaderAction)) {
             // transfer restart and advanced restart to their own list of power actions
             // and position it where Reset button was supposed to be
             int powerOptionsIndex = tempActions.indexOf(restartAction);
@@ -731,15 +742,16 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
 
             // add the PowerOptionsAction after Emergency and Shutdown action, if present
             tempActions.add(powerOptionsIndex, new PowerOptionsAction());
-        }
-        // Add also Power to power actions list, if needed
-        if (tempActions.contains(shutdownAction) && mPowerItems.size() > 1
-                /*tempActions.size gets in count already PowerOptionsAction if added*/
-                && tempActions.size() > getMaxShownPowerItems()) {
-            tempActions.remove(shutdownAction);
-            mPowerItems.add(0, shutdownAction);
+            // Add also Power to power actions list, if needed
+            if (tempActions.contains(shutdownAction) && mPowerItems.size() > 1
+                    /*tempActions.size gets in count already PowerOptionsAction if added*/
+                    && tempActions.size() > getMaxShownPowerItems()) {
+                tempActions.remove(shutdownAction);
+                mPowerItems.add(0, shutdownAction);
 
+            }
         }
+
         for (Action action : tempActions) {
             addActionItem(action);
         }
@@ -2833,6 +2845,8 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
     private void onPowerMenuLockScreenSettingsChanged() {
         mShowLockScreenCardsAndControls = Settings.Secure.getInt(mContentResolver,
                 Settings.Secure.POWER_MENU_LOCKED_SHOW_CONTENT, 0) != 0;
+        mShowAdvancedRebootOnKeyguard = Settings.Secure.getInt(mContentResolver,
+                Settings.Secure.ADVANCED_REBOOT_KEYGUARD, 0) != 0;
     }
 
     public static void restartSystemUI(Context ctx) {
