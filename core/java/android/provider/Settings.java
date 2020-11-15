@@ -5219,6 +5219,13 @@ public final class Settings {
          * @hide
          */
         public static final String QS_MEDIA_PLAYER = "qs_media_player";
+
+        /**
+         * Whether to show media album art on keyguard
+         * @hide
+         */
+        public static final String KEYGAURD_MEDIA_ART = "keygaurd_media_art";
+
         /**
          * IMPORTANT: If you add a new public settings you also have to add it to
          * PUBLIC_SETTINGS below. If the new setting is hidden you have to add
