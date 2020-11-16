@@ -747,9 +747,10 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
             if (tempActions.contains(shutdownAction) && mPowerItems.size() > 1
                     /*tempActions.size gets in count already PowerOptionsAction if added*/
                     && tempActions.size() > getMaxShownPowerItems()) {
+                ((SinglePressAction) tempActions.get(powerOptionsIndex)).setMessageResId(
+                        com.android.systemui.R.string.global_action_restart_advanced_alt);
                 tempActions.remove(shutdownAction);
                 mPowerItems.add(0, shutdownAction);
-
             }
         }
 
@@ -1729,8 +1730,8 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
     private abstract class SinglePressAction implements Action {
         private final int mIconResId;
         private final Drawable mIcon;
-        private final int mMessageResId;
-        private final CharSequence mMessage;
+        private int mMessageResId;
+        private CharSequence mMessage;
 
         protected SinglePressAction(int iconResId, int messageResId) {
             mIconResId = iconResId;
@@ -1770,6 +1771,11 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
 
         public CharSequence getMessage() {
             return mMessage;
+        }
+
+        public void setMessageResId(int messageResId) {
+            mMessageResId = messageResId;
+            mMessage = null;
         }
 
         @Override
