@@ -18,6 +18,7 @@ package com.android.systemui.qs.tiles;
 
 import android.annotation.Nullable;
 import android.content.Intent;
+import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
 import android.service.quicksettings.Tile;
@@ -26,11 +27,13 @@ import android.widget.Switch;
 
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.systemui.R;
+import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.plugins.qs.QSTile.BooleanState;
 import com.android.systemui.qs.QSHost;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
 import com.android.systemui.statusbar.policy.DataSaverController;
 import com.android.systemui.statusbar.policy.HotspotController;
+import com.android.systemui.statusbar.policy.KeyguardStateController;
 
 import javax.inject.Inject;
 
@@ -40,18 +43,24 @@ public class HotspotTile extends QSTileImpl<BooleanState> {
 
     private final HotspotController mHotspotController;
     private final DataSaverController mDataSaverController;
+    private final ActivityStarter mActivityStarter;
+    private final KeyguardStateController mKeyguard;
 
     private final HotspotAndDataSaverCallbacks mCallbacks = new HotspotAndDataSaverCallbacks();
     private boolean mListening;
 
     @Inject
     public HotspotTile(QSHost host, HotspotController hotspotController,
-            DataSaverController dataSaverController) {
+            DataSaverController dataSaverController,
+            KeyguardStateController keyguardStateController,
+            ActivityStarter activityStarter) {
         super(host);
         mHotspotController = hotspotController;
         mDataSaverController = dataSaverController;
         mHotspotController.observe(this, mCallbacks);
         mDataSaverController.observe(this, mCallbacks);
+        mKeyguard = keyguardStateController;
+        mActivityStarter = activityStarter;
     }
 
     @Override
@@ -90,9 +99,25 @@ public class HotspotTile extends QSTileImpl<BooleanState> {
         if (!isEnabled && mDataSaverController.isDataSaverEnabled()) {
             return;
         }
+        if (mKeyguard.isMethodSecure() && mKeyguard.isShowing() && isUnlockingRequired()) {
+            mActivityStarter.postQSRunnableDismissingKeyguard(() -> {
+                setEnabled(isEnabled);
+            });
+            return;
+        }
+        setEnabled(isEnabled);
+    }
+
+    private void setEnabled(boolean isEnabled) {
         // Immediately enter transient enabling state when turning hotspot on.
         refreshState(isEnabled ? null : ARG_SHOW_TRANSIENT_ENABLING);
         mHotspotController.setHotspotEnabled(!isEnabled);
+    }
+
+    private boolean isUnlockingRequired() {
+        return (Settings.Secure.getIntForUser(
+                mContext.getContentResolver(), Settings.Secure.QSTILE_REQUIRES_UNLOCKING, 1,
+                UserHandle.USER_CURRENT) == 1);
     }
 
     @Override

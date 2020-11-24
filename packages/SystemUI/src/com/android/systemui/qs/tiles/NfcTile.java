@@ -23,6 +23,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.nfc.NfcAdapter;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.service.quicksettings.Tile;
 import android.widget.Switch;
@@ -30,9 +31,11 @@ import android.widget.Switch;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.systemui.R;
 import com.android.systemui.broadcast.BroadcastDispatcher;
+import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.plugins.qs.QSTile.BooleanState;
 import com.android.systemui.qs.QSHost;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
+import com.android.systemui.statusbar.policy.KeyguardStateController;
 
 import javax.inject.Inject;
 
@@ -40,6 +43,8 @@ import javax.inject.Inject;
 public class NfcTile extends QSTileImpl<BooleanState> {
 
     private final Icon mIcon = ResourceIcon.get(R.drawable.ic_qs_nfc);
+    private final ActivityStarter mActivityStarter;
+    private final KeyguardStateController mKeyguard;
 
     private NfcAdapter mAdapter;
     private BroadcastDispatcher mBroadcastDispatcher;
@@ -47,9 +52,13 @@ public class NfcTile extends QSTileImpl<BooleanState> {
     private boolean mListening;
 
     @Inject
-    public NfcTile(QSHost host, BroadcastDispatcher broadcastDispatcher) {
+    public NfcTile(QSHost host, BroadcastDispatcher broadcastDispatcher,
+            KeyguardStateController keyguardStateController,
+            ActivityStarter activityStarter) {
         super(host);
         mBroadcastDispatcher = broadcastDispatcher;
+        mKeyguard = keyguardStateController;
+        mActivityStarter = activityStarter;
     }
 
     @Override
@@ -88,11 +97,27 @@ public class NfcTile extends QSTileImpl<BooleanState> {
         if (getAdapter() == null) {
             return;
         }
+        if (mKeyguard.isMethodSecure() && mKeyguard.isShowing() && isUnlockingRequired()) {
+            mActivityStarter.postQSRunnableDismissingKeyguard(() -> {
+                setEnabled();
+            });
+            return;
+        }
+        setEnabled();
+    }
+
+    private void setEnabled() {
         if (!getAdapter().isEnabled()) {
             getAdapter().enable();
         } else {
             getAdapter().disable();
         }
+    }
+
+    private boolean isUnlockingRequired() {
+        return (Settings.Secure.getIntForUser(
+                mContext.getContentResolver(), Settings.Secure.QSTILE_REQUIRES_UNLOCKING, 1,
+                UserHandle.USER_CURRENT) == 1);
     }
 
     @Override
