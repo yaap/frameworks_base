@@ -6071,7 +6071,9 @@ public final class Settings {
 
         /**
          * Style of battery to show.
-         *
+         * 0 = protrait (default)
+         * 1 = circle
+         * 2 = text
          * @hide
          */
         @Readable
