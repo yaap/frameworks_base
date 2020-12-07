@@ -129,6 +129,8 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
     private final SparseArray<Pair<HeightExpansionAnimator, TouchAnimator>>
             mNonFirstPageQSAnimators = new SparseArray<>();
 
+    private final TunerService mTunerService;
+
     private boolean mNeedsAnimatorUpdate = false;
     private boolean mOnKeyguard;
 
@@ -157,6 +159,7 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
         mHost = qsTileHost;
         mExecutor = executor;
         mQSExpansionPathInterpolator = qsExpansionPathInterpolator;
+        mTunerService = tunerService;
         mHost.addCallback(this);
         mQsPanelController.addOnAttachStateChangeListener(this);
         qs.getView().addOnLayoutChangeListener(this);
@@ -431,15 +434,6 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
             }
         }
 
-        animateBrightnessSlider();
-
-        mFirstPageAnimator = firstPageBuilder
-                // Fade in the tiles/labels as we reach the final position.
-                .addFloat(tileLayout, "alpha", 0, 1)
-                .addFloat(quadraticInterpolatorBuilder.build(), "position", 0, 1)
-                .setListener(this)
-                .build();
-
         // Fade in the media player as we reach the final position
         Builder builder = new Builder().setStartDelay(EXPANDED_TILE_DELAY);
         if (mQsPanelController.shouldUseHorizontalLayout()
@@ -449,6 +443,24 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
             // In portrait, media view should always be visible
             mQsPanelController.mMediaHost.hostView.setAlpha(1.0f);
         }
+
+        View qsBrightness = mQsPanelController.getBrightnessView();
+        final boolean bottom = mTunerService.getValue(
+                QSPanel.QS_BRIGHTNESS_POSITION_BOTTOM, 0) == 1;
+        if (bottom) {
+            // If brightness is showing at the bottom fade in as we reach the final position
+            builder.addFloat(qsBrightness, "alpha", 0, 1);
+            mBrightnessTranslationAnimator = null;
+            mBrightnessOpacityAnimator = null;
+        }
+        animateBrightnessSlider(bottom);
+        mFirstPageAnimator = firstPageBuilder
+                // Fade in the tiles/labels as we reach the final position.
+                .addFloat(tileLayout, "alpha", 0, 1)
+                .addFloat(quadraticInterpolatorBuilder.build(), "position", 0, 1)
+                .setListener(this)
+                .build();
+
         mAllPagesDelayedAnimator = builder.build();
         translationYBuilder.setInterpolator(mQSExpansionPathInterpolator.getYInterpolator());
         qqsTranslationYBuilder.setInterpolator(mQSExpansionPathInterpolator.getYInterpolator());
@@ -557,7 +569,7 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
         return new Pair<>(animator, builder.build());
     }
 
-    private void animateBrightnessSlider() {
+    private void animateBrightnessSlider(boolean bottom) {
         mBrightnessTranslationAnimator = null;
         mBrightnessOpacityAnimator = null;
         View qsBrightness = mQsPanelController.getBrightnessView();
@@ -591,12 +603,14 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
 
             // For (2), the slider scales to the vertical center, so compensate with half the
             // height at full collapse.
-            float scaleCompensation = qsBrightness.getMeasuredHeight() * 0.5f;
-            mBrightnessTranslationAnimator = new Builder()
-                    .addFloat(qsBrightness, "translationY", scaleCompensation + tileMovement, 0)
-                    .addFloat(qsBrightness, "sliderScaleY", 0, 1)
-                    .setInterpolator(mQSExpansionPathInterpolator.getYInterpolator())
-                    .build();
+            if (!bottom) {
+                float scaleCompensation = qsBrightness.getMeasuredHeight() * 0.5f;
+                mBrightnessTranslationAnimator = new Builder()
+                        .addFloat(qsBrightness, "translationY", scaleCompensation + tileMovement, 0)
+                        .addFloat(qsBrightness, "sliderScaleY", 0, 1)
+                        .setInterpolator(mQSExpansionPathInterpolator.getYInterpolator())
+                        .build();
+            }
 
             // While the slider's position and unfurl is animated throughouth the motion, the
             // fade in happens independently.
