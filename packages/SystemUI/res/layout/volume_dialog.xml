@@ -89,7 +89,7 @@
                 android:id="@+id/media_output_container"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="?android:attr/panelColorBackground">
+                android:background="@android:color/transparent">
                 <com.android.keyguard.AlphaOptimizedImageButton
                     android:id="@+id/media_output"
                     android:src="@drawable/ic_bluetooth_audio"
