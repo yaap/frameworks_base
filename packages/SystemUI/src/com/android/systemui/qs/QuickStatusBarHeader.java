@@ -129,6 +129,7 @@ public class QuickStatusBarHeader extends RelativeLayout implements
     protected QSTileHost mHost;
     private TintedIconManager mIconManager;
     private TouchAnimator mStatusIconsAlphaAnimator;
+    private TouchAnimator mStatusDateAlphaAnimator;
     private TouchAnimator mHeaderTextContainerAlphaAnimator;
     private TouchAnimator mPrivacyChipAlphaAnimator;
     private DualToneHandler mDualToneHandler;
@@ -158,6 +159,7 @@ public class QuickStatusBarHeader extends RelativeLayout implements
     private boolean mAllIndicatorsEnabled;
     private boolean mMicCameraIndicatorsEnabled;
     private BatteryMeterView mBatteryMeterView;
+    private StatusIconContainer mStatusIconContainer;
 
     private PrivacyItemController mPrivacyItemController;
     private final UiEventLogger mUiEventLogger;
@@ -233,11 +235,11 @@ public class QuickStatusBarHeader extends RelativeLayout implements
         mHeaderQsPanel = findViewById(R.id.quick_qs_panel);
         mSystemIconsView = findViewById(R.id.quick_status_bar_system_icons);
         mQuickQsStatusIcons = findViewById(R.id.quick_qs_status_icons);
-        StatusIconContainer iconContainer = findViewById(R.id.statusIcons);
+        mStatusIconContainer = findViewById(R.id.statusIcons);
         // Ignore privacy icons because they show in the space above QQS
-        iconContainer.addIgnoredSlots(getIgnoredIconSlots());
-        iconContainer.setShouldRestrictIcons(false);
-        mIconManager = new TintedIconManager(iconContainer, mCommandQueue);
+        mStatusIconContainer.addIgnoredSlots(getIgnoredIconSlots());
+        mStatusIconContainer.setShouldRestrictIcons(false);
+        mIconManager = new TintedIconManager(mStatusIconContainer, mCommandQueue);
 
         mBatteryMeterView = findViewById(R.id.battery);
         mBatteryMeterView.setForceShowPercent(true);
@@ -323,6 +325,7 @@ public class QuickStatusBarHeader extends RelativeLayout implements
             boolean ringerVisible = mRingerModeTextView.getVisibility() == View.VISIBLE;
             mStatusSeparator.setVisibility(alarmVisible && ringerVisible ? View.VISIBLE
                     : View.GONE);
+            updateDateViewAlphaAnimator(alarmVisible || ringerVisible);
         }
     }
 
@@ -446,14 +449,33 @@ public class QuickStatusBarHeader extends RelativeLayout implements
         setLayoutParams(lp);
 
         updateStatusIconAlphaAnimator();
+        updateDateViewAlphaAnimator();
         updateHeaderTextContainerAlphaAnimator();
         updatePrivacyChipAlphaAnimator();
     }
 
     private void updateStatusIconAlphaAnimator() {
         mStatusIconsAlphaAnimator = new TouchAnimator.Builder()
-                .addFloat(mQuickQsStatusIcons, "alpha", 1, 0, 0)
+                .addFloat(mStatusIconContainer, "alpha", 1, 0, 0)
                 .build();
+    }
+
+    private void updateDateViewAlphaAnimator() {
+        boolean statusVisible =
+                mNextAlarmTextView.getVisibility() == View.VISIBLE ||
+                mRingerModeTextView.getVisibility() == View.VISIBLE;
+        updateDateViewAlphaAnimator(statusVisible);
+    }
+
+    private void updateDateViewAlphaAnimator(boolean statusVisible) {
+        if (mExpanded) mDateView.setAlpha(statusVisible ? 0 : 1);
+        if (statusVisible) {
+            mStatusDateAlphaAnimator = new TouchAnimator.Builder()
+                    .addFloat(mDateView, "alpha", 1, 0, 0)
+                    .build();
+            return;
+        }
+        mStatusDateAlphaAnimator = null;
     }
 
     private void updateHeaderTextContainerAlphaAnimator() {
@@ -489,13 +511,18 @@ public class QuickStatusBarHeader extends RelativeLayout implements
         if (mStatusIconsAlphaAnimator != null) {
             mStatusIconsAlphaAnimator.setPosition(keyguardExpansionFraction);
         }
+        if (mStatusDateAlphaAnimator != null) {
+            mStatusDateAlphaAnimator.setPosition(keyguardExpansionFraction);
+        }
 
         if (forceExpanded) {
             // If the keyguard is showing, we want to offset the text so that it comes in at the
             // same time as the panel as it slides down.
             mHeaderTextContainerView.setTranslationY(panelTranslationY);
+            mDateView.setTranslationY(panelTranslationY);
         } else {
             mHeaderTextContainerView.setTranslationY(0f);
+            mDateView.setTranslationY(0f);
         }
 
         if (mHeaderTextContainerAlphaAnimator != null) {
