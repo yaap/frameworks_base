@@ -468,15 +468,9 @@ public class QSPanel extends LinearLayout implements Callback, BrightnessMirrorL
         boolean above = Settings.System.getIntForUser(mContext.getContentResolver(),
                 Settings.System.QS_SHOW_BRIGHTNESS_ABOVE_FOOTER, 0,
                 UserHandle.USER_CURRENT) == 1;
-        boolean shouldUseFooter = above && (!mMediaVisible || !mUsingMediaPlayer);
-        View seekView = shouldUseFooter ? mFooter : mDivider;
-        for (int i = 0; i < getChildCount(); i++) {
-            View v = getChildAt(i);
-            if (v == seekView) {
-                return i;
-            }
-        }
-        return 0;
+        boolean shouldUseFooter = above && !shouldUseHorizontalLayout();
+        int index = indexOfChild(shouldUseFooter ? mFooter : mDivider);
+        return (index == -1) ? 0 : index;
     }
 
     public void updateViewVisibilityForTuningValue(boolean visible) {
@@ -740,6 +734,7 @@ public class QSPanel extends LinearLayout implements Callback, BrightnessMirrorL
             updateHorizontalLinearLayoutMargins();
             updatePadding();
             updateMinRows();
+            updateBrightnessSliderPosition();
             return true;
         }
         updateMinRows();
