@@ -279,7 +279,27 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.NOTIFICATION_PULSE_DURATION, ANY_INTEGER_VALIDATOR);
         VALIDATORS.put(System.NAVIGATION_BAR_ARROW_KEYS, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.NAVIGATION_BAR_INVERSE, BOOLEAN_VALIDATOR);
-        VALIDATORS.put(System.NAVBAR_LAYOUT_VIEWS, ANY_STRING_VALIDATOR); // TODO: write a peoper validator
+        VALIDATORS.put(System.NAVBAR_LAYOUT_VIEWS,
+                new Validator() {
+                    @Override
+                    public boolean validate(String value) {
+                        if (value.equals("default")) return true;
+                        int scCount = value.length() - value.replace(";", "").length();
+                        if (scCount != 2) return false;
+                        value = value.replace(";", ",");
+                        String[] args = value.split(",", 0);
+                        for (String str : args) {
+                            if (!str.equals("left") &&
+                                !str.equals("right") &&
+                                !str.equals("back") &&
+                                !str.equals("home") &&
+                                !str.equals("recent") &&
+                                !str.equals("space"))
+                                return false;
+                        }
+                        return true;
+                    }
+                });
         VALIDATORS.put(System.QS_MEDIA_PLAYER, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.KEYGAURD_MEDIA_ART, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.STATUS_BAR_BATTERY_STYLE, new InclusiveIntegerRangeValidator(0, 2));
