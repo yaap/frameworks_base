@@ -9279,13 +9279,24 @@ public final class Settings {
 
         /**
          * What behavior should be invoked when the volume hush gesture is triggered
-         * One of VOLUME_HUSH_OFF, VOLUME_HUSH_VIBRATE, VOLUME_HUSH_MUTE, VOLUME_HUSH_CYCLE.
-         *
+         * Either YAAP_VOLUME_HUSH_OFF or a comma separated list of modes. One or more of:
+         * YAAP_VOLUME_HUSH_NORMAL, YAAP_VOLUME_HUSH_VIBRATE, YAAP_VOLUME_HUSH_MUTE
          * @hide
          */
         @SystemApi
         public static final String VOLUME_HUSH_GESTURE = "volume_hush_gesture";
 
+        /** @hide */
+        public static final String YAAP_VOLUME_HUSH_OFF = "off";
+        /** @hide */
+        public static final String YAAP_VOLUME_HUSH_NORMAL = "normal";
+        /** @hide */
+        public static final String YAAP_VOLUME_HUSH_VIBRATE = "vibrate";
+        /** @hide */
+        public static final String YAAP_VOLUME_HUSH_MUTE = "mute";
+
+        // Following ints are now useless
+        // We can't remove or change those without changing the sdk
         /** @hide */
         @SystemApi
         public static final int VOLUME_HUSH_OFF = 0;
@@ -9295,9 +9306,6 @@ public final class Settings {
         /** @hide */
         @SystemApi
         public static final int VOLUME_HUSH_MUTE = 2;
-        /** @hide */
-        @SystemApi
-        public static final int VOLUME_HUSH_CYCLE = 3;
 
         /**
          * The number of times (integer) the user has manually enabled battery saver.

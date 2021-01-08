@@ -32,7 +32,7 @@ import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.content.res.Configuration.EMPTY;
 import static android.os.Build.VERSION_CODES.M;
 import static android.os.Build.VERSION_CODES.O;
-import static android.provider.Settings.Secure.VOLUME_HUSH_OFF;
+import static android.provider.Settings.Secure.YAAP_VOLUME_HUSH_OFF;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.INVALID_DISPLAY;
 import static android.view.Display.STATE_OFF;
@@ -591,7 +591,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private long mScreenshotChordPowerKeyTime;
 
     // Ringer toggle should reuse timing and triggering from screenshot power and a11y vol up
-    private int mRingerToggleChord = VOLUME_HUSH_OFF;
+    private String mRingerToggleChord = YAAP_VOLUME_HUSH_OFF;
 
     private static final long BUGREPORT_TV_GESTURE_TIMEOUT_MILLIS = 1000;
 
@@ -873,13 +873,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     };
 
     private void handleRingerChordGesture() {
-        if (mRingerToggleChord == VOLUME_HUSH_OFF) {
-            return;
-        }
+        if (mRingerToggleChord == null ||
+                mRingerToggleChord.equals(YAAP_VOLUME_HUSH_OFF)) return;
         getAudioManagerInternal();
         mAudioManagerInternal.silenceRingerModeInternal("volume_hush");
         Settings.Secure.putInt(mContext.getContentResolver(), Settings.Secure.HUSH_GESTURE_USED, 1);
-        mLogger.action(MetricsProto.MetricsEvent.ACTION_HUSH_GESTURE, mRingerToggleChord);
     }
 
     IStatusBarService getStatusBarService() {
@@ -1457,7 +1455,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void interceptRingerToggleChord() {
-        if (mRingerToggleChord != Settings.Secure.VOLUME_HUSH_OFF
+        if (mRingerToggleChord != null && !mRingerToggleChord.equals(YAAP_VOLUME_HUSH_OFF)
                 && mScreenshotChordPowerKeyTriggered && mA11yShortcutChordVolumeUpKeyTriggered) {
             final long now = SystemClock.uptimeMillis();
             if (now <= mA11yShortcutChordVolumeUpKeyTime + SCREENSHOT_CHORD_DEBOUNCE_DELAY_MILLIS
@@ -2163,15 +2161,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mSystemNavigationKeysEnabled = Settings.Secure.getIntForUser(resolver,
                     Settings.Secure.SYSTEM_NAVIGATION_KEYS_ENABLED,
                     0, UserHandle.USER_CURRENT) == 1;
-            mRingerToggleChord = Settings.Secure.getIntForUser(resolver,
-                    Settings.Secure.VOLUME_HUSH_GESTURE, VOLUME_HUSH_OFF,
+            mRingerToggleChord = Settings.Secure.getStringForUser(resolver,
+                    Settings.Secure.VOLUME_HUSH_GESTURE,
                     UserHandle.USER_CURRENT);
             mPowerButtonSuppressionDelayMillis = Settings.Global.getInt(resolver,
                     Settings.Global.POWER_BUTTON_SUPPRESSION_DELAY_AFTER_GESTURE_WAKE,
                     POWER_BUTTON_SUPPRESSION_DELAY_DEFAULT_MILLIS);
             if (!mContext.getResources()
                     .getBoolean(com.android.internal.R.bool.config_volumeHushGestureEnabled)) {
-                mRingerToggleChord = Settings.Secure.VOLUME_HUSH_OFF;
+                mRingerToggleChord = Settings.Secure.YAAP_VOLUME_HUSH_OFF;
             }
 
 
@@ -2807,7 +2805,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         // If a ringer toggle chord could be on the way but we're not sure, then tell the dispatcher
         // to wait a little while and try again later before dispatching.
-        if (mRingerToggleChord != VOLUME_HUSH_OFF && (flags & KeyEvent.FLAG_FALLBACK) == 0) {
+        if (mRingerToggleChord != null && !mRingerToggleChord.equals(YAAP_VOLUME_HUSH_OFF)
+                && (flags & KeyEvent.FLAG_FALLBACK) == 0) {
             if (mA11yShortcutChordVolumeUpKeyTriggered && !mScreenshotChordPowerKeyTriggered) {
                 final long now = SystemClock.uptimeMillis();
                 final long timeoutTime = mA11yShortcutChordVolumeUpKeyTime
