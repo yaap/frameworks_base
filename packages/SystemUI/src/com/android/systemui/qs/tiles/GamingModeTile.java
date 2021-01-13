@@ -40,6 +40,7 @@ import android.widget.Toast;
 
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
+import com.android.internal.util.hwkeys.ActionUtils;
 import com.android.systemui.Dependency;
 import com.android.systemui.Prefs;
 import com.android.systemui.R;
@@ -262,7 +263,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         Prefs.putInt(mContext, KEY_ZEN_STATE, Settings.Global.getInt(mResolver,
                 Settings.Global.ZEN_MODE, 0) != 0 ? 1 : 0);
         Prefs.putInt(mContext, KEY_NAVBAR_STATE, Settings.System.getInt(mResolver,
-                Settings.System.FORCE_SHOW_NAVBAR, 1));
+                Settings.System.FORCE_SHOW_NAVBAR,
+                ActionUtils.hasNavbarByDefault(mContext) ? 1 : 0));
         Prefs.putInt(mContext, KEY_HW_KEYS_STATE, Settings.Secure.getInt(mResolver,
                 Settings.Secure.HARDWARE_KEYS_DISABLE, 0));
         Prefs.putInt(mContext, KEY_BRIGHTNESS_STATE, Settings.System.getInt(mResolver,
