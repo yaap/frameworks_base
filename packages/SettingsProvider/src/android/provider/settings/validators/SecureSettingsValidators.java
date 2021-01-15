@@ -272,5 +272,20 @@ public class SecureSettingsValidators {
                 Secure.ASSIST_HANDLES_LEARNING_TIME_ELAPSED_MILLIS, NONE_NEGATIVE_LONG_VALIDATOR);
         VALIDATORS.put(Secure.ASSIST_HANDLES_LEARNING_EVENT_COUNT, NON_NEGATIVE_INTEGER_VALIDATOR);
         VALIDATORS.put(Secure.FOD_ON_DOZE, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.NAVBAR_PULSE_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.LOCKSCREEN_PULSE_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.PULSE_COLOR_MODE, new InclusiveIntegerRangeValidator(0, 3));
+        VALIDATORS.put(Secure.PULSE_COLOR_USER, ANY_INTEGER_VALIDATOR);
+        VALIDATORS.put(Secure.PULSE_LAVALAMP_SPEED, new InclusiveIntegerRangeValidator(200, 30000));
+        VALIDATORS.put(Secure.PULSE_RENDER_STYLE, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.PULSE_CUSTOM_DIMEN, new InclusiveIntegerRangeValidator(1, 30));
+        VALIDATORS.put(Secure.PULSE_CUSTOM_DIV, new InclusiveIntegerRangeValidator(2, 44));
+        VALIDATORS.put(Secure.PULSE_FILLED_BLOCK_SIZE, new InclusiveIntegerRangeValidator(4, 8));
+        VALIDATORS.put(Secure.PULSE_EMPTY_BLOCK_SIZE, new InclusiveIntegerRangeValidator(0, 4));
+        VALIDATORS.put(Secure.PULSE_CUSTOM_FUDGE_FACTOR, new InclusiveIntegerRangeValidator(2, 6));
+        VALIDATORS.put(Secure.PULSE_SOLID_FUDGE_FACTOR, new InclusiveIntegerRangeValidator(2, 7));
+        VALIDATORS.put(Secure.PULSE_SOLID_UNITS_COUNT, new InclusiveIntegerRangeValidator(32, 128));
+        VALIDATORS.put(Secure.PULSE_SOLID_UNITS_OPACITY, new InclusiveIntegerRangeValidator(0, 255));
+        VALIDATORS.put(Secure.PULSE_SMOOTHING_ENABLED, BOOLEAN_VALIDATOR);
     }
 }
