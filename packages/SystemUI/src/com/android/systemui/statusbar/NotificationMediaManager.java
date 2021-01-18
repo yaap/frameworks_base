@@ -38,6 +38,7 @@ import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.AsyncTask;
 import android.os.Trace;
+import android.os.UserHandle;
 import android.service.notification.NotificationStats;
 import android.service.notification.StatusBarNotification;
 import android.provider.Settings;
@@ -543,12 +544,6 @@ public class NotificationMediaManager implements Dumpable {
         if (mIsLockscreenLiveWallpaperEnabled) return;
 
         Trace.beginSection("CentralSurfaces#updateMediaMetaData");
-        boolean mediaArt = Settings.System.getIntForUser(mContext.getContentResolver(),
-                Settings.System.KEYGAURD_MEDIA_ART, 0, UserHandle.USER_CURRENT) == 1;
-        if (!mediaArt) {
-            Trace.endSection();
-            return;
-        }
 
         if (getBackDropView() == null) {
             Trace.endSection();
@@ -590,7 +585,7 @@ public class NotificationMediaManager implements Dumpable {
             mProcessArtworkTasks.clear();
         }
 
-        if (artworkBitmap != null && mediaArt) {
+        if (artworkBitmap != null) {
             mProcessArtworkTasks.add(new ProcessArtworkTask(this, metaDataChanged,
                     allowEnterAnimation).execute(artworkBitmap));
         } else {
@@ -603,7 +598,11 @@ public class NotificationMediaManager implements Dumpable {
     private void finishUpdateMediaMetaData(boolean metaDataChanged, boolean allowEnterAnimation,
             @Nullable Bitmap bmp) {
         Drawable artworkDrawable = null;
-        if (bmp != null) {
+        // set media artwork as lockscreen wallpaper if player is playing
+        boolean mediaArt = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.KEYGAURD_MEDIA_ART, 0, UserHandle.USER_CURRENT) == 1;
+        if (bmp != null && (mediaArt || !ENABLE_LOCKSCREEN_WALLPAPER) &&
+                PlaybackState.STATE_PLAYING == getMediaControllerPlaybackState(mMediaController)) {
             artworkDrawable = new BitmapDrawable(mBackdropBack.getResources(), bmp);
         }
         boolean hasMediaArtwork = artworkDrawable != null;
