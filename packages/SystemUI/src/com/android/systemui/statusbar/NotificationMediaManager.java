@@ -588,9 +588,7 @@ public class NotificationMediaManager implements Dumpable, MediaDataManager.List
             mProcessArtworkTasks.clear();
         }
 
-        boolean mediaArt = Settings.System.getIntForUser(mContext.getContentResolver(),
-                Settings.System.KEYGAURD_MEDIA_ART, 0, UserHandle.USER_CURRENT) == 1;
-        if (artworkBitmap != null && mediaArt) {
+        if (artworkBitmap != null) {
             mProcessArtworkTasks.add(new ProcessArtworkTask(this, metaDataChanged,
                     allowEnterAnimation).execute(artworkBitmap));
         } else {
@@ -604,7 +602,9 @@ public class NotificationMediaManager implements Dumpable, MediaDataManager.List
             @Nullable Bitmap bmp) {
         Drawable artworkDrawable = null;
         // set media artwork as lockscreen wallpaper if player is playing
-        if (bmp != null && !ENABLE_LOCKSCREEN_WALLPAPER &&
+        boolean mediaArt = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.KEYGAURD_MEDIA_ART, 0, UserHandle.USER_CURRENT) == 1;
+        if (bmp != null && (mediaArt || !ENABLE_LOCKSCREEN_WALLPAPER) &&
                 PlaybackState.STATE_PLAYING == getMediaControllerPlaybackState(mMediaController)) {
             artworkDrawable = new BitmapDrawable(mBackdropBack.getResources(), bmp);
         }
