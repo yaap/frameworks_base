@@ -3528,7 +3528,7 @@ public class AudioService extends IAudioService.Stub
         int index = -1;
         if (silenceRingerSetting.size() == 1) {
             // apply the only enabled mode
-            while (true) {
+            while (index < 2) {
                 index++;
                 if (settingsValue.equals(modeArr.valueAt(index)))
                     break;
