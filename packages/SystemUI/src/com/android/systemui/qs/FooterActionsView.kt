@@ -44,6 +44,7 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
     private lateinit var runningServicesContainer: View
 
     private var qsDisabled = false
+    private var isRunningServicesEnabled = false
     private var expansionAmount = 0f
 
     override fun onFinishInflate() {
@@ -81,11 +82,15 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
         }
     }
 
+    fun setRunningServicesEnablement(enabled: Boolean) {
+        isRunningServicesEnabled = enabled
+    }
+
     private fun updateClickabilities() {
         multiUserSwitch.isClickable = multiUserSwitch.visibility == VISIBLE
         settingsContainer.isClickable = settingsContainer.visibility == VISIBLE
         runningServicesContainer.isClickable = settingsContainer.visibility == VISIBLE
-                && runningServicesContainer.visibility == VISIBLE
+                && runningServicesContainer.visibility == VISIBLE && isRunningServicesEnabled
     }
 
     private fun updateVisibilities(
@@ -93,7 +98,7 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
     ) {
         settingsContainer.visibility = if (qsDisabled) GONE else VISIBLE
         multiUserSwitch.visibility = if (multiUserEnabled) VISIBLE else GONE
-        runningServicesContainer.visibility = if (qsDisabled) GONE else VISIBLE
+        runningServicesContainer.visibility = if (qsDisabled || !isRunningServicesEnabled) GONE else VISIBLE
         val isDemo = UserManager.isDeviceInDemoMode(context)
         settingsContainer.visibility = if (isDemo) INVISIBLE else VISIBLE
     }
