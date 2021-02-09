@@ -79,6 +79,7 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
     private PageIndicator mPageIndicator;
     private TextView mBuildText;
     private boolean mShouldShowBuildText;
+    private boolean mShouldShowServices;
     private View mRunningServicesButton;
 
     private boolean mQsDisabled;
@@ -103,12 +104,49 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
 
     private OnClickListener mExpandClickListener;
 
-    private final ContentObserver mSettingsObserver = new ContentObserver(
-            new Handler(mContext.getMainLooper())) {
+    private final SettingsObserver mSettingsObserver = new SettingsObserver(new Handler(mContext.getMainLooper()));
+    private class SettingsObserver extends ContentObserver {
+        SettingsObserver(Handler handler) {
+            super(handler);
+        }
+
+        public void observe() {
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_SHOW), false,
+                    mSettingsObserver, UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_STRING), false,
+                    mSettingsObserver, UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.QS_FOOTER_SERVICES_SHOW), false,
+                    mSettingsObserver, UserHandle.USER_ALL);
+        }
+
+        public void stop() {
+            mContext.getContentResolver().unregisterContentObserver(this);
+        }
+
         @Override
         public void onChange(boolean selfChange, Uri uri) {
             super.onChange(selfChange, uri);
-            setBuildText();
+            if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.QS_FOOTER_SERVICES_SHOW))) {
+                boolean show = Settings.System.getIntForUser(mContext.getContentResolver(),
+                        Settings.System.QS_FOOTER_SERVICES_SHOW, 0,
+                        UserHandle.USER_CURRENT) == 1;
+                if (show != mShouldShowServices) {
+                    mShouldShowServices = show;
+                    updateEverything();
+                }
+            } else {
+                post(() -> setBuildText());
+            }
+        }
+
+        public void update() {
+            mShouldShowServices = Settings.System.getIntForUser(mContext.getContentResolver(),
+                    Settings.System.QS_FOOTER_SERVICES_SHOW, 0,
+                    UserHandle.USER_CURRENT) == 1;
         }
     };
 
@@ -155,6 +193,8 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
         mEditContainer = findViewById(R.id.qs_footer_actions_edit_container);
         mBuildText = findViewById(R.id.build);
 
+        mSettingsObserver.update();
+
         // RenderThread is doing more harm than good when touching the header (to expand quick
         // settings), so disable it for this view
         ((RippleDrawable) mSettingsButton.getBackground()).setForceSoftware(true);
@@ -173,13 +213,13 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
     private void setBuildText() {
         if (mBuildText == null) return;
         boolean isShow = Settings.System.getIntForUser(mContext.getContentResolver(),
-                        Settings.System.QS_FOOTER_TEXT_SHOW, 0,
-                        UserHandle.USER_CURRENT) == 1;
+                Settings.System.QS_FOOTER_TEXT_SHOW, 0,
+                UserHandle.USER_CURRENT) == 1;
         String text = Settings.System.getStringForUser(mContext.getContentResolver(),
-                        Settings.System.QS_FOOTER_TEXT_STRING,
-                        UserHandle.USER_CURRENT);
+                Settings.System.QS_FOOTER_TEXT_STRING,
+                UserHandle.USER_CURRENT);
         if (isShow) {
-            mBuildText.setText(text == null || text == "" ? "YAAP" : text);
+            mBuildText.setText(text == null || text.equals("") ? "YAAP" : text);
             // Set as selected for marquee before its made visible, then it won't be announced when
             // it's made visible.
             mBuildText.setSelected(true);
@@ -269,19 +309,14 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        mContext.getContentResolver().registerContentObserver(
-                Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_SHOW), false,
-                mSettingsObserver, UserHandle.USER_ALL);
-        mContext.getContentResolver().registerContentObserver(
-                Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_STRING), false,
-                mSettingsObserver, UserHandle.USER_ALL);
+        mSettingsObserver.observe();
     }
 
     @Override
     @VisibleForTesting
     public void onDetachedFromWindow() {
         setListening(false);
-        mContext.getContentResolver().unregisterContentObserver(mSettingsObserver);
+        mSettingsObserver.stop();
         super.onDetachedFromWindow();
     }
 
@@ -340,7 +375,8 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
         mMultiUserSwitch.setVisibility(showUserSwitcher() ? View.VISIBLE : View.INVISIBLE);
         mEditContainer.setVisibility(isDemo || !mExpanded ? View.INVISIBLE : View.VISIBLE);
         mSettingsButton.setVisibility(isDemo || !mExpanded ? View.INVISIBLE : View.VISIBLE);
-        mRunningServicesButton.setVisibility(!isDemo && mExpanded ? View.VISIBLE : View.INVISIBLE);
+        mRunningServicesButton.setVisibility(mShouldShowServices && !isDemo && mExpanded
+                ? View.VISIBLE : View.INVISIBLE);
         mBuildText.setVisibility(mExpanded && mShouldShowBuildText ? View.VISIBLE : View.GONE);
     }
 

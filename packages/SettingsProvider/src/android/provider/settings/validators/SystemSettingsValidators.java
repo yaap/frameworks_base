@@ -224,6 +224,7 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.OMNI_QS_LAYOUT_COLUMNS, new InclusiveIntegerRangeValidator(3, 8));
         VALIDATORS.put(System.QS_LAYOUT_ROWS, new InclusiveIntegerRangeValidator(2, 3));
         VALIDATORS.put(System.OMNI_QS_TILE_TITLE_VISIBILITY, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.QS_FOOTER_SERVICES_SHOW, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.QS_FOOTER_TEXT_SHOW, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.QS_FOOTER_TEXT_STRING, ANY_STRING_VALIDATOR);
         VALIDATORS.put(System.QS_SHOW_BRIGHTNESS, BOOLEAN_VALIDATOR);

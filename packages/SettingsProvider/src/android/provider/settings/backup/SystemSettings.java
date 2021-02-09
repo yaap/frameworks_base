@@ -98,6 +98,7 @@ public class SystemSettings {
         Settings.System.OMNI_QS_LAYOUT_COLUMNS,
         Settings.System.QS_LAYOUT_ROWS,
         Settings.System.OMNI_QS_TILE_TITLE_VISIBILITY,
+        Settings.System.QS_FOOTER_SERVICES_SHOW,
         Settings.System.QS_FOOTER_TEXT_SHOW,
         Settings.System.QS_FOOTER_TEXT_STRING,
         Settings.System.QS_SHOW_BRIGHTNESS,

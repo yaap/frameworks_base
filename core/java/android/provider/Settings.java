@@ -4908,6 +4908,12 @@ public final class Settings {
         public static final String QS_QUICKBAR_COLUMNS = "qs_quickbar_columns";
 
         /**
+         * Whether to show qs footer Running Services icon
+         * @hide
+         */
+        public static final String QS_FOOTER_SERVICES_SHOW = "qs_footer_services_show";
+
+        /**
          * Whether to show qs footer text
          * @hide
          */
