@@ -43,14 +43,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Trace;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.IndentingPrintWriter;
@@ -611,6 +615,34 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
         }
     };
 
+    private CustomSettingsObserver mCustomSettingsObserver = new CustomSettingsObserver(new Handler());
+    private class CustomSettingsObserver extends ContentObserver {
+        CustomSettingsObserver(Handler handler) {
+            super(handler);
+        }
+
+        void observe() {
+            mContext.getContentResolver().registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.NOTIFICATION_HEADERS),
+                    false, this, UserHandle.USER_ALL);
+        }
+
+        void stop() {
+            mContext.getContentResolver().unregisterContentObserver(this);
+        }
+
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            update();
+        }
+
+        void update() {
+            boolean enabled = Settings.System.getIntForUser(getContext().getContentResolver(),
+                    Settings.System.NOTIFICATION_HEADERS, 1, UserHandle.USER_CURRENT) == 1;
+            mSectionsManager.setHeadersVisibility(enabled);
+        }
+    }
+
     @Nullable
     private OnClickListener mManageButtonClickListener;
     @Nullable
@@ -774,6 +806,19 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
      */
     boolean hasActiveClearableNotifications(@SelectedRows int selection) {
         return mController.hasActiveClearableNotifications(selection);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        mCustomSettingsObserver.observe();
+        mCustomSettingsObserver.update();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        mCustomSettingsObserver.stop();
     }
 
     public NotificationSwipeActionHelper getSwipeActionHelper() {
