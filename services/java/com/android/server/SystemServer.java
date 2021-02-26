@@ -130,6 +130,7 @@ import com.android.server.devicepolicy.DevicePolicyManagerService;
 import com.android.server.devicestate.DeviceStateManagerService;
 import com.android.server.display.AutoDCDimService;
 import com.android.server.display.AutoDimService;
+import com.android.server.display.AutoAODService;
 import com.android.server.display.DisplayManagerService;
 import com.android.server.display.color.ColorDisplayService;
 import com.android.server.dreams.DreamManagerService;
@@ -1709,6 +1710,12 @@ public final class SystemServer implements Dumpable {
             if (dcdNodePath != null && !dcdNodePath.isEmpty()) {
                 t.traceBegin("AutoDCDimService");
                 mSystemServiceManager.startService(AutoDCDimService.class);
+                t.traceEnd();
+            }
+
+            if (context.getResources().getBoolean(R.bool.config_dozeAlwaysOnDisplayAvailable)) {
+                t.traceBegin("AutoAODService");
+                mSystemServiceManager.startService(AutoAODService.class);
                 t.traceEnd();
             }
         } catch (Throwable e) {
