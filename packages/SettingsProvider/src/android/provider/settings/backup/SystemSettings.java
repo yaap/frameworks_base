@@ -154,5 +154,6 @@ public class SystemSettings {
         Settings.System.SCREENSHOT_GESTURE_DELAY,
         Settings.System.VOLUME_BUTTON_MUSIC_CONTROL,
         Settings.System.VOLUME_BUTTON_MUSIC_CONTROL_DELAY,
+        Settings.System.VOLUME_PANEL_ON_LEFT,
     };
 }

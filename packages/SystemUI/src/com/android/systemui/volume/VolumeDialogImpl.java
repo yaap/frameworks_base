@@ -53,17 +53,20 @@ import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.database.ContentObserver;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Region;
 import android.graphics.drawable.ColorDrawable;
 import android.media.AudioManager;
 import android.media.AudioSystem;
+import android.net.Uri;
 import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.os.UserHandle;
 import android.os.VibrationEffect;
 import android.provider.Settings;
 import android.provider.Settings.Global;
@@ -201,7 +204,7 @@ public class VolumeDialogImpl implements VolumeDialog,
         mShowActiveStreamOnly = showActiveStreamOnly();
         mHasSeenODICaptionsTooltip =
                 Prefs.getBoolean(context, Prefs.Key.HAS_SEEN_ODI_CAPTIONS_TOOLTIP, false);
-        mLeftVolumeRocker = mContext.getResources().getBoolean(R.bool.config_audioPanelOnLeftSide);
+        mCustomSettingsObserver.update();
     }
 
     @Override
@@ -217,6 +220,8 @@ public class VolumeDialogImpl implements VolumeDialog,
         mController.addCallback(mControllerCallbackH, mHandler);
         mController.getState();
 
+        mCustomSettingsObserver.observe();
+
         Dependency.get(ConfigurationController.class).addCallback(this);
     }
 
@@ -224,6 +229,7 @@ public class VolumeDialogImpl implements VolumeDialog,
     public void destroy() {
         mController.removeCallback(mControllerCallbackH);
         mHandler.removeCallbacksAndMessages(null);
+        mCustomSettingsObserver.stop();
         Dependency.get(ConfigurationController.class).removeCallback(this);
     }
 
@@ -232,7 +238,7 @@ public class VolumeDialogImpl implements VolumeDialog,
                 R.dimen.volume_dialog_panel_land_margin);
 
         // Gravitate various views left/right depending on panel placement setting.
-        final int panelGravity = mLeftVolumeRocker ? Gravity.LEFT : Gravity.RIGHT;
+        final int panelGravity = isAudioPanelOnLeftSide() ? Gravity.LEFT : Gravity.RIGHT;
 
         mConfigurableTexts = new ConfigurableTexts(mContext);
         mHovering = false;
@@ -401,6 +407,39 @@ public class VolumeDialogImpl implements VolumeDialog,
         ));
     };
 
+    private CustomSettingsObserver mCustomSettingsObserver = new CustomSettingsObserver(mHandler);
+    private class CustomSettingsObserver extends ContentObserver {
+        CustomSettingsObserver(Handler handler) {
+            super(handler);
+        }
+
+        void observe() {
+            mContext.getContentResolver().registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.VOLUME_PANEL_ON_LEFT),
+                    false, this, UserHandle.USER_ALL);
+        }
+
+        void stop() {
+            mContext.getContentResolver().unregisterContentObserver(this);
+        }
+
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            boolean changed = update();
+            if (changed) mConfigChanged = true;
+        }
+
+        boolean update() {
+            boolean value = Settings.System.getIntForUser(mContext.getContentResolver(),
+                    Settings.System.VOLUME_PANEL_ON_LEFT,
+                    mContext.getResources().getBoolean(R.bool.config_audioPanelOnLeftSide)
+                    ? 1 : 0, UserHandle.USER_CURRENT) == 1;
+            boolean changed = value != mLeftVolumeRocker;
+            mLeftVolumeRocker = value;
+            return changed;
+        }
+    }
+
     // Helper to set layout gravity.
     // Particular useful when the ViewGroup in question
     // is different for portait vs landscape.
@@ -454,7 +493,7 @@ public class VolumeDialogImpl implements VolumeDialog,
         if (D.BUG) Slog.d(TAG, "Adding row for stream " + stream);
         VolumeRow row = new VolumeRow();
         initRow(row, stream, iconRes, iconMuteRes, important, defaultStream);
-        if(!mLeftVolumeRocker){
+        if(!isAudioPanelOnLeftSide()){
             mDialogRowsView.addView(row.view, 0);
         } else {
             mDialogRowsView.addView(row.view);
@@ -468,7 +507,7 @@ public class VolumeDialogImpl implements VolumeDialog,
             final VolumeRow row = mRows.get(i);
             initRow(row, row.stream, row.iconRes, row.iconMuteRes, row.important,
                     row.defaultStream);
-            if(!mLeftVolumeRocker){
+            if(!isAudioPanelOnLeftSide()){
                 mDialogRowsView.addView(row.view, 0);
             } else {
                 mDialogRowsView.addView(row.view);
@@ -883,7 +922,7 @@ public class VolumeDialogImpl implements VolumeDialog,
         if (!mShowing && !mDialog.isShown()) {
             if (!isLandscape()) {
                 mDialogView.setTranslationX(
-                        (mLeftVolumeRocker ? -1 : 1) * mDialogView.getWidth() / 2.0f);
+                        (isAudioPanelOnLeftSide() ? -1 : 1) * mDialogView.getWidth() / 2.0f);
             }
             mDialogView.setAlpha(0);
             mDialogView.animate()
