@@ -32,6 +32,10 @@ import static android.view.View.VISIBLE;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 import static com.android.settingslib.media.MediaOutputSliceConstants.ACTION_LAUNCH_BLUETOOTH_SETTINGS;
+import static com.android.settingslib.media.MediaOutputSliceConstants.ACTION_LAUNCH_MEDIA_OUTPUT_DIALOG;
+import static com.android.settingslib.media.MediaOutputSliceConstants.EXTRA_PACKAGE_NAME;
+import static com.android.settingslib.media.MediaOutputSliceConstants.KEY_MEDIA_SESSION_TOKEN;
+import static com.android.settingslib.media.MediaOutputSliceConstants.SYSTEMUI_PACKAGE_NAME;
 import static com.android.systemui.volume.Events.DISMISS_REASON_SETTINGS_CLICKED;
 
 import android.animation.Animator;
@@ -60,6 +64,9 @@ import android.graphics.Region;
 import android.graphics.drawable.ColorDrawable;
 import android.media.AudioManager;
 import android.media.AudioSystem;
+import android.media.session.MediaController;
+import android.media.session.MediaSessionManager;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Debug;
 import android.os.Handler;
@@ -71,6 +78,7 @@ import android.os.VibrationEffect;
 import android.provider.Settings;
 import android.provider.Settings.Global;
 import android.text.InputFilter;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.Slog;
 import android.util.SparseBooleanArray;
@@ -100,6 +108,8 @@ import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.Nullable;
 
 import com.android.settingslib.Utils;
 import com.android.systemui.Dependency;
@@ -660,6 +670,14 @@ public class VolumeDialogImpl implements VolumeDialog,
                     Settings.Secure.VOLUME_LINK_NOTIFICATION, 1) == 1;
     }
 
+    private void launchBluetoothSettings() {
+        Intent intent = new Intent(ACTION_LAUNCH_BLUETOOTH_SETTINGS);
+        dismissH(DISMISS_REASON_SETTINGS_CLICKED);
+        Dependency.get(MediaOutputDialogFactory.class).dismiss();
+        Dependency.get(ActivityStarter.class).startActivity(intent,
+                true /* dismissShade */);
+    }
+
     public void initSettingsH() {
         if (mMediaOutputView != null) {
             mMediaOutputView.setVisibility(
@@ -671,11 +689,26 @@ public class VolumeDialogImpl implements VolumeDialog,
             mMediaOutputIcon.setOnClickListener(v -> {
                 rescheduleTimeoutH();
                 Events.writeEvent(Events.EVENT_SETTINGS_CLICK);
-                Intent intent = new Intent(ACTION_LAUNCH_BLUETOOTH_SETTINGS);
+                MediaController mediaController = getActiveLocalMediaController(
+                        mContext.getSystemService(MediaSessionManager.class));
+                if (mediaController == null) { // no music is playing
+                    launchBluetoothSettings();
+                    return;
+                }
                 dismissH(DISMISS_REASON_SETTINGS_CLICKED);
-                Dependency.get(MediaOutputDialogFactory.class).dismiss();
-                Dependency.get(ActivityStarter.class).startActivity(intent,
-                        true /* dismissShade */);
+                mContext.sendBroadcast(new Intent()
+                        .setAction(ACTION_LAUNCH_MEDIA_OUTPUT_DIALOG)
+                        .setPackage(SYSTEMUI_PACKAGE_NAME)
+                        .putExtra(EXTRA_PACKAGE_NAME,
+                                mediaController.getPackageName())
+                        .putExtra(KEY_MEDIA_SESSION_TOKEN,
+                                mediaController.getSessionToken()));
+            });
+            mMediaOutputIcon.setOnLongClickListener(v -> {
+                rescheduleTimeoutH();
+                Events.writeEvent(Events.EVENT_SETTINGS_CLICK);
+                launchBluetoothSettings();
+                return true;
             });
         }
 
@@ -1547,6 +1580,51 @@ public class VolumeDialogImpl implements VolumeDialog,
                 button.setPressed(false);
             }
         };
+    }
+
+    /**
+     *  Returns a {@link MediaController} that state is playing and type is local playback,
+     *  and also have active sessions.
+     */
+    @Nullable
+    private static MediaController getActiveLocalMediaController(
+            MediaSessionManager mediaSessionManager) {
+
+        MediaController localController = null;
+        final List<String> remoteMediaSessionLists = new ArrayList<>();
+        for (MediaController controller : mediaSessionManager.getActiveSessions(null)) {
+            final MediaController.PlaybackInfo pi = controller.getPlaybackInfo();
+            if (pi == null) {
+                // do nothing
+                continue;
+            }
+            final PlaybackState playbackState = controller.getPlaybackState();
+            if (playbackState == null) {
+                // do nothing
+                continue;
+            }
+            if (playbackState.getState() != PlaybackState.STATE_PLAYING) {
+                // do nothing
+                continue;
+            }
+            if (pi.getPlaybackType() == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE) {
+                if (localController != null && TextUtils.equals(localController.getPackageName(),
+                        controller.getPackageName())) {
+                    localController = null;
+                }
+                if (!remoteMediaSessionLists.contains(controller.getPackageName())) {
+                    remoteMediaSessionLists.add(controller.getPackageName());
+                }
+                continue;
+            }
+            if (pi.getPlaybackType() == MediaController.PlaybackInfo.PLAYBACK_TYPE_LOCAL) {
+                if (localController == null
+                        && !remoteMediaSessionLists.contains(controller.getPackageName())) {
+                    localController = controller;
+                }
+            }
+        }
+        return localController;
     }
 
     private final VolumeDialogController.Callbacks mControllerCallbackH
