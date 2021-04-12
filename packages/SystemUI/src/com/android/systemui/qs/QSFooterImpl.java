@@ -376,7 +376,7 @@ public class QSFooterImpl extends FrameLayout implements QSFooter,
         mEditContainer.setVisibility(isDemo || !mExpanded ? View.INVISIBLE : View.VISIBLE);
         mSettingsButton.setVisibility(isDemo || !mExpanded ? View.INVISIBLE : View.VISIBLE);
         mRunningServicesButton.setVisibility(mShouldShowServices && !isDemo && mExpanded
-                ? View.VISIBLE : View.INVISIBLE);
+                ? View.VISIBLE : View.GONE);
         mBuildText.setVisibility(mExpanded && mShouldShowBuildText ? View.VISIBLE : View.GONE);
     }
 
