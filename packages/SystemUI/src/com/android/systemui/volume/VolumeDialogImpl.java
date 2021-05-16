@@ -137,7 +137,7 @@ public class VolumeDialogImpl implements VolumeDialog,
     private static final String TAG = Util.logTag(VolumeDialogImpl.class);
 
     private static final long USER_ATTEMPT_GRACE_PERIOD = 1000;
-    private static final int UPDATE_ANIMATION_DURATION = 80;
+    private static final int UPDATE_ANIMATION_DURATION = 100;
 
     static final int DIALOG_SAFETYWARNING_TIMEOUT_MILLIS = 5000;
     static final int DIALOG_ODI_CAPTIONS_TOOLTIP_TIMEOUT_MILLIS = 5000;
@@ -627,25 +627,22 @@ public class VolumeDialogImpl implements VolumeDialog,
         }
 
         ValueAnimator animator = ValueAnimator.ofInt(startWidth, targetWidth);
-        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                mDialogRowsView.getLayoutParams().width =
-                        (Integer) valueAnimator.getAnimatedValue();
-                mDialogRowsView.requestLayout();
-            }
+        animator.addUpdateListener(valueAnimator -> {
+            ViewGroup.LayoutParams layoutParams = mDialogRowsView.getLayoutParams();
+            layoutParams.width = (Integer) valueAnimator.getAnimatedValue();
+            mDialogRowsView.setLayoutParams(layoutParams);
         });
-        animator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                if (!expand) {
-                    updateExpandedRows(expand);
+        if (!expand) {
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    updateExpandedRows(false);
                 }
-            }
-        });
+            });
+        }
         animator.setInterpolator(expand ? new SystemUIInterpolators.LogDecelerateInterpolator()
                 : new SystemUIInterpolators.LogAccelerateInterpolator());
-        animator.setDuration(UPDATE_ANIMATION_DURATION);
+        animator.setDuration(expand ? DIALOG_SHOW_ANIMATION_DURATION : DIALOG_HIDE_ANIMATION_DURATION);
         animator.start();
     }
 
