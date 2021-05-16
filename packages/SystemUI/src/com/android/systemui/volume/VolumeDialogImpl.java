@@ -44,13 +44,11 @@ import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
-import android.app.Dialog;
 import android.app.KeyguardManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothProfile;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -61,7 +59,6 @@ import android.database.ContentObserver;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Region;
-import android.graphics.drawable.ColorDrawable;
 import android.media.AudioManager;
 import android.media.AudioSystem;
 import android.media.session.MediaController;
@@ -92,10 +89,8 @@ import android.view.ViewGroup;
 import android.view.ViewGroup.MarginLayoutParams;
 import android.view.ViewPropertyAnimator;
 import android.view.ViewStub;
-import android.view.ViewTreeObserver;
 import android.view.ViewTreeObserver.InternalInsetsInfo;
 import android.view.ViewTreeObserver.OnComputeInternalInsetsListener;
-import android.view.Window;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
@@ -151,7 +146,7 @@ public class VolumeDialogImpl implements VolumeDialog,
     static final int DIALOG_HIDE_ANIMATION_DURATION = 200;
 
     private final Context mContext;
-    private WindowManager mWindowManager;
+    private final WindowManager mWindowManager;
     private WindowManager.LayoutParams mWindowParams;
     private final H mHandler = new H();
     private final VolumeDialogController mController;
@@ -159,9 +154,7 @@ public class VolumeDialogImpl implements VolumeDialog,
 
     private View mDialog;
     private ViewGroup mDialogView;
-    private ViewGroup mDialogMainView;
     private ViewGroup mDialogRowsView;
-    private ViewGroup mRinger;
     private ImageButton mRingerIcon;
     private ViewGroup mODICaptionsView;
     private CaptionsToggleImageButton mODICaptionsIcon;
@@ -178,6 +171,7 @@ public class VolumeDialogImpl implements VolumeDialog,
     private final AccessibilityManagerWrapper mAccessibilityMgr;
     private final Object mSafetyWarningLock = new Object();
     private final Accessibility mAccessibility = new Accessibility();
+    private final boolean mShowActiveStreamOnly;
 
     private boolean mShowing;
     private boolean mShowA11yStream;
@@ -191,7 +185,6 @@ public class VolumeDialogImpl implements VolumeDialog,
     private State mState;
     private SafetyWarningDialog mSafetyWarning;
     private boolean mHovering = false;
-    private boolean mShowActiveStreamOnly;
     private boolean mConfigChanged = false;
     private boolean mIsAnimatingDismiss = false;
     private boolean mHasSeenODICaptionsTooltip;
@@ -266,7 +259,7 @@ public class VolumeDialogImpl implements VolumeDialog,
         mWindowParams.format = PixelFormat.TRANSLUCENT;
         mWindowParams.windowAnimations = -1;
         mDialog = LayoutInflater.from(mContext).inflate(R.layout.volume_dialog,
-                (ViewGroup) null, false);
+                null, false);
 
         mDialog.setOnTouchListener((v, event) -> {
             if (mShowing) {
@@ -298,25 +291,25 @@ public class VolumeDialogImpl implements VolumeDialog,
         dialogViewLP.gravity = Gravity.CENTER_VERTICAL;
         mDialogView.setLayoutParams(dialogViewLP);
 
-        mDialogMainView = mDialog.findViewById(R.id.main);
-        if (mDialogMainView != null) {
-            setLayoutGravity(mDialogMainView.getLayoutParams(), panelGravity);
+        ViewGroup dialogMainView = mDialog.findViewById(R.id.main);
+        if (dialogMainView != null) {
+            setLayoutGravity(dialogMainView.getLayoutParams(), panelGravity);
         }
 
         mDialogRowsView = mDialog.findViewById(R.id.volume_dialog_rows);
-        mRinger = mDialog.findViewById(R.id.ringer);
-        if (mRinger != null) {
-            mRingerIcon = mRinger.findViewById(R.id.ringer_icon);
-            mZenIcon = mRinger.findViewById(R.id.dnd_icon);
-            if(!isAudioPanelOnLeftSide()) {
-                mRinger.setForegroundGravity(Gravity.RIGHT);
+        ViewGroup ringer = mDialog.findViewById(R.id.ringer);
+        if (ringer != null) {
+            mRingerIcon = ringer.findViewById(R.id.ringer_icon);
+            mZenIcon = ringer.findViewById(R.id.dnd_icon);
+            if (!isAudioPanelOnLeftSide()) {
+                ringer.setForegroundGravity(Gravity.RIGHT);
             } else {
-                mRinger.setForegroundGravity(Gravity.LEFT);
+                ringer.setForegroundGravity(Gravity.LEFT);
             }
-            if(isLandscape() && isAudioPanelOnLeftSide()){
-                MarginLayoutParams ringerLayoutParams = (MarginLayoutParams) mRinger.getLayoutParams();
+            if (isLandscape() && isAudioPanelOnLeftSide()) {
+                MarginLayoutParams ringerLayoutParams = (MarginLayoutParams) ringer.getLayoutParams();
                 ringerLayoutParams.setMargins(0, 0, land_margin, 0);
-                mRinger.setLayoutParams(ringerLayoutParams);
+                ringer.setLayoutParams(ringerLayoutParams);
             }
         }
 
@@ -335,17 +328,16 @@ public class VolumeDialogImpl implements VolumeDialog,
             mODICaptionsTooltipViewStub = null;
         }else if (mODICaptionsTooltipViewStub != null){
             if(!isAudioPanelOnLeftSide()) {
-                mRinger.setForegroundGravity(Gravity.BOTTOM | Gravity.RIGHT);
+                ringer.setForegroundGravity(Gravity.BOTTOM | Gravity.RIGHT);
             } else {
-                mRinger.setForegroundGravity(Gravity.BOTTOM | Gravity.LEFT);
+                ringer.setForegroundGravity(Gravity.BOTTOM | Gravity.LEFT);
             }
         }
 
         if(isLandscape() && isAudioPanelOnLeftSide()){
-            LinearLayout mainView = mDialog.findViewById(R.id.main);
-            MarginLayoutParams mainLayoutParams = (MarginLayoutParams) mainView.getLayoutParams();
+            MarginLayoutParams mainLayoutParams = (MarginLayoutParams) dialogMainView.getLayoutParams();
             mainLayoutParams.setMargins(0, land_margin, land_margin, 0);
-            mainView.setLayoutParams(mainLayoutParams);
+            dialogMainView.setLayoutParams(mainLayoutParams);
         }
 
         mMediaOutputView = mDialog.findViewById(R.id.media_output_container);
@@ -417,7 +409,7 @@ public class VolumeDialogImpl implements VolumeDialog,
         ));
     };
 
-    private CustomSettingsObserver mCustomSettingsObserver = new CustomSettingsObserver(mHandler);
+    private final CustomSettingsObserver mCustomSettingsObserver = new CustomSettingsObserver(mHandler);
     private class CustomSettingsObserver extends ContentObserver {
         CustomSettingsObserver(Handler handler) {
             super(handler);
@@ -465,8 +457,8 @@ public class VolumeDialogImpl implements VolumeDialog,
         return mDialogView;
     }
 
-    private int getAlphaAttr(int attr) {
-        TypedArray ta = mContext.obtainStyledAttributes(new int[]{attr});
+    private int getAlphaAttr() {
+        TypedArray ta = mContext.obtainStyledAttributes(new int[]{android.R.attr.secondaryContentAlpha});
         float alpha = ta.getFloat(0, 0);
         ta.recycle();
         return (int) (alpha * 255);
@@ -494,16 +486,11 @@ public class VolumeDialogImpl implements VolumeDialog,
     }
 
     private void addRow(int stream, int iconRes, int iconMuteRes, boolean important,
-            boolean defaultStream) {
-        addRow(stream, iconRes, iconMuteRes, important, defaultStream, false);
-    }
-
-    private void addRow(int stream, int iconRes, int iconMuteRes, boolean important,
-            boolean defaultStream, boolean dynamic) {
+                        boolean defaultStream) {
         if (D.BUG) Slog.d(TAG, "Adding row for stream " + stream);
         VolumeRow row = new VolumeRow();
         initRow(row, stream, iconRes, iconMuteRes, important, defaultStream);
-        if(!isAudioPanelOnLeftSide()){
+        if (!isAudioPanelOnLeftSide()) {
             mDialogRowsView.addView(row.view, 0);
         } else {
             mDialogRowsView.addView(row.view);
@@ -512,12 +499,10 @@ public class VolumeDialogImpl implements VolumeDialog,
     }
 
     private void addExistingRows() {
-        int N = mRows.size();
-        for (int i = 0; i < N; i++) {
-            final VolumeRow row = mRows.get(i);
+        for (final VolumeRow row : mRows) {
             initRow(row, row.stream, row.iconRes, row.iconMuteRes, row.important,
                     row.defaultStream);
-            if(!isAudioPanelOnLeftSide()){
+            if (!isAudioPanelOnLeftSide()) {
                 mDialogRowsView.addView(row.view, 0);
             } else {
                 mDialogRowsView.addView(row.view);
@@ -559,9 +544,8 @@ public class VolumeDialogImpl implements VolumeDialog,
     private static int getImpliedLevel(SeekBar seekBar, int progress) {
         final int m = seekBar.getMax();
         final int n = m / 100 - 1;
-        final int level = progress == 0 ? 0
+        return progress == 0 ? 0
                 : progress == m ? (m / 100) : (1 + (int)((progress / (float) m) * n));
-        return level;
     }
 
     @SuppressLint("InflateParams")
@@ -634,7 +618,7 @@ public class VolumeDialogImpl implements VolumeDialog,
         final int targetWidth;
 
         if (expand) {
-            updateExpandedRows(expand);
+            updateExpandedRows(true);
             mDialogRowsView.measure(WRAP_CONTENT, WRAP_CONTENT);
             targetWidth = mDialogRowsView.getMeasuredWidth();
         } else {
@@ -1268,7 +1252,7 @@ public class VolumeDialogImpl implements VolumeDialog,
             mDynamic.put(stream, true);
             if (findRow(stream) == null) {
                 addRow(stream, R.drawable.ic_volume_remote, R.drawable.ic_volume_remote_mute, true,
-                        false, true);
+                        false);
             }
         }
 
@@ -1337,8 +1321,7 @@ public class VolumeDialogImpl implements VolumeDialog,
                         (isMusicStream && mState.disallowMedia) ||
                         (isRingStream && mState.disallowRinger) ||
                         (isSystemStream && mState.disallowSystem))
-                : isVibrate ? isNotificationStream
-                : false;
+                : isVibrate && isNotificationStream;
 
         // update slider max
         final int max = ss.levelMax * 100;
@@ -1428,10 +1411,6 @@ public class VolumeDialogImpl implements VolumeDialog,
         updateVolumeRowSliderH(row, enableSlider, vlevel);
     }
 
-    private boolean isStreamMuted(final StreamState streamState) {
-        return (mAutomute && streamState.level == 0) || streamState.muted;
-    }
-
     private void updateVolumeRowTintH(VolumeRow row, boolean isActive) {
         if (isActive) {
             row.slider.requestFocus();
@@ -1442,7 +1421,7 @@ public class VolumeDialogImpl implements VolumeDialog,
                 : Utils.getColorAttr(mContext, android.R.attr.colorForeground);
         final int alpha = useActiveColoring
                 ? Color.alpha(tint.getDefaultColor())
-                : getAlphaAttr(android.R.attr.secondaryContentAlpha);
+                : getAlphaAttr();
         if (tint == row.cachedTint && mExpanded) return;
         row.slider.setProgressTintList(tint);
         row.slider.setThumbTintList(tint);
@@ -1681,7 +1660,7 @@ public class VolumeDialogImpl implements VolumeDialog,
 
         @Override
         public void onAccessibilityModeChanged(Boolean showA11yStream) {
-            mShowA11yStream = showA11yStream == null ? false : showA11yStream;
+            mShowA11yStream = showA11yStream != null && showA11yStream;
             VolumeRow activeRow = getActiveRow();
             if (!mShowA11yStream && STREAM_ACCESSIBILITY == activeRow.stream) {
                 dismissH(Events.DISMISS_STREAM_GONE);
