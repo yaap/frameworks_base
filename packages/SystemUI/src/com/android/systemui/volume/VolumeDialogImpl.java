@@ -86,7 +86,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.AccessibilityDelegate;
 import android.view.ViewGroup;
-import android.view.ViewGroup.MarginLayoutParams;
 import android.view.ViewPropertyAnimator;
 import android.view.ViewStub;
 import android.view.ViewTreeObserver.InternalInsetsInfo;
@@ -239,9 +238,6 @@ public class VolumeDialogImpl implements VolumeDialog,
     }
 
     private void initDialog() {
-        int land_margin = (int) mContext.getResources().getDimension(
-                R.dimen.volume_dialog_panel_land_margin);
-
         // Gravitate various views left/right depending on panel placement setting.
         final int panelGravity = isAudioPanelOnLeftSide() ? Gravity.LEFT : Gravity.RIGHT;
 
@@ -308,21 +304,11 @@ public class VolumeDialogImpl implements VolumeDialog,
             } else {
                 ringer.setForegroundGravity(Gravity.LEFT);
             }
-            if (isLandscape() && isAudioPanelOnLeftSide()) {
-                MarginLayoutParams ringerLayoutParams = (MarginLayoutParams) ringer.getLayoutParams();
-                ringerLayoutParams.setMargins(0, 0, land_margin, 0);
-                ringer.setLayoutParams(ringerLayoutParams);
-            }
         }
 
         mODICaptionsView = mDialog.findViewById(R.id.odi_captions);
         if (mODICaptionsView != null) {
             mODICaptionsIcon = mODICaptionsView.findViewById(R.id.odi_captions_icon);
-            if(isLandscape() && isAudioPanelOnLeftSide()){
-                MarginLayoutParams captionsLayoutParams = (MarginLayoutParams) mODICaptionsView.getLayoutParams();
-                captionsLayoutParams.setMargins(0, 0, 0, 0);
-                mODICaptionsView.setLayoutParams(captionsLayoutParams);
-            }
         }
         mODICaptionsTooltipViewStub = mDialog.findViewById(R.id.odi_captions_tooltip_stub);
         if (mHasSeenODICaptionsTooltip && mODICaptionsTooltipViewStub != null) {
@@ -334,12 +320,7 @@ public class VolumeDialogImpl implements VolumeDialog,
             } else {
                 ringer.setForegroundGravity(Gravity.BOTTOM | Gravity.LEFT);
             }
-        }
 
-        if(isLandscape() && isAudioPanelOnLeftSide()){
-            MarginLayoutParams mainLayoutParams = (MarginLayoutParams) dialogMainView.getLayoutParams();
-            mainLayoutParams.setMargins(0, land_margin, land_margin, 0);
-            dialogMainView.setLayoutParams(mainLayoutParams);
         }
 
         mMediaOutputView = mDialog.findViewById(R.id.media_output_container);
