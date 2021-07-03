@@ -867,15 +867,18 @@ public final class BatteryService extends SystemService {
     }
 
     private boolean isDashCharger() {
-        try {
-            FileReader file = new FileReader("/sys/class/power_supply/battery/fastchg_status");
-            BufferedReader br = new BufferedReader(file);
-            String state = br.readLine();
-            br.close();
-            file.close();
-            return "1".equals(state);
-        } catch (FileNotFoundException e) {
-        } catch (IOException e) {
+        String chargerpath = mContext.getResources().getString(com.android.internal.R.string.config_oem_charger_path);
+        if(!chargerpath.isEmpty()) {
+            try {
+                FileReader file = new FileReader(chargerpath);
+                BufferedReader br = new BufferedReader(file);
+                String state = br.readLine();
+                br.close();
+                file.close();
+                return "1".equals(state);    
+            } catch (FileNotFoundException e) {
+            } catch (IOException e) {
+            }
         }
         return false;
     }
