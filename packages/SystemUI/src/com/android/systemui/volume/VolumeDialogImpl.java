@@ -25,6 +25,7 @@ import static android.media.AudioManager.STREAM_ALARM;
 import static android.media.AudioManager.STREAM_MUSIC;
 import static android.media.AudioManager.STREAM_RING;
 import static android.media.AudioManager.STREAM_VOICE_CALL;
+import static android.provider.Settings.ACTION_SOUND_SETTINGS;
 import static android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE;
 import static android.view.View.GONE;
 import static android.view.View.INVISIBLE;
@@ -237,6 +238,7 @@ public class VolumeDialogImpl implements VolumeDialog,
         Dependency.get(ConfigurationController.class).removeCallback(this);
     }
 
+    @SuppressLint("RtlHardcoded")
     private void initDialog() {
         // Gravitate various views left/right depending on panel placement setting.
         final int panelGravity = isAudioPanelOnLeftSide() ? Gravity.LEFT : Gravity.RIGHT;
@@ -644,6 +646,13 @@ public class VolumeDialogImpl implements VolumeDialog,
                 true /* dismissShade */);
     }
 
+    private void launchSoundSettings() {
+        Intent intent = new Intent(ACTION_SOUND_SETTINGS);
+        dismissH(DISMISS_REASON_SETTINGS_CLICKED);
+        Dependency.get(ActivityStarter.class).startActivity(intent,
+                true /* dismissShade */);
+    }
+
     public void initSettingsH() {
         if (mMediaOutputView != null) {
             mMediaOutputView.setVisibility(
@@ -730,6 +739,10 @@ public class VolumeDialogImpl implements VolumeDialog,
                 provideTouchFeedbackH(newRingerMode);
                 mController.setRingerMode(newRingerMode, false);
                 maybeShowToastH(newRingerMode);
+            });
+            mRingerIcon.setOnLongClickListener(v -> {
+                launchSoundSettings();
+                return true;
             });
         }
         updateRingerH();
