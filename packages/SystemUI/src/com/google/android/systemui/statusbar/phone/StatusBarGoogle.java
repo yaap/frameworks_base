@@ -72,6 +72,7 @@ import com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager;
 import com.android.systemui.statusbar.phone.StatusBarNotificationActivityStarter;
 import com.android.systemui.statusbar.phone.StatusBarTouchableRegionManager;
 import com.android.systemui.statusbar.policy.BatteryController;
+import com.android.systemui.statusbar.policy.BurnInProtectionController;
 import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.DeviceProvisionedController;
 import com.android.systemui.statusbar.policy.ExtensionController;
@@ -185,6 +186,7 @@ public class StatusBarGoogle extends StatusBar {
             DismissCallbackRegistry dismissCallbackRegistry,
             Lazy<NotificationShadeDepthController> notificationShadeDepthControllerLazy,
             StatusBarTouchableRegionManager statusBarTouchableRegionManager,
+            BurnInProtectionController burnInProtectionController,
             FODCircleViewImpl fodCircleViewImpl) {
 
         super(context,
@@ -265,6 +267,7 @@ public class StatusBarGoogle extends StatusBar {
             dismissCallbackRegistry,
             notificationShadeDepthControllerLazy,
             statusBarTouchableRegionManager,
+            burnInProtectionController,
             fodCircleViewImpl);
         }
 
