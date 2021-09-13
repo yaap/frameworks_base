@@ -919,6 +919,9 @@ public class StatusBar extends SystemUI implements DemoMode,
 
         DateTimeView.setReceiverHandler(timeTickHandler);
 
+        mBurnInProtectionController = new BurnInProtectionController(context,
+            this, configurationController);
+
         mFingerprintService = IFingerprintService.Stub.asInterface(
                 ServiceManager.getService(Context.FINGERPRINT_SERVICE));
     }
@@ -1202,8 +1205,7 @@ public class StatusBar extends SystemUI implements DemoMode,
                             mStatusBarView.findViewById(R.id.notification_lights_out));
                     mNotificationShadeWindowViewController.setStatusBarView(mStatusBarView);
                     checkBarModes();
-                    mBurnInProtectionController =
-                        new BurnInProtectionController(mContext, this, mStatusBarView);
+                    mBurnInProtectionController.setPhoneStatusBarView(mStatusBarView);
                 }).getFragmentManager()
                 .beginTransaction()
                 .replace(R.id.status_bar_container, new CollapsedStatusBarFragment(),
@@ -3962,7 +3964,7 @@ public class StatusBar extends SystemUI implements DemoMode,
             mNotificationShadeWindowViewController.cancelCurrentTouch();
 
             if (mBurnInProtectionController != null) {
-                mBurnInProtectionController.stopSwiftTimer();
+                mBurnInProtectionController.stopShiftTimer();
             }
             if (mLaunchCameraOnFinishedGoingToSleep) {
                 mLaunchCameraOnFinishedGoingToSleep = false;
@@ -4021,7 +4023,7 @@ public class StatusBar extends SystemUI implements DemoMode,
             }
             updateScrimController();
             if (mBurnInProtectionController != null) {
-                mBurnInProtectionController.startSwiftTimer();
+                mBurnInProtectionController.startShiftTimer();
             }
         }
     };
