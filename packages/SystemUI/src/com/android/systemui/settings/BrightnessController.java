@@ -228,11 +228,11 @@ public class BrightnessController implements ToggleSlider.Listener {
                         Settings.System.SCREEN_BRIGHTNESS_MODE,
                         Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL,
                         UserHandle.USER_CURRENT);
-                mHandler.obtainMessage(MSG_UPDATE_ICON, mAutomatic ? 1 : 0).sendToTarget();
                 mAutomatic = automatic != Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL;
+                mHandler.obtainMessage(MSG_UPDATE_ICON).sendToTarget();
             } else {
                 mHandler.obtainMessage(MSG_SET_CHECKED, 0).sendToTarget();
-                mHandler.obtainMessage(MSG_UPDATE_ICON, 0 /* automatic */).sendToTarget();
+                mHandler.obtainMessage(MSG_UPDATE_ICON).sendToTarget();
             }
         }
     };
@@ -277,7 +277,7 @@ public class BrightnessController implements ToggleSlider.Listener {
             try {
                 switch (msg.what) {
                     case MSG_UPDATE_ICON:
-                        updateIcon(msg.arg1 != 0);
+                        updateIcon();
                         break;
                     case MSG_UPDATE_SLIDER:
                         updateSlider(Float.intBitsToFloat(msg.arg1), msg.arg2 != 0);
@@ -382,7 +382,7 @@ public class BrightnessController implements ToggleSlider.Listener {
     @Override
     public void onChanged(ToggleSlider toggleSlider, boolean tracking, boolean automatic,
             int value, boolean stopTracking) {
-        updateIcon(mAutomatic);
+        updateIcon();
         if (mExternalChange) return;
 
         if (mSliderAnimator != null) {
@@ -454,7 +454,7 @@ public class BrightnessController implements ToggleSlider.Listener {
     }
 
 
-    private void updateIcon(boolean automatic) {
+    private void updateIcon() {
         if (mIcon != null) {
             mIcon.setImageResource(mAutomatic ?
                     com.android.systemui.R.drawable.ic_qs_brightness_auto_on :
