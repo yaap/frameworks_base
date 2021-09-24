@@ -38,6 +38,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.PorterDuff;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -68,8 +69,6 @@ import vendor.lineage.biometrics.fingerprint.inscreen.V1_0.IFingerprintInscreen;
 import vendor.lineage.biometrics.fingerprint.inscreen.V1_0.IFingerprintInscreenCallback;
 
 import java.util.NoSuchElementException;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class FODCircleView extends ImageView {
     private static final String SCREEN_BRIGHTNESS = Settings.System.SCREEN_BRIGHTNESS;
@@ -100,12 +99,8 @@ public class FODCircleView extends ImageView {
     private boolean mIsAssistantVisible = false;
 
     private final Handler mHandler;
-
     private final ImageView mPressedView;
-
     private final LockPatternUtils mLockPatternUtils;
-
-    private Timer mBurnInProtectionTimer;
 
     private final Spline mFODiconBrightnessToDimAmountSpline;
 
@@ -125,29 +120,29 @@ public class FODCircleView extends ImageView {
     private final KeyguardUpdateMonitor mUpdateMonitor;
     private final KeyguardUpdateMonitorCallback mMonitorCallback = new KeyguardUpdateMonitorCallback() {
         @Override
+        public void onTimeChanged() {
+            if (!mIsScreenTurnedOn || !mIsDreaming) return;
+            if (getVisibility() != View.VISIBLE) return;
+            final long now = System.currentTimeMillis() / 60000;
+            // Let y to be not synchronized with x, so that we get maximum movement
+            mDreamingOffsetY = (int) ((now + mDreamingMaxOffset / 3) % (mDreamingMaxOffset * 2));
+            mDreamingOffsetY -= mDreamingMaxOffset;
+            updatePosition();
+        }
+
+        @Override
         public void onDreamingStateChanged(boolean dreaming) {
             mIsDreaming = dreaming;
             updateIconDim(false);
 
-            if (dreaming) {
-                if (shouldShowOnDoze()) {
-                    mBurnInProtectionTimer = new Timer();
-                    mBurnInProtectionTimer.schedule(new BurnInProtectionTask(), 0, 60 * 1000);
-                } else {
-                    setImageDrawable(null);
-                    invalidate();
-                }
-            } else {
-                if (mBurnInProtectionTimer != null) {
-                    mBurnInProtectionTimer.cancel();
-                    mBurnInProtectionTimer = null;
-                    updatePosition();
-                }
-                if (!shouldShowOnDoze()) {
-                    setImageResource(R.drawable.fod_icon_default);
-                    invalidate();
-                }
+            if (!shouldShowOnDoze()) {
+                Drawable icon = null;
+                if (!dreaming) icon = getResources().getDrawable(
+                        R.drawable.fod_icon_default, null);
+                setImageDrawable(icon);
+                invalidate();
             }
+            if (!dreaming) updatePosition();
         }
 
         @Override
@@ -643,19 +638,6 @@ public class FODCircleView extends ImageView {
     private boolean shouldShowOnDoze() {
         return Settings.Secure.getInt(mContext.getContentResolver(),
                 Settings.Secure.FOD_ON_DOZE, 1) == 1;
-    }
-
-    private class BurnInProtectionTask extends TimerTask {
-        @Override
-        public void run() {
-            long now = System.currentTimeMillis() / 1000 / 60;
-
-            // Let y to be not synchronized with x, so that we get maximum movement
-            mDreamingOffsetY = (int) ((now + mDreamingMaxOffset / 3) % (mDreamingMaxOffset * 2));
-            mDreamingOffsetY -= mDreamingMaxOffset;
-
-            mHandler.post(FODCircleView.this::updatePosition);
-        }
     }
 
     private static float[] getFloatArray(TypedArray array) {
