@@ -16,7 +16,6 @@
 
 package com.android.systemui.qs.tiles;
 
-import android.content.ComponentName;
 import android.content.Intent;
 import android.database.ContentObserver;
 import android.net.Uri;
@@ -39,11 +38,6 @@ public class AODTile extends QSTileImpl<State> implements
     private boolean mListening;
     private final Icon mIcon = ResourceIcon.get(R.drawable.ic_qs_aod);
     private final BatteryController mBatteryController;
-
-    private static final ComponentName LS_DISPLAY_SETTINGS_COMPONENT = new ComponentName(
-            "com.android.settings", "com.android.settings.Settings$LockscreenDashboardActivity");
-    private static final Intent LS_DISPLAY_SETTINGS =
-            new Intent().setComponent(LS_DISPLAY_SETTINGS_COMPONENT);
 
     @Inject
     public AODTile(QSHost host, BatteryController batteryController) {
@@ -95,8 +89,19 @@ public class AODTile extends QSTileImpl<State> implements
     }
 
     @Override
+    protected void handleLongClick() {
+        // always toggle on/off on long click
+        Settings.Secure.putIntForUser(mContext.getContentResolver(),
+                Settings.Secure.DOZE_ALWAYS_ON, getAodState() != 0 ? 0 : 1,
+                UserHandle.USER_CURRENT);
+        Settings.System.putIntForUser(mContext.getContentResolver(),
+                Settings.System.DOZE_ON_CHARGE, 0, UserHandle.USER_CURRENT);
+        refreshState();
+    }
+
+    @Override
     public Intent getLongClickIntent() {
-        return LS_DISPLAY_SETTINGS;
+        return null;
     }
 
     @Override
@@ -131,7 +136,7 @@ public class AODTile extends QSTileImpl<State> implements
         return MetricsEvent.YASP;
     }
 
-    private ContentObserver mObserver = new ContentObserver(mHandler) {
+    private final ContentObserver mObserver = new ContentObserver(mHandler) {
         @Override
         public void onChange(boolean selfChange, Uri uri) {
             refreshState();
