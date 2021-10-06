@@ -120,6 +120,8 @@ android_library {
         "jsr330",
         "lottie",
         "//hardware/google/interfaces:com.google.hardware.pixel.display-V3-java",
+        "colorkt",
+        "themelib",
     ],
     manifest: "AndroidManifest.xml",
 
