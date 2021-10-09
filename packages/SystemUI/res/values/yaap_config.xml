@@ -76,4 +76,9 @@
           <item>2047,46</item>
           <item>4095,0</item>
     </string-array>
+
+    <!-- Whether to enable burn-in protection for statusbar and navbar -->
+    <bool name="config_systemBarBurnInProtection">@*android:bool/config_enableBurnInProtection</bool>
+    <!-- Interval between subsequent shifting of statusbar and navbar contents, in seconds -->
+    <integer name="config_systemBarBurnInProtectionShiftInterval">60</integer>
 </resources>
