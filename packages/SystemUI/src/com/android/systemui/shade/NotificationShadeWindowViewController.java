@@ -23,6 +23,7 @@ import android.app.StatusBarManager;
 import android.media.AudioManager;
 import android.media.session.MediaSessionLegacyHelper;
 import android.os.PowerManager;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.InputDevice;
@@ -70,6 +71,7 @@ import com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager;
 import com.android.systemui.statusbar.phone.dagger.CentralSurfacesComponent;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.unfold.UnfoldTransitionProgressProvider;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.util.time.SystemClock;
 
 import java.io.PrintWriter;
@@ -114,6 +116,7 @@ public class NotificationShadeWindowViewController {
     private final DockManager mDockManager;
     private final NotificationPanelViewController mNotificationPanelViewController;
     private final ShadeExpansionStateManager mShadeExpansionStateManager;
+    private final SystemSettings mSystemSettings;
 
     private boolean mIsTrackingBarGesture = false;
     private boolean mIsOcclusionTransitionRunning = false;
@@ -154,7 +157,8 @@ public class NotificationShadeWindowViewController {
             FeatureFlags featureFlags,
             Provider<MultiShadeInteractor> multiShadeInteractorProvider,
             SystemClock clock,
-            Provider<MultiShadeMotionEventInteractor> multiShadeMotionEventInteractorProvider) {
+            Provider<MultiShadeMotionEventInteractor> multiShadeMotionEventInteractorProvider,
+            SystemSettings systemSettings) {
         mLockscreenShadeTransitionController = transitionController;
         mFalsingCollector = falsingCollector;
         mStatusBarStateController = statusBarStateController;
@@ -175,6 +179,7 @@ public class NotificationShadeWindowViewController {
         mPulsingGestureListener = pulsingGestureListener;
         mNotificationInsetsController = notificationInsetsController;
         mIsTrackpadCommonEnabled = featureFlags.isEnabled(TRACKPAD_GESTURE_COMMON);
+        mSystemSettings = systemSettings;
 
         // This view is not part of the newly inflated expanded status bar.
         mBrightnessMirror = mView.findViewById(R.id.brightness_mirror_container);
@@ -535,5 +540,17 @@ public class NotificationShadeWindowViewController {
     @VisibleForTesting
     void setDragDownHelper(DragDownHelper dragDownHelper) {
         mDragDownHelper = dragDownHelper;
+    }
+
+    public void setDoubleTapToSleepGesture() {
+        boolean isDoubleTapLockscreenEnabled = mSystemSettings.getInt(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, 0) == 1;
+        boolean isDoubleTapSbEnabled = mSystemSettings.getInt(Settings.System.DOUBLE_TAP_SLEEP_GESTURE, 0) == 1;
+        if (mNotificationPanelViewController != null) {
+            mNotificationPanelViewController.setLockscreenDoubleTapToSleep(isDoubleTapLockscreenEnabled);
+            mNotificationPanelViewController.setSbDoubleTapToSleep(isDoubleTapSbEnabled);
+        }
+        if (mDragDownHelper != null) {
+            mDragDownHelper.updateDoubleTapToSleep(isDoubleTapSbEnabled);
+        }
     }
 }
