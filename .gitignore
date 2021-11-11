@@ -5,3 +5,5 @@
 gen/
 .vscode/
 *.code-workspace
+*.project
+*.settings/
