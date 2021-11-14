@@ -197,5 +197,6 @@ public class SecureSettings {
         Settings.Secure.LOCKSCREEN_USE_DOUBLE_LINE_CLOCK,
         Settings.Secure.VOLUME_LINK_NOTIFICATION,
         Settings.Secure.SHOW_COMBINED_STATUS_BAR_SIGNAL_ICONS,
+        Settings.Secure.ENABLE_LOCATION_PRIVACY_INDICATOR,
     };
 }
