@@ -30,18 +30,25 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.database.ContentObserver;
 import android.graphics.Point;
 import android.hardware.biometrics.BiometricFingerprintConstants;
+import android.hardware.biometrics.SensorLocationInternal;
+import android.hardware.display.AmbientDisplayConfiguration;
 import android.hardware.display.DisplayManager;
 import android.hardware.fingerprint.FingerprintManager;
 import android.hardware.fingerprint.IUdfpsOverlayController;
 import android.hardware.fingerprint.IUdfpsOverlayControllerCallback;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.Process;
 import android.os.Trace;
 import android.os.VibrationAttributes;
+import android.os.UserHandle;
 import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.provider.Settings;
 import android.util.Log;
 import android.util.RotationUtils;
 import android.view.LayoutInflater;
@@ -75,6 +82,7 @@ import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.Execution;
 import com.android.systemui.util.time.SystemClock;
+import com.android.systemui.util.settings.SystemSettings;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -169,6 +177,10 @@ public class UdfpsController implements DozeReceiver {
     private boolean mAttemptedToDismissKeyguard;
     private final Set<Callback> mCallbacks = new HashSet<>();
     private final int mUdfpsVendorCode;
+    private final SystemSettings mSystemSettings;
+    private boolean mScreenOffFod;
+
+    private final AmbientDisplayConfiguration mAmbientDisplayConfiguration;
 
     @VisibleForTesting
     public static final VibrationAttributes VIBRATION_ATTRIBUTES =
@@ -251,8 +263,10 @@ public class UdfpsController implements DozeReceiver {
                     }
                 });
             } else {
+                final boolean isAodEnabled = mAmbientDisplayConfiguration.alwaysOnEnabled(UserHandle.USER_CURRENT);
+                final boolean isShowingAmbientDisplay = mStatusBarStateController.isDozing() && mScreenOn;
                 boolean acquiredVendor = acquiredInfo == FINGERPRINT_ACQUIRED_VENDOR;
-                if (!acquiredVendor || (!mStatusBarStateController.isDozing() && mScreenOn)) {
+                if (!acquiredVendor || ((!mScreenOffFod || mScreenOn) && (!isAodEnabled || !isShowingAmbientDisplay))) {
                     return;
                 }
                 if (vendorCode == mUdfpsVendorCode) {
@@ -623,7 +637,8 @@ public class UdfpsController implements DozeReceiver {
             @NonNull LatencyTracker latencyTracker,
             @NonNull ActivityLaunchAnimator activityLaunchAnimator,
             @NonNull Optional<AlternateUdfpsTouchProvider> aternateTouchProvider,
-            @BiometricsBackground Executor biometricsExecutor) {
+            @BiometricsBackground Executor biometricsExecutor,
+            @NonNull SystemSettings systemSettings) {
         mContext = context;
         mExecution = execution;
         mVibrator = vibrator;
@@ -679,6 +694,23 @@ public class UdfpsController implements DozeReceiver {
         udfpsShell.setUdfpsOverlayController(mUdfpsOverlayController);
 
         mUdfpsVendorCode = mContext.getResources().getInteger(R.integer.config_udfps_vendor_code);
+        mAmbientDisplayConfiguration = new AmbientDisplayConfiguration(mContext);
+        mSystemSettings = systemSettings;
+        updateScreenOffFodState();
+        mSystemSettings.registerContentObserver(Settings.System.SCREEN_OFF_FOD,
+            new ContentObserver(mainHandler) {
+                @Override
+                public void onChange(boolean selfChange, Uri uri) {
+                    if (uri.getLastPathSegment().equals(Settings.System.SCREEN_OFF_FOD)) {
+                        updateScreenOffFodState();
+                    }
+                }
+            }
+        );
+    }
+
+    private void updateScreenOffFodState() {
+        mScreenOffFod = mSystemSettings.getInt(Settings.System.SCREEN_OFF_FOD, 1) == 1;
     }
 
     /**
