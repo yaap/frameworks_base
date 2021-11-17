@@ -7,3 +7,4 @@ gen/
 *.code-workspace
 *.project
 *.settings/
+*.gradle/
