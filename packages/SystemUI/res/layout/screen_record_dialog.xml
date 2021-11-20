@@ -148,7 +148,8 @@
                         android:id="@+id/screenrecord_stopdot_switch"
                         android:text="@string/screenrecord_stopdot_label"
                         android:textColor="?android:attr/textColorPrimary"
-                        android:textAppearance="?android:attr/textAppearanceMedium"/>
+                        android:textAppearance="?android:attr/textAppearanceMedium"
+                        style="@style/ScreenRecord.Switch"/>
 
                 </LinearLayout>
 
@@ -171,7 +172,8 @@
                         android:id="@+id/screenrecord_lowquality_switch"
                         android:text="@string/screenrecord_lowquality_label"
                         android:textColor="?android:attr/textColorPrimary"
-                        android:textAppearance="?android:attr/textAppearanceMedium"/>
+                        android:textAppearance="?android:attr/textAppearanceMedium"
+                        style="@style/ScreenRecord.Switch"/>
                 </LinearLayout>
 
                 <LinearLayout
@@ -193,7 +195,8 @@
                         android:id="@+id/screenrecord_longer_timeout_switch"
                         android:text="@string/screenrecord_longer_timeout_switch_label"
                         android:textColor="?android:attr/textColorPrimary"
-                        android:textAppearance="?android:attr/textAppearanceMedium"/>
+                        android:textAppearance="?android:attr/textAppearanceMedium"
+                        style="@style/ScreenRecord.Switch"/>
 
                 </LinearLayout>
             </LinearLayout>
