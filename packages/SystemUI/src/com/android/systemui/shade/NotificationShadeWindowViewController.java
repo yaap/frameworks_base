@@ -121,8 +121,6 @@ public class NotificationShadeWindowViewController {
     private final ShadeExpansionStateManager mShadeExpansionStateManager;
     private final SystemSettings mSystemSettings;
 
-    private ImageView mAutoBrightnessIcon;
-    private boolean mShowAutoBrightnessButton;
     private boolean mIsTrackingBarGesture = false;
     private boolean mIsOcclusionTransitionRunning = false;
     private DisableSubpixelTextTransitionListener mDisableSubpixelTextTransitionListener;
@@ -215,11 +213,6 @@ public class NotificationShadeWindowViewController {
         } else {
             mMultiShadeMotionEventInteractor = null;
         }
-
-        mAutoBrightnessIcon = (ImageView)
-                mBrightnessMirror.findViewById(R.id.brightness_icon);
-        mShowAutoBrightnessButton = mTunerService.getValue(
-                QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
     }
 
     /**
@@ -480,10 +473,11 @@ public class NotificationShadeWindowViewController {
             public void onChildViewAdded(View parent, View child) {
                 if (child.getId() == R.id.brightness_mirror_container) {
                     mBrightnessMirror = child;
-                    mAutoBrightnessIcon = (ImageView)
+                    ImageView autoBrightnessIcon =
                             child.findViewById(R.id.brightness_icon);
-                    mAutoBrightnessIcon.setVisibility(!mShowAutoBrightnessButton
-                            ? View.GONE : View.VISIBLE);
+                    boolean show = mTunerService.getValue(
+                            QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
+                    autoBrightnessIcon.setVisibility(show ? View.VISIBLE : View.GONE);
                 }
             }
 

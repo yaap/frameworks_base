@@ -60,7 +60,6 @@ public class BrightnessDialog extends Activity implements Tunable {
     private final Handler mBackgroundHandler;
 
     private ImageView mAutoBrightnessIcon;
-    private boolean mShowAutoBrightnessButton;
 
     @Inject
     public BrightnessDialog(
@@ -118,10 +117,9 @@ public class BrightnessDialog extends Activity implements Tunable {
         frame.addView(controller.getRootView(), MATCH_PARENT, WRAP_CONTENT);
 
         mAutoBrightnessIcon = controller.getIconView();
-        mShowAutoBrightnessButton = Dependency.get(TunerService.class).getValue(
+        boolean show = Dependency.get(TunerService.class).getValue(
                 QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
-        mAutoBrightnessIcon.setVisibility(!mShowAutoBrightnessButton
-                ? View.GONE : View.VISIBLE);
+        mAutoBrightnessIcon.setVisibility(show ? View.VISIBLE : View.GONE);
         mBrightnessController = new BrightnessController(
                 this, mAutoBrightnessIcon, controller, mUserTracker, mDisplayTracker,
                 mMainExecutor, mBackgroundHandler);
@@ -162,13 +160,10 @@ public class BrightnessDialog extends Activity implements Tunable {
 
     @Override
     public void onTuningChanged(String key, String newValue) {
-        if (QS_SHOW_AUTO_BRIGHTNESS_BUTTON.equals(key)) {
-            if (mAutoBrightnessIcon != null) {
-                mShowAutoBrightnessButton = (newValue == null
-                        || Integer.parseInt(newValue) == 0) ? false : true;
-                mAutoBrightnessIcon.setVisibility(!mShowAutoBrightnessButton
-                        ? View.GONE : View.VISIBLE);
-            }
+        if (QS_SHOW_AUTO_BRIGHTNESS_BUTTON.equals(key)
+                && mAutoBrightnessIcon != null) {
+            boolean show = newValue == null || Integer.parseInt(newValue) == 1;
+            mAutoBrightnessIcon.setVisibility(show ? View.VISIBLE : View.GONE);
         }
     }
 }
