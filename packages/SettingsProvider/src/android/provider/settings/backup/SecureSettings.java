@@ -140,6 +140,7 @@ public class SecureSettings {
         Settings.Secure.SCREENSAVER_ACTIVATE_ON_DOCK,
         Settings.Secure.SCREENSAVER_ACTIVATE_ON_SLEEP,
         Settings.Secure.SCREENSAVER_HOME_CONTROLS_ENABLED,
+        Settings.Secure.LOCKDOWN_IN_POWER_MENU,
         Settings.Secure.SHOW_FIRST_CRASH_DIALOG_DEV_OPTION,
         Settings.Secure.VOLUME_HUSH_GESTURE,
         Settings.Secure.MANUAL_RINGER_TOGGLE_COUNT,
