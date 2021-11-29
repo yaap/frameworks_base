@@ -85,6 +85,8 @@ import com.android.systemui.wallet.dagger.WalletModule;
 import com.android.systemui.wmshell.BubblesManager;
 import com.android.wm.shell.bubbles.Bubbles;
 
+import com.yaap.android.systemui.YaapUdfpsHbmProvider;
+
 import java.util.Optional;
 import java.util.concurrent.Executor;
 
@@ -177,6 +179,10 @@ public abstract class SystemUIModule {
 
     @BindsOptionalOf
     abstract UdfpsHbmProvider optionalUdfpsHbmProvider();
+
+    @SysUISingleton
+    @Binds
+    abstract UdfpsHbmProvider bindUdfpsHbmProvider(YaapUdfpsHbmProvider provider);
 
     @SysUISingleton
     @Binds

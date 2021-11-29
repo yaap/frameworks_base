@@ -119,6 +119,7 @@ android_library {
         "dagger2",
         "jsr330",
         "lottie",
+        "//hardware/google/interfaces:com.google.hardware.pixel.display-V3-java",
     ],
     manifest: "AndroidManifest.xml",
 
