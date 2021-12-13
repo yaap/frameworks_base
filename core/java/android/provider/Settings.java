@@ -10865,7 +10865,7 @@ public final class Settings {
         public static final String SHOW_COMBINED_STATUS_BAR_SIGNAL_ICONS = "show_combined_status_bar_signal_icons";
 
         /**
-         * Whether to show QS auto brightness toggle button
+         * Whether secure QS tiles require unlocking
          * @hide
          */
         @Readable
@@ -10878,6 +10878,26 @@ public final class Settings {
          */
         @Readable
         public static final String ENABLE_LOCATION_PRIVACY_INDICATOR = "enable_location_privacy_indicator";
+
+        /**
+         * Whether to show QS brightness slider
+         * @hide
+         */
+        @Readable
+        public static final String QS_SHOW_BRIGHTNESS = "qs_show_brightness";
+
+        /**
+         * Whether to show QS brightness slider below the tiles
+         * @hide
+         */
+        @Readable
+        public static final String QS_BRIGHTNESS_POSITION_BOTTOM = "qs_brightness_position_bottom";
+
+        /**
+         * Whether to show QS auto brightness toggle button
+         * @hide
+         */
+        public static final String QS_SHOW_AUTO_BRIGHTNESS_BUTTON = "qs_show_auto_brightness_button";
 
         /**
          * These entries are considered common between the personal and the managed profile,
