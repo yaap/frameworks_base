@@ -11380,11 +11380,31 @@ public final class Settings {
         public static final String DOZE_ON_CHARGE_NOW = "doze_on_charge_now";
 
         /**
-         * Whether to show QS auto brightness toggle button
+         * Whether secure QS tiles require unlocking
          * @hide
          */
         @Readable
         public static final String QSTILE_REQUIRES_UNLOCKING = "qstile_requires_unlocking";
+
+        /**
+         * Whether to show QS brightness slider
+         * @hide
+         */
+        @Readable
+        public static final String QS_SHOW_BRIGHTNESS = "qs_show_brightness";
+
+        /**
+         * Whether to show QS brightness slider below the tiles
+         * @hide
+         */
+        @Readable
+        public static final String QS_BRIGHTNESS_POSITION_BOTTOM = "qs_brightness_position_bottom";
+
+        /**
+         * Whether to show QS auto brightness toggle button
+         * @hide
+         */
+        public static final String QS_SHOW_AUTO_BRIGHTNESS_BUTTON = "qs_show_auto_brightness_button";
 
         /**
          * These entries are considered common between the personal and the managed profile,

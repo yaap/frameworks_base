@@ -210,5 +210,8 @@ public class SecureSettings {
         Settings.Secure.STATUS_BAR_SHOW_VIBRATE_ICON,
         Settings.Secure.DOZE_ON_CHARGE,
         Settings.Secure.VOLUME_LINK_NOTIFICATION,
+        Settings.Secure.QS_SHOW_BRIGHTNESS,
+        Settings.Secure.QS_BRIGHTNESS_POSITION_BOTTOM,
+        Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
     };
 }
