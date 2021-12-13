@@ -17,6 +17,7 @@ package com.android.systemui.qs;
 import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.annotation.NonNull;
+import android.provider.Settings;
 import android.util.Log;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -129,8 +130,6 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
     private final SparseArray<Pair<HeightExpansionAnimator, TouchAnimator>>
             mNonFirstPageQSAnimators = new SparseArray<>();
 
-    private final TunerService mTunerService;
-
     private boolean mNeedsAnimatorUpdate = false;
     private boolean mOnKeyguard;
 
@@ -159,7 +158,6 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
         mHost = qsTileHost;
         mExecutor = executor;
         mQSExpansionPathInterpolator = qsExpansionPathInterpolator;
-        mTunerService = tunerService;
         mHost.addCallback(this);
         mQsPanelController.addOnAttachStateChangeListener(this);
         qs.getView().addOnLayoutChangeListener(this);
@@ -434,25 +432,11 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
             }
         }
 
-        // Fade in the media player as we reach the final position
-        Builder builder = new Builder().setStartDelay(EXPANDED_TILE_DELAY);
-        if (mQsPanelController.shouldUseHorizontalLayout()
-                && mQsPanelController.mMediaHost.hostView != null) {
-            builder.addFloat(mQsPanelController.mMediaHost.hostView, "alpha", 0, 1);
-        } else {
-            // In portrait, media view should always be visible
-            mQsPanelController.mMediaHost.hostView.setAlpha(1.0f);
-        }
 
         View qsBrightness = mQsPanelController.getBrightnessView();
-        final boolean bottom = mTunerService.getValue(
-                QSPanel.QS_BRIGHTNESS_POSITION_BOTTOM, 0) == 1;
-        if (bottom) {
-            // If brightness is showing at the bottom fade in as we reach the final position
-            builder.addFloat(qsBrightness, "alpha", 0, 1);
-            mBrightnessTranslationAnimator = null;
-            mBrightnessOpacityAnimator = null;
-        }
+        final boolean bottom = Settings.Secure.getInt(
+                qsBrightness.getContext().getContentResolver(),
+                Settings.Secure.QS_BRIGHTNESS_POSITION_BOTTOM, 0) == 1;
         animateBrightnessSlider(bottom);
         mFirstPageAnimator = firstPageBuilder
                 // Fade in the tiles/labels as we reach the final position.
@@ -461,6 +445,21 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
                 .setListener(this)
                 .build();
 
+        // Fade in the media player as we reach the final position
+        Builder builder = new Builder().setStartDelay(EXPANDED_TILE_DELAY);
+        if (bottom) {
+            // If brightness is showing at the bottom fade in as we reach the final position
+            builder.addFloat(qsBrightness, "alpha", 0, 1);
+            mBrightnessTranslationAnimator = null;
+            mBrightnessOpacityAnimator = null;
+        }
+        if (mQsPanelController.shouldUseHorizontalLayout()
+                && mQsPanelController.mMediaHost.hostView != null) {
+            builder.addFloat(mQsPanelController.mMediaHost.hostView, "alpha", 0, 1);
+        } else {
+            // In portrait, media view should always be visible
+            mQsPanelController.mMediaHost.hostView.setAlpha(1.0f);
+        }
         mAllPagesDelayedAnimator = builder.build();
         translationYBuilder.setInterpolator(mQSExpansionPathInterpolator.getYInterpolator());
         qqsTranslationYBuilder.setInterpolator(mQSExpansionPathInterpolator.getYInterpolator());
@@ -587,7 +586,7 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
                     .addFloat(qqsBrightness, "translationY", 0, translationY)
                     .setInterpolator(mQSExpansionPathInterpolator.getYInterpolator())
                     .build();
-        } else if (qsBrightness != null) {
+        } else if (qsBrightness != null && !bottom) {
             // The brightness slider's visible bottom edge must maintain a constant margin from the
             // QS tiles during transition. Thus the slider must (1) perform the same vertical
             // translation as the tiles, and (2) compensate for the slider scaling.
@@ -603,14 +602,12 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
 
             // For (2), the slider scales to the vertical center, so compensate with half the
             // height at full collapse.
-            if (!bottom) {
-                float scaleCompensation = qsBrightness.getMeasuredHeight() * 0.5f;
-                mBrightnessTranslationAnimator = new Builder()
-                        .addFloat(qsBrightness, "translationY", scaleCompensation + tileMovement, 0)
-                        .addFloat(qsBrightness, "sliderScaleY", 0, 1)
-                        .setInterpolator(mQSExpansionPathInterpolator.getYInterpolator())
-                        .build();
-            }
+            float scaleCompensation = qsBrightness.getMeasuredHeight() * 0.5f;
+            mBrightnessTranslationAnimator = new Builder()
+                    .addFloat(qsBrightness, "translationY", scaleCompensation + tileMovement, 0)
+                    .addFloat(qsBrightness, "sliderScaleY", 0, 1)
+                    .setInterpolator(mQSExpansionPathInterpolator.getYInterpolator())
+                    .build();
 
             // While the slider's position and unfurl is animated throughouth the motion, the
             // fade in happens independently.

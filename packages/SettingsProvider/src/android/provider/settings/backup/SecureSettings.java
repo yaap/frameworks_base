@@ -249,6 +249,9 @@ public class SecureSettings {
         Settings.Secure.EXTRA_DIM_AUTO_TIME,
         Settings.Secure.DC_DIM_AUTO_MODE,
         Settings.Secure.DC_DIM_AUTO_TIME,
-        Settings.Secure.DOZE_ON_CHARGE
+        Settings.Secure.DOZE_ON_CHARGE,
+        Settings.Secure.QS_SHOW_BRIGHTNESS,
+        Settings.Secure.QS_BRIGHTNESS_POSITION_BOTTOM,
+        Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON
     };
 }

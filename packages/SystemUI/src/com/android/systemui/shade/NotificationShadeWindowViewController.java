@@ -19,8 +19,6 @@ package com.android.systemui.shade;
 import static com.android.systemui.flags.Flags.TRACKPAD_GESTURE_COMMON;
 import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
 
-import static com.android.systemui.qs.QSPanel.QS_SHOW_AUTO_BRIGHTNESS_BUTTON;
-
 import android.app.StatusBarManager;
 import android.media.AudioManager;
 import android.media.session.MediaSessionLegacyHelper;
@@ -475,8 +473,9 @@ public class NotificationShadeWindowViewController {
                     mBrightnessMirror = child;
                     ImageView autoBrightnessIcon =
                             child.findViewById(R.id.brightness_icon);
-                    boolean show = mTunerService.getValue(
-                            QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
+                    boolean show = Settings.Secure.getInt(
+                            autoBrightnessIcon.getContext().getContentResolver(),
+                            Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
                     autoBrightnessIcon.setVisibility(show ? View.VISIBLE : View.GONE);
                 }
             }

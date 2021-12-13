@@ -426,5 +426,8 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.DC_DIM_AUTO_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2", "3", "4"}));
         VALIDATORS.put(Secure.DC_DIM_AUTO_TIME, TIME_RANGE_VALIDATOR);
         VALIDATORS.put(Secure.DOZE_ON_CHARGE, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.QS_SHOW_BRIGHTNESS, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.QS_BRIGHTNESS_POSITION_BOTTOM, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON, BOOLEAN_VALIDATOR);
     }
 }
