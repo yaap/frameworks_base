@@ -211,6 +211,13 @@ public class NotificationShadeWindowViewController {
         } else {
             mMultiShadeMotionEventInteractor = null;
         }
+        ImageView icon = mBrightnessMirror.findViewById(R.id.brightness_icon);
+        if (icon != null) {
+            boolean show = Settings.Secure.getInt(
+                    mView.getContext().getContentResolver(),
+                    Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
+            icon.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
     }
 
     /**
@@ -471,12 +478,11 @@ public class NotificationShadeWindowViewController {
             public void onChildViewAdded(View parent, View child) {
                 if (child.getId() == R.id.brightness_mirror_container) {
                     mBrightnessMirror = child;
-                    ImageView autoBrightnessIcon =
-                            child.findViewById(R.id.brightness_icon);
+                    ImageView icon = child.findViewById(R.id.brightness_icon);
                     boolean show = Settings.Secure.getInt(
-                            autoBrightnessIcon.getContext().getContentResolver(),
+                            mView.getContext().getContentResolver(),
                             Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
-                    autoBrightnessIcon.setVisibility(show ? View.VISIBLE : View.GONE);
+                    icon.setVisibility(show ? View.VISIBLE : View.GONE);
                 }
             }
 
