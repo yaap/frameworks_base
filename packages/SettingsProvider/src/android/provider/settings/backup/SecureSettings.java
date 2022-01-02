@@ -270,5 +270,6 @@ public class SecureSettings {
         Settings.Secure.DOZE_TAP_GESTURE_VIBRATE,
         Settings.Secure.DOZE_PICK_UP_GESTURE_VIBRATE,
         Settings.Secure.VPN_ENFORCE_DNS,
+        Settings.Secure.TETHERING_ALLOW_VPN_UPSTREAMS,
     };
 }
