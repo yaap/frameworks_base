@@ -5609,6 +5609,13 @@ public final class Settings {
         public static final String GAMING_MODE_MEDIA = "gaming_mode_media";
 
         /**
+         * Whether gaming mode turns off when screen is off
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_SCREEN_OFF = "gaming_mode_screen_off";
+
+        /**
          * Controls whether to show notification headers
          * @hide
          */
