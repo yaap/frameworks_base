@@ -5834,13 +5834,6 @@ public final class Settings {
         public static final String NETWORK_TRAFFIC_VIEW_LOCATION = "network_traffic_view_location";
 
         /**
-         * Whether to enable gaming mode or not
-         * @hide
-         */
-        @Readable
-        public static final String ENABLE_GAMING_MODE = "enable_gaming_mode";
-
-        /**
          * Whether gaming mode sets {@link Global.HEADS_UP_NOTIFICATIONS_ENABLED}
          * @hide
          */
