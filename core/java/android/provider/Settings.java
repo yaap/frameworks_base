@@ -5290,13 +5290,6 @@ public final class Settings {
         public static final String DOZE_ON_CHARGE_NOW = "doze_on_charge_now";
 
         /**
-         * Whether to enable gaming mode or not
-         * @hide
-         */
-        @Readable
-        public static final String ENABLE_GAMING_MODE = "enable_gaming_mode";
-
-        /**
          * Whether gaming mode sets {@link Global.HEADS_UP_NOTIFICATIONS_ENABLED}
          * @hide
          */
