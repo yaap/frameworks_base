@@ -84,6 +84,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     // private static final String KEY_NAVBAR_STATE = "gaming_mode_state_navbar";
     // private static final String KEY_HW_KEYS_STATE = "gaming_mode_state_hw_keys";
     private static final String KEY_NIGHT_LIGHT = "gaming_mode_night_light";
+    private static final String KEY_NIGHT_LIGHT_AUTO = "gaming_mode_night_light_auto";
     private static final String KEY_BRIGHTNESS_STATE = "gaming_mode_state_brightness";
     private static final String KEY_BRIGHTNESS_LEVEL = "gaming_mode_level_brightness";
     private static final String KEY_MEDIA_LEVEL = "gaming_mode_level_media";
@@ -206,6 +207,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
 
             if (mNightLightEnabled) {
                 mColorManager.setNightDisplayActivated(false);
+                mColorManager.setNightDisplayAutoMode(ColorDisplayManager.AUTO_MODE_DISABLED);
             }
 
             if (mBrightnessEnabled) {
@@ -329,6 +331,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         //         Settings.Secure.HARDWARE_KEYS_DISABLE, 0));
         Prefs.putInt(mContext, KEY_NIGHT_LIGHT,
                 mColorManager.isNightDisplayActivated() ? 1 : 0);
+        Prefs.putInt(mContext, KEY_NIGHT_LIGHT_AUTO,
+                mColorManager.getNightDisplayAutoMode());
         Prefs.putInt(mContext, KEY_BRIGHTNESS_STATE, Settings.System.getInt(mResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC));
@@ -370,6 +374,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         if (mNightLightEnabled) {
             mColorManager.setNightDisplayActivated(
                     Prefs.getInt(mContext, KEY_NIGHT_LIGHT, 0) == 1);
+            mColorManager.setNightDisplayAutoMode(
+                    Prefs.getInt(mContext, KEY_NIGHT_LIGHT_AUTO, 0));
         }
 
         if (mBrightnessEnabled) {
