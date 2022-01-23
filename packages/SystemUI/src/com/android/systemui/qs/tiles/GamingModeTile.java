@@ -71,6 +71,7 @@ import com.android.systemui.SysUIToast;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 
+import java.util.ArrayList;
 import javax.inject.Inject;
 
 /** Quick settings tile: Gaming Mode tile **/
@@ -181,6 +182,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     }
 
     private void handleState(boolean enabled) {
+        ArrayList<String> enabledStrings = new ArrayList<>();
         if (enabled) {
             saveSettingsState();
             updateUserSettings();
@@ -188,26 +190,31 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             if (mHeadsUpEnabled) {
                 Settings.Global.putInt(mResolver,
                         Settings.Global.HEADS_UP_NOTIFICATIONS_ENABLED, 0);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_headsup));
             }
 
             if (mZenEnabled) {
                 mNm.setInterruptionFilter(
                         NotificationManager.INTERRUPTION_FILTER_PRIORITY);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_zen));
             }
 
             // if (mNavBarEnabled) {
             //     Settings.System.putInt(mResolver,
             //             Settings.System.FORCE_SHOW_NAVBAR, 0);
+            //     enabledStrings.add(mContext.getString(R.string.gaming_mode_navbar));
             // }
             //
             // if (mHwKeysEnabled && mHasHWKeys) {
             //     Settings.Secure.putInt(mResolver,
             //             Settings.Secure.HARDWARE_KEYS_DISABLE, 1);
+            //     enabledStrings.add(mContext.getString(R.string.gaming_mode_hardware_keys));
             // }
 
             if (mNightLightEnabled) {
                 mColorManager.setNightDisplayActivated(false);
                 mColorManager.setNightDisplayAutoMode(ColorDisplayManager.AUTO_MODE_DISABLED);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_night_light));
             }
 
             if (mBrightnessEnabled) {
@@ -221,6 +228,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                             Settings.System.SCREEN_BRIGHTNESS,
                             Math.round(255f * (mBrightnessLevel / 100f)));
                 }
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_brightness));
             }
 
             if (mMediaEnabled) {
@@ -228,6 +236,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 final int level = Math.round((float)max * ((float)mMediaLevel / 100f));
                 mAudio.setStreamVolume(AudioManager.STREAM_MUSIC, level,
                         AudioManager.FLAG_SHOW_UI);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_media));
             }
 
             if (mScreenOffEnabled) {
@@ -244,7 +253,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 mRegistered = false;
             }
         }
-        setNotification(enabled);
+        setNotification(enabled, enabledStrings);
     }
 
     @Override
@@ -310,7 +319,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 Settings.System.GAMING_MODE_NIGHT_LIGHT, 0) == 1;
         mBrightnessEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_BRIGHTNESS_ENABLED, 0) == 1;
-        mBrightnessLevel= Settings.System.getInt(mResolver,
+        mBrightnessLevel = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_BRIGHTNESS, 80);
         mMediaEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_MEDIA_ENABLED, 0) == 1;
@@ -400,9 +409,15 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         }
     }
 
-    private void setNotification(boolean show) {
+    private void setNotification(boolean show, ArrayList<String> strings) {
         if (show) {
             final Resources res = mContext.getResources();
+            String text = res.getString(R.string.accessibility_quick_settings_gaming_mode_on);
+            if (!strings.isEmpty()) {
+                text += " " + res.getString(R.string.gaming_mode_for) + " ";
+                text += strings.remove(0);
+                for (String str : strings) text += ", " + str;
+            }
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     res.getString(R.string.gaming_mode_tile_title),
@@ -413,7 +428,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             Notification notification = new Notification.Builder(mContext, CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_qs_gaming_mode)
                     .setContentTitle(res.getString(R.string.gaming_mode_tile_title))
-                    .setContentText(res.getString(R.string.accessibility_quick_settings_gaming_mode_on))
+                    .setContentText(text)
                     .setShowWhen(true)
                     .setOngoing(true)
                     .build();
