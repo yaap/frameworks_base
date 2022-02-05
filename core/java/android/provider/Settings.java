@@ -5869,6 +5869,13 @@ public final class Settings {
         public static final String GAMING_MODE_NIGHT_LIGHT = "gaming_mode_night_light";
 
         /**
+         * Whether to disable battery saver schedule when gaming mode is on
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_BATTERY_SCHEDULE = "gaming_mode_battery_schedule";
+
+        /**
          * Whether gaming mode toggles auto brightness
          * @hide
          */
