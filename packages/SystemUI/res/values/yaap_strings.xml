@@ -65,6 +65,7 @@
     <string name="gaming_mode_headsup">Heads Up</string>
     <string name="gaming_mode_zen">DND</string>
     <string name="gaming_mode_night_light">Night Light</string>
+    <string name="gaming_mode_battery_saver">Battery Saver</string>
     <string name="gaming_mode_brightness">Brightness</string>
     <string name="gaming_mode_media">Media Volume</string>
 

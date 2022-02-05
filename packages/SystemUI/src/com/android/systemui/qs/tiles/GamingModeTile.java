@@ -32,6 +32,7 @@ import android.hardware.display.ColorDisplayManager;
 import android.hardware.display.DisplayManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.UserHandle;
 import android.media.AudioManager;
 import android.provider.Settings;
@@ -69,6 +70,7 @@ import com.android.systemui.qs.tileimpl.QSTileImpl;
 import com.android.systemui.R;
 import com.android.systemui.SysUIToast;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
+import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 
 import java.util.ArrayList;
@@ -86,6 +88,9 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     // private static final String KEY_HW_KEYS_STATE = "gaming_mode_state_hw_keys";
     private static final String KEY_NIGHT_LIGHT = "gaming_mode_night_light";
     private static final String KEY_NIGHT_LIGHT_AUTO = "gaming_mode_night_light_auto";
+    private static final String KEY_BATTERY_SAVER = "gaming_mode_battery_saver";
+    private static final String KEY_BATTERY_SAVER_MODE = "gaming_mode_battery_saver_mode";
+    private static final String KEY_BATTERY_SAVER_LEVEL = "gaming_mode_battery_saver_level";
     private static final String KEY_BRIGHTNESS_STATE = "gaming_mode_state_brightness";
     private static final String KEY_BRIGHTNESS_LEVEL = "gaming_mode_level_brightness";
     private static final String KEY_MEDIA_LEVEL = "gaming_mode_level_media";
@@ -95,6 +100,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private final NotificationManager mNm;
     private final ContentResolver mResolver;
     private final ScreenBroadcastReceiver mScreenBroadcastReceiver;
+    private final BatteryController mBatteryController;
     private ColorDisplayManager mColorManager;
     private final boolean mHasHWKeys;
     private boolean mRegistered;
@@ -105,6 +111,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private boolean mNavBarEnabled;
     private boolean mHwKeysEnabled;
     private boolean mNightLightEnabled;
+    private boolean mBatterySaverEnabled;
     private boolean mBrightnessEnabled;
     private boolean mMediaEnabled;
     private boolean mScreenOffEnabled;
@@ -122,7 +129,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             QSLogger qsLogger,
             BroadcastDispatcher broadcastDispatcher,
             KeyguardStateController keyguardStateController,
-            ColorDisplayManager colorManager
+            ColorDisplayManager colorManager,
+            BatteryController batteryController
     ) {
         super(host, backgroundLooper, mainHandler, falsingManager, metricsLogger,
                 statusBarStateController, activityStarter, qsLogger);
@@ -130,6 +138,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         mAudio = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
         mNm = (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
         mColorManager = colorManager;
+        mBatteryController = batteryController;
 
         // find out if a physical navbar is present
         Configuration c = mContext.getResources().getConfiguration();
@@ -215,6 +224,18 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 mColorManager.setNightDisplayActivated(false);
                 mColorManager.setNightDisplayAutoMode(ColorDisplayManager.AUTO_MODE_DISABLED);
                 enabledStrings.add(mContext.getString(R.string.gaming_mode_night_light));
+            }
+
+            if (mBatterySaverEnabled) {
+                // disable
+                mBatteryController.setPowerSaveMode(false);
+                // Set to percentage mode at 0
+                Settings.Global.putInt(mResolver,
+                        Settings.Global.LOW_POWER_MODE_TRIGGER_LEVEL, 0);
+                Settings.Global.putInt(mResolver,
+                        Settings.Global.AUTOMATIC_POWER_SAVE_MODE,
+                        PowerManager.POWER_SAVE_MODE_TRIGGER_PERCENTAGE);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_battery_saver));
             }
 
             if (mBrightnessEnabled) {
@@ -317,6 +338,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 Settings.System.GAMING_MODE_HW_BUTTONS, 1) == 1;
         mNightLightEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_NIGHT_LIGHT, 0) == 1;
+        mBatterySaverEnabled = Settings.System.getInt(mResolver,
+                Settings.System.GAMING_MODE_BATTERY_SCHEDULE, 0) == 1;
         mBrightnessEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_BRIGHTNESS_ENABLED, 0) == 1;
         mBrightnessLevel = Settings.System.getInt(mResolver,
@@ -342,6 +365,12 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 mColorManager.isNightDisplayActivated() ? 1 : 0);
         Prefs.putInt(mContext, KEY_NIGHT_LIGHT_AUTO,
                 mColorManager.getNightDisplayAutoMode());
+        Prefs.putInt(mContext, KEY_BATTERY_SAVER, mBatteryController.isPowerSave() ? 1 : 0);
+        Prefs.putInt(mContext, KEY_BATTERY_SAVER_MODE, Settings.Global.getInt(mResolver,
+                Settings.Global.AUTOMATIC_POWER_SAVE_MODE,
+                PowerManager.POWER_SAVE_MODE_TRIGGER_PERCENTAGE));
+        Prefs.putInt(mContext, KEY_BATTERY_SAVER_LEVEL, Settings.Global.getInt(mResolver,
+                Settings.Global.LOW_POWER_MODE_TRIGGER_LEVEL, 0));
         Prefs.putInt(mContext, KEY_BRIGHTNESS_STATE, Settings.System.getInt(mResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC));
@@ -385,6 +414,18 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                     Prefs.getInt(mContext, KEY_NIGHT_LIGHT, 0) == 1);
             mColorManager.setNightDisplayAutoMode(
                     Prefs.getInt(mContext, KEY_NIGHT_LIGHT_AUTO, 0));
+        }
+
+        if (mBatterySaverEnabled) {
+            final int prevMode = Prefs.getInt(mContext, KEY_BATTERY_SAVER_MODE,
+                    PowerManager.POWER_SAVE_MODE_TRIGGER_PERCENTAGE);
+            final int prevLevel = Prefs.getInt(mContext, KEY_BATTERY_SAVER_LEVEL, 0);
+            Settings.Global.putInt(mResolver,
+                    Settings.Global.LOW_POWER_MODE_TRIGGER_LEVEL, prevLevel);
+            Settings.Global.putInt(mResolver,
+                    Settings.Global.AUTOMATIC_POWER_SAVE_MODE, prevMode);
+            mBatteryController.setPowerSaveMode(
+                    Prefs.getInt(mContext, KEY_BATTERY_SAVER, 0) == 1);
         }
 
         if (mBrightnessEnabled) {
