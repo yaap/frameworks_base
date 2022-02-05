@@ -101,6 +101,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private final ContentResolver mResolver;
     private final ScreenBroadcastReceiver mScreenBroadcastReceiver;
     private final BatteryController mBatteryController;
+    private final DisplayManager mDisplayManager;
     private ColorDisplayManager mColorManager;
     private final boolean mHasHWKeys;
     private boolean mRegistered;
@@ -137,6 +138,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         mResolver = mContext.getContentResolver();
         mAudio = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
         mNm = (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
+        mDisplayManager = (DisplayManager) mContext.getSystemService(DisplayManager.class);
         mColorManager = colorManager;
         mBatteryController = batteryController;
 
@@ -245,9 +247,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                         Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
                 if (mBrightnessLevel != 0) {
                     // Set level
-                    Settings.System.putInt(mResolver,
-                            Settings.System.SCREEN_BRIGHTNESS,
-                            Math.round(255f * (mBrightnessLevel / 100f)));
+                    mDisplayManager.setBrightness(mContext.getDisplayId(),
+                            mBrightnessLevel / 100f);
                 }
                 enabledStrings.add(mContext.getString(R.string.gaming_mode_brightness));
             }
@@ -374,8 +375,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         Prefs.putInt(mContext, KEY_BRIGHTNESS_STATE, Settings.System.getInt(mResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC));
-        Prefs.putInt(mContext, KEY_BRIGHTNESS_LEVEL, Settings.System.getInt(mResolver,
-                Settings.System.SCREEN_BRIGHTNESS, 0));
+        Prefs.putInt(mContext, KEY_BRIGHTNESS_LEVEL,
+                Math.round(mDisplayManager.getBrightness(mContext.getDisplayId()) * 100f));
         // save current volume as percentage
         // we can restore it that way even if vol steps was changed in runtime
         final int max = mAudio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
@@ -435,9 +436,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                     Settings.System.SCREEN_BRIGHTNESS_MODE, prevMode);
             if (prevMode != Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
                     && mBrightnessLevel != 0) {
-                Settings.System.putInt(mResolver,
-                        Settings.System.SCREEN_BRIGHTNESS,
-                        Prefs.getInt(mContext, KEY_BRIGHTNESS_LEVEL, 0));
+                mDisplayManager.setBrightness(mContext.getDisplayId(),
+                        Prefs.getInt(mContext, KEY_BRIGHTNESS_LEVEL, 0) / 100f);
             }
         }
 
