@@ -20,13 +20,11 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.hardware.display.ColorDisplayManager;
 import android.hardware.display.DisplayManager;
@@ -36,39 +34,25 @@ import android.os.PowerManager;
 import android.os.UserHandle;
 import android.media.AudioManager;
 import android.provider.Settings;
-import android.provider.Settings.System;
 import android.service.quicksettings.Tile;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.CompoundButton;
-import android.widget.LinearLayout;
-import android.widget.SeekBar;
-import android.widget.Switch;
-import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
-import com.android.internal.util.yaap.YaapUtils;
 import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
-import com.android.systemui.Dependency;
 import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.plugins.FalsingManager;
-import com.android.systemui.plugins.qs.QSIconView;
 import com.android.systemui.plugins.qs.QSTile.BooleanState;
-import com.android.systemui.plugins.qs.QSTile.State;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.Prefs;
 import com.android.systemui.qs.logging.QSLogger;
 import com.android.systemui.qs.QSHost;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
 import com.android.systemui.R;
-import com.android.systemui.SysUIToast;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
 import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
@@ -104,15 +88,15 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private final ScreenBroadcastReceiver mScreenBroadcastReceiver;
     private final BatteryController mBatteryController;
     private final DisplayManager mDisplayManager;
-    private ColorDisplayManager mColorManager;
-    private final boolean mHasHWKeys;
-    private boolean mRegistered;
+    private final ColorDisplayManager mColorManager;
+    // private final boolean mHasHWKeys;
+    private boolean mScreenRegistered;
 
     // user settings
     private boolean mHeadsUpEnabled;
     private boolean mZenEnabled;
-    private boolean mNavBarEnabled;
-    private boolean mHwKeysEnabled;
+    // private boolean mNavBarEnabled;
+    // private boolean mHwKeysEnabled;
     private boolean mNightLightEnabled;
     private boolean mBatterySaverEnabled;
     private boolean mBrightnessEnabled;
@@ -145,8 +129,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         mBatteryController = batteryController;
 
         // find out if a physical navbar is present
-        Configuration c = mContext.getResources().getConfiguration();
-        mHasHWKeys = c.navigation != Configuration.NAVIGATION_NONAV;
+        // Configuration c = mContext.getResources().getConfiguration();
+        // mHasHWKeys = c.navigation != Configuration.NAVIGATION_NONAV;
 
         mScreenBroadcastReceiver = new ScreenBroadcastReceiver();
     }
@@ -168,12 +152,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         dialog.setTitle(R.string.gaming_mode_dialog_title);
         dialog.setMessage(R.string.gaming_mode_dialog_message);
         dialog.setPositiveButton(com.android.internal.R.string.ok,
-                new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        Prefs.putBoolean(mContext, Prefs.Key.QS_GAMING_MODE_DIALOG_SHOWN, true);
-                    }
-                });
+                (DialogInterface.OnClickListener) (dialog1, which) ->
+                        Prefs.putBoolean(mContext, Prefs.Key.QS_GAMING_MODE_DIALOG_SHOWN, true));
         dialog.setShowForAllUsers(true);
         dialog.show();
     }
@@ -268,13 +248,13 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 filter.addAction(Intent.ACTION_SCREEN_ON);
                 filter.addAction(Intent.ACTION_SCREEN_OFF);
                 mContext.registerReceiver(mScreenBroadcastReceiver, filter);
-                mRegistered = true;
+                mScreenRegistered = true;
             }
         } else {
             restoreSettingsState();
-            if (mRegistered) {
+            if (mScreenRegistered) {
                 mContext.unregisterReceiver(mScreenBroadcastReceiver);
-                mRegistered = false;
+                mScreenRegistered = false;
             }
         }
         setNotification(enabled, enabledStrings);
@@ -324,10 +304,10 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 Settings.System.GAMING_MODE_HEADS_UP, 1) == 1;
         mZenEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_ZEN, 0) == 1;
-        mNavBarEnabled = Settings.System.getInt(mResolver,
-                Settings.System.GAMING_MODE_NAVBAR, 0) == 1;
-        mHwKeysEnabled = Settings.System.getInt(mResolver,
-                Settings.System.GAMING_MODE_HW_BUTTONS, 1) == 1;
+        // mNavBarEnabled = Settings.System.getInt(mResolver,
+        //         Settings.System.GAMING_MODE_NAVBAR, 0) == 1;
+        // mHwKeysEnabled = Settings.System.getInt(mResolver,
+        //         Settings.System.GAMING_MODE_HW_BUTTONS, 1) == 1;
         mNightLightEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_NIGHT_LIGHT, 0) == 1;
         mBatterySaverEnabled = Settings.System.getInt(mResolver,
@@ -444,11 +424,11 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private void setNotification(boolean show, ArrayList<String> strings) {
         if (show) {
             final Resources res = mContext.getResources();
-            String text = res.getString(R.string.accessibility_quick_settings_gaming_mode_on);
+            StringBuilder text = new StringBuilder(res.getString(R.string.accessibility_quick_settings_gaming_mode_on));
             if (!strings.isEmpty()) {
-                text += " " + res.getString(R.string.gaming_mode_for) + " ";
-                text += strings.remove(0);
-                for (String str : strings) text += ", " + str;
+                text.append(" ").append(res.getString(R.string.gaming_mode_for)).append(" ");
+                text.append(strings.remove(0));
+                for (String str : strings) text.append(", ").append(str);
             }
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
@@ -460,7 +440,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             Notification notification = new Notification.Builder(mContext, CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_qs_gaming_mode)
                     .setContentTitle(res.getString(R.string.gaming_mode_tile_title))
-                    .setContentText(text)
+                    .setContentText(text.toString())
                     .setShowWhen(true)
                     .setOngoing(true)
                     .build();
