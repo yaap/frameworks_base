@@ -68,6 +68,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     // saved settings state keys
     private static final String KEY_HEADSUP_STATE = "gaming_mode_state_headsup";
     private static final String KEY_ZEN_STATE = "gaming_mode_state_zen";
+    private static final String KEY_RINGER_MODE = "gmaing_mode_ringer_mode";
     // private static final String KEY_NAVBAR_STATE = "gaming_mode_state_navbar";
     // private static final String KEY_HW_KEYS_STATE = "gaming_mode_state_hw_keys";
     private static final String KEY_NIGHT_LIGHT = "gaming_mode_night_light";
@@ -100,6 +101,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private boolean mBrightnessEnabled;
     private boolean mMediaEnabled;
     private boolean mScreenOffEnabled;
+
+    private int mRingerMode = 0;
     private int mBrightnessLevel = 80;
     private int mMediaLevel = 80;
 
@@ -188,6 +191,22 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 mNm.setInterruptionFilter(
                         NotificationManager.INTERRUPTION_FILTER_PRIORITY);
                 enabledStrings.add(mContext.getString(R.string.gaming_mode_zen));
+            }
+
+            if (mRingerMode != 0) {
+                // if we somehow have an invalid setting value stay at the same mode
+                int mode = mAudio.getRingerModeInternal();
+                String modeStr = "invalid";
+                if (mRingerMode == 1) {
+                    mode = AudioManager.RINGER_MODE_VIBRATE;
+                    modeStr = mContext.getString(R.string.gaming_mode_vibrate);
+                } else if (mRingerMode == 2) {
+                    mode = AudioManager.RINGER_MODE_SILENT;
+                    modeStr = mContext.getString(R.string.gaming_mode_silent);
+                }
+                mAudio.setRingerModeInternal(mode);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_ringer)
+                        + " (" + modeStr + ")");
             }
 
             // if (mNavBarEnabled) {
@@ -313,6 +332,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 Settings.System.GAMING_MODE_HEADS_UP, 1) == 1;
         mZenEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_ZEN, 0) == 1;
+        mRingerMode = Settings.System.getInt(mResolver,
+                Settings.System.GAMING_MODE_RINGER, 0);
         // mNavBarEnabled = Settings.System.getInt(mResolver,
         //         Settings.System.GAMING_MODE_NAVBAR, 0) == 1;
         // mHwKeysEnabled = Settings.System.getInt(mResolver,
@@ -338,6 +359,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 Settings.Global.HEADS_UP_NOTIFICATIONS_ENABLED, 1));
         Prefs.putInt(mContext, KEY_ZEN_STATE, Settings.Global.getInt(mResolver,
                 Settings.Global.ZEN_MODE, 0) != 0 ? 1 : 0);
+        Prefs.putInt(mContext, KEY_RINGER_MODE, mAudio.getRingerModeInternal());
         // Prefs.putInt(mContext, KEY_NAVBAR_STATE, Settings.System.getInt(mResolver,
         //         Settings.System.FORCE_SHOW_NAVBAR, 1));
         // Prefs.putInt(mContext, KEY_HW_KEYS_STATE, Settings.Secure.getInt(mResolver,
@@ -376,6 +398,11 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             mNm.setInterruptionFilter(Prefs.getInt(mContext, KEY_ZEN_STATE, 0) == 1
                     ? NotificationManager.INTERRUPTION_FILTER_PRIORITY
                     : NotificationManager.INTERRUPTION_FILTER_ALL);
+        }
+
+        if (mRingerMode != 0) {
+            mAudio.setRingerModeInternal(Prefs.getInt(mContext,
+                    KEY_RINGER_MODE, AudioManager.RINGER_MODE_NORMAL));
         }
 
         // if (mNavBarEnabled) {

@@ -96,6 +96,7 @@ public class SystemSettings {
         Settings.System.DOZE_ON_CHARGE,
         Settings.System.GAMING_MODE_HEADS_UP,
         Settings.System.GAMING_MODE_ZEN,
+        Settings.System.GAMING_MODE_RINGER,
         Settings.System.GAMING_MODE_NAVBAR,
         Settings.System.GAMING_MODE_HW_BUTTONS,
         Settings.System.GAMING_MODE_NIGHT_LIGHT,
