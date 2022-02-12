@@ -5848,6 +5848,16 @@ public final class Settings {
         public static final String GAMING_MODE_ZEN = "gaming_mode_zen";
 
         /**
+         * Gaming mode ringer
+         * 0 = Disabled / Don't change (default)
+         * 1 = Vibrate
+         * 2 = Silent
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_RINGER = "gaming_mode_ringer";
+
+        /**
          * Whether gaming mode sets {@link FORCE_SHOW_NAVBAR}
          * @hide
          */
