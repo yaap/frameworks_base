@@ -56,7 +56,7 @@
     <!-- Gaming Mode -->
     <string name="gaming_mode_tile_title">Gaming Macro</string>
     <string name="gaming_mode_dialog_title">Gaming Macro</string>
-    <string name="gaming_mode_dialog_message">Go to \'Settings > YASP > Quick Settings > Gaming macro\' for more details and settings</string>
+    <string name="gaming_mode_dialog_message">This tile requires an initial setup.\nLong pressing the tile will take you to a settings page with more info</string>
     <string name="accessibility_quick_settings_gaming_mode_on">Gaming macros are on</string>
     <string name="accessibility_quick_settings_gaming_mode_off">Gaming macros are off</string>
     <string name="gaming_mode_for">for:</string>
