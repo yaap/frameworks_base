@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018 FireHound
+ *               2022 Yet Another AOSP Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +65,7 @@ import javax.inject.Inject;
 public class GamingModeTile extends QSTileImpl<BooleanState> {
     private static final int NOTIFICATION_ID = 10000;
     private static final String CHANNEL_ID = "gaming_mode";
+    private static final Intent SETTINGS_INTENT = new Intent("com.android.settings.GAMING_MODE_SETTINGS");
 
     // saved settings state keys
     private static final String KEY_HEADSUP_STATE = "gaming_mode_state_headsup";
@@ -79,6 +81,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private static final String KEY_BRIGHTNESS_STATE = "gaming_mode_state_brightness";
     private static final String KEY_BRIGHTNESS_LEVEL = "gaming_mode_level_brightness";
     private static final String KEY_MEDIA_LEVEL = "gaming_mode_level_media";
+    // other shared prefs keys
+    private static final String KEY_DIALOG_SHOWN = "gaming_mode_dialog_shown";
 
     private final Icon mIcon = ResourceIcon.get(R.drawable.ic_qs_gaming_mode);
     private final AudioManager mAudio;
@@ -143,23 +147,10 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
 
     @Override
     public void handleClick(@Nullable View view) {
-        if (!Prefs.getBoolean(mContext, Prefs.Key.QS_GAMING_MODE_DIALOG_SHOWN, false))
+        if (!Prefs.getBoolean(mContext, KEY_DIALOG_SHOWN, false)) {
             showGamingModeWhatsThisDialog();
-        enableGamingMode();
-    }
-
-    private void showGamingModeWhatsThisDialog() {
-        SystemUIDialog dialog = new SystemUIDialog(mContext);
-        dialog.setTitle(R.string.gaming_mode_dialog_title);
-        dialog.setMessage(R.string.gaming_mode_dialog_message);
-        dialog.setPositiveButton(com.android.internal.R.string.ok,
-                (DialogInterface.OnClickListener) (dialog1, which) ->
-                        Prefs.putBoolean(mContext, Prefs.Key.QS_GAMING_MODE_DIALOG_SHOWN, true));
-        dialog.setShowForAllUsers(true);
-        dialog.show();
-    }
-
-    public void enableGamingMode() {
+            return;
+        }
         final boolean newState = !mState.value;
         handleState(newState);
         refreshState(newState);
@@ -167,12 +158,9 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
 
     @Override
     public Intent getLongClickIntent() {
-        return null;
-    }
-
-    @Override
-    protected void handleLongClick(@Nullable View view) {
-        showGamingModeWhatsThisDialog();
+        // no need to show it to the user if they already did this
+        Prefs.putBoolean(mContext, KEY_DIALOG_SHOWN, true);
+        return SETTINGS_INTENT;
     }
 
     private void handleState(boolean enabled) {
@@ -325,6 +313,17 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     @Override
     public void handleSetListening(boolean listening) {
         // no-op
+    }
+
+    private void showGamingModeWhatsThisDialog() {
+        SystemUIDialog dialog = new SystemUIDialog(mContext);
+        dialog.setTitle(R.string.gaming_mode_dialog_title);
+        dialog.setMessage(R.string.gaming_mode_dialog_message);
+        dialog.setPositiveButton(com.android.internal.R.string.ok,
+                (DialogInterface.OnClickListener) (dialog1, which) ->
+                    Prefs.putBoolean(mContext, KEY_DIALOG_SHOWN, true));
+        dialog.setShowForAllUsers(true);
+        dialog.show();
     }
 
     private void updateUserSettings() {
