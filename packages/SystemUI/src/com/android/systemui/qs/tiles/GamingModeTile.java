@@ -88,11 +88,13 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private final AudioManager mAudio;
     private final NotificationManager mNm;
     private final ContentResolver mResolver;
+    private final ShutdownBroadcastReciever mShutdownBroadcastReciever;
     private final ScreenBroadcastReceiver mScreenBroadcastReceiver;
     private final BatteryController mBatteryController;
     private final DisplayManager mDisplayManager;
     private final ColorDisplayManager mColorManager;
     // private final boolean mHasHWKeys;
+    private boolean mShutdownRegistered;
     private boolean mScreenRegistered;
 
     // user settings
@@ -137,6 +139,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         // Configuration c = mContext.getResources().getConfiguration();
         // mHasHWKeys = c.navigation != Configuration.NAVIGATION_NONAV;
 
+        mShutdownBroadcastReciever = new ShutdownBroadcastReciever();
         mScreenBroadcastReceiver = new ScreenBroadcastReceiver();
     }
 
@@ -250,16 +253,25 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
 
             if (mScreenOffEnabled) {
                 IntentFilter filter = new IntentFilter();
-                filter.addAction(Intent.ACTION_SCREEN_ON);
                 filter.addAction(Intent.ACTION_SCREEN_OFF);
                 mContext.registerReceiver(mScreenBroadcastReceiver, filter);
                 mScreenRegistered = true;
             }
+
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_SHUTDOWN);
+            mContext.registerReceiver(mShutdownBroadcastReciever, filter);
+            mShutdownRegistered = true;
+
         } else {
             restoreSettingsState();
             if (mScreenRegistered) {
                 mContext.unregisterReceiver(mScreenBroadcastReceiver);
                 mScreenRegistered = false;
+            }
+            if (mShutdownRegistered) {
+                mContext.unregisterReceiver(mShutdownBroadcastReciever);
+                mShutdownRegistered = false;
             }
         }
         setNotification(enabled, enabledStrings);
@@ -489,6 +501,16 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (intent.getAction().equals(Intent.ACTION_SCREEN_OFF)) {
+                handleState(false);
+                refreshState(false);
+            }
+        }
+    }
+
+    private class ShutdownBroadcastReciever extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent.getAction().equals(Intent.ACTION_SHUTDOWN)) {
                 handleState(false);
                 refreshState(false);
             }
