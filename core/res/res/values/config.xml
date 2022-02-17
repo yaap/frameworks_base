@@ -5976,6 +5976,9 @@
     <!-- Package name of the on-device intelligent processor for visual
          features. Examples include the autorotate feature. -->
     <string name="config_systemVisualIntelligence" translatable="false"></string>
+    <!-- Package name of a telephony-related system app, such as an IMS service.
+         Exempted from privacy indicators. -->
+     <string name="config_systemTelephonyPackage" translatable="false"></string>
     <!-- On-device package for providing companion device associations. -->
     <string name="config_systemCompanionDeviceProvider" translatable="false"></string>
 
