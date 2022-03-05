@@ -2,7 +2,6 @@ package com.yaap.android.systemui;
 
 import android.content.Context;
 import android.content.res.AssetManager;
-import android.os.Handler;
 
 import com.yaap.android.systemui.dagger.YaapGlobalRootComponent;
 import com.yaap.android.systemui.dagger.YaapSysUIComponent;
