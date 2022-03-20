@@ -5690,13 +5690,6 @@ public final class Settings {
         public static final String STATUSBAR_CLOCK_POSITION = "statusbar_clock_position";
 
         /**
-         * Whether to force small clock on keyguard
-         * @hide
-         */
-        @Readable
-        public static final String LOCKSCREEN_SMALL_CLOCK = "lockscreen_small_clock";
-
-        /**
          * Whether to inverse keys in navigation bar
          * Default 0
          * @hide

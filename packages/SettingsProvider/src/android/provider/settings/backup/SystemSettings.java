@@ -143,7 +143,6 @@ public class SystemSettings {
         Settings.System.QS_SHOW_BATTERY_ESTIMATE,
         Settings.System.ENABLE_FLOATING_ROTATION_BUTTON,
         Settings.System.STATUSBAR_CLOCK_POSITION,
-        Settings.System.LOCKSCREEN_SMALL_CLOCK,
         Settings.System.NAVIGATION_BAR_INVERSE,
         Settings.System.NAVBAR_LAYOUT_VIEWS,
         Settings.System.VOLUME_KEY_CURSOR_CONTROL,
