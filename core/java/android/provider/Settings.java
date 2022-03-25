@@ -6083,7 +6083,22 @@ public final class Settings {
          * Whether to draw battery percent inside the icon
          * @hide
          */
+        @Readable
         public static final String SHOW_BATTERY_PERCENT_INSIDE = "status_bar_show_battery_percent_inside";
+
+        /**
+         * Whether to enable quick mute
+         * @hide
+         */
+        @Readable
+        public static final String VOLUME_BUTTON_QUICK_MUTE = "volume_button_quick_mute";
+
+        /**
+         * Quick mute activation delay in ms
+         * @hide
+         */
+        @Readable
+        public static final String VOLUME_BUTTON_QUICK_MUTE_DELAY = "volume_button_quick_mute_delay";
 
         /**
          * IMPORTANT: If you add a new public settings you also have to add it to
