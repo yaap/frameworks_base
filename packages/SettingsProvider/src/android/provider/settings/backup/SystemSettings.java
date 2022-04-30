@@ -159,5 +159,6 @@ public class SystemSettings {
         Settings.System.MAX_CALL_VOLUME,
         Settings.System.MAX_MUSIC_VOLUME,
         Settings.System.MAX_ALARM_VOLUME,
+        Settings.System.QS_TRANSPARENCY,
     };
 }

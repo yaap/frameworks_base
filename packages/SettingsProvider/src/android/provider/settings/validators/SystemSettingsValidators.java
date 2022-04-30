@@ -308,5 +308,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.MAX_CALL_VOLUME, ANY_INTEGER_VALIDATOR);
         VALIDATORS.put(System.MAX_MUSIC_VOLUME, ANY_INTEGER_VALIDATOR);
         VALIDATORS.put(System.MAX_ALARM_VOLUME, ANY_INTEGER_VALIDATOR);
+        VALIDATORS.put(System.QS_TRANSPARENCY, new InclusiveIntegerRangeValidator(0, 100));
     }
 }

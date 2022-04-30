@@ -3351,6 +3351,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         }
 
         void observe() {
+            mSystemSettings.registerContentObserver(Settings.System.QS_TRANSPARENCY, this);
             mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, this);
             mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_GESTURE, this);
 
@@ -3361,6 +3362,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         @Override
         public void onChange(boolean selfChange, Uri uri) {
             switch (uri.getLastPathSegment()) {
+                case Settings.System.QS_TRANSPARENCY:
+                    updateQSTransparency();
+                    break;
                 case Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN:
                 case Settings.System.DOUBLE_TAP_SLEEP_GESTURE:
                     setDoubleTapToSleepGesture();
@@ -3373,6 +3377,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         void update() {
             setDoubleTapToSleepGesture();
+            updateQSTransparency();
         }
 
         private void setDoubleTapToSleepGesture() {
@@ -3387,6 +3392,14 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             } catch (RemoteException e) {
                 // Won't fail unless the squere root of -1 is a real number
             }
+        }
+
+        private void updateQSTransparency() {
+            int newValue = Settings.System.getIntForUser(mContext.getContentResolver(),
+                    Settings.System.QS_TRANSPARENCY, 100, UserHandle.USER_CURRENT);
+            mContext.getMainExecutor().execute(() -> {
+                mScrimController.setCustomScrimAlpha(newValue);
+            });
         }
     }
 
