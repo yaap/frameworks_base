@@ -29,8 +29,10 @@ import android.animation.ValueAnimator;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.Fragment;
+import android.database.ContentObserver;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.Settings;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -38,9 +40,12 @@ import android.view.ViewGroup;
 import android.view.ViewStub;
 import android.widget.LinearLayout;
 
+import androidx.annotation.VisibleForTesting;
+
 import com.android.systemui.Dependency;
 import com.android.systemui.R;
 import com.android.systemui.animation.Interpolators;
+import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.statusbar.CommandQueue;
@@ -68,11 +73,13 @@ import com.android.systemui.statusbar.phone.panelstate.PanelExpansionStateManage
 import com.android.systemui.statusbar.policy.EncryptionHelper;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.tuner.TunerService;
+import com.android.systemui.util.settings.SecureSettings;
 
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 import javax.inject.Inject;
 
@@ -115,6 +122,8 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
     private final PanelExpansionStateManager mPanelExpansionStateManager;
     private final StatusBarIconController mStatusBarIconController;
     private final StatusBarHideIconsForBouncerManager mStatusBarHideIconsForBouncerManager;
+    private final SecureSettings mSecureSettings;
+    private final Executor mMainExecutor;
     private ClockController mClockController;
     private boolean mIsClockBlacklisted;
 
@@ -152,7 +161,9 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
             StatusBarStateController statusBarStateController,
             CommandQueue commandQueue,
             CollapsedStatusBarFragmentLogger collapsedStatusBarFragmentLogger,
-            OperatorNameViewController.Factory operatorNameViewControllerFactory
+            OperatorNameViewController.Factory operatorNameViewControllerFactory,
+            SecureSettings secureSettings,
+            @Main Executor mainExecutor
     ) {
         mStatusBarFragmentComponentFactory = statusBarFragmentComponentFactory;
         mOngoingCallController = ongoingCallController;
@@ -170,6 +181,8 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         mCommandQueue = commandQueue;
         mCollapsedStatusBarFragmentLogger = collapsedStatusBarFragmentLogger;
         mOperatorNameViewControllerFactory = operatorNameViewControllerFactory;
+        mSecureSettings = secureSettings;
+        mMainExecutor = mainExecutor;
     }
 
     @Override
@@ -194,8 +207,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         }
         mDarkIconManager = new DarkIconManager(view.findViewById(R.id.statusIcons), mFeatureFlags);
         mDarkIconManager.setShouldLog(true);
-        mBlockedIcons.add(getString(com.android.internal.R.string.status_bar_call_strength));
-        mDarkIconManager.setBlockList(mBlockedIcons);
+        updateBlockedIcons();
         mStatusBarIconController.addIconGroup(mDarkIconManager);
         mSystemIconArea = mStatusBar.findViewById(R.id.system_icon_area);
         mClockController = mStatusBar.getClockController();
@@ -207,6 +219,24 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         initNotificationIconArea();
         mAnimationScheduler.addCallback(this);
         Dependency.get(TunerService.class).addTunable(this, StatusBarIconController.ICON_HIDE_LIST);
+    }
+
+    @VisibleForTesting
+    void updateBlockedIcons() {
+        mBlockedIcons.clear();
+
+        if (mSecureSettings.getInt(Settings.Secure.STATUS_BAR_SHOW_VIBRATE_ICON, 0) == 0) {
+            mBlockedIcons.add(getString(com.android.internal.R.string.status_bar_volume));
+        }
+        mBlockedIcons.add(getString(com.android.internal.R.string.status_bar_alarm_clock));
+        mBlockedIcons.add(getString(com.android.internal.R.string.status_bar_call_strength));
+
+        mMainExecutor.execute(() -> mDarkIconManager.setBlockList(mBlockedIcons));
+    }
+
+    @VisibleForTesting
+    List<String> getBlockedIcons() {
+        return mBlockedIcons;
     }
 
     @Override
@@ -223,6 +253,11 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         mCommandQueue.addCallback(this);
         mStatusBarStateController.addCallback(this);
         initOngoingCallChip();
+
+        mSecureSettings.registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.STATUS_BAR_SHOW_VIBRATE_ICON),
+                false,
+                mVolumeSettingObserver);
     }
 
     @Override
@@ -231,6 +266,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         mCommandQueue.removeCallback(this);
         mStatusBarStateController.removeCallback(this);
         mOngoingCallController.removeCallback(mOngoingCallListener);
+        mSecureSettings.unregisterContentObserver(mVolumeSettingObserver);
     }
 
     @Override
@@ -614,6 +650,13 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
 
         mLocationPublisher.updateStatusBarMargin(leftMargin, rightMargin);
     }
+
+    private final ContentObserver mVolumeSettingObserver = new ContentObserver(null) {
+        @Override
+        public void onChange(boolean selfChange) {
+            updateBlockedIcons();
+        }
+    };
 
     // Listen for view end changes of PhoneStatusBarView and publish that to the privacy dot
     private View.OnLayoutChangeListener mStatusBarLayoutListener =
