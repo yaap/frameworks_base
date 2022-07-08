@@ -10919,6 +10919,13 @@ public final class Settings {
                 "device_state_rotation_lock";
 
         /**
+         * Whether to show Wi-Fi standard icon
+         * @hide
+         */
+        public static final String SHOW_WIFI_STANDARD_ICON = "show_wifi_standard_icon";
+
+        /**
+         * Whether signal icons are combined
          * @hide
          */
         @Readable
