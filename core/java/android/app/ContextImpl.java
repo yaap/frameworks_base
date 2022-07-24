@@ -98,6 +98,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.gmscompat.BinderRedirector;
 import com.android.internal.gmscompat.sysservice.GmcPackageManager;
 import com.android.internal.gmscompat.GmsHooks;
+import com.android.internal.util.AppPermissionUtils;
 import com.android.internal.util.Preconditions;
 
 import dalvik.system.BlockGuard;
@@ -2165,7 +2166,18 @@ class ContextImpl extends Context {
             Log.v(TAG, "Treating renounced permission " + permission + " as denied");
             return PERMISSION_DENIED;
         }
-        return PermissionManager.checkPermission(permission, pid, uid);
+        int res = PermissionManager.checkPermission(permission, pid, uid);
+	final boolean selfCheck = pid == android.os.Process.myPid() && uid == android.os.Process.myUid();
+
+        if (res != PERMISSION_GRANTED) {
+            if (selfCheck) {
+                if (AppPermissionUtils.shouldSpoofSelfCheck(permission)) {
+                    return PERMISSION_GRANTED;
+                }
+            }
+        }
+
+        return res;
     }
 
     /** @hide */

@@ -123,6 +123,7 @@ import com.android.internal.annotations.Immutable;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.gmscompat.GmsInfo;
 import com.android.internal.os.SomeArgs;
+import com.android.internal.util.AppPermissionUtils;
 import com.android.internal.util.UserIcons;
 
 import dalvik.system.VMRuntime;
@@ -750,7 +751,17 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override
     public int checkPermission(String permName, String pkgName) {
-        return PermissionManager.checkPackageNamePermission(permName, pkgName, getUserId());
+        int res = PermissionManager.checkPackageNamePermission(permName, pkgName, getUserId());
+
+        if (res != PERMISSION_GRANTED) {
+            if (pkgName.equals(ActivityThread.currentPackageName())
+                    && AppPermissionUtils.shouldSpoofSelfCheck(permName))
+            {
+                return PERMISSION_GRANTED;
+            }
+        }
+
+        return res;
     }
 
     @Override
