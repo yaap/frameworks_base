@@ -42,6 +42,7 @@ import android.system.keystore2.ResponseCode;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.gmscompat.AttestationHooks;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -164,11 +165,7 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
 
     @Override
     public Certificate[] engineGetCertificateChain(String alias) {
-        for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
-            if (ste.getClassName().contains("DroidGuard")) {
-                throw new UnsupportedOperationException("Blocking safetynet attestation");
-            }
-        }
+        AttestationHooks.onEngineGetCertificateChain();
 
         KeyEntryResponse response = getKeyMetadata(alias);
 

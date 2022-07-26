@@ -456,7 +456,6 @@ public class PackageInstaller {
              */
             switch (pkg) {
                 case "app.attestation.auditor":
-                case "org.grapheneos.pdfviewer":
                 case GmsInfo.PACKAGE_GSF:
                     ContentResolver cr = GmsCompat.appContext().getContentResolver();
                     String pref = "gmscompat_play_store_unrestrict_pkg_" + pkg;

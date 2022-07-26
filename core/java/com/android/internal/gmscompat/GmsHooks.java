@@ -19,6 +19,7 @@ package com.android.internal.gmscompat;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.ActivityManager.RunningAppProcessInfo;
 import android.app.ActivityThread;
 import android.app.Application;
@@ -96,16 +97,6 @@ public final class GmsHooks {
         return false;
     }
 
-    // ApplicationPackageManager#hasSystemFeature(String, int)
-    public static boolean isHiddenSystemFeature(String name) {
-        switch (name) {
-            // checked before accessing privileged UwbManager
-            case "android.hardware.uwb":
-                return true;
-        }
-        return false;
-    }
-
     /**
      * Use the per-app SSAID as a random serial number for SafetyNet. This doesn't necessarily make
      * pass, but at least it retusn a valid "failed" response and stops spamming device key
@@ -121,18 +112,6 @@ public final class GmsHooks {
         String serial = ssaid.toUpperCase();
         Log.d(TAG, "Generating serial number from SSAID: " + serial);
         return serial;
-    }
-
-    // Only get package info for current user
-    // ApplicationPackageManager#getInstalledPackages(int)
-    // ApplicationPackageManager#getPackageInfo(VersionedPackage, int)
-    // ApplicationPackageManager#getPackageInfoAsUser(String, int, int)
-    public static int filterPackageInfoFlags(int flags) {
-        if (GmsCompat.isEnabled()) {
-            // Remove MATCH_ANY_USER flag to avoid permission denial
-            flags &= ~PackageManager.MATCH_ANY_USER;
-        }
-        return flags;
     }
 
     static class RecentBinderPid implements Comparable<RecentBinderPid> {
@@ -348,10 +327,10 @@ public final class GmsHooks {
         return result;
     }
 
-    // ContextImpl#startActivity(Intent, Bundle)
-    public static boolean startActivity(Intent intent, Bundle options) {
-        if (ActivityThread.currentActivityThread().hasAtLeastOneResumedActivity()) {
-            return false;
+    // Instrumentation#execStartActivity(Context, IBinder, IBinder, Activity, Intent, int, Bundle)
+    public static void onActivityStart(int resultCode, Intent intent, Bundle options) {
+        if (resultCode != ActivityManager.START_ABORTED) {
+            return;
         }
 
         // handle background activity starts, which normally require a privileged permission
@@ -365,7 +344,6 @@ public final class GmsHooks {
         } catch (RemoteException e) {
             GmsCompatApp.callFailed(e);
         }
-        return true;
     }
 
     // Activity#onCreate(Bundle)
@@ -454,6 +432,11 @@ public final class GmsHooks {
             return options;
         }
 
+        return filterBroadcastOptions(options, targetPkg);
+    }
+
+    // PendingIntent#send
+    public static Bundle filterBroadcastOptions(Bundle options, String targetPkg) {
         BroadcastOptions bo = new BroadcastOptions(options);
 
         if (bo.getTemporaryAppAllowlistType() == PowerExemptionManager.TEMPORARY_ALLOW_LIST_TYPE_NONE) {

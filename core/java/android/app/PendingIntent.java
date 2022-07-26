@@ -30,6 +30,7 @@ import android.annotation.SystemApi;
 import android.annotation.SystemApi.Client;
 import android.annotation.TestApi;
 import android.app.ActivityManager.PendingIntentInfo;
+import android.app.compat.gms.GmsCompat;
 import android.compat.Compatibility;
 import android.compat.annotation.ChangeId;
 import android.compat.annotation.EnabledAfter;
@@ -53,8 +54,10 @@ import android.os.RemoteException;
 import android.os.UserHandle;
 import android.util.AndroidException;
 import android.util.ArraySet;
+import android.util.Log;
 import android.util.proto.ProtoOutputStream;
 
+import com.android.internal.gmscompat.GmsHooks;
 import com.android.internal.os.IResultReceiver;
 
 import java.lang.annotation.Retention;
@@ -355,7 +358,7 @@ public final class PendingIntent implements Parcelable {
         sOnMarshaledListener.set(listener);
     }
 
-    private static void checkFlags(int flags, String packageName) {
+    private static int checkFlags(int flags, String packageName) {
         final boolean flagImmutableSet = (flags & PendingIntent.FLAG_IMMUTABLE) != 0;
         final boolean flagMutableSet = (flags & PendingIntent.FLAG_MUTABLE) != 0;
 
@@ -372,8 +375,11 @@ public final class PendingIntent implements Parcelable {
                     + " using FLAG_IMMUTABLE, only use FLAG_MUTABLE if some functionality"
                     + " depends on the PendingIntent being mutable, e.g. if it needs to"
                     + " be used with inline replies or bubbles.";
-                throw new IllegalArgumentException(msg);
+            // secure-by-default instead of crash-by-default for better compatibility
+            Log.e(TAG, msg);
+            return flags | PendingIntent.FLAG_IMMUTABLE;
         }
+        return flags;
     }
 
     /**
@@ -455,7 +461,7 @@ public final class PendingIntent implements Parcelable {
             @NonNull Intent intent, int flags, Bundle options, UserHandle user) {
         String packageName = context.getPackageName();
         String resolvedType = intent.resolveTypeIfNeeded(context.getContentResolver());
-        checkFlags(flags, packageName);
+        flags = checkFlags(flags, packageName);
         try {
             intent.migrateExtraStreamToClipData(context);
             intent.prepareToLeaveProcess(context);
@@ -590,7 +596,7 @@ public final class PendingIntent implements Parcelable {
             intents[i].prepareToLeaveProcess(context);
             resolvedTypes[i] = intents[i].resolveTypeIfNeeded(context.getContentResolver());
         }
-        checkFlags(flags, packageName);
+        flags = checkFlags(flags, packageName);
         try {
             IIntentSender target =
                 ActivityManager.getService().getIntentSenderWithFeature(
@@ -642,7 +648,7 @@ public final class PendingIntent implements Parcelable {
             Intent intent, int flags, UserHandle userHandle) {
         String packageName = context.getPackageName();
         String resolvedType = intent.resolveTypeIfNeeded(context.getContentResolver());
-        checkFlags(flags, packageName);
+        flags = checkFlags(flags, packageName);
         try {
             intent.prepareToLeaveProcess(context);
             IIntentSender target =
@@ -721,7 +727,7 @@ public final class PendingIntent implements Parcelable {
             Intent intent, int flags, int serviceKind) {
         String packageName = context.getPackageName();
         String resolvedType = intent.resolveTypeIfNeeded(context.getContentResolver());
-        checkFlags(flags, packageName);
+        flags = checkFlags(flags, packageName);
         try {
             intent.prepareToLeaveProcess(context);
             IIntentSender target =
@@ -954,6 +960,15 @@ public final class PendingIntent implements Parcelable {
             @Nullable OnFinished onFinished, @Nullable Handler handler,
             @Nullable String requiredPermission, @Nullable Bundle options)
             throws CanceledException {
+        if (GmsCompat.isEnabled()) {
+            if (options != null && intent != null && isBroadcast()) {
+                String targetPkg = getCreatorPackage();
+                if (targetPkg != null) {
+                    options = GmsHooks.filterBroadcastOptions(options, targetPkg);
+                }
+            }
+        }
+
         if (sendAndReturnResult(context, code, intent, onFinished, handler, requiredPermission,
                 options) < 0) {
             throw new CanceledException();

@@ -96,6 +96,7 @@ import android.window.WindowTokenClient;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.gmscompat.BinderRedirector;
+import com.android.internal.gmscompat.sysservice.GmcPackageManager;
 import com.android.internal.gmscompat.GmsHooks;
 import com.android.internal.util.Preconditions;
 
@@ -393,7 +394,7 @@ class ContextImpl extends Context {
         final IPackageManager pm = ActivityThread.getPackageManager();
         if (pm != null) {
             // Doesn't matter if we make more than one instance.
-            return (mPackageManager = new ApplicationPackageManager(this, pm));
+            return (mPackageManager = GmsCompat.isEnabled() ? new GmcPackageManager(this, pm) : new ApplicationPackageManager(this, pm));
         }
 
         return null;
@@ -1092,12 +1093,6 @@ class ContextImpl extends Context {
                     "Calling startActivity() from outside of an Activity "
                             + " context requires the FLAG_ACTIVITY_NEW_TASK flag."
                             + " Is this really what you want?");
-        }
-
-        if (GmsCompat.isEnabled()) {
-            if (GmsHooks.startActivity(intent, options)) {
-                return;
-            }
         }
 
         mMainThread.getInstrumentation().execStartActivity(

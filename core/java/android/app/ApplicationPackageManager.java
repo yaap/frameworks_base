@@ -121,9 +121,7 @@ import android.util.Log;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.Immutable;
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.gmscompat.GmsHooks;
 import com.android.internal.gmscompat.GmsInfo;
-import com.android.internal.gmscompat.PlayStoreHooks;
 import com.android.internal.os.SomeArgs;
 import com.android.internal.util.UserIcons;
 
@@ -220,8 +218,6 @@ public class ApplicationPackageManager extends PackageManager {
     @Override
     public PackageInfo getPackageInfo(VersionedPackage versionedPackage, int flags)
             throws NameNotFoundException {
-        flags = GmsHooks.filterPackageInfoFlags(flags);
-
         final int userId = getUserId();
         try {
             PackageInfo pi = mPM.getPackageInfoVersioned(versionedPackage,
@@ -238,8 +234,6 @@ public class ApplicationPackageManager extends PackageManager {
     @Override
     public PackageInfo getPackageInfoAsUser(String packageName, int flags, int userId)
             throws NameNotFoundException {
-        flags = GmsHooks.filterPackageInfoFlags(flags);
-
         PackageInfo pi =
                 getPackageInfoAsUserCached(
                         packageName,
@@ -591,10 +585,6 @@ public class ApplicationPackageManager extends PackageManager {
     /** @hide */
     @Override
     public @NonNull List<SharedLibraryInfo> getSharedLibraries(int flags) {
-        if (GmsCompat.isEnabled()) {
-            // MATCH_ANY_USER requires privileged INTERACT_ACROSS_USERS permission
-            flags &= ~MATCH_ANY_USER;
-        }
         return getSharedLibrariesAsUser(flags, getUserId());
     }
 
@@ -744,13 +734,7 @@ public class ApplicationPackageManager extends PackageManager {
                 name.contains("PIXEL_2019_PRELOAD") ||
                 name.contains("PIXEL_2019_MIDYEAR_EXPERIENCE"))) {
             return false;
-	}
-        if (GmsCompat.isEnabled()) {
-            if (GmsHooks.isHiddenSystemFeature(name)) {
-                return false;
-            }
         }
-
         return mHasSystemFeatureCache.query(new HasSystemFeatureQuery(name, version));
     }
 
@@ -1123,8 +1107,6 @@ public class ApplicationPackageManager extends PackageManager {
     @SuppressWarnings("unchecked")
     @Override
     public List<PackageInfo> getInstalledPackages(int flags) {
-        flags = GmsHooks.filterPackageInfoFlags(flags);
-
         return getInstalledPackagesAsUser(flags, getUserId());
     }
 
@@ -1847,10 +1829,6 @@ public class ApplicationPackageManager extends PackageManager {
 
     @Override
     public void addOnPermissionsChangeListener(OnPermissionsChangedListener listener) {
-        if (GmsCompat.isEnabled()) {
-            return;
-        }
-
         getPermissionManager().addOnPermissionsChangeListener(listener);
     }
 
@@ -1868,8 +1846,8 @@ public class ApplicationPackageManager extends PackageManager {
     }
 
     @UnsupportedAppUsage
-    protected ApplicationPackageManager(ContextImpl context, IPackageManager pm) {
-        mContext = context;
+    protected ApplicationPackageManager(Context context, IPackageManager pm) {
+        mContext = (ContextImpl) context;
         mPM = pm;
     }
 
@@ -2546,10 +2524,6 @@ public class ApplicationPackageManager extends PackageManager {
     @Override
     @UnsupportedAppUsage
     public void deletePackage(String packageName, IPackageDeleteObserver observer, int flags) {
-        if (GmsCompat.isPlayStore()) {
-            PlayStoreHooks.deletePackage(mContext, this, packageName, observer, flags);
-            return;
-        }
         deletePackageAsUser(packageName, observer, flags, getUserId());
     }
 
@@ -2596,10 +2570,6 @@ public class ApplicationPackageManager extends PackageManager {
     @Override
     public void freeStorageAndNotify(String volumeUuid, long idealStorageSize,
             IPackageDataObserver observer) {
-        if (GmsCompat.isPlayStore()) {
-            PlayStoreHooks.freeStorageAndNotify(mContext, volumeUuid, idealStorageSize, observer);
-            return;
-        }
         try {
             mPM.freeStorageAndNotify(volumeUuid, idealStorageSize, 0, observer);
         } catch (RemoteException e) {
@@ -2863,11 +2833,6 @@ public class ApplicationPackageManager extends PackageManager {
     @Override
     public void setApplicationEnabledSetting(String packageName,
                                              int newState, int flags) {
-        if (GmsCompat.isPlayStore()) {
-            PlayStoreHooks.setApplicationEnabledSetting(packageName, newState);
-            return;
-        }
-
         try {
             mPM.setApplicationEnabledSetting(packageName, newState, flags,
                     getUserId(), mContext.getOpPackageName());
