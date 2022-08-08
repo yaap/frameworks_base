@@ -44,4 +44,7 @@
     <!-- advanced reboot to fastboot. -->
     <string name="reboot_to_fastboot_title">Reboot fastboot</string>
     <string name="reboot_to_fastboot_message">Rebooting to fastboot\u2026</string>
+
+    <!-- Button that opens the screen with details of an application error -->
+    <string name="aerr_show_details">Show details</string>
 </resources>
