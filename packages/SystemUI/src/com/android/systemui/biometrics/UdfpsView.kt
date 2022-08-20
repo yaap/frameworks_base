@@ -25,6 +25,7 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
+import android.view.Surface
 import android.widget.FrameLayout
 import com.android.settingslib.udfps.UdfpsOverlayParams
 import com.android.systemui.R
@@ -61,6 +62,13 @@ class UdfpsView(
             a.getFloat(R.styleable.UdfpsView_sensorTouchAreaCoefficient, 0f)
         }
 
+    private val onIlluminatedDelayMs = context.resources.getInteger(
+        com.android.internal.R.integer.config_udfps_illumination_transition_ms
+    ).toLong()
+
+    // Only used for UdfpsHbmTypes.GLOBAL_HBM.
+    private var ghbmView: UdfpsSurfaceView? = null
+
     /** View controller (can be different for enrollment, BiometricPrompt, Keyguard, etc.). */
     var animationViewController: UdfpsAnimationViewController<*>? = null
 
@@ -85,6 +93,10 @@ class UdfpsView(
     // Don't propagate any touch events to the child views.
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         return (animationViewController == null || !animationViewController!!.shouldPauseAuth())
+    }
+
+    override fun onFinishInflate() {
+        ghbmView = findViewById(R.id.hbm_view)
     }
 
     override fun dozeTimeTick() {
@@ -157,5 +169,54 @@ class UdfpsView(
         isDisplayConfigured = false
         animationViewController?.onDisplayUnconfigured()
         mUdfpsDisplayMode?.disable(null /* onDisabled */)
+    }
+
+    /**
+     * Start and run [onIlluminatedRunnable] when the first illumination frame reaches the panel.
+     */
+    override fun startIllumination(onIlluminatedRunnable: Runnable?) {
+        isIlluminationRequested = true
+        animationViewController?.onIlluminationStarting()
+        val gView = ghbmView
+        if (gView != null) {
+            gView.setGhbmIlluminationListener(this::doIlluminate)
+            gView.visibility = VISIBLE
+            gView.startGhbmIllumination(onIlluminatedRunnable)
+        } else {
+            doIlluminate(null /* surface */, onIlluminatedRunnable)
+        }
+    }
+
+    private fun doIlluminate(surface: Surface?, onIlluminatedRunnable: Runnable?) {
+        if (ghbmView != null && surface == null) {
+            Log.e(TAG, "doIlluminate | surface must be non-null for GHBM")
+        }
+
+        // TODO(b/231335067): enableHbm with halControlsIllumination=true shouldn't make sense.
+        // This only makes sense now because vendor code may rely on the side effects of enableHbm.
+        hbmProvider?.enableHbm(halControlsIllumination) {
+            ghbmView?.drawIlluminationDot(sensorRect)
+            if (onIlluminatedRunnable != null) {
+                if (halControlsIllumination) {
+                    onIlluminatedRunnable.run()
+                } else {
+                    // No framework API can reliably tell when a frame reaches the panel. A timeout
+                    // is the safest solution.
+                    postDelayed(onIlluminatedRunnable, onIlluminatedDelayMs)
+                }
+            } else {
+                Log.w(TAG, "doIlluminate | onIlluminatedRunnable is null")
+            }
+        }
+    }
+
+    override fun stopIllumination() {
+        isIlluminationRequested = false
+        animationViewController?.onIlluminationStopped()
+        ghbmView?.let { view ->
+            view.setGhbmIlluminationListener(null)
+            view.visibility = INVISIBLE
+        }
+        hbmProvider?.disableHbm(null /* onHbmDisabled */)
     }
 }
