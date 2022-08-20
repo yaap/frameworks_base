@@ -99,7 +99,7 @@ public class UdfpsSurfaceView extends SurfaceView implements SurfaceHolder.Callb
         mHasValidSurface = false;
     }
 
-    void setGhbmIlluminationListener(@Nullable GhbmIlluminationListener listener) {
+    public void setGhbmIlluminationListener(@Nullable GhbmIlluminationListener listener) {
         mGhbmIlluminationListener = listener;
     }
 
@@ -108,7 +108,7 @@ public class UdfpsSurfaceView extends SurfaceView implements SurfaceHolder.Callb
      * {@link UdfpsView} will hide this view, which would destroy the surface and remove the
      * illumination dot.
      */
-    void startGhbmIllumination(@Nullable Runnable onIlluminatedRunnable) {
+    public void startGhbmIllumination(@Nullable Runnable onIlluminatedRunnable) {
         if (mGhbmIlluminationListener == null) {
             Log.e(TAG, "startIllumination | mGhbmIlluminationListener is null");
             return;
@@ -134,7 +134,7 @@ public class UdfpsSurfaceView extends SurfaceView implements SurfaceHolder.Callb
     /**
      * Immediately draws the illumination dot on this SurfaceView's surface.
      */
-    void drawIlluminationDot(@NonNull RectF sensorRect) {
+    public void drawIlluminationDot(@NonNull RectF sensorRect) {
         if (!mHasValidSurface) {
             Log.e(TAG, "drawIlluminationDot | the surface is destroyed or was never created.");
             return;
