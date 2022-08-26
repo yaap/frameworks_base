@@ -108,5 +108,6 @@ public class GlobalSettings {
         Settings.Global.APM_ENHANCEMENT,
         Settings.Global.LOW_POWER_MODE_HBM,
         Settings.Global.LOW_POWER_MODE_DMD,
+        Settings.Global.BLUETOOTH_OFF_TIMEOUT,
     };
 }
