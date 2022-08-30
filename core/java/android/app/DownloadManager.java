@@ -1171,6 +1171,11 @@ public class DownloadManager {
      * @return the number of downloads actually removed
      */
     public int remove(long... ids) {
+        if (SpecialRuntimePermAppUtils.isInternetCompatEnabled()) {
+            // underlying provider is protected by the INTERNET permission
+            return 0;
+        }
+
         return markRowDeleted(ids);
     }
 
@@ -1595,6 +1600,11 @@ public class DownloadManager {
         validateArgumentIsNonEmpty("mimeType", mimeType);
         if (length < 0) {
             throw new IllegalArgumentException(" invalid value for param: totalBytes");
+        }
+
+        if (SpecialRuntimePermAppUtils.isInternetCompatEnabled()) {
+            // underlying provider is protected by the INTERNET permission
+            return -1;
         }
 
         // if there is already an entry with the given path name in downloads.db, return its id
