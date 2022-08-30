@@ -7338,6 +7338,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
     int mediaProviderAppId;
     int permissionControllerAppId;
+    int sysLauncherAppId;
 
     private void initGosPackageStateAppIds() {
         synchronized (mLock) {
@@ -7350,6 +7351,11 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
             AndroidPackage permissionController = mPackages.get(mRequiredPermissionControllerPackage);
             if (permissionController != null) {
                 permissionControllerAppId = permissionController.getUid();
+            }
+
+            var sysLauncher = mPackages.get("com.android.launcher3");
+            if (sysLauncher != null) {
+                sysLauncherAppId = sysLauncher.getUid();
             }
         }
     }
