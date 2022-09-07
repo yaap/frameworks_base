@@ -273,7 +273,9 @@ public class UdfpsDialogMeasureAdapter {
 
     @NonNull
     private static Insets getNavbarInsets(@Nullable WindowMetrics windowMetrics) {
-        return Insets.NONE;
+        return windowMetrics != null
+                ? windowMetrics.getWindowInsets().getInsets(WindowInsets.Type.navigationBars())
+                : Insets.NONE;
     }
 
     @NonNull
