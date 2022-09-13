@@ -23,7 +23,6 @@ import android.app.AppOpsManager;
 import android.app.compat.gms.GmsCompat;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.util.ExceptionUtils;
-import android.util.IntArray;
 import android.util.Log;
 import android.util.Slog;
 
@@ -147,9 +146,6 @@ public class Binder implements IBinder {
      */
     private static volatile boolean sStackTrackingEnabled = false;
 
-    private static final Object sTracingUidsWriteLock = new Object();
-    private static volatile IntArray sTracingUidsImmutable = new IntArray();
-
     /**
      * Enable Binder IPC stack tracking. If enabled, every binder transaction will be logged to
      * {@link TransactionTracker}.
@@ -170,30 +166,12 @@ public class Binder implements IBinder {
     }
 
     /**
-     * @hide
-     */
-    public static void enableTracingForUid(int uid) {
-        synchronized (sTracingUidsWriteLock) {
-            final IntArray copy = sTracingUidsImmutable.clone();
-            copy.add(uid);
-            sTracingUidsImmutable = copy;
-        }
-    }
-
-    /**
      * Check if binder transaction stack tracking is enabled.
      *
      * @hide
      */
     public static boolean isStackTrackingEnabled() {
         return sStackTrackingEnabled;
-    }
-
-    /**
-     * @hide
-     */
-    public static boolean isTracingEnabled(int callingUid) {
-        return sTracingUidsImmutable.indexOf(callingUid) != -1;
     }
 
     /**
@@ -1284,7 +1262,7 @@ public class Binder implements IBinder {
         // If the call was {@link IBinder#FLAG_ONEWAY} then these exceptions
         // disappear into the ether.
         final boolean tracingEnabled = Trace.isTagEnabled(Trace.TRACE_TAG_AIDL) &&
-                (Binder.isStackTrackingEnabled() || Binder.isTracingEnabled(callingUid));
+                Binder.isStackTrackingEnabled();
         data.mPerformBinderRedirectionCheck = mPerformRedirectionCheck;
         try {
             final BinderCallHeavyHitterWatcher heavyHitterWatcher = sHeavyHitterWatcher;
