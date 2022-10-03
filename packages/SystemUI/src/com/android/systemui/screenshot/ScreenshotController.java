@@ -324,8 +324,8 @@ public class ScreenshotController {
         try {
             final ActivityInfo ai = mPm.getActivityInfo(mTaskComponentName, 0);
             return ai.applicationInfo.loadLabel(mPm).toString();
-        } catch (PackageManager.NameNotFoundException e) {
-             return null;
+        } catch (Exception e) {
+            return "SystemUI";
         }
     }
 
