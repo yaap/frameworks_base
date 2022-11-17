@@ -548,6 +548,8 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
     private final ScreenOffAnimationController mScreenOffAnimationController;
     private boolean mShouldUseSplitNotificationShade;
 
+    private ExpandableNotificationRow mLastExpandableRow;
+
     private final ExpandableView.OnHeightChangedListener mOnChildHeightChangedListener =
             new ExpandableView.OnHeightChangedListener() {
                 @Override
@@ -3057,8 +3059,13 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
         if (child instanceof ExpandableNotificationRow) {
             ExpandableNotificationRow row = (ExpandableNotificationRow) child;
             row.setDismissUsingRowTranslationX(mDismissUsingRowTranslationX);
-
+            mLastExpandableRow = row;
         }
+    }
+
+    /** @hide */
+    public ExpandableNotificationRow getLastExpandableNotificationRow() {
+        return mLastExpandableRow;
     }
 
     @ShadeViewRefactor(RefactorComponent.COORDINATOR)
