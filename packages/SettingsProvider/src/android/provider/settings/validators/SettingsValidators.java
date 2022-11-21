@@ -257,4 +257,19 @@ public class SettingsValidators {
             return true;
         }
     };
+    static final Validator CUSTOM_VIBRATION_PATTERN_VALIDATOR = new Validator() {
+        @Override
+        public boolean validate(String value) {
+            String[] args = value.split(",", 0);
+            if (args.length != 3) return false;
+            try {
+                for (String str : args)
+                    if (Integer.parseInt(str) < 0)
+                        return false;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+            return true;
+        }
+    };
 }
