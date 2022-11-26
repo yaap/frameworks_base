@@ -1734,7 +1734,7 @@
         android:permissionGroup="android.permission-group.UNDEFINED"
         android:label="@string/permlab_otherSensors"
         android:description="@string/permdesc_otherSensors"
-        android:protectionLevel="dangerous" />
+        android:protectionLevel="dangerous|instant" />
 
     <!-- ====================================================================== -->
     <!-- REMOVED PERMISSIONS                                                    -->
