@@ -602,13 +602,13 @@ public class NotificationStackScrollLayout extends ViewGroup implements Dumpable
         @Override
         public void onChange(boolean selfChange, Uri uri) {
             update();
+            reinflateViews();
         }
 
         void update() {
             boolean enabled = Settings.System.getIntForUser(getContext().getContentResolver(),
                     Settings.System.NOTIFICATION_HEADERS, 1, UserHandle.USER_CURRENT) == 1;
             mSectionsManager.setHeadersVisibility(enabled);
-            updateFirstAndLastBackgroundViews();
         }
     }
 
