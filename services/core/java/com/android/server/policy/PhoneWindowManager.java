@@ -172,7 +172,6 @@ import android.util.proto.ProtoOutputStream;
 import android.view.Display;
 import android.view.HapticFeedbackConstants;
 import android.view.IDisplayFoldListener;
-import android.view.IWindowManager;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyCharacterMap.FallbackAction;
@@ -394,7 +393,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private final SparseArray<ScreenOnListener> mScreenOnListeners = new SparseArray<>();
 
     Context mContext;
-    IWindowManager mWindowManager;
     WindowManagerFuncs mWindowManagerFuncs;
     WindowManagerInternal mWindowManagerInternal;
     PowerManager mPowerManager;
@@ -1031,6 +1029,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     private void powerPress(long eventTime, int count, boolean beganFromNonInteractive) {
+        // SideFPS still needs to know about suppressed power buttons, in case it needs to block
+        // an auth attempt.
+        if (count == 1) {
+            mSideFpsEventHandler.notifyPowerPressed();
+        }
         if (mDefaultDisplayPolicy.isScreenOnEarly() && !mDefaultDisplayPolicy.isScreenOnFully()
             && mTorchActionMode != 1) {
             Slog.i(TAG, "Suppressed redundant power key press while "
@@ -1051,7 +1054,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         } else if (count > 3 && count <= getMaxMultiPressPowerCount()) {
             Slog.d(TAG, "No behavior defined for power press count " + count);
         } else if (count == 1 && interactive && !beganFromNonInteractive) {
-            if (mSideFpsEventHandler.onSinglePressDetected(eventTime)) {
+            if (mSideFpsEventHandler.shouldConsumeSinglePress(eventTime)) {
                 Slog.i(TAG, "Suppressing power key because the user is interacting with the "
                         + "fingerprint sensor");
                 return;
@@ -1970,10 +1973,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     /** {@inheritDoc} */
     @Override
-    public void init(Context context, IWindowManager windowManager,
-            WindowManagerFuncs windowManagerFuncs) {
+    public void init(Context context, WindowManagerFuncs windowManagerFuncs) {
         mContext = context;
-        mWindowManager = windowManager;
         mWindowManagerFuncs = windowManagerFuncs;
         mWindowManagerInternal = LocalServices.getService(WindowManagerInternal.class);
         mActivityManagerInternal = LocalServices.getService(ActivityManagerInternal.class);
@@ -3430,8 +3431,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     @Override
     public void onKeyguardOccludedChangedLw(boolean occluded) {
-        if (mKeyguardDelegate != null && mKeyguardDelegate.isShowing()
-                && !WindowManagerService.sEnableShellTransitions) {
+        if (mKeyguardDelegate != null && mKeyguardDelegate.isShowing()) {
             mPendingKeyguardOccluded = occluded;
             mKeyguardOccludedChanged = true;
         } else {
@@ -4798,7 +4798,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                                     pmWakeReason)) + ")");
         }
 
-        mActivityTaskManagerInternal.notifyWakingUp();
         mDefaultDisplayPolicy.setAwake(true);
 
         // Since goToSleep performs these functions synchronously, we must
@@ -5070,10 +5069,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         if (enableScreen) {
-            try {
-                mWindowManager.enableScreenIfNeeded();
-            } catch (RemoteException unhandled) {
-            }
+            mWindowManagerFuncs.enableScreenIfNeeded();
         }
     }
 
@@ -5455,18 +5451,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     /** {@inheritDoc} */
     @Override
-    public void userActivity() {
-        // ***************************************
-        // NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
-        // ***************************************
-        // THIS IS CALLED FROM DEEP IN THE POWER MANAGER
-        // WITH ITS LOCKS HELD.
-        //
-        // This code must be VERY careful about the locks
-        // it acquires.
-        // In fact, the current code acquires way too many,
-        // and probably has lurking deadlocks.
-
+    public void userActivity(int displayGroupId, int event) {
+        if (displayGroupId == DEFAULT_DISPLAY && event == PowerManager.USER_ACTIVITY_EVENT_TOUCH) {
+            mDefaultDisplayPolicy.onUserActivityEventTouch();
+        }
         synchronized (mScreenLockTimeout) {
             if (mLockScreenTimerActive) {
                 // reset the timer
@@ -5607,12 +5595,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     void updateRotation(boolean alwaysSendConfiguration) {
-        try {
-            // Set orientation on WindowManager.
-            mWindowManager.updateRotation(alwaysSendConfiguration, false /* forceRelayout */);
-        } catch (RemoteException e) {
-            // Ignore
-        }
+        mWindowManagerFuncs.updateRotation(alwaysSendConfiguration, false /* forceRelayout */);
     }
 
     /**

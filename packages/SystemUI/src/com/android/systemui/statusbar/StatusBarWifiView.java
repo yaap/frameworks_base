@@ -30,7 +30,6 @@ import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 
@@ -43,8 +42,7 @@ import java.util.ArrayList;
 /**
  * Start small: StatusBarWifiView will be able to layout from a WifiIconState
  */
-public class StatusBarWifiView extends FrameLayout implements DarkReceiver,
-        StatusIconDisplayable {
+public class StatusBarWifiView extends BaseStatusBarWifiView implements DarkReceiver {
     private static final String TAG = "StatusBarWifiView";
 
     /// Used to show etc dots
@@ -60,7 +58,8 @@ public class StatusBarWifiView extends FrameLayout implements DarkReceiver,
     private View mAirplaneSpacer;
     private WifiIconState mState;
     private String mSlot;
-    private int mVisibleState = -1;
+    @StatusBarIconView.VisibleState
+    private int mVisibleState = STATE_HIDDEN;
     private boolean mShowWifiStandard;
     private WifiManager mWifiManager;
 
@@ -82,12 +81,7 @@ public class StatusBarWifiView extends FrameLayout implements DarkReceiver,
     }
 
     public StatusBarWifiView(Context context, AttributeSet attrs, int defStyleAttr) {
-        this(context, attrs, defStyleAttr, 0);
-    }
-
-    public StatusBarWifiView(Context context, AttributeSet attrs, int defStyleAttr,
-            int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
+        super(context, attrs, defStyleAttr);
         mWifiManager = context.getSystemService(WifiManager.class);
     }
 
@@ -121,7 +115,7 @@ public class StatusBarWifiView extends FrameLayout implements DarkReceiver,
     }
 
     @Override
-    public void setVisibleState(int state, boolean animate) {
+    public void setVisibleState(@StatusBarIconView.VisibleState int state, boolean animate) {
         if (state == mVisibleState) {
             return;
         }
@@ -145,6 +139,7 @@ public class StatusBarWifiView extends FrameLayout implements DarkReceiver,
     }
 
     @Override
+    @StatusBarIconView.VisibleState
     public int getVisibleState() {
         return mVisibleState;
     }

@@ -1703,7 +1703,8 @@ public class PermissionManagerServiceImpl implements PermissionManagerServiceInt
                 mDefaultPermissionCallback.onInstallPermissionGranted();
             }
 
-            public void onPermissionRevoked(int uid, int userId, String reason) {
+            public void onPermissionRevoked(int uid, int userId, String reason,
+                    boolean overrideKill, @Nullable String permissionName) {
                 revokedPermissions.add(IntPair.of(uid, userId));
 
                 syncUpdatedUsers.add(userId);
