@@ -3964,20 +3964,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         // poacket judge handling
-        if (mIsDeviceInPocket && (!interactive || mPocketLockShowing)) {
-            if (keyCode != KeyEvent.KEYCODE_POWER &&
-                keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
-                keyCode != KeyEvent.KEYCODE_VOLUME_DOWN &&
-                keyCode != KeyEvent.KEYCODE_MEDIA_PLAY &&
-                keyCode != KeyEvent.KEYCODE_MEDIA_PAUSE &&
-                keyCode != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE &&
-                keyCode != KeyEvent.KEYCODE_HEADSETHOOK &&
-                keyCode != KeyEvent.KEYCODE_MEDIA_STOP &&
-                keyCode != KeyEvent.KEYCODE_MEDIA_NEXT &&
-                keyCode != KeyEvent.KEYCODE_MEDIA_PREVIOUS &&
-                keyCode != KeyEvent.KEYCODE_VOLUME_MUTE) {
-                return 0;
-            }
+        if (mIsDeviceInPocket && (!interactive || mPocketLockShowing) && isWakeKey) {
+            return 0;
         }
 
         // Handle special keys.
