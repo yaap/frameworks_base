@@ -935,7 +935,9 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
                 new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDoubleTap(MotionEvent e) {
-                YaapUtils.switchScreenOff(mView.getContext());
+                mView.getHandler().postDelayed(() -> {
+                    YaapUtils.switchScreenOff(mView.getContext());
+                }, 100);
                 return true;
             }
         });
