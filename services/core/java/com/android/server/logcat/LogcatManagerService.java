@@ -109,6 +109,7 @@ public final class LogcatManagerService extends SystemService {
     private final BinderService mBinderService;
     private final LogAccessDialogCallback mDialogCallback;
     private final Handler mHandler;
+    private final List<String> mBuiltInLoggers;
     private ActivityManagerInternal mActivityManagerInternal;
     private ILogd mLogdService;
 
@@ -312,6 +313,8 @@ public final class LogcatManagerService extends SystemService {
         mBinderService = new BinderService();
         mDialogCallback = new LogAccessDialogCallback();
         mHandler = new LogAccessRequestHandler(injector.getLooper(), this);
+        mBuiltInLoggers = Arrays.asList(context.getResources().getStringArray(
+                com.android.internal.R.array.config_loggersPkgList));
     }
 
     @Override
@@ -430,6 +433,11 @@ public final class LogcatManagerService extends SystemService {
                 != android.os.Process.INVALID_UID;
         // The instrumented apks only run for testing, so we don't check user permission.
         if (isInstrumented) {
+            onAccessApprovedForClient(client);
+            return;
+        }
+
+        if (mBuiltInLoggers.contains(client.mPackageName)) {
             onAccessApprovedForClient(client);
             return;
         }
