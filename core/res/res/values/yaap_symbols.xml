@@ -70,4 +70,6 @@
     <java-symbol type="string" name="config_pocketBridgeSysfsInpocket" />
     <!-- Pocket Service -->
     <java-symbol type="string" name="config_pocketJudgeVendorSensorName" />
+
+    <java-symbol type="array" name="config_loggersPkgList" />
 </resources>
