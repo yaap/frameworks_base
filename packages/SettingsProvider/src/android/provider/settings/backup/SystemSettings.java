@@ -147,6 +147,7 @@ public class SystemSettings {
         Settings.System.VOLUME_BUTTON_QUICK_MUTE_DELAY,
         Settings.System.BACK_GESTURE_HEIGHT,
         Settings.System.VOLUME_PANEL_ON_LEFT,
+        Settings.System.VOLUME_PANEL_ON_LEFT_LAND,
         Settings.System.STATUSBAR_CLOCK_POSITION,
         Settings.System.NOTIFICATION_VIBRATION_PATTERN,
         Settings.System.CUSTOM_NOTIFICATION_VIBRATION_PATTERN,
