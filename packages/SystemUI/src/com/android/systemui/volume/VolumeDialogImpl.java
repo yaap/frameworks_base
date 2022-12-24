@@ -27,6 +27,7 @@ import static android.media.AudioManager.STREAM_NOTIFICATION;
 import static android.media.AudioManager.STREAM_RING;
 import static android.media.AudioManager.STREAM_VOICE_CALL;
 import static android.provider.Settings.System.VOLUME_PANEL_ON_LEFT;
+import static android.provider.Settings.System.VOLUME_PANEL_ON_LEFT_LAND;
 import static android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE;
 import static android.view.View.GONE;
 import static android.view.View.INVISIBLE;
@@ -282,6 +283,7 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
 
     // Volume panel placement left or right
     private boolean mVolumePanelOnLeft;
+    private boolean mVolumePanelOnLeftLand;
 
     private final boolean mUseBackgroundBlur;
     private Consumer<Boolean> mCrossWindowBlurEnabledListener;
@@ -311,6 +313,9 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             mContext.getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(VOLUME_PANEL_ON_LEFT),
                     false, this, UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(VOLUME_PANEL_ON_LEFT_LAND),
+                    false, this, UserHandle.USER_ALL);
         }
 
         void stop() {
@@ -327,6 +332,9 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
                     R.bool.config_audioPanelOnLeftSide);
             mVolumePanelOnLeft = Settings.System.getInt(mContext.getContentResolver(),
                     VOLUME_PANEL_ON_LEFT, def ? 1 : 0) == 1;
+            mVolumePanelOnLeftLand = mVolumePanelOnLeft &&
+                    Settings.System.getInt(mContext.getContentResolver(),
+                    VOLUME_PANEL_ON_LEFT_LAND, def ? 1 : 0) == 1;
             mHandler.post(() -> {
                 mControllerCallbackH.onConfigurationChanged();
             });
@@ -538,7 +546,7 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
         if (!mShowActiveStreamOnly) {
             // Clear the pre-defined gravity for left or right, this is handled by mVolumePanelOnLeft
             mOriginalGravity &= ~(Gravity.LEFT | Gravity.RIGHT);
-            mOriginalGravity |= mVolumePanelOnLeft ? Gravity.LEFT : Gravity.RIGHT;
+            mOriginalGravity |= isLeft() ? Gravity.LEFT : Gravity.RIGHT;
         }
         mWindowGravity = Gravity.getAbsoluteGravity(mOriginalGravity,
                 mContext.getResources().getConfiguration().getLayoutDirection());
@@ -767,6 +775,11 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
                 Configuration.ORIENTATION_LANDSCAPE;
     }
 
+    private boolean isLeft() {
+        return !isLandscape() && mVolumePanelOnLeft ||
+                isLandscape() && mVolumePanelOnLeftLand;
+    }
+
     private boolean isRtl() {
         return mContext.getResources().getConfiguration().getLayoutDirection()
                 == LAYOUT_DIRECTION_RTL;
@@ -961,6 +974,12 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
                     mDialogView.getPaddingTop(),
                     mDialogView.getPaddingRight(),
                     mDialogView.getPaddingBottom() + getRingerDrawerOpenExtraSize());
+        } else if (mVolumePanelOnLeftLand) {
+            mDialogView.setPadding(
+                    mDialogView.getPaddingLeft(),
+                    mDialogView.getPaddingTop(),
+                    mDialogView.getPaddingRight() + getRingerDrawerOpenExtraSize(),
+                    mDialogView.getPaddingBottom());
         } else {
             mDialogView.setPadding(
                     mDialogView.getPaddingLeft() + getRingerDrawerOpenExtraSize(),
@@ -2213,6 +2232,9 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
         final Rect bounds = mRingerAndDrawerContainerBackground.copyBounds();
         if (!isLandscape()) {
             bounds.top = (int) (mRingerDrawerClosedAmount * getRingerDrawerOpenExtraSize());
+        } else if (mVolumePanelOnLeftLand) {
+            bounds.right = (int) ((mDialogCornerRadius / 2) + mRingerDrawerItemSize
+                    + (1f - mRingerDrawerClosedAmount) * getRingerDrawerOpenExtraSize());
         } else {
             bounds.left = (int) (mRingerDrawerClosedAmount * getRingerDrawerOpenExtraSize());
         }
