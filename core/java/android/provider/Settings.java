@@ -6050,6 +6050,15 @@ public final class Settings {
         public static final String VOLUME_PANEL_ON_LEFT = "volume_panel_on_left";
 
         /**
+         * Whether to show volume panel on the left side on landscape as well
+         * Defaults to com.android.systemui.R.bool.config_audioPanelOnLeftSide
+         * Also depends on {@link #VOLUME_PANEL_ON_LEFT}
+         * @hide
+         */
+        @Readable
+        public static final String VOLUME_PANEL_ON_LEFT_LAND = "volume_panel_on_left_land";
+
+        /**
          * Whether to enable statusbar brightness control
          * @hide
          */
