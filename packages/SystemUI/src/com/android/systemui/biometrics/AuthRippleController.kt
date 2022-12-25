@@ -96,8 +96,16 @@ class AuthRippleController @Inject constructor(
     private var udfpsController: UdfpsController? = null
     private var udfpsRadius: Float = -1f
 
+    private var animationDuration: Long
+
+    init {
+        animationDuration = sysuiContext.resources.getFloat(
+                R.dimen.auth_ripple_animation_duration).toLong()
+    }
+
     override fun start() {
         init()
+        mView.setAnimationDuration(animationDuration)
     }
 
     @VisibleForTesting
@@ -219,7 +227,7 @@ class AuthRippleController @Inject constructor(
                 lightRevealScrimAnimator?.cancel()
                 lightRevealScrimAnimator = ValueAnimator.ofFloat(.1f, 1f).apply {
                     interpolator = Interpolators.LINEAR_OUT_SLOW_IN
-                    duration = RIPPLE_ANIMATION_DURATION
+                    duration = animationDuration
                     startDelay = keyguardStateController.keyguardFadingAwayDelay
                     addUpdateListener { animator ->
                         if (lightRevealScrim.revealEffect != circleReveal) {
@@ -413,7 +421,6 @@ class AuthRippleController @Inject constructor(
     }
 
     companion object {
-        const val RIPPLE_ANIMATION_DURATION: Long = 800
         const val TAG = "AuthRippleController"
     }
 }

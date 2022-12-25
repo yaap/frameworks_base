@@ -54,6 +54,7 @@ class AuthRippleView(context: Context?, attrs: AttributeSet?) : View(context, at
     private var lockScreenColorVal = Color.WHITE
     private val fadeDuration = 83L
     private val retractDuration = 400L
+    private var animationDuration: Long = 1533
     private val dwellShader = DwellRippleShader()
     private val dwellPaint = Paint()
     private val rippleShader = RippleShader()
@@ -108,6 +109,10 @@ class AuthRippleView(context: Context?, attrs: AttributeSet?) : View(context, at
         radius = maxOf(location.x, location.y, width - location.x, height - location.y).toFloat()
         dwellOrigin = location
         dwellRadius = sensorRadius * 1.5f
+    }
+
+    fun setAnimationDuration(duration: Long) {
+        animationDuration = duration
     }
 
     /**
@@ -261,7 +266,7 @@ class AuthRippleView(context: Context?, attrs: AttributeSet?) : View(context, at
         unlockedRippleAnimator?.cancel()
 
         val rippleAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = AuthRippleController.RIPPLE_ANIMATION_DURATION
+            duration = animationDuration
             addUpdateListener { animator ->
                 val now = animator.currentPlayTime
                 rippleShader.rawProgress = animator.animatedValue as Float
