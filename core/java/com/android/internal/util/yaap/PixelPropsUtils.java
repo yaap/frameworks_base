@@ -32,8 +32,9 @@ public final class PixelPropsUtils {
     private static final String TAG = "PixelPropsUtils";
     private static final boolean DEBUG = false;
 
-    public static final String PACKAGE_GMS = "com.google.android.gms";
-    public static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
+    private static final String PACKAGE_FINSKY = "com.android.vending";
+    private static final String PACKAGE_GMS = "com.google.android.gms";
+    private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
 
     private static final String build_device =
             Resources.getSystem().getString(com.android.internal.R.string.build_device);
@@ -130,9 +131,12 @@ public final class PixelPropsUtils {
         "com.google.android.apps.recorder"
     );
 
+    private static volatile boolean sIsFinsky = false;
+
     public static void setProps(String packageName) {
         if (packageName == null) return;
         if (DEBUG) Log.d(TAG, "Package = " + packageName);
+        sIsFinsky = packageName.equals(PACKAGE_FINSKY);
         if (marlinPackagesToChange.contains(packageName)) {
             commonProps.forEach(PixelPropsUtils::setPropValue);
             marlinProps.forEach(PixelPropsUtils::setPropValue);
@@ -179,5 +183,9 @@ public final class PixelPropsUtils {
         } catch (NoSuchFieldException | IllegalAccessException e) {
             Log.e(TAG, "Failed to set prop " + key, e);
         }
+    }
+
+    public static boolean getIsFinsky() {
+        return sIsFinsky;
     }
 }
