@@ -36,7 +36,6 @@ public final class PixelPropsUtils {
     private static final String TAG = "PixelPropsUtils";
 
     private static final String PACKAGE_FINSKY = "com.android.vending";
-    private static final String PACKAGE_SI = "com.google.android.settings.intelligence";
     private static final String PACKAGE_GMS = "com.google.android.gms";
     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
     private static final String PROCESS_GMS_PERSISTENT = PACKAGE_GMS + ".persistent";
