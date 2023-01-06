@@ -226,5 +226,6 @@ public class SecureSettings {
         Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
         Settings.Secure.SHOW_WIFI_STANDARD_ICON,
         Settings.Secure.NFC_SOUNDS,
+        Settings.Secure.DOZE_FOR_NOTIFICATIONS,
     };
 }
