@@ -116,7 +116,8 @@ public final class PixelPropsUtils {
     }
 
     private static final Set<String> extraPackagesToChange = Set.of(
-        "com.breel.wallpapers20"
+        "com.breel.wallpapers20",
+        "com.snapchat.android"
     );
 
     private static final Set<String> marlinPackagesToChange = Set.of(
