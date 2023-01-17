@@ -2927,6 +2927,19 @@ public final class PowerManager {
     }
 
     /**
+     * Updates ambient display state according to settings
+     * @hide
+     */
+    @RequiresPermission(android.Manifest.permission.READ_DREAM_STATE)
+    public void updateAmbientDisplayState() {
+        try {
+            mService.updateAmbientDisplayState();
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * Returns the reason the phone was last shutdown. Calling app must have the
      * {@link android.Manifest.permission#DEVICE_POWER} permission to request this information.
      * @return Reason for shutdown as an int, {@link #SHUTDOWN_REASON_UNKNOWN} if the file could

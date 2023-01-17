@@ -1859,6 +1859,17 @@ public class StatusBarManagerService extends IStatusBarService.Stub implements D
     }
 
     @Override
+    public void updateAmbientDisplayState() {
+        enforceStatusBarService();
+        if (mBar != null) {
+            try {
+                mBar.updateAmbientDisplayState();
+            } catch (RemoteException ex) {
+            }
+        }
+    }
+
+    @Override
     public void startAssist(Bundle args) {
         enforceStatusBarService();
         if (mBar != null) {

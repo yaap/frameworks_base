@@ -21,6 +21,7 @@ import static android.app.StatusBarManager.WINDOW_STATE_HIDDEN;
 import static android.app.StatusBarManager.WINDOW_STATE_SHOWING;
 import static android.app.StatusBarManager.WindowVisibleState;
 import static android.app.StatusBarManager.windowStateToString;
+import static android.hardware.display.AmbientDisplayConfiguration.REFRESHING_DOZE_SETTINGS;
 import static android.view.WindowInsetsController.APPEARANCE_LOW_PROFILE_BARS;
 import static android.view.WindowInsetsController.APPEARANCE_OPAQUE_STATUS_BARS;
 import static android.view.WindowInsetsController.APPEARANCE_SEMI_TRANSPARENT_STATUS_BARS;
@@ -254,6 +255,7 @@ import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.MessageRouter;
+import com.android.systemui.util.settings.SecureSettings;
 import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.volume.VolumeComponent;
 import com.android.wm.shell.bubbles.Bubbles;
@@ -695,6 +697,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     private final InteractionJankMonitor mJankMonitor;
 
     private final SystemSettings mSystemSettings;
+    private final SecureSettings mSecureSettings;
 
     /** Existing callback that handles back gesture invoked for the Shade. */
     private final OnBackInvokedCallback mOnBackInvokedCallback = () -> {
@@ -838,7 +841,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             Provider<FingerprintManager> fingerprintManager,
             ActivityStarter activityStarter,
             BurnInProtectionController burnInProtectionController,
-            SystemSettings systemSettings
+            SystemSettings systemSettings,
+            SecureSettings secureSettings
     ) {
         mContext = context;
         mNotificationsController = notificationsController;
@@ -946,6 +950,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mBurnInProtectionController = burnInProtectionController;
 
         mSystemSettings = systemSettings;
+        mSecureSettings = secureSettings;
 
         mActivityIntentHelper = new ActivityIntentHelper(mContext);
         mActivityLaunchAnimator = activityLaunchAnimator;
@@ -3684,6 +3689,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         void observe() {
             mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, this);
             mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_GESTURE, this);
+
+            for (String setting : REFRESHING_DOZE_SETTINGS)
+                mSecureSettings.registerContentObserver(setting, this);
         }
 
         @Override
@@ -3692,6 +3700,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 case Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN:
                 case Settings.System.DOUBLE_TAP_SLEEP_GESTURE:
                     setDoubleTapToSleepGesture();
+                    break;
+                default: // REFRESHING_DOZE_SETTINGS
+                    updateAmbientDisplayState();
+                    break;
             }
         }
 
@@ -3702,6 +3714,14 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         private void setDoubleTapToSleepGesture() {
             if (mNotificationShadeWindowViewController != null) {
                 mNotificationShadeWindowViewController.setDoubleTapToSleepGesture();
+            }
+        }
+
+        private void updateAmbientDisplayState() {
+            try {
+                mBarService.updateAmbientDisplayState();
+            } catch (RemoteException e) {
+                // Won't fail unless the squere root of -1 is a real number
             }
         }
     }

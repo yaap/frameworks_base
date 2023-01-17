@@ -479,6 +479,13 @@ public final class DozeServiceHost implements DozeHost {
         mPulsePending = isPulsePending;
     }
 
+    void updateAmbientDisplayState() {
+        Assert.isMainThread();
+        for (Callback callback : mCallbacks) {
+            callback.onAlwaysOnUpdate();
+        }
+    }
+
     /**
      * Whether always-on-display is being suppressed. This does not affect wakeup gestures like
      * pickup and tap.

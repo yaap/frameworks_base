@@ -342,6 +342,7 @@ public final class PowerManagerService extends SystemService
 
     private final InattentiveSleepWarningController mInattentiveSleepWarningOverlayController;
     private final AmbientDisplaySuppressionController mAmbientDisplaySuppressionController;
+    private final AmbientDisplayStateController mAmbientDisplayStateController;
 
     private final Object mLock = LockGuard.installNewLock(LockGuard.INDEX_POWER);
 
@@ -1007,6 +1008,11 @@ public final class PowerManagerService extends SystemService
             return new AmbientDisplaySuppressionController(callback);
         }
 
+        AmbientDisplayStateController createAmbientDisplayStateController(
+                Context context) {
+            return new AmbientDisplayStateController(context);
+        }
+
         InattentiveSleepWarningController createInattentiveSleepWarningController() {
             return new InattentiveSleepWarningController();
         }
@@ -1155,6 +1161,8 @@ public final class PowerManagerService extends SystemService
         mAmbientDisplaySuppressionController =
                 mInjector.createAmbientDisplaySuppressionController(
                         mAmbientSuppressionChangedCallback);
+        mAmbientDisplayStateController =
+                mInjector.createAmbientDisplayStateController(context);
         mAttentionDetector = new AttentionDetector(this::onUserAttention, mLock);
         mFaceDownDetector = new FaceDownDetector(this::onFlip);
         mScreenUndimDetector = new ScreenUndimDetector();
@@ -1445,6 +1453,9 @@ public final class PowerManagerService extends SystemService
                 false, mSettingsObserver, UserHandle.USER_SYSTEM);
         resolver.registerContentObserver(Settings.Secure.getUriFor(
                 Settings.Secure.DOZE_ON_CHARGE),
+                false, mSettingsObserver, UserHandle.USER_ALL);
+        resolver.registerContentObserver(Settings.Secure.getUriFor(
+                Settings.Secure.DOZE_ON_CHARGE_NOW),
                 false, mSettingsObserver, UserHandle.USER_ALL);
 
         // Register for broadcasts from other components of the system.
@@ -6795,6 +6806,19 @@ public final class PowerManagerService extends SystemService
                 } else {
                     dumpInternal(pw);
                 }
+            } finally {
+                Binder.restoreCallingIdentity(ident);
+            }
+        }
+
+        @Override // Binder call
+        public void updateAmbientDisplayState() {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.WRITE_DREAM_STATE, null);
+
+            final long ident = Binder.clearCallingIdentity();
+            try {
+                mAmbientDisplayStateController.update();
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }
