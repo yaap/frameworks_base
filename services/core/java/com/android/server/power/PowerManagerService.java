@@ -317,6 +317,7 @@ public final class PowerManagerService extends SystemService
 
     private final InattentiveSleepWarningController mInattentiveSleepWarningOverlayController;
     private final AmbientDisplaySuppressionController mAmbientDisplaySuppressionController;
+    private final AmbientDisplayStateController mAmbientDisplayStateController;
 
     private final Object mLock = LockGuard.installNewLock(LockGuard.INDEX_POWER);
 
@@ -968,6 +969,11 @@ public final class PowerManagerService extends SystemService
             return new AmbientDisplaySuppressionController(context);
         }
 
+        AmbientDisplayStateController createAmbientDisplayStateController(
+                Context context) {
+            return new AmbientDisplayStateController(context);
+        }
+
         InattentiveSleepWarningController createInattentiveSleepWarningController() {
             return new InattentiveSleepWarningController();
         }
@@ -1045,6 +1051,8 @@ public final class PowerManagerService extends SystemService
         mAmbientDisplayConfiguration = mInjector.createAmbientDisplayConfiguration(context);
         mAmbientDisplaySuppressionController =
                 mInjector.createAmbientDisplaySuppressionController(context);
+        mAmbientDisplayStateController =
+                mInjector.createAmbientDisplayStateController(context);
         mAttentionDetector = new AttentionDetector(this::onUserAttention, mLock);
         mFaceDownDetector = new FaceDownDetector(this::onFlip);
         mScreenUndimDetector = new ScreenUndimDetector();
@@ -1344,6 +1352,9 @@ public final class PowerManagerService extends SystemService
         resolver.registerContentObserver(Settings.Secure.getUriFor(
                 Settings.Secure.DOZE_ON_CHARGE),
                 false, mSettingsObserver, UserHandle.USER_ALL);
+        resolver.registerContentObserver(Settings.Secure.getUriFor(
+                Settings.Secure.DOZE_ON_CHARGE_NOW),
+                false, mSettingsObserver, UserHandle.USER_ALL);
         resolver.registerContentObserver(Settings.System.getUriFor(
                 Settings.System.AOD_NOTIFICATION_PULSE_TRIGGER),
                 false, mSettingsObserver, UserHandle.USER_ALL);
@@ -1458,21 +1469,23 @@ public final class PowerManagerService extends SystemService
         mDozeOnChargeEnabled = Settings.Secure.getIntForUser(resolver,
                 Settings.Secure.DOZE_ON_CHARGE, 0, UserHandle.USER_CURRENT) != 0;
 
+        final boolean dozeOnChargeActive = Settings.Secure.getIntForUser(resolver,
+                Settings.Secure.DOZE_ON_CHARGE_NOW, 0, UserHandle.USER_CURRENT) != 0; 
+        final boolean aodEnabled = Settings.Secure.getIntForUser(resolver,
+                Settings.Secure.DOZE_ALWAYS_ON, 0, UserHandle.USER_CURRENT) == 1;
         boolean mAmbientLights = Settings.System.getIntForUser(
                 mContext.getContentResolver(), Settings.System.AOD_NOTIFICATION_PULSE,
                 0, UserHandle.USER_CURRENT) != 0;
-        boolean aodEnabled = Settings.Secure.getIntForUser(resolver,
-                Settings.Secure.DOZE_ALWAYS_ON, 0, UserHandle.USER_CURRENT) == 1;
-        if (mAmbientLights && aodEnabled) {
+        if (mAmbientLights && (aodEnabled || dozeOnChargeActive)) {
             boolean dozeOnNotification = Settings.System.getIntForUser(resolver,
                     Settings.System.AOD_NOTIFICATION_PULSE_TRIGGER, 0, UserHandle.USER_CURRENT) != 0;
             Settings.System.putIntForUser(resolver,
-                     Settings.System.AOD_NOTIFICATION_PULSE_ACTIVATED, dozeOnNotification ? 1 : 0,
-                     UserHandle.USER_CURRENT);
+                    Settings.System.AOD_NOTIFICATION_PULSE_ACTIVATED, dozeOnNotification ? 1 : 0,
+                    UserHandle.USER_CURRENT);
         } else {
-             Settings.System.putIntForUser(resolver,
-                     Settings.System.AOD_NOTIFICATION_PULSE_ACTIVATED, 0,
-                     UserHandle.USER_CURRENT);
+            Settings.System.putIntForUser(resolver,
+                    Settings.System.AOD_NOTIFICATION_PULSE_ACTIVATED, 0,
+                    UserHandle.USER_CURRENT);
         }
         // depends on AOD_NOTIFICATION_PULSE_ACTIVATED - so MUST be afterwards
         // no need to call us again
@@ -6440,6 +6453,19 @@ public final class PowerManagerService extends SystemService
                 } else {
                     dumpInternal(pw);
                 }
+            } finally {
+                Binder.restoreCallingIdentity(ident);
+            }
+        }
+
+        @Override // Binder call
+        public void updateAmbientDisplayState() {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.WRITE_DREAM_STATE, null);
+
+            final long ident = Binder.clearCallingIdentity();
+            try {
+                mAmbientDisplayStateController.update();
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }

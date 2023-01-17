@@ -270,6 +270,11 @@ oneway interface IStatusBar
     void suppressAmbientDisplay(boolean suppress);
 
     /**
+     * Updates ambient display state according to settings
+     */
+    void updateAmbientDisplayState();
+
+    /**
      * Requests {@link WindowMagnification} to set window magnification connection through
      * {@link AccessibilityManager#setWindowMagnificationConnection(IWindowMagnificationConnection)}
      *

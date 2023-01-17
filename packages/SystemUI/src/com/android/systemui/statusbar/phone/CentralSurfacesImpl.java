@@ -20,6 +20,7 @@ import static android.app.StatusBarManager.WINDOW_STATE_HIDDEN;
 import static android.app.StatusBarManager.WINDOW_STATE_SHOWING;
 import static android.app.StatusBarManager.WindowVisibleState;
 import static android.app.StatusBarManager.windowStateToString;
+import static android.hardware.display.AmbientDisplayConfiguration.REFRESHING_DOZE_SETTINGS;
 import static android.view.InsetsState.ITYPE_STATUS_BAR;
 import static android.view.InsetsState.containsType;
 import static android.view.WindowInsetsController.APPEARANCE_LOW_PROFILE_BARS;
@@ -248,6 +249,7 @@ import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.MessageRouter;
+import com.android.systemui.util.settings.SecureSettings;
 import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.volume.VolumeComponent;
 import com.android.wm.shell.bubbles.Bubbles;
@@ -694,6 +696,7 @@ public class CentralSurfacesImpl extends CoreStartable implements
     private final InteractionJankMonitor mJankMonitor;
 
     private final SystemSettings mSystemSettings;
+    private final SecureSettings mSecureSettings;
 
     private final OnBackInvokedCallback mOnBackInvokedCallback = () -> {
         if (DEBUG) {
@@ -798,7 +801,8 @@ public class CentralSurfacesImpl extends CoreStartable implements
             WiredChargingRippleController wiredChargingRippleController,
             IDreamManager dreamManager,
             BurnInProtectionController burnInProtectionController,
-            SystemSettings systemSettings) {
+            SystemSettings systemSettings,
+            SecureSettings secureSettings) {
         super(context);
         mNotificationsController = notificationsController;
         mFragmentService = fragmentService;
@@ -889,6 +893,7 @@ public class CentralSurfacesImpl extends CoreStartable implements
         mBurnInProtectionController = burnInProtectionController;
 
         mSystemSettings = systemSettings;
+        mSecureSettings = secureSettings;
 
         mPanelExpansionStateManager.addExpansionListener(this::onPanelExpansionChanged);
 
@@ -4191,6 +4196,9 @@ public class CentralSurfacesImpl extends CoreStartable implements
             mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_LOCKSCREEN, this);
             mSystemSettings.registerContentObserver(Settings.System.DOUBLE_TAP_SLEEP_GESTURE, this);
             mSystemSettings.registerContentObserver(Settings.System.STATUS_BAR_BRIGHTNESS_CONTROL, this);
+
+            for (String setting : REFRESHING_DOZE_SETTINGS)
+                mSecureSettings.registerContentObserver(setting, this);
         }
 
         @Override
@@ -4202,6 +4210,9 @@ public class CentralSurfacesImpl extends CoreStartable implements
                     break;
                 case Settings.System.STATUS_BAR_BRIGHTNESS_CONTROL:
                     setBrightnessControl();
+                    break;
+                default: // REFRESHING_DOZE_SETTINGS
+                    updateAmbientDisplayState();
                     break;
             }
         }
@@ -4220,6 +4231,14 @@ public class CentralSurfacesImpl extends CoreStartable implements
         private void setBrightnessControl() {
             mBrightnessControl = Settings.System.getInt(mContext.getContentResolver(),
                     Settings.System.STATUS_BAR_BRIGHTNESS_CONTROL, 0) == 1;
+        }
+
+        private void updateAmbientDisplayState() {
+            try {
+                mBarService.updateAmbientDisplayState();
+            } catch (RemoteException e) {
+                // Won't fail unless the squere root of -1 is a real number
+            }
         }
     }
 

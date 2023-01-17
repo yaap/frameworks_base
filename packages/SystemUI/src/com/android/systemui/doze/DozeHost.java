@@ -102,6 +102,8 @@ public interface DozeHost {
          */
         default void onAlwaysOnSuppressedChanged(boolean suppressed) {}
 
+        default void onAlwaysOnUpdate() {}
+
         /**
          * Called when the dozing state may have been updated.
          */
