@@ -24,14 +24,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.database.ContentObserver;
-import android.hardware.display.AmbientDisplayConfiguration;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.PowerManager;
-import android.os.PowerManager.WakeLock;
-import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.Slog;
@@ -48,12 +44,10 @@ import java.util.Calendar;
 public class AutoAODService extends SystemService {
 
     private static final String TAG = "AutoAODService";
-    private static final String PULSE_ACTION = "com.android.systemui.doze.pulse";
     private static final String PREF_DIR_NAME = "shared_prefs";
     private static final String PREF_FILE_NAME = TAG + "_preferences.xml";
     private static final String PREF_STATE_KEY = TAG + "_last_state";
     private static final String PREF_TIME_KEY = TAG + "_last_time";
-    private static final int WAKELOCK_TIMEOUT_MS = 3000;
 
     /**
      * Disabled state (default)
@@ -82,7 +76,6 @@ public class AutoAODService extends SystemService {
     private TwilightManager mTwilightManager;
     private TwilightState mTwilightState;
     private SharedPreferences mSharedPreferences;
-    private AmbientDisplayConfiguration mAmbientConfig;
 
     /**
      * Current operation mode
@@ -483,32 +476,5 @@ public class AutoAODService extends SystemService {
         Settings.Secure.putIntForUser(mContext.getContentResolver(),
                 Settings.Secure.DOZE_ALWAYS_ON, active ? 1 : 0,
                 UserHandle.USER_CURRENT);
-
-        // update the screen state
-        PowerManager powerManager = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
-        if (powerManager.isInteractive()) return; // no need if the screen is already on
-        WakeLock wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
-        wakeLock.acquire(WAKELOCK_TIMEOUT_MS);
-        if (isDozeEnabled()) {
-            // trigger doze if it's enabled
-            final Intent intent = new Intent(PULSE_ACTION);
-            mContext.sendBroadcastAsUser(intent, UserHandle.CURRENT);
-        } else {
-            // turn the screen on if we have to
-            powerManager.wakeUp(SystemClock.uptimeMillis(),
-                    PowerManager.WAKE_REASON_APPLICATION, TAG);
-        }
-    }
-
-    private boolean isDozeEnabled() {
-        return getAmbientConfig().pulseOnNotificationEnabled(UserHandle.USER_CURRENT);
-    }
-
-    private AmbientDisplayConfiguration getAmbientConfig() {
-        if (mAmbientConfig == null) {
-            mAmbientConfig = new AmbientDisplayConfiguration(mContext);
-        }
-
-        return mAmbientConfig;
     }
 }

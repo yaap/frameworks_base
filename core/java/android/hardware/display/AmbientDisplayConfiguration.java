@@ -56,6 +56,16 @@ public class AmbientDisplayConfiguration {
             Settings.Secure.DOZE_FOR_NOTIFICATIONS,
     };
 
+    /**
+     * Changes in these settings will trigger an update to doze state
+     * see {@link com.android.systemui.statusbar.phone.CentralSurfacesImpl.SbSettingsObserver}
+     * @hide
+     */
+    public static final String[] REFRESHING_DOZE_SETTINGS = {
+            Settings.Secure.DOZE_ALWAYS_ON,
+            Settings.Secure.DOZE_ON_CHARGE_NOW
+    };
+
     /** Non-user configurable doze settings */
     private static final String[] NON_USER_CONFIGURABLE_DOZE_SETTINGS = {
             Settings.Secure.DOZE_QUICK_PICKUP_GESTURE

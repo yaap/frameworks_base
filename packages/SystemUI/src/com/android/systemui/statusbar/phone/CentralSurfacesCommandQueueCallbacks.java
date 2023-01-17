@@ -563,6 +563,11 @@ public class CentralSurfacesCommandQueueCallbacks implements CommandQueue.Callba
     }
 
     @Override
+    public void updateAmbientDisplayState() {
+        mDozeServiceHost.updateAmbientDisplayState();
+    }
+
+    @Override
     public void togglePanel() {
         if (mCentralSurfaces.isPanelExpanded()) {
             mShadeController.animateCollapseShade();

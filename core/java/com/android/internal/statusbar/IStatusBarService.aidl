@@ -173,6 +173,11 @@ interface IStatusBarService
     void suppressAmbientDisplay(boolean suppress);
 
     /**
+     * Updates ambient display state according to settings
+     */
+    void updateAmbientDisplayState();
+
+    /**
      * Send a request to SystemUI to put a given active tile in listening state
      */
     void requestTileServiceListeningState(in ComponentName componentName, int userId);

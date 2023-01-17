@@ -138,6 +138,8 @@ interface IPowerManager
     boolean isAmbientDisplayAvailable();
     // suppresses the current ambient display configuration and disables ambient display.
     void suppressAmbientDisplay(String token, boolean suppress);
+    // updates ambient display state according to settings
+    void updateAmbientDisplayState();
     // returns whether ambient display is suppressed by the calling app with the given token.
     boolean isAmbientDisplaySuppressedForToken(String token);
     // returns whether ambient display is suppressed by any app with any token.

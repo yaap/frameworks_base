@@ -2427,6 +2427,13 @@ public class Intent implements Parcelable, Cloneable {
             "android.intent.action.VIEW_APP_FEATURES";
 
     /**
+     * @hide
+     */
+    @RequiresPermission(android.Manifest.permission.WRITE_DREAM_STATE)
+    public static final String ACTION_UPDATE_AOD =
+            "android.intent.action.UPDATE_AOD";
+
+    /**
      * Activity action: Launch UI to open the Safety Center, which highlights the user's security
      * and privacy status.
      */
