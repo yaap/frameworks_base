@@ -228,5 +228,6 @@ public class SecureSettings {
         Settings.Secure.NFC_SOUNDS,
         Settings.Secure.DOZE_FOR_NOTIFICATIONS,
         Settings.Secure.MEDIA_CONTROLS_ALWAYS_SHOW_TIME,
+        Settings.Secure.MEDIA_CONTROLS_SQUIGGLE,
     };
 }
