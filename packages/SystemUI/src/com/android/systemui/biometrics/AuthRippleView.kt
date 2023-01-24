@@ -272,6 +272,10 @@ class AuthRippleView(context: Context?, attrs: AttributeSet?) : View(context, at
             return // Ignore if ripple effect is already playing
         }
 
+        if (animationDuration == 0L) {
+            return // Ignore if duration is set to 0
+        }
+
         val rippleAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             interpolator = Interpolators.LINEAR_OUT_SLOW_IN
             duration = animationDuration
