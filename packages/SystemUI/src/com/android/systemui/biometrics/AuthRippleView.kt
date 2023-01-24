@@ -265,6 +265,10 @@ class AuthRippleView(context: Context?, attrs: AttributeSet?) : View(context, at
     fun startUnlockedRipple(onAnimationEnd: Runnable?) {
         unlockedRippleAnimator?.cancel()
 
+        if (animationDuration == 0L) {
+            return // Ignore if duration is set to 0
+        }
+
         val rippleAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = animationDuration
             addUpdateListener { animator ->
