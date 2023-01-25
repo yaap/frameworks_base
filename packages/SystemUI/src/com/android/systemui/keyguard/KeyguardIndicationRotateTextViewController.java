@@ -259,7 +259,11 @@ public class KeyguardIndicationRotateTextViewController extends
         mLastIndicationSwitch = SystemClock.uptimeMillis();
         if (!TextUtils.equals(previousMessage, mCurrMessage)
                 || previousIndicationType != mCurrIndicationType) {
-            mView.switchIndication(mIndicationMessages.get(type));
+            // never animate a battery -> battery change
+            final boolean animate =
+                    mCurrIndicationType != INDICATION_TYPE_BATTERY ||
+                    previousIndicationType != INDICATION_TYPE_BATTERY;
+            mView.switchIndication(mIndicationMessages.get(type), animate);
         }
 
         // only schedule next indication if there's more than just this indication in the queue
