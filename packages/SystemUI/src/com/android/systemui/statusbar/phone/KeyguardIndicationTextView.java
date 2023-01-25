@@ -98,6 +98,14 @@ public class KeyguardIndicationTextView extends TextView {
     }
 
     /**
+     * Changes the text, allows disabling animation
+     */
+    public void switchIndication(KeyguardIndication indication, boolean animate) {
+        switchIndication(indication == null ? null : indication.getMessage(), indication,
+                animate, null);
+    }
+
+    /**
      * Changes the text with an animation.
      */
     public void switchIndication(CharSequence text, KeyguardIndication indication) {
