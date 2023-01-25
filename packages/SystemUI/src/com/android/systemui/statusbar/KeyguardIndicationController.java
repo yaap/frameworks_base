@@ -912,7 +912,7 @@ public class KeyguardIndicationController {
                                                 ? mContext.getColor(R.color.misalignment_text_color)
                                                 : Color.WHITE))
                                 .build(),
-                        true, () -> mWakeLock.setAcquired(false));
+                        false, () -> mWakeLock.setAcquired(false));
             }
             return;
         }
@@ -977,8 +977,8 @@ public class KeyguardIndicationController {
         String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
         String batteryInfo = "";
         boolean showbatteryInfo = Settings.System.getIntForUser(mContext.getContentResolver(),
-            Settings.System.LOCKSCREEN_BATTERY_INFO, 1, UserHandle.USER_CURRENT) == 1;
-         if (showbatteryInfo) {
+                Settings.System.LOCKSCREEN_BATTERY_INFO, 1, UserHandle.USER_CURRENT) == 1;
+        if (showbatteryInfo) {
             if (mChargingCurrent > 0) {
                 batteryInfo = batteryInfo + (mChargingCurrent / 1000) + "mA";
             }

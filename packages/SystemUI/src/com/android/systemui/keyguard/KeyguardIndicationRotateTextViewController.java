@@ -281,7 +281,11 @@ public class KeyguardIndicationRotateTextViewController extends
                 || previousIndicationType != mCurrIndicationType) {
             mLogger.logKeyguardSwitchIndication(type,
                     mCurrMessage != null ? mCurrMessage.toString() : null);
-            mView.switchIndication(mIndicationMessages.get(type));
+            // never animate a battery -> battery change
+            final boolean animate =
+                    mCurrIndicationType != INDICATION_TYPE_BATTERY ||
+                    previousIndicationType != INDICATION_TYPE_BATTERY;
+            mView.switchIndication(mIndicationMessages.get(type), animate);
         }
 
         // only schedule next indication if there's more than just this indication in the queue
