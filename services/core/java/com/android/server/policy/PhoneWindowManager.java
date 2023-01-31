@@ -28,6 +28,7 @@ import static android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE;
 import static android.content.pm.PackageManager.FEATURE_WATCH;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.media.session.MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE;
+import static android.media.session.PlaybackState.STATE_PLAYING;
 import static android.os.Build.VERSION_CODES.M;
 import static android.os.Build.VERSION_CODES.O;
 import static android.provider.Settings.Secure.YAAP_VOLUME_HUSH_OFF;
@@ -802,11 +803,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     handleSwitchKeyboardLayout(msg.arg1, msg.arg2);
                     break;
                 case MSG_DISPATCH_VOLKEY_WITH_WAKE_LOCK:
-                    KeyEvent event = (KeyEvent) msg.obj;
-                    dispatchMediaKeyWithWakeLockToAudioService(event);
-                    dispatchMediaKeyWithWakeLockToAudioService(
-                            KeyEvent.changeAction(event, KeyEvent.ACTION_UP));
-                    mVolumeMusicControlActive = true;
+                    handleVolkeyMusicControl((KeyEvent)msg.obj);
                     break;
                 case MSG_QUICK_MUTE:
                     maybePerformQuickMute();
@@ -4396,7 +4393,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     result |= ACTION_PASS_TO_USER;
                 } else if ((result & ACTION_PASS_TO_USER) == 0) {
                     boolean notHandledMusicControl = false;
-                    if (!interactive && mVolumeMusicControl && isMusicActive()) {
+                    if (!interactive && mVolumeMusicControl &&
+                            (isMusicActive() || isMusicActiveRemotely())) {
                         if (down) {
                             if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
                                 scheduleLongPressKeyEvent(event, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
@@ -6770,9 +6768,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     /**
-     * @return Whether music is being played right now "locally" (e.g. on the device's speakers
-     *    or wired headphones) or "remotely" (e.g. on a device using the Cast protocol and
-     *    controlled by this device, or through remote submix).
+     * @return Whether music is being played right now "locally"
+     *         (e.g. on the device's speakers, wired headphones and bluetooth) 
+     *         or "remotely" (e.g. on a device using the Cast protocol and
+     *         controlled by this device and through a remote submix).
      */
     private boolean isMusicActive() {
         final AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
@@ -6797,12 +6796,44 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         return false;
     }
 
+    /**
+     * @return The first remote *playing* media session. null if does not exist
+     */
+    private MediaController getRemoteMusicSession() {
+        final MediaSessionManager msm = (MediaSessionManager) mContext
+                .getSystemService(Context.MEDIA_SESSION_SERVICE);
+        final List<MediaController> sessions = msm.getActiveSessions(null);
+        for (MediaController session : sessions) {
+            if (session.getPlaybackInfo().getPlaybackType() == PLAYBACK_TYPE_REMOTE &&
+                session.getPlaybackState().getState() == STATE_PLAYING) {
+                return session;
+            }
+        }
+        return null;
+    }
+
     private void scheduleLongPressKeyEvent(KeyEvent origEvent, int keyCode, int timeout) {
         KeyEvent event = new KeyEvent(origEvent.getDownTime(), origEvent.getEventTime(),
                 origEvent.getAction(), keyCode, 0);
         Message msg = mHandler.obtainMessage(MSG_DISPATCH_VOLKEY_WITH_WAKE_LOCK, event);
         msg.setAsynchronous(true);
         mHandler.sendMessageDelayed(msg, timeout);
+    }
+
+    private void handleVolkeyMusicControl(KeyEvent event) {
+        final MediaController session = getRemoteMusicSession();
+        if (session != null) {
+            // remote stream exists and is playing - send the media keys directly to it
+            session.dispatchMediaButtonEvent(event);
+            session.dispatchMediaButtonEvent(
+                    KeyEvent.changeAction(event, KeyEvent.ACTION_UP));
+        } else {
+            // playing locally - dispatch to AudioService
+            dispatchMediaKeyWithWakeLockToAudioService(event);
+            dispatchMediaKeyWithWakeLockToAudioService(
+                    KeyEvent.changeAction(event, KeyEvent.ACTION_UP));
+        }
+        mVolumeMusicControlActive = true;
     }
 
     private void maybePerformQuickMute() {
