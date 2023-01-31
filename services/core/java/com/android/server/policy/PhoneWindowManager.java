@@ -27,6 +27,7 @@ import static android.content.pm.PackageManager.FEATURE_LEANBACK;
 import static android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE;
 import static android.content.pm.PackageManager.FEATURE_WATCH;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.media.session.MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE;
 import static android.os.Build.VERSION_CODES.M;
 import static android.os.Build.VERSION_CODES.O;
 import static android.provider.Settings.Secure.YAAP_VOLUME_HUSH_OFF;
@@ -128,7 +129,9 @@ import android.media.AudioManager;
 import android.media.AudioManagerInternal;
 import android.media.AudioSystem;
 import android.media.IAudioService;
+import android.media.session.MediaController;
 import android.media.session.MediaSessionLegacyHelper;
+import android.media.session.MediaSessionManager;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.DeviceIdleManager;
@@ -6780,6 +6783,20 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         return am.isMusicActive();
     }
 
+    /**
+     * @return Whether a remote media is currently present and controlled by this device
+     *         Either paused or playing
+     */
+    private boolean isMusicActiveRemotely() {
+        final MediaSessionManager msm = (MediaSessionManager) mContext
+                .getSystemService(Context.MEDIA_SESSION_SERVICE);
+        final List<MediaController> sessions = msm.getActiveSessions(null);
+        for (MediaController session : sessions)
+            if (session.getPlaybackInfo().getPlaybackType() == PLAYBACK_TYPE_REMOTE)
+                return true;
+        return false;
+    }
+
     private void scheduleLongPressKeyEvent(KeyEvent origEvent, int keyCode, int timeout) {
         KeyEvent event = new KeyEvent(origEvent.getDownTime(), origEvent.getEventTime(),
                 origEvent.getAction(), keyCode, 0);
@@ -6800,6 +6817,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         final boolean isInCall = (telecomManager != null && telecomManager.isInCall()) ||
                 audioMode != AudioManager.MODE_NORMAL;
         if (isInCall) return;
+
+        // when we cast the default volume stream becomes the remote one, do not mute
+        if (isMusicActiveRemotely()) return;
 
         // making sure there are no more volume down presses queued
         mHandler.removeMessages(MSG_SYSTEM_KEY_PRESS);
