@@ -9179,8 +9179,9 @@ public class AppOpsManager {
      */
     public int startProxyOpNoThrow(int op, @NonNull AttributionSource attributionSource,
             @Nullable String message, boolean skipProxyOperation) {
-        return startProxyOpNoThrow(op, attributionSource, message, skipProxyOperation,
-                ATTRIBUTION_FLAGS_NONE, ATTRIBUTION_FLAGS_NONE, ATTRIBUTION_CHAIN_ID_NONE);
+        return startProxyOpNoThrow(attributionSource.getToken(), op, attributionSource, message,
+                skipProxyOperation, ATTRIBUTION_FLAGS_NONE, ATTRIBUTION_FLAGS_NONE,
+                ATTRIBUTION_CHAIN_ID_NONE);
     }
 
     /**
@@ -9192,7 +9193,8 @@ public class AppOpsManager {
      *
      * @hide
      */
-    public int startProxyOpNoThrow(int op, @NonNull AttributionSource attributionSource,
+    public int startProxyOpNoThrow(@NonNull IBinder clientId, int op,
+            @NonNull AttributionSource attributionSource,
             @Nullable String message, boolean skipProxyOperation, @AttributionFlags
             int proxyAttributionFlags, @AttributionFlags int proxiedAttributionFlags,
             int attributionChainId) {
@@ -9210,7 +9212,7 @@ public class AppOpsManager {
                 }
             }
 
-            SyncNotedAppOp syncOp = mService.startProxyOperation(op,
+            SyncNotedAppOp syncOp = mService.startProxyOperation(clientId, op,
                     attributionSource, false, collectionMode == COLLECT_ASYNC, message,
                     shouldCollectMessage, skipProxyOperation, proxyAttributionFlags,
                     proxiedAttributionFlags, attributionChainId);
@@ -9313,9 +9315,10 @@ public class AppOpsManager {
      */
     public void finishProxyOp(@NonNull String op, int proxiedUid,
             @NonNull String proxiedPackageName, @Nullable String proxiedAttributionTag) {
-        finishProxyOp(op, new AttributionSource(mContext.getAttributionSource(),
+        IBinder token = mContext.getAttributionSource().getToken();
+        finishProxyOp(token, op, new AttributionSource(mContext.getAttributionSource(),
                 new AttributionSource(proxiedUid, proxiedPackageName,  proxiedAttributionTag,
-                        mContext.getAttributionSource().getToken())), /*skipProxyOperation*/ false);
+                        token)), /*skipProxyOperation*/ false);
     }
 
     /**
@@ -9330,10 +9333,11 @@ public class AppOpsManager {
      *
      * @hide
      */
-    public void finishProxyOp(@NonNull String op, @NonNull AttributionSource attributionSource,
-            boolean skipProxyOperation) {
+    public void finishProxyOp(@NonNull IBinder clientId, @NonNull String op,
+            @NonNull AttributionSource attributionSource, boolean skipProxyOperation) {
         try {
-            mService.finishProxyOperation(strOpToOp(op), attributionSource, skipProxyOperation);
+            mService.finishProxyOperation(clientId, strOpToOp(op), attributionSource,
+                    skipProxyOperation);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
