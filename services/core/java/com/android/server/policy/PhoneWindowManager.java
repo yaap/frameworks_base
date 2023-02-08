@@ -4303,7 +4303,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             return 0;
         }
 
-        // poacket judge handling
+        // pocket judge handling
         if (mIsDeviceInPocket && (!interactive || mPocketLockShowing) && isWakeKey) {
             return 0;
         }
@@ -5459,7 +5459,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             try {
                 handler.onPocketStateChanged(mIsDeviceInPocket);
             } catch (Exception e) {
-                Slog.w(TAG, "Could not notify poacket mode to device key handler", e);
+                Slog.w(TAG, "Could not notify pocket mode to device key handler", e);
             }
         }
     }
