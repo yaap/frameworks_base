@@ -56,6 +56,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.RemoteException;
 import android.os.UserManager;
+import android.util.DisplayUtils;
 import android.util.Log;
 import android.util.RotationUtils;
 import android.util.SparseBooleanArray;
