@@ -1094,6 +1094,8 @@ public class ScreenshotController {
                     R.string.screenshot_failed_to_save_text);
         } else {
             mUiEventLogger.log(ScreenshotEvent.SCREENSHOT_SAVED, 0, mPackageName);
+            mNotificationsController.showPostActionNotification(
+                    imageData, mScreenBitmap);
         }
     }
 
