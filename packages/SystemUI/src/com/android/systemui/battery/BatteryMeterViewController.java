@@ -17,6 +17,7 @@ package com.android.systemui.battery;
 
 import static android.provider.Settings.Global.BATTERY_ESTIMATES_LAST_UPDATE_TIME;
 import static android.provider.Settings.System.SHOW_BATTERY_PERCENT;
+import static android.provider.Settings.System.SHOW_BATTERY_PERCENT_CHARGING;
 import static android.provider.Settings.System.QS_SHOW_BATTERY_ESTIMATE;
 import static android.provider.Settings.System.STATUS_BAR_BATTERY_STYLE;
 import static android.provider.Settings.System.SHOW_BATTERY_PERCENT_INSIDE;
@@ -198,6 +199,11 @@ public class BatteryMeterViewController extends ViewController<BatteryMeterView>
                 false,
                 mSettingObserver,
                 user);
+        mContentResolver.registerContentObserver(
+                Settings.System.getUriFor(SHOW_BATTERY_PERCENT_CHARGING),
+                false,
+                mSettingObserver,
+                user);
     }
 
     private void registerGlobalBatteryUpdateObserver() {
@@ -236,6 +242,7 @@ public class BatteryMeterViewController extends ViewController<BatteryMeterView>
                     mView.updatePercentText();
                     break;
                 case SHOW_BATTERY_PERCENT:
+                case SHOW_BATTERY_PERCENT_CHARGING:
                 case SHOW_BATTERY_PERCENT_INSIDE:
                     mView.updateShowPercent();
                     break;
