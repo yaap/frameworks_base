@@ -230,5 +230,7 @@ public class SecureSettings {
         Settings.Secure.MEDIA_CONTROLS_ALWAYS_SHOW_TIME,
         Settings.Secure.MEDIA_CONTROLS_SQUIGGLE,
         Settings.Secure.TETHERING_ALLOW_VPN_UPSTREAMS,
+        Settings.Secure.TOUCH_SENSITIVITY_ENABLED,
+        Settings.Secure.SCREEN_OFF_UDFPS_ENABLED,
     };
 }

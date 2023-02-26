@@ -11815,6 +11815,18 @@ public final class Settings {
         public static final String MEDIA_CONTROLS_SQUIGGLE = "media_controls_squiggle";
 
         /**
+         * Whether to increase touch sensitivity
+         * @hide
+         */
+        public static final String TOUCH_SENSITIVITY_ENABLED = "touch_sensitivity_enabled";
+
+        /**
+         * Whether to increase touch sensitivity
+         * @hide
+         */
+        public static final String SCREEN_OFF_UDFPS_ENABLED = "screen_off_udfps_enabled";
+
+        /**
          * These entries are considered common between the personal and the managed profile,
          * since the managed profile doesn't get to change them.
          */
