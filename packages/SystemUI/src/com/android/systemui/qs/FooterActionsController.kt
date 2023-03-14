@@ -18,10 +18,7 @@ package com.android.systemui.qs
 
 import android.content.Intent
 import android.content.res.Configuration
-import android.database.ContentObserver
 import android.os.Handler
-import android.os.Looper
-import android.os.UserHandle
 import android.os.UserManager
 import android.provider.Settings
 import android.provider.Settings.Global.USER_SWITCHER_ENABLED
@@ -85,7 +82,6 @@ internal class FooterActionsController @Inject constructor(
     private var lastExpansion = -1f
     private var listening: Boolean = false
     private var inSplitShade = false
-    private var isRunningServicesEnabled = false
 
     private val singleShadeAnimator by lazy {
         // In single shade, the actions footer should only appear at the end of the expansion,
@@ -182,29 +178,6 @@ internal class FooterActionsController @Inject constructor(
         return@OnLongClickListener false
     }
 
-    private val settingsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-        public fun observe() {
-            context.getContentResolver().registerContentObserver(
-                    Settings.System.getUriFor(Settings.System.QS_FOOTER_SERVICES_SHOW),
-                    false, this, UserHandle.USER_ALL)
-        }
-
-        public fun stop() {
-            context.getContentResolver().unregisterContentObserver(this)
-        }
-
-        public fun update() {
-            isRunningServicesEnabled = Settings.System.getInt(
-                    context.getContentResolver(),
-                    Settings.System.QS_FOOTER_SERVICES_SHOW, 0) == 1
-        }
-
-        override fun onChange(selfChange: Boolean) {
-            update()
-            updateView()
-        }
-    }
-
     private val configurationListener =
         object : ConfigurationController.ConfigurationListener {
             override fun onConfigChanged(newConfig: Configuration?) {
@@ -283,9 +256,6 @@ internal class FooterActionsController @Inject constructor(
         securityFooterController.setOnVisibilityChangedListener(visibilityListener)
         fgsManagerFooterController.setOnVisibilityChangedListener(visibilityListener)
 
-        settingsObserver.observe()
-        settingsObserver.update()
-
         configurationController.addCallback(configurationListener)
 
         updateResources()
@@ -293,7 +263,6 @@ internal class FooterActionsController @Inject constructor(
     }
 
     private fun updateView() {
-        mView.setRunningServicesEnablement(isRunningServicesEnabled)
         mView.updateEverything(multiUserSwitchController.isMultiUserEnabled)
     }
 
@@ -312,12 +281,9 @@ internal class FooterActionsController @Inject constructor(
         this.listening = listening
         if (this.listening) {
             userInfoController.addCallback(onUserInfoChangedListener)
-            settingsObserver.observe()
-            settingsObserver.update()
             updateView()
         } else {
             userInfoController.removeCallback(onUserInfoChangedListener)
-            settingsObserver.stop()
         }
 
         fgsManagerFooterController.setListening(listening)

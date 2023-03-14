@@ -141,7 +141,6 @@ public class SystemSettings {
         Settings.System.NOTIFICATION_PULSE_COLOR,
         Settings.System.NOTIFICATION_PULSE_REPEATS,
         Settings.System.NOTIFICATION_PULSE_DURATION,
-        Settings.System.QS_FOOTER_SERVICES_SHOW,
         Settings.System.KEYGAURD_MEDIA_ART,
         Settings.System.QS_SHOW_BATTERY_ESTIMATE,
         Settings.System.ENABLE_FLOATING_ROTATION_BUTTON,

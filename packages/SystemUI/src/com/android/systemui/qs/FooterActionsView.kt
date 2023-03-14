@@ -45,7 +45,6 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
     private lateinit var multiUserAvatar: ImageView
 
     private var qsDisabled = false
-    private var isRunningServicesEnabled = false
     private var expansionAmount = 0f
 
     /**
@@ -93,10 +92,6 @@ class FooterActionsView(context: Context?, attrs: AttributeSet?) : LinearLayout(
             updateClickabilities()
             isClickable = false
         }
-    }
-
-    fun setRunningServicesEnablement(enabled: Boolean) {
-        isRunningServicesEnabled = enabled
     }
 
     private fun updateClickabilities() {

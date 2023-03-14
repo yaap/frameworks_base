@@ -23,7 +23,6 @@ import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.UserHandle;
 import android.provider.Settings;
@@ -58,29 +57,12 @@ public class QSFooterView extends FrameLayout {
     @Nullable
     private OnClickListener mExpandClickListener;
 
-    private final SettingsObserver mSettingsObserver = new SettingsObserver(new Handler(mContext.getMainLooper()));
-    private class SettingsObserver extends ContentObserver {
-        SettingsObserver(Handler handler) {
-            super(handler);
-        }
-
-        public void observe() {
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_SHOW), false,
-                    mSettingsObserver, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_STRING), false,
-                    mSettingsObserver, UserHandle.USER_ALL);
-        }
-
-        public void stop() {
-            mContext.getContentResolver().unregisterContentObserver(this);
-        }
-
+    private final ContentObserver mSettingsObserver = new ContentObserver(
+            new Handler(mContext.getMainLooper())) {
         @Override
         public void onChange(boolean selfChange, Uri uri) {
             super.onChange(selfChange, uri);
-            post(() -> setBuildText());
+            setBuildText();
         }
     };
 
@@ -106,11 +88,11 @@ public class QSFooterView extends FrameLayout {
             return;
         }
         mShouldShowBuildText = Settings.System.getIntForUser(mContext.getContentResolver(),
-                Settings.System.QS_FOOTER_TEXT_SHOW, 0,
-                UserHandle.USER_CURRENT) == 1;
+                        Settings.System.QS_FOOTER_TEXT_SHOW, 0,
+                        UserHandle.USER_CURRENT) == 1;
         String text = Settings.System.getStringForUser(mContext.getContentResolver(),
-                Settings.System.QS_FOOTER_TEXT_STRING,
-                UserHandle.USER_CURRENT);
+                        Settings.System.QS_FOOTER_TEXT_STRING,
+                        UserHandle.USER_CURRENT);
         if (mShouldShowBuildText) {
             if (text == null || text.isEmpty()) {
                 mBuildText.setText("YAAP");
@@ -177,13 +159,18 @@ public class QSFooterView extends FrameLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        mSettingsObserver.observe();
+        mContext.getContentResolver().registerContentObserver(
+                Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_SHOW), false,
+                mSettingsObserver, UserHandle.USER_ALL);
+        mContext.getContentResolver().registerContentObserver(
+                Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_STRING), false,
+                mSettingsObserver, UserHandle.USER_ALL);
     }
 
     @Override
     @VisibleForTesting
     public void onDetachedFromWindow() {
-        mSettingsObserver.stop();
+        mContext.getContentResolver().unregisterContentObserver(mSettingsObserver);
         super.onDetachedFromWindow();
     }
 
@@ -208,5 +195,6 @@ public class QSFooterView extends FrameLayout {
 
     private void updateVisibilities() {
         mBuildText.setVisibility(mExpanded && mShouldShowBuildText ? View.VISIBLE : View.INVISIBLE);
+        mRunningServicesButton.setVisibility(mExpanded ? View.VISIBLE : View.INVISIBLE);
     }
 }

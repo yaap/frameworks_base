@@ -5975,13 +5975,6 @@ public final class Settings {
         public static final String NOTIFICATION_PULSE_DURATION = "ambient_notification_light_duration";
 
         /**
-         * Whether to show qs footer Running Services icon
-         * @hide
-         */
-        @Readable
-        public static final String QS_FOOTER_SERVICES_SHOW = "qs_footer_services_show";
-
-        /**
          * Whether to show media album art on keyguard
          * @hide
          */
