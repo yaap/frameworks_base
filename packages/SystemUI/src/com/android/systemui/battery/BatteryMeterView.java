@@ -51,7 +51,6 @@ import androidx.annotation.StyleRes;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.settingslib.graph.CircleBatteryDrawable;
-import com.android.settingslib.graph.ThemedBatteryDrawable;
 import com.android.systemui.DualToneHandler;
 import com.android.systemui.R;
 import com.android.systemui.animation.Interpolators;
@@ -79,7 +78,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     public static final int BATTERY_STYLE_TEXT = 2;
 
     private final CircleBatteryDrawable mCircleDrawable;
-    private final ThemedBatteryDrawable mThemedDrawable;
+    private final AccessorizedBatteryDrawable mThemedDrawable;
     private ImageView mBatteryIconView;
     private TextView mBatteryPercentView;
 
@@ -89,6 +88,9 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     private int mShowPercentMode = MODE_DEFAULT;
     private boolean mCharging;
     private boolean mPCharging;
+    private String mEstimateText = null;
+    private boolean mIsOverheated;
+    private boolean mDisplayShieldEnabled;
     // Error state where we know nothing about the current battery state
     private boolean mBatteryStateUnknown;
     // Lazily-loaded since this is expected to be a rare-if-ever state
@@ -120,7 +122,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                 context.getColor(R.color.meter_background_color));
         mPercentageStyleId = atts.getResourceId(R.styleable.BatteryMeterView_textAppearance, 0);
         mCircleDrawable = new CircleBatteryDrawable(context, frameColor);
-        mThemedDrawable = new ThemedBatteryDrawable(context, frameColor);
+        mThemedDrawable = new AccessorizedBatteryDrawable(context, frameColor);
         atts.recycle();
 
         setupLayoutTransition();
@@ -172,12 +174,14 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         if (mode == mShowPercentMode) return;
         mShowPercentMode = mode;
         updateShowPercent();
+        updatePercentText();
     }
 
     @Override
     protected void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         updatePercentView();
+        mThemedDrawable.notifyDensityChanged();
     }
 
     public void setColorsFromContext(Context context) {
@@ -209,6 +213,17 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         mThemedDrawable.setPowerSaveEnabled(isPowerSave);
     }
 
+    void onIsOverheatedChanged(boolean isOverheated) {
+        boolean valueChanged = mIsOverheated != isOverheated;
+        mIsOverheated = isOverheated;
+        if (valueChanged) {
+            updateContentDescription();
+            // The battery drawable is a different size depending on whether it's currently
+            // overheated or not, so we need to re-scale the view when overheated changes.
+            scaleBatteryMeterViews();
+        }
+    }
+
     private TextView loadPercentView() {
         return (TextView) LayoutInflater.from(getContext())
                 .inflate(R.layout.battery_percentage_view, null);
@@ -233,13 +248,17 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         mBatteryEstimateFetcher = fetcher;
     }
 
+    void setDisplayShieldEnabled(boolean displayShieldEnabled) {
+        mDisplayShieldEnabled = displayShieldEnabled;
+    }
+
     void updatePercentText() {
         if (mBatteryStateUnknown) {
-            setContentDescription(getContext().getString(R.string.accessibility_battery_unknown));
             return;
         }
 
         if (mBatteryEstimateFetcher == null) {
+            setPercentTextAtCurrentLevel();
             return;
         }
 
@@ -255,10 +274,9 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                         return;
                     }
                     if (estimate != null && mShowPercentMode == MODE_ESTIMATE) {
+                        mEstimateText = estimate;
                         mBatteryPercentView.setText(estimate);
-                        setContentDescription(getContext().getString(
-                                R.string.accessibility_battery_level_with_estimate,
-                                mLevel, estimate));
+                        updateContentDescription();
                     } else {
                         setPercentTextAtCurrentLevel();
                     }
@@ -267,9 +285,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                 setPercentTextAtCurrentLevel();
             }
         } else {
-            setContentDescription(
-                    getContext().getString(mCharging ? R.string.accessibility_battery_level_charging
-                            : R.string.accessibility_battery_level, mLevel));
+            updateContentDescription();
         }
     }
 
@@ -287,12 +303,35 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             // only use it when there is no batt icon showing
             String indication = mCharging && (mBatteryStyle == BATTERY_STYLE_TEXT)
                     ? "\u26A1\uFE0E " : "";
+            mEstimateText = null;
             mBatteryPercentView.setText(indication + percentText);
         }
 
-        setContentDescription(
-                getContext().getString(mCharging ? R.string.accessibility_battery_level_charging
-                        : R.string.accessibility_battery_level, mLevel));
+        updateContentDescription();
+    }
+
+    private void updateContentDescription() {
+        Context context = getContext();
+
+        String contentDescription;
+        if (mBatteryStateUnknown) {
+            contentDescription = context.getString(R.string.accessibility_battery_unknown);
+        } else if (mShowPercentMode == MODE_ESTIMATE && !TextUtils.isEmpty(mEstimateText)) {
+            contentDescription = context.getString(
+                    mIsOverheated
+                            ? R.string.accessibility_battery_level_charging_paused_with_estimate
+                            : R.string.accessibility_battery_level_with_estimate,
+                    mLevel,
+                    mEstimateText);
+        } else if (mIsOverheated) {
+            contentDescription =
+                    context.getString(R.string.accessibility_battery_level_charging_paused, mLevel);
+        } else if (mCharging) {
+            contentDescription =
+                    context.getString(R.string.accessibility_battery_level_charging, mLevel);
+        } else {
+            contentDescription = context.getString(R.string.accessibility_battery_level, mLevel);
+        }
     }
 
     void updateShowPercent() {
@@ -363,6 +402,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         }
 
         mBatteryStateUnknown = isUnknown;
+        updateContentDescription();
 
         if (mBatteryStateUnknown) {
             mBatteryIconView.setImageDrawable(getUnknownStateDrawable());
@@ -384,17 +424,44 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         res.getValue(R.dimen.status_bar_icon_scale_factor, typedValue, true);
         float iconScaleFactor = typedValue.getFloat();
 
-        int batteryHeight = res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_height);
-        int batteryWidth = mBatteryStyle == BATTERY_STYLE_CIRCLE ?
+        float mainBatteryHeight =
+                res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_height) * iconScaleFactor;
+        float mainBatteryWidth = (mBatteryStyle == BATTERY_STYLE_CIRCLE ?
                 res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_circle_width) :
-                res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_width);
+                res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_width)) * iconScaleFactor;
+
+        // If the battery is marked as overheated, we should display a shield indicating that the
+        // battery is being "defended".
+        boolean displayShield = mDisplayShieldEnabled && mIsOverheated;
+        float fullBatteryIconHeight =
+                BatterySpecs.getFullBatteryHeight(mainBatteryHeight, displayShield);
+        float fullBatteryIconWidth =
+                BatterySpecs.getFullBatteryWidth(mainBatteryWidth, displayShield);
+
+        int marginTop;
+        if (displayShield) {
+            // If the shield is displayed, we need some extra marginTop so that the bottom of the
+            // main icon is still aligned with the bottom of all the other system icons.
+            int shieldHeightAddition = Math.round(fullBatteryIconHeight - mainBatteryHeight);
+            // However, the other system icons have some embedded bottom padding that the battery
+            // doesn't have, so we shouldn't move the battery icon down by the full amount.
+            // See b/258672854.
+            marginTop = shieldHeightAddition
+                    - res.getDimensionPixelSize(R.dimen.status_bar_battery_extra_vertical_spacing);
+        } else {
+            marginTop = 0;
+        }
+
         int marginBottom = res.getDimensionPixelSize(R.dimen.battery_margin_bottom);
 
         LinearLayout.LayoutParams scaledLayoutParams = new LinearLayout.LayoutParams(
-                (int) (batteryWidth * iconScaleFactor), (int) (batteryHeight * iconScaleFactor));
-        scaledLayoutParams.setMargins(0, 0, 0, marginBottom);
+                Math.round(fullBatteryIconWidth),
+                Math.round(fullBatteryIconHeight));
+        scaledLayoutParams.setMargins(0, marginTop, 0, marginBottom);
 
+        mThemedDrawable.setDisplayShield(displayShield);
         mBatteryIconView.setLayoutParams(scaledLayoutParams);
+        mBatteryIconView.invalidateDrawable(mThemedDrawable);
     }
 
     void updateBatteryStyle() {

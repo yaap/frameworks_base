@@ -42,7 +42,6 @@ import com.android.internal.statusbar.IStatusBarService;
 public class YaapUtils {
 
     public static final String INTENT_SCREENSHOT = "action_handler_screenshot";
-    public static final String INTENT_REGION_SCREENSHOT = "action_handler_region_screenshot";
 
     public static void switchScreenOff(Context ctx) {
         PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
@@ -93,7 +92,7 @@ public class YaapUtils {
     public static void takeScreenshot(boolean full) {
         IWindowManager wm = WindowManagerGlobal.getWindowManagerService();
         try {
-            wm.sendCustomAction(new Intent(full? INTENT_SCREENSHOT : INTENT_REGION_SCREENSHOT));
+            wm.sendCustomAction(new Intent(INTENT_SCREENSHOT));
         } catch (RemoteException e) {
             e.printStackTrace();
         }

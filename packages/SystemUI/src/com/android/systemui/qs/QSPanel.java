@@ -49,6 +49,7 @@ import com.android.internal.logging.UiEventLogger;
 import com.android.internal.widget.RemeasuringLinearLayout;
 import com.android.systemui.R;
 import com.android.systemui.plugins.qs.QSTile;
+import com.android.systemui.qs.logging.QSLogger;
 import com.android.systemui.settings.brightness.BrightnessSliderController;
 
 import java.lang.Runnable;
@@ -115,6 +116,7 @@ public class QSPanel extends LinearLayout {
     private ViewGroup mMediaHostView;
     private boolean mShouldMoveMediaOnExpansion = true;
     private boolean mUsingCombinedHeaders = false;
+    private QSLogger mQsLogger;
 
     private final CustomSettingsObserver mCustomSettingsObserver = new CustomSettingsObserver();
     private class CustomSettingsObserver extends ContentObserver {
@@ -195,7 +197,8 @@ public class QSPanel extends LinearLayout {
         mMovableContentStartIndex = getChildCount();
     }
 
-    void initialize() {
+    void initialize(QSLogger qsLogger) {
+        mQsLogger = qsLogger;
         mTileLayout = getOrCreateTileLayout();
 
         if (mUsingMediaPlayer) {
@@ -285,6 +288,7 @@ public class QSPanel extends LinearLayout {
         if (mTileLayout == null) {
             mTileLayout = (QSTileLayout) LayoutInflater.from(mContext)
                     .inflate(R.layout.qs_paged_tile_layout, this, false);
+            mTileLayout.setLogger(mQsLogger);
             mTileLayout.setSquishinessFraction(mSquishinessFraction);
         }
         return mTileLayout;
@@ -841,6 +845,8 @@ public class QSPanel extends LinearLayout {
         default void setExpansion(float expansion, float proposedTranslation) {}
 
         int getNumVisibleTiles();
+
+        default void setLogger(QSLogger qsLogger) { }
     }
 
     interface OnConfigurationChangedListener {

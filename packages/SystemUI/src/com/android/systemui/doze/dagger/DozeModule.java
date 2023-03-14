@@ -35,6 +35,7 @@ import com.android.systemui.doze.DozeScreenStatePreventingAdapter;
 import com.android.systemui.doze.DozeSensors;
 import com.android.systemui.doze.DozeSuppressor;
 import com.android.systemui.doze.DozeSuspendScreenStatePreventingAdapter;
+import com.android.systemui.doze.DozeTransitionListener;
 import com.android.systemui.doze.DozeTriggers;
 import com.android.systemui.doze.DozeUi;
 import com.android.systemui.doze.DozeUpdater;
@@ -84,7 +85,8 @@ public abstract class DozeModule {
             DozeUi dozeUi, DozeScreenState dozeScreenState,
             DozeScreenBrightness dozeScreenBrightness, DozeWallpaperState dozeWallpaperState,
             DozeDockHandler dozeDockHandler, DozeAuthRemover dozeAuthRemover,
-            DozeSuppressor dozeSuppressor, DozeUpdater dozeUpdater) {
+            DozeSuppressor dozeSuppressor, DozeTransitionListener dozeTransitionListener,
+            DozeUpdater dozeUpdater) {
         return new DozeMachine.Part[]{
                 dozePauser,
                 dozeFalsingManagerAdapter,
@@ -96,6 +98,7 @@ public abstract class DozeModule {
                 dozeDockHandler,
                 dozeAuthRemover,
                 dozeSuppressor,
+                dozeTransitionListener,
                 dozeUpdater
         };
     }

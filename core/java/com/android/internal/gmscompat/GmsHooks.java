@@ -176,7 +176,7 @@ public final class GmsHooks {
                     e instanceof DeadSystemRuntimeException
     // Seems to be an OS bug, see
     // https://cs.android.com/android/platform/superproject/+/android-13.0.0_r3:frameworks/base/services/core/java/com/android/server/am/BroadcastQueue.java;l=654
-                    || e instanceof RemoteServiceException.CannotDeliverBroadcastException
+                    || e instanceof RemoteServiceException
                 ;
 
                 if (skip) {

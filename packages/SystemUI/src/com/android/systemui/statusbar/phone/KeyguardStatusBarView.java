@@ -26,6 +26,7 @@ import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.os.Trace;
 import android.util.AttributeSet;
 import android.util.Pair;
 import android.util.TypedValue;
@@ -47,7 +48,10 @@ import com.android.systemui.R;
 import com.android.systemui.animation.Interpolators;
 import com.android.systemui.battery.BatteryMeterView;
 import com.android.systemui.plugins.DarkIconDispatcher.DarkReceiver;
+import com.android.systemui.statusbar.phone.userswitcher.StatusBarUserSwitcherContainer;
 import com.android.systemui.statusbar.policy.NetworkTrafficSB;
+import com.android.systemui.user.ui.binder.StatusBarUserChipViewBinder;
+import com.android.systemui.user.ui.viewmodel.StatusBarUserChipViewModel;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -70,7 +74,7 @@ public class KeyguardStatusBarView extends RelativeLayout {
     private BatteryMeterView mBatteryView;
     private NetworkTrafficSB mNetworkTraffic;
     private StatusIconContainer mStatusIconContainer;
-    private ViewGroup mUserSwitcherContainer;
+    private StatusBarUserSwitcherContainer mUserSwitcherContainer;
 
     private boolean mKeyguardUserSwitcherEnabled;
     private boolean mKeyguardUserAvatarEnabled;
@@ -122,8 +126,12 @@ public class KeyguardStatusBarView extends RelativeLayout {
         loadDimens();
     }
 
-    public ViewGroup getUserSwitcherContainer() {
-        return mUserSwitcherContainer;
+    /**
+     * Should only be called from {@link KeyguardStatusBarViewController}
+     * @param viewModel view model for the status bar user chip
+     */
+    void init(StatusBarUserChipViewModel viewModel) {
+        StatusBarUserChipViewBinder.bind(mUserSwitcherContainer, viewModel);
     }
 
     @Override
@@ -302,10 +310,7 @@ public class KeyguardStatusBarView extends RelativeLayout {
         lp = (LayoutParams) mStatusIconArea.getLayoutParams();
         lp.removeRule(RelativeLayout.RIGHT_OF);
         lp.width = LayoutParams.WRAP_CONTENT;
-
-        LinearLayout.LayoutParams llp =
-                (LinearLayout.LayoutParams) mSystemIconsContainer.getLayoutParams();
-        llp.setMarginStart(getResources().getDimensionPixelSize(
+        lp.setMarginStart(getResources().getDimensionPixelSize(
                 R.dimen.system_icons_super_container_margin_start));
         return true;
     }
@@ -337,10 +342,7 @@ public class KeyguardStatusBarView extends RelativeLayout {
         lp = (LayoutParams) mStatusIconArea.getLayoutParams();
         lp.addRule(RelativeLayout.RIGHT_OF, R.id.cutout_space_view);
         lp.width = LayoutParams.MATCH_PARENT;
-
-        LinearLayout.LayoutParams llp =
-                (LinearLayout.LayoutParams) mSystemIconsContainer.getLayoutParams();
-        llp.setMarginStart(0);
+        lp.setMarginStart(0);
         return true;
     }
 
@@ -527,5 +529,12 @@ public class KeyguardStatusBarView extends RelativeLayout {
     private void updateClipping() {
         mClipRect.set(0, mTopClipping, getWidth(), getHeight());
         setClipBounds(mClipRect);
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        Trace.beginSection("KeyguardStatusBarView#onMeasure");
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        Trace.endSection();
     }
 }

@@ -195,6 +195,5 @@ public class QSFooterView extends FrameLayout {
 
     private void updateVisibilities() {
         mBuildText.setVisibility(mExpanded && mShouldShowBuildText ? View.VISIBLE : View.INVISIBLE);
-        mRunningServicesButton.setVisibility(mExpanded ? View.VISIBLE : View.INVISIBLE);
     }
 }

@@ -1072,6 +1072,12 @@ public class OomAdjuster {
 
     private long mNextNoKillDebugMessageTime;
 
+    private double mLastFreeSwapPercent = 1.00;
+
+    private static double getFreeSwapPercent() {
+        return CachedAppOptimizer.getFreeSwapPercent();
+    }
+
     @GuardedBy({"mService", "mProcLock"})
     private boolean updateAndTrimProcessLSP(final long now, final long nowElapsed,
             final long oldTime, final ActiveUids activeUids, String oomAdjReason) {
@@ -1100,6 +1106,11 @@ public class OomAdjuster {
         int numBServices = 0;
 
 
+
+        boolean proactiveKillsEnabled = mConstants.PROACTIVE_KILLS_ENABLED;
+        double lowSwapThresholdPercent = mConstants.LOW_SWAP_THRESHOLD_PERCENT;
+        double freeSwapPercent =  proactiveKillsEnabled ? getFreeSwapPercent() : 1.00;
+        ProcessRecord lruCachedApp = null;
 
         for (int i = numLru - 1; i >= 0; i--) {
             ProcessRecord app = lruList.get(i);
@@ -1166,6 +1177,8 @@ public class OomAdjuster {
                                     ApplicationExitInfo.REASON_OTHER,
                                     ApplicationExitInfo.SUBREASON_TOO_MANY_CACHED,
                                     true);
+                        } else if (proactiveKillsEnabled) {
+                            lruCachedApp = app;
                         }
                         break;
                     case PROCESS_STATE_CACHED_EMPTY:
@@ -1185,6 +1198,8 @@ public class OomAdjuster {
                                         ApplicationExitInfo.REASON_OTHER,
                                         ApplicationExitInfo.SUBREASON_TOO_MANY_EMPTY,
                                         true);
+                            } else if (proactiveKillsEnabled) {
+                                lruCachedApp = app;
                             }
                         }
                         break;
@@ -1223,6 +1238,20 @@ public class OomAdjuster {
             if (DEBUG_OOM_ADJ) Slog.d(TAG,"app.processName = " + selectedAppRecord.processName
                         + " app.pid = " + selectedAppRecord.getPid() + " is moved to higher adj");
         }
+
+        if (proactiveKillsEnabled                               // Proactive kills enabled?
+                && doKillExcessiveProcesses                     // Should kill excessive processes?
+                && freeSwapPercent < lowSwapThresholdPercent    // Swap below threshold?
+                && lruCachedApp != null                         // If no cached app, let LMKD decide
+                // If swap is non-decreasing, give reclaim a chance to catch up
+                && freeSwapPercent < mLastFreeSwapPercent) {
+            lruCachedApp.killLocked("swap low and too many cached",
+                    ApplicationExitInfo.REASON_OTHER,
+                    ApplicationExitInfo.SUBREASON_TOO_MANY_CACHED,
+                    true);
+        }
+
+        mLastFreeSwapPercent = freeSwapPercent;
 
         return mService.mAppProfiler.updateLowMemStateLSP(numCached, numEmpty, numTrimming);
     }
