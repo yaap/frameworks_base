@@ -6085,13 +6085,6 @@ public final class Settings {
         public static final String VOLUME_PANEL_ON_LEFT_LAND = "volume_panel_on_left_land";
 
         /**
-         * Whether to enable statusbar brightness control
-         * @hide
-         */
-        @Readable
-        public static final String STATUS_BAR_BRIGHTNESS_CONTROL = "status_bar_brightness_control";
-
-        /**
          * Position to show statusbar clock
          * 0 = Left (Default)
          * 1 = Center
