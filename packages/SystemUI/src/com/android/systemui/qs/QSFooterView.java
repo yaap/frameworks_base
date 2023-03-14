@@ -197,8 +197,13 @@ public class QSFooterView extends FrameLayout {
     void updateEverything() {
         post(() -> {
             updateVisibilities();
+            updateClickabilities();
             setClickable(false);
         });
+    }
+
+    private void updateClickabilities() {
+        mBuildText.setLongClickable(mBuildText.getVisibility() == View.VISIBLE);
     }
 
     private void updateVisibilities() {
