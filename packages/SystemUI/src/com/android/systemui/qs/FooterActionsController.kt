@@ -160,24 +160,6 @@ internal class FooterActionsController @Inject constructor(
         }
     }
 
-    private val onLongClickListener = View.OnLongClickListener { v ->
-        // Don't do anything if the tap looks suspicious.
-        if (!visible || falsingManager.isFalseTap(FalsingManager.LOW_PENALTY)) {
-            return@OnLongClickListener false
-        }
-
-        if (v === settingsButtonContainer) {
-            if (!deviceProvisionedController.isCurrentUserSetup) {
-                // If user isn't setup just unlock the device and dump them back at SUW.
-                activityStarter.postQSRunnableDismissingKeyguard {}
-                return@OnLongClickListener false
-            }
-            startYASPActivity()
-            return@OnLongClickListener true
-        }
-        return@OnLongClickListener false
-    }
-
     private val configurationListener =
         object : ConfigurationController.ConfigurationListener {
             override fun onConfigChanged(newConfig: Configuration?) {
@@ -211,16 +193,6 @@ internal class FooterActionsController @Inject constructor(
                 true /* dismissShade */, animationController)
     }
 
-    private fun startYASPActivity() {
-        val animationController = settingsButtonContainer?.let {
-            ActivityLaunchAnimator.Controller.fromView(
-                    it,
-                    InteractionJankMonitor.CUJ_SHADE_APP_LAUNCH_FROM_SETTINGS_BUTTON)
-            }
-        activityStarter.startActivity(Intent("com.android.settings.YAAP_SETTINGS"),
-                true /* dismissShade */, animationController)
-    }
-
     @VisibleForTesting
     public override fun onViewAttached() {
         globalActionsDialog = globalActionsDialogProvider.get()
@@ -231,7 +203,6 @@ internal class FooterActionsController @Inject constructor(
             powerMenuLite.visibility = View.GONE
         }
         settingsButtonContainer.setOnClickListener(onClickListener)
-        settingsButtonContainer.setOnLongClickListener(onLongClickListener)
         multiUserSetting.isListening = true
 
         val securityFooter = securityFooterController.view

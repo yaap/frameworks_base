@@ -65,6 +65,20 @@ public class QSFooterViewController extends ViewController<QSFooterView> impleme
 
     @Override
     protected void onViewAttached() {
+        mBuildText.setOnLongClickListener(view -> {
+            CharSequence buildText = mBuildText.getText();
+            if (!TextUtils.isEmpty(buildText)) {
+                ClipboardManager service =
+                        mUserTracker.getUserContext().getSystemService(ClipboardManager.class);
+                String label = getResources().getString(R.string.build_number_clip_data_label);
+                service.setPrimaryClip(ClipData.newPlainText(label, buildText));
+                Toast.makeText(getContext(), R.string.build_number_copy_toast, Toast.LENGTH_SHORT)
+                        .show();
+                return true;
+            }
+            return false;
+        });
+
         mEditButton.setOnClickListener(view -> {
             if (mFalsingManager.isFalseTap(FalsingManager.LOW_PENALTY)) {
                 return;
