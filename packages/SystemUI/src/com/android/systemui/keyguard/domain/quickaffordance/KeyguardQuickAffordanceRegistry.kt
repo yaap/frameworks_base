@@ -41,8 +41,6 @@ constructor(
     private val homeControls: HomeControlsKeyguardQuickAffordanceConfig,
     private val quickAccessWallet: QuickAccessWalletKeyguardQuickAffordanceConfig,
     private val qrCodeScanner: QrCodeScannerKeyguardQuickAffordanceConfig,
-    private val camera: CameraKeyguardQuickAffordanceConfig,
-    private val flashlight: FlashlightKeyguardQuickAffordanceConfig,
 ) : KeyguardQuickAffordanceRegistry<KeyguardQuickAffordanceConfig> {
 
     private val configsBySetting: Map<String, KeyguardQuickAffordanceConfig> =
@@ -50,8 +48,6 @@ constructor(
             "home" to homeControls,
             "wallet" to quickAccessWallet,
             "qr" to qrCodeScanner,
-            "camera" to camera,
-            "flashlight" to flashlight
         )
 
     private var configsByPosition: Map<KeyguardQuickAffordancePosition, MutableList<KeyguardQuickAffordanceConfig>>
