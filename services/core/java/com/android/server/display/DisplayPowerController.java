@@ -2443,7 +2443,6 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
                 mAutomaticBrightnessController.resetShortTermModel();
             }
         }
-        mPendingAutoBrightnessAdjustment = getAutoBrightnessAdjustmentSetting();
         needReset |= mPendingAutoBrightnessAdjustment != mAutoBrightnessAdjustment;
         // We don't bother with a pending variable for VR screen brightness since we just
         // immediately adapt to it.
