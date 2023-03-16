@@ -81,4 +81,8 @@
     <!-- Camera -->
     <java-symbol type="array" name="config_cameraAuxPackageAllowList" />
     <java-symbol type="array" name="config_cameraAuxPackageBlackList" />
+
+    <!-- Title & summary of notification letting users know that battery saver is now on -->
+    <java-symbol type="string" name="battery_saver_on_notification_title" />
+    <java-symbol type="string" name="battery_saver_on_notification_summary" />
 </resources>
