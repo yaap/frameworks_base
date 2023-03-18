@@ -725,6 +725,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private int mVolumeMusicControlDelay;
 
     private boolean mQuickMute;
+    private boolean mUnhandledQuickMute = false;
     private int mQuickMuteDelay;
 
     private class PolicyHandler extends Handler {
@@ -4428,13 +4429,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     }
                 } else if (mQuickMute) {
                     if (down) {
-                        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && !mUnhandledQuickMute) {
                             Message msg = mHandler.obtainMessage(MSG_QUICK_MUTE);
                             msg.setAsynchronous(true);
                             mHandler.sendMessageDelayed(msg, mQuickMuteDelay);
+                            mUnhandledQuickMute = true;
                         }
                     } else {
                         mHandler.removeMessages(MSG_QUICK_MUTE);
+                        mUnhandledQuickMute = false;
                     }
                 }
                 break;
@@ -6787,6 +6790,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
      *         Either paused or playing
      */
     private boolean isMusicActiveRemotely() {
+        if (isMusicActive()) return false; // local takes priority
         final MediaSessionManager msm = (MediaSessionManager) mContext
                 .getSystemService(Context.MEDIA_SESSION_SERVICE);
         final List<MediaController> sessions = msm.getActiveSessions(null);
