@@ -68,6 +68,7 @@ import com.android.systemui.statusbar.phone.dagger.StatusBarViewModule.LARGE_SCR
 import com.android.systemui.statusbar.phone.dagger.StatusBarViewModule.LARGE_SCREEN_SHADE_HEADER
 import com.android.systemui.statusbar.policy.Clock
 import com.android.systemui.statusbar.policy.ConfigurationController
+import com.android.systemui.statusbar.policy.NetworkTraffic
 import com.android.systemui.statusbar.policy.VariableDateView
 import com.android.systemui.statusbar.policy.VariableDateViewController
 import com.android.systemui.util.ViewController
@@ -143,6 +144,7 @@ class LargeScreenShadeHeaderController @Inject constructor(
     private val date: TextView = header.findViewById(R.id.date)
     private val iconContainer: StatusIconContainer = header.findViewById(R.id.statusIcons)
     private val qsCarrierGroup: QSCarrierGroup = header.findViewById(R.id.carrier_group)
+    private val networkTraffic: NetworkTraffic = header.findViewById(R.id.networkTraffic)
     private val vibrator: Vibrator = header.context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
     private var cutoutLeft = 0
@@ -248,6 +250,7 @@ class LargeScreenShadeHeaderController @Inject constructor(
             }
             privacyChipVisible = visible
             setBatteryClickable(qsExpandedFraction == 1f || !visible)
+            setNetworkTrafficVisible(qsExpandedFraction == 1f && !privacyChipVisible)
         }
     }
 
@@ -313,6 +316,7 @@ class LargeScreenShadeHeaderController @Inject constructor(
         clock.setOnClickListener(this)
         date.setOnClickListener(this)
         setBatteryClickable(true)
+        setNetworkTrafficVisible(false)
     }
 
     override fun onClick(v: View) {
@@ -503,6 +507,7 @@ class LargeScreenShadeHeaderController @Inject constructor(
             header.progress = qsExpandedFraction
         }
         setBatteryClickable(qsExpandedFraction == 1f || !privacyChipVisible)
+        setNetworkTrafficVisible(qsExpandedFraction == 1f && !privacyChipVisible)
     }
 
     private fun logInstantEvent(message: String) {
@@ -557,6 +562,7 @@ class LargeScreenShadeHeaderController @Inject constructor(
             date.setTextColor(textColorPrimary)
             qsCarrierGroup.updateColors(textColorPrimary, colorStateList)
             batteryIcon.updateColors(textColorPrimary, textColorSecondary, textColorPrimary)
+            networkTraffic.setTintColor(textColorPrimary)
         }
     }
 
@@ -586,6 +592,10 @@ class LargeScreenShadeHeaderController @Inject constructor(
     private fun setBatteryClickable(clickable: Boolean) {
         batteryIcon.setOnClickListener(if (clickable) this else null)
         batteryIcon.setClickable(clickable)
+    }
+
+    private fun setNetworkTrafficVisible(visible: Boolean) {
+        networkTraffic.setAlpha(if (visible) 1f else 0f)
     }
 
     override fun dump(pw: PrintWriter, args: Array<out String>) {
