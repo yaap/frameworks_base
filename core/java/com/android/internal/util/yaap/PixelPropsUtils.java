@@ -122,8 +122,7 @@ public final class PixelPropsUtils {
     }
 
     private static final HashSet<String> extraPackagesToChange = new HashSet<>(Set.of(
-        "com.breel.wallpapers20",
-        "com.snapchat.android"
+        "com.breel.wallpapers20"
     ));
 
     private static final HashSet<String> redfinPackagesToChange = new HashSet<>(Set.of(
