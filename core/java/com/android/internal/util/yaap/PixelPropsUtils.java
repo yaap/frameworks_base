@@ -46,27 +46,12 @@ public final class PixelPropsUtils {
     private static final String build_model =
             Resources.getSystem().getString(R.string.build_model);
 
-    private static final String persist_device =
-            Resources.getSystem().getString(R.string.persist_device);
-    private static final String persist_fp =
-            Resources.getSystem().getString(R.string.persist_fp);
-    private static final String persist_model =
-            Resources.getSystem().getString(R.string.persist_model);
-
     private static final HashMap<String, String> walleyeProps = new HashMap<>(Map.of(
         "ID", "OPM1.171019.011",
         "MODEL", "Pixel 2",
         "PRODUCT", "walleye",
         "DEVICE", "walleye",
         "FINGERPRINT", "google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys"
-    ));
-
-    private static final HashMap<String, String> persistProps = new HashMap<>(Map.of(
-        "ID", persist_fp.split("/", 5)[3],
-        "MODEL", persist_model,
-        "PRODUCT", persist_device,
-        "DEVICE", persist_device,
-        "FINGERPRINT", persist_fp
     ));
 
     private static final HashMap<String, String> buildProps = new HashMap<>(Map.of(
@@ -147,12 +132,7 @@ public final class PixelPropsUtils {
                 walleyeProps.forEach(PixelPropsUtils::setPropValue);
                 return;
             }
-            if (isExtra) {
-                buildProps.forEach(PixelPropsUtils::setPropValue);
-                return;
-            }
-            // persistent
-            persistProps.forEach(PixelPropsUtils::setPropValue);
+            buildProps.forEach(PixelPropsUtils::setPropValue);
         } else if (packageName.startsWith("com.google.")
                 || extraPackagesToChange.contains(packageName)) {
             final boolean isInKeep = propsToKeep.containsKey(packageName);

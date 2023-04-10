@@ -21,9 +21,6 @@
     <string name="build_device"></string>
     <string name="build_fp"></string>
     <string name="build_model"></string>
-    <string name="persist_device"></string>
-    <string name="persist_fp"></string>
-    <string name="persist_model"></string>
 
     <!-- Cycle through ringer modes -->
     <string name="volume_dialog_ringer_guidance_normal">Calls and notifications will ring</string>
