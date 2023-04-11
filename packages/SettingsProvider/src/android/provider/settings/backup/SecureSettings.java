@@ -234,5 +234,7 @@ public class SecureSettings {
         Settings.Secure.TETHERING_ALLOW_VPN_UPSTREAMS,
         Settings.Secure.TOUCH_SENSITIVITY_ENABLED,
         Settings.Secure.SCREEN_OFF_UDFPS_ENABLED,
+        Settings.Secure.DOZE_DOUBLE_TAP_GESTURE_AMBIENT,
+        Settings.Secure.DOZE_PICK_UP_GESTURE_AMBIENT,
     };
 }
