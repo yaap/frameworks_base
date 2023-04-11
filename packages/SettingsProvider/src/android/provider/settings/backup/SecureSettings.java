@@ -259,5 +259,7 @@ public class SecureSettings {
         Settings.Secure.MEDIA_CONTROLS_SQUIGGLE,
         Settings.Secure.TOUCH_SENSITIVITY_ENABLED,
         Settings.Secure.SCREEN_OFF_UDFPS_ENABLED,
+        Settings.Secure.DOZE_DOUBLE_TAP_GESTURE_AMBIENT,
+        Settings.Secure.DOZE_PICK_UP_GESTURE_AMBIENT,
     };
 }
