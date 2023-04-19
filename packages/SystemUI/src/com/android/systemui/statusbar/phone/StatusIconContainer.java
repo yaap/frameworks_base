@@ -473,7 +473,7 @@ public class StatusIconContainer extends AlphaOptimizedLinearLayout {
             }
 
             // HACK: we dont want networktraffic to animate
-            if (icon.getSlot() == "networktraffic") {
+            if (icon.getSlot().equals("networktraffic")) {
                 animateVisibility = false;
                 animationProperties = null;
             }
