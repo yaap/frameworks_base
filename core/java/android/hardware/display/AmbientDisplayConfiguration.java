@@ -139,6 +139,12 @@ public class AmbientDisplayConfiguration {
     }
 
     /** @hide */
+    public boolean tapGestureAmbient(int user) {
+        return boolSettingDefaultOff(Settings.Secure.DOZE_TAP_GESTURE_AMBIENT, user)
+                && tapGestureEnabled(user) && pulseOnNotificationEnabled(user);
+    }
+
+    /** @hide */
     public boolean tapSensorAvailable() {
         for (String tapType : tapSensorTypeMapping()) {
             if (!TextUtils.isEmpty(tapType)) {
