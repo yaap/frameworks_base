@@ -199,6 +199,7 @@ import com.android.server.Watchdog;
 import com.android.server.apphibernation.AppHibernationManagerInternal;
 import com.android.server.compat.CompatChange;
 import com.android.server.compat.PlatformCompat;
+import com.android.server.ext.PackageManagerHooks;
 import com.android.server.pm.Installer.InstallerException;
 import com.android.server.pm.Settings.VersionInfo;
 import com.android.server.pm.dex.ArtManagerService;
@@ -6119,6 +6120,12 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                                                   @NonNull GosPackageState updatedPs, int editorFlags) {
             return GosPackageStatePmHooks.set(PackageManagerService.this, packageName, userId,
                     updatedPs, editorFlags);
+        }
+
+        @Nullable
+        @Override
+        public Bundle getExtraAppBindArgs(String packageName) {
+            return PackageManagerHooks.getExtraAppBindArgs(PackageManagerService.this, packageName);
         }
     }
 
