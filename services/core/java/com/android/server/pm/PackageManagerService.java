@@ -6111,13 +6111,10 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         }
 
         @Override
-        public GosPackageState setGosPackageState(@NonNull String packageName, int userId,
+        public boolean setGosPackageState(@NonNull String packageName, int userId,
                                                   @NonNull GosPackageState updatedPs, boolean killUid) {
-            if (GosPackageStatePmHooks.set(PackageManagerService.this, packageName, userId,
-                    updatedPs, killUid)) {
-                return GosPackageStatePmHooks.get(PackageManagerService.this, packageName, userId);
-            }
-            return null;
+            return GosPackageStatePmHooks.set(PackageManagerService.this, packageName, userId,
+                    updatedPs, killUid);
         }
     }
 
