@@ -804,8 +804,6 @@ interface IPackageManager {
 
     boolean canPackageQuery(String sourcePackageName, String targetPackageName, int userId);
 
-    int getSpecialRuntimePermissionFlags(String packageName);
-
     void skipSpecialRuntimePermissionAutoGrantsForPackage(String packageName, int userId, in List<String> permissions);
 
     android.content.pm.GosPackageState getGosPackageState(String packageName, int userId);
