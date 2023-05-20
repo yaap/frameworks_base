@@ -23,8 +23,6 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import android.content.res.ColorStateList
-import android.graphics.Color
 import android.os.Trace
 import android.os.Trace.TRACE_TAG_APP
 import android.os.VibrationEffect
@@ -43,7 +41,6 @@ import com.android.systemui.R
 import com.android.systemui.animation.Interpolators
 import com.android.systemui.animation.ShadeInterpolation
 import com.android.systemui.battery.BatteryMeterView
-import com.android.systemui.battery.BatteryMeterView.BATTERY_STYLE_CIRCLE
 import com.android.systemui.battery.BatteryMeterViewController
 import com.android.systemui.demomode.DemoMode
 import com.android.systemui.demomode.DemoModeController
@@ -76,8 +73,6 @@ import java.io.PrintWriter
 import javax.inject.Inject
 import javax.inject.Named
 
-import kotlin.math.roundToInt
-
 /**
  * Controller for QS header on Large Screen width (large screen + landscape).
  *
@@ -98,7 +93,6 @@ class LargeScreenShadeHeaderController @Inject constructor(
     private val privacyIconsController: HeaderPrivacyIconsController,
     private val insetsProvider: StatusBarContentInsetsProvider,
     private val configurationController: ConfigurationController,
-    private val context: Context,
     private val variableDateViewControllerFactory: VariableDateViewController.Factory,
     @Named(LARGE_SCREEN_BATTERY_CONTROLLER)
     private val batteryMeterViewController: BatteryMeterViewController,
@@ -151,7 +145,6 @@ class LargeScreenShadeHeaderController @Inject constructor(
     private var cutoutRight = 0
     private var roundedCorners = 0
     private var lastInsets: WindowInsets? = null
-    private var textColorPrimary = Color.TRANSPARENT
 
     private var privacyChipVisible = false
     private var qsDisabled = false
@@ -282,10 +275,6 @@ class LargeScreenShadeHeaderController @Inject constructor(
             }
             updateResources()
         }
-
-        override fun onUiModeChanged() {
-            updateResources()
-        }
     }
 
     override fun onInit() {
@@ -364,7 +353,6 @@ class LargeScreenShadeHeaderController @Inject constructor(
 
         updateVisibility()
         updateTransition()
-        updateResources()
     }
 
     override fun onViewDetached() {
@@ -543,35 +531,6 @@ class LargeScreenShadeHeaderController @Inject constructor(
         val padding = resources.getDimensionPixelSize(R.dimen.qs_panel_padding)
         header.setPadding(padding, header.paddingTop, padding, header.paddingBottom)
         updateQQSPaddings()
-
-        val fillColor = Utils.getColorAttrDefaultColor(context, android.R.attr.textColorPrimary)
-        iconManager.setTint(fillColor)
-        val textColor = Utils.getColorAttrDefaultColor(context, android.R.attr.textColorPrimary)
-        val colorStateList = Utils.getColorAttr(context, android.R.attr.textColorPrimary)
-        if (textColor != textColorPrimary) {
-            var textColorSecondary = Utils.getColorAttrDefaultColor(context,
-                    android.R.attr.textColorSecondary)
-            textColorPrimary = textColor
-            if (iconManager != null) {
-                iconManager.setTint(textColor)
-            }
-            if (batteryIcon.getBatteryStyle() == BATTERY_STYLE_CIRCLE) {
-                textColorSecondary = reduceColorAlpha(textColor, 0.3f)
-            }
-            clock.setTextColor(textColorPrimary)
-            date.setTextColor(textColorPrimary)
-            qsCarrierGroup.updateColors(textColorPrimary, colorStateList)
-            batteryIcon.updateColors(textColorPrimary, textColorSecondary, textColorPrimary)
-            networkTraffic.setTintColor(textColorPrimary)
-        }
-    }
-
-    private fun reduceColorAlpha(color: Int, factor: Float): Int {
-        val a: Int = (Color.alpha(color) * factor).roundToInt()
-        val r: Int = Color.red(color)
-        val g: Int = Color.green(color)
-        val b: Int = Color.blue(color)
-        return Color.argb(a, r, g, b)
     }
 
     private fun updateQQSPaddings() {

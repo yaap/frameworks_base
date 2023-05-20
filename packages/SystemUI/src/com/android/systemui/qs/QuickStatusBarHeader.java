@@ -210,9 +210,6 @@ public class QuickStatusBarHeader extends FrameLayout implements
 
     void setIsSingleCarrier(boolean isSingleCarrier) {
         mIsSingleCarrier = isSingleCarrier;
-        if (mIsSingleCarrier) {
-            mIconContainer.removeIgnoredSlots(mRssiIgnoredSlots);
-        }
         updateAlphaAnimator();
     }
 
@@ -225,7 +222,7 @@ public class QuickStatusBarHeader extends FrameLayout implements
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         if (mDatePrivacyView.getMeasuredHeight() != mTopViewMeasureHeight) {
             mTopViewMeasureHeight = mDatePrivacyView.getMeasuredHeight();
-            updateAnimators();
+            post(this::updateAnimators);
         }
     }
 
@@ -345,7 +342,13 @@ public class QuickStatusBarHeader extends FrameLayout implements
                 mTintedIconManager.setTint(textColor);
             }
             if (mBatteryRemainingIcon.getBatteryStyle() == BATTERY_STYLE_CIRCLE) {
-                textColorSecondary = reduceColorAlpha(textColor, 0.3f);
+                final float factor = 0.3f;
+                textColorSecondary = Color.argb(
+                    Color.alpha(textColor),
+                    Math.round(Color.red(textColor) * factor),
+                    Math.round(Color.green(textColor) * factor),
+                    Math.round(Color.blue(textColor) * factor)
+                );
             }
             mBatteryRemainingIcon.updateColors(mTextColorPrimary, textColorSecondary,
                     mTextColorPrimary);
@@ -368,14 +371,6 @@ public class QuickStatusBarHeader extends FrameLayout implements
         updateAnimators();
 
         updateClockDatePadding();
-    }
-
-    private static int reduceColorAlpha(int color, float factor) {
-        final int a = Math.round(Color.alpha(color) * factor);
-        final int r = Color.red(color);
-        final int g = Color.green(color);
-        final int b = Color.blue(color);
-        return Color.argb(a, r, g, b);
     }
 
     private void updateClockDatePadding() {
