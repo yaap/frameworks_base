@@ -17,6 +17,7 @@
 package com.android.internal.util.yaap;
 
 import android.app.Application;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.os.Build;
 import android.util.Log;
@@ -26,6 +27,7 @@ import com.android.internal.R;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -39,12 +41,19 @@ public final class PixelPropsUtils {
     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
     private static final String PROCESS_GMS_PERSISTENT = PACKAGE_GMS + ".persistent";
 
-    private static final String build_device =
-            Resources.getSystem().getString(R.string.build_device);
-    private static final String build_fp =
-            Resources.getSystem().getString(R.string.build_fp);
-    private static final String build_model =
-            Resources.getSystem().getString(R.string.build_model);
+    private static final Resources mResources;
+    static {
+        // make sure we only use the english strings
+        Resources res = Resources.getSystem();
+        Configuration conf = res.getConfiguration();
+        conf.setLocale(Locale.ENGLISH);
+        res.updateConfiguration(conf, null);
+        mResources = res;
+    }
+
+    private static final String build_device = mResources.getString(R.string.build_device);
+    private static final String build_fp = mResources.getString(R.string.build_fp);
+    private static final String build_model = mResources.getString(R.string.build_model);
 
     private static final HashMap<String, String> marlinProps = new HashMap<>(Map.of(
         "ID", "NJH47F",
