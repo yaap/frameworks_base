@@ -17,10 +17,10 @@
 */
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <!-- Strings for PixelPropUtils -->
-    <string name="build_device"></string>
-    <string name="build_fp"></string>
-    <string name="build_model"></string>
+    <!-- Strings for PixelPropUtils DO NOT TRANSLATE! -->
+    <string name="build_device" translatable="false"></string>
+    <string name="build_fp" translatable="false"></string>
+    <string name="build_model" translatable="false"></string>
 
     <!-- Cycle through ringer modes -->
     <string name="volume_dialog_ringer_guidance_normal">Calls and notifications will ring</string>
