@@ -17,11 +17,6 @@
 */
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <!-- Strings for PixelPropUtils -->
-    <string name="build_device"></string>
-    <string name="build_fp"></string>
-    <string name="build_model"></string>
-
     <!-- Cycle through ringer modes -->
     <string name="volume_dialog_ringer_guidance_normal">Дзвінки та сповіщення дзвонитимуть</string>
 
@@ -51,8 +46,6 @@
     <string name="pocket_view_title_cancel">Щоб скористатися телефоном:</string>
     <string name="pocket_view_top_tag_cancel">Перевірте, чи область датчика вашого телефону вільна від будь-яких перешкод, і очистіть будь-який бруд або пил.</string>
     <string name="pocket_view_top_tag_cancel2">Утримуйте кнопку живлення, щоб примусово вийти з кишенькового режиму.</string>
-    <string name="pocket_view_top_tag_number1" translatable="false">1.\u0020</string>
-    <string name="pocket_view_top_tag_number2" translatable="false">2.\u0020</string>
 
     <!-- Title & summary of notification letting users know that battery saver is now on [CHAR_LIMIT=80] -->
     <string name="battery_saver_on_notification_title">Енергозбереження ввімкнено</string>
