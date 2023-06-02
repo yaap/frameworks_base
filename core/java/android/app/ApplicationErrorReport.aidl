@@ -17,5 +17,4 @@
 package android.app;
 
 /** @hide */
-parcelable ApplicationErrorReport;
 parcelable ApplicationErrorReport.ParcelableCrashInfo;

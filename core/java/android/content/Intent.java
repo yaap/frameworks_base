@@ -33,7 +33,6 @@ import android.annotation.SystemApi;
 import android.annotation.TestApi;
 import android.app.ActivityThread;
 import android.app.AppGlobals;
-import android.app.compat.gms.GmsCompat;
 import android.bluetooth.BluetoothDevice;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.pm.ActivityInfo;
@@ -9480,13 +9479,6 @@ public class Intent implements Parcelable, Cloneable {
      * @see #resolveActivityInfo
      */
     public ComponentName resolveActivity(@NonNull PackageManager pm) {
-        if (GmsCompat.isEnabled()) {
-            if (Settings.ACTION_SETTINGS_EMBED_DEEP_LINK_ACTIVITY.equals(getAction())) {
-                // LAUNCH_MULTI_PANE_SETTINGS_DEEP_LINK permission has protectionLevel="signature|preinstalled"
-                return null;
-            }
-        }
-
         if (mComponent != null) {
             return mComponent;
         }

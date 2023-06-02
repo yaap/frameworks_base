@@ -26,7 +26,6 @@ import android.app.compat.CompatChanges;
 import android.compat.annotation.ChangeId;
 import android.compat.annotation.Disabled;
 import android.compat.annotation.EnabledSince;
-import android.app.compat.gms.GmsCompat;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
@@ -428,10 +427,6 @@ public class BroadcastOptions extends ComponentOptions {
      */
     @RequiresPermission(android.Manifest.permission.START_ACTIVITIES_FROM_BACKGROUND)
     public void setBackgroundActivityStartsAllowed(boolean allowBackgroundActivityStarts) {
-        if (GmsCompat.isEnabled()) {
-            return;
-        }
-
         mAllowBackgroundActivityStarts = allowBackgroundActivityStarts;
     }
 
@@ -591,10 +586,6 @@ public class BroadcastOptions extends ComponentOptions {
     @SystemApi
     @RequiresPermission(android.Manifest.permission.ACCESS_BROADCAST_RESPONSE_STATS)
     public void recordResponseEventWhileInBackground(@IntRange(from = 0) long id) {
-        if (GmsCompat.isEnabled()) {
-            return;
-        }
-
         mIdForResponseEvent = id;
     }
 
