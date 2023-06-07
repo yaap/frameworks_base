@@ -32,6 +32,7 @@ import static android.provider.settings.validators.SettingsValidators.NULLABLE_C
 import static android.provider.settings.validators.SettingsValidators.PACKAGE_NAME_VALIDATOR;
 import static android.provider.settings.validators.SettingsValidators.PERCENTAGE_INTEGER_VALIDATOR;
 import static android.provider.settings.validators.SettingsValidators.TILE_LIST_VALIDATOR;
+import static android.provider.settings.validators.SettingsValidators.TIME_RANGE_VALIDATOR;
 import static android.provider.settings.validators.SettingsValidators.TTS_LIST_VALIDATOR;
 
 import android.provider.Settings.Secure;
@@ -162,6 +163,11 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.STATUS_BAR_SHOW_VIBRATE_ICON, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.DOZE_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.DOZE_ALWAYS_ON, BOOLEAN_VALIDATOR);
+<<<<<<< HEAD
+=======
+        VALIDATORS.put(Secure.DOZE_ALWAYS_ON_AUTO_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2", "3", "4"}));
+        VALIDATORS.put(Secure.DOZE_ALWAYS_ON_AUTO_TIME, TIME_RANGE_VALIDATOR);
+>>>>>>> 8a894fd8d4c9 (base: services: Introduce AutoDimService [1/2])
         VALIDATORS.put(Secure.DOZE_PICK_UP_GESTURE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.DOZE_DOUBLE_TAP_GESTURE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.DOZE_TAP_SCREEN_GESTURE, BOOLEAN_VALIDATOR);
@@ -383,5 +389,7 @@ public class SecureSettingsValidators {
                 new DiscreteValueValidator(new String[] {"0", "1", "2"}));
         VALIDATORS.put(Secure.ACCESSIBILITY_FONT_SCALING_HAS_BEEN_CHANGED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.NFC_SOUNDS, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.EXTRA_DIM_AUTO_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2", "3", "4"}));
+        VALIDATORS.put(Secure.EXTRA_DIM_AUTO_TIME, TIME_RANGE_VALIDATOR);
     }
 }
