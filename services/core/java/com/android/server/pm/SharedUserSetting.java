@@ -175,8 +175,6 @@ public final class SharedUserSetting extends SettingBase implements SharedUserAp
     }
 
     boolean removePackage(PackageSetting packageSetting) {
-        clearGosPackageStateCachedDerivedFlags();
-
         if (!mPackages.remove(packageSetting)) {
             return false;
         }
@@ -212,9 +210,6 @@ public final class SharedUserSetting extends SettingBase implements SharedUserAp
         if (mPackages.add(packageSetting)) {
             setFlags(this.getFlags() | packageSetting.getFlags());
             setPrivateFlags(this.getPrivateFlags() | packageSetting.getPrivateFlags());
-
-            clearGosPackageStateCachedDerivedFlags();
-
             onChanged();
         }
         if (packageSetting.getPkg() != null) {
@@ -415,12 +410,5 @@ public final class SharedUserSetting extends SettingBase implements SharedUserAp
     @Override
     public LegacyPermissionState getSharedUserLegacyPermissionState() {
         return super.getLegacyPermissionState();
-    }
-
-    // to recalculate derived flags when sharedUid members are added/removed
-    private void clearGosPackageStateCachedDerivedFlags() {
-        for (AndroidPackage pkg : getPackages()) {
-            pkg.setGosPackageStateCachedDerivedFlags(0);
-        }
     }
 }

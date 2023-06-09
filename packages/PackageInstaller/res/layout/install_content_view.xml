@@ -77,16 +77,6 @@
         android:orientation="vertical"
         android:visibility="invisible">
 
-        <CheckBox
-            android:id="@+id/install_allow_INTERNET_permission"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            style="@android:style/TextAppearance.Material.Subhead"
-            android:text="@string/allow_network_permission_checkbox"
-            android:checked="true"
-            android:visibility="gone" />
-
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

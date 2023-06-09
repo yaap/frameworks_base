@@ -352,7 +352,4 @@ public interface AndroidPackageApi {
     boolean isCoreApp();
 
     boolean isStub();
-
-    int getGosPackageStateCachedDerivedFlags();
-    void setGosPackageStateCachedDerivedFlags(int value);
 }

@@ -4916,9 +4916,4 @@
   <java-symbol type="id" name="language_picker_header" />
 
   <java-symbol type="dimen" name="status_bar_height_default" />
-
-  <java-symbol type="string" name="notification_action_dont_show_again" />
-  <java-symbol type="string" name="notification_channel_missing_permission" />
-  <java-symbol type="string" name="missing_sensors_permission_title" />
-  <java-symbol type="string" name="missing_sensors_permission_message" />
 </resources>

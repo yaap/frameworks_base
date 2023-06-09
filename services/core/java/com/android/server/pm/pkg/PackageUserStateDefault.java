@@ -139,12 +139,6 @@ class PackageUserStateDefault implements PackageUserStateInternal {
         return 0;
     }
 
-    @Nullable
-    @Override
-    public GosPackageStatePm getGosPackageState() {
-        return null;
-    }
-
     @Override
     public boolean isComponentEnabled(String componentName) {
         return false;

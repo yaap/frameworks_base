@@ -803,12 +803,4 @@ interface IPackageManager {
     void setKeepUninstalledPackages(in List<String> packageList);
 
     boolean canPackageQuery(String sourcePackageName, String targetPackageName, int userId);
-
-    void skipSpecialRuntimePermissionAutoGrantsForPackage(String packageName, int userId, in List<String> permissions);
-
-    android.content.pm.GosPackageState getGosPackageState(String packageName, int userId);
-
-    boolean setGosPackageState(String packageName, int userId, in android.content.pm.GosPackageState updatedPs, int editorFlags);
-
-    @nullable Bundle getExtraAppBindArgs(String packageName);
 }

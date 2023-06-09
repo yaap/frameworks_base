@@ -76,7 +76,6 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.ComponentInfo;
-import android.content.pm.GosPackageState;
 import android.content.pm.IPackageManager;
 import android.content.pm.InstrumentationInfo;
 import android.content.pm.PackageInfo;
@@ -1922,12 +1921,6 @@ public final class ActivityThread extends ClientTransactionHandler
             args.arg5 = viewIds;
             args.arg6 = uiTranslationSpec;
             sendMessage(H.UPDATE_UI_TRANSLATION_STATE, args);
-        }
-
-        @Override
-        public void onGosPackageStateChanged(@Nullable GosPackageState state) {
-            // this is a oneway method, caller (ActivityManager) will not be blocked
-            ActivityThreadHooks.onGosPackageStateChanged(mInitialApplication, state, false);
         }
     }
 
@@ -6688,7 +6681,6 @@ public final class ActivityThread extends ClientTransactionHandler
 
         final ContextImpl appContext = ContextImpl.createAppContext(this, data.info);
         mConfigurationController.updateLocaleListFromAppContext(appContext);
-        final Bundle extraAppBindArgs = ActivityThreadHooks.onBind(appContext);
 
         // Initialize the default http proxy in this process.
         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "Setup proxies");
@@ -6755,10 +6747,6 @@ public final class ActivityThread extends ClientTransactionHandler
             // Small heap, clamp to the current growth limit and let the heap release
             // pages after the growth limit to the non growth limit capacity. b/18387825
             dalvik.system.VMRuntime.getRuntime().clampGrowthLimit();
-        }
-
-        if (extraAppBindArgs != null) {
-            ActivityThreadHooks.onBind2(appContext, extraAppBindArgs);
         }
 
         // Allow disk access during application and provider setup. This could
