@@ -2221,8 +2221,6 @@ public class ParsingPackageUtils {
 
         pkg.setHasDomainUrls(hasDomainURLs(pkg));
 
-        pkg.addUsesPermission(new ParsedUsesPermissionImpl(android.Manifest.permission.OTHER_SENSORS, 0));
-
         return input.success(pkg);
     }
 
