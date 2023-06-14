@@ -275,7 +275,6 @@ public class EdgeBackGestureHandler implements PluginListener<NavigationEdgeBack
                 @Override
                 public void triggerBack() {
                     // Notify FalsingManager that an intentional gesture has occurred.
-                    // TODO(b/186519446): use a different method than isFalseTouch
                     mFalsingManager.isFalseTouch(BACK_GESTURE);
                     // Only inject back keycodes when ahead-of-time back dispatching is disabled.
                     if (mBackAnimation == null) {
@@ -471,7 +470,7 @@ public class EdgeBackGestureHandler implements PluginListener<NavigationEdgeBack
     }
 
     /**
-     * @see NavigationBarView#onAttachedToWindow()
+     * Called when the nav/task bar is attached.
      */
     public void onNavBarAttached() {
         mIsAttached = true;
@@ -483,7 +482,7 @@ public class EdgeBackGestureHandler implements PluginListener<NavigationEdgeBack
     }
 
     /**
-     * @see NavigationBarView#onDetachedFromWindow()
+     * Called when the nav/task bar is detached.
      */
     public void onNavBarDetached() {
         mIsAttached = false;
@@ -523,6 +522,15 @@ public class EdgeBackGestureHandler implements PluginListener<NavigationEdgeBack
     }
 
     private void updateIsEnabled() {
+        try {
+            Trace.beginSection("EdgeBackGestureHandler#updateIsEnabled");
+            updateIsEnabledTraced();
+        } finally {
+            Trace.endSection();
+        }
+    }
+
+    private void updateIsEnabledTraced() {
         boolean isEnabled = mIsAttached && mIsGesturalModeEnabled;
         if (isEnabled == mIsEnabled) {
             return;
@@ -608,13 +616,18 @@ public class EdgeBackGestureHandler implements PluginListener<NavigationEdgeBack
     }
 
     private void setEdgeBackPlugin(NavigationEdgeBackPlugin edgeBackPlugin) {
-        if (mEdgeBackPlugin != null) {
-            mEdgeBackPlugin.onDestroy();
+        try {
+            Trace.beginSection("setEdgeBackPlugin");
+            if (mEdgeBackPlugin != null) {
+                mEdgeBackPlugin.onDestroy();
+            }
+            mEdgeBackPlugin = edgeBackPlugin;
+            mEdgeBackPlugin.setBackCallback(mBackCallback);
+            mEdgeBackPlugin.setLayoutParams(createLayoutParams());
+            updateDisplaySize();
+        } finally {
+            Trace.endSection();
         }
-        mEdgeBackPlugin = edgeBackPlugin;
-        mEdgeBackPlugin.setBackCallback(mBackCallback);
-        mEdgeBackPlugin.setLayoutParams(createLayoutParams());
-        updateDisplaySize();
     }
 
     public boolean isHandlingGestures() {
@@ -945,6 +958,10 @@ public class EdgeBackGestureHandler implements PluginListener<NavigationEdgeBack
                             mThresholdCrossed = true;
                             // Capture inputs
                             mInputMonitor.pilferPointers();
+                            if (mBackAnimation != null) {
+                                // Notify FalsingManager that an intentional gesture has occurred.
+                                mFalsingManager.isFalseTouch(BACK_GESTURE);
+                            }
                             mInputEventReceiver.setBatchingEnabled(true);
                         } else {
                             logGesture(SysUiStatsLog.BACK_GESTURE__TYPE__INCOMPLETE_FAR_FROM_EDGE);

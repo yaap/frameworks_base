@@ -76,6 +76,7 @@ public class KeyguardIndicationTextView extends TextView {
         if (mLastAnimator != null) {
             mLastAnimator.cancel();
         }
+        mMessage = "";
         setText("");
     }
 
@@ -171,6 +172,13 @@ public class KeyguardIndicationTextView extends TextView {
                 mLastAnimator = null;
             }
         }
+    }
+
+    /**
+     * Get the message that should be shown after the previous text animates out.
+     */
+    public CharSequence getMessage() {
+        return mMessage;
     }
 
     private AnimatorSet getOutAnimator() {

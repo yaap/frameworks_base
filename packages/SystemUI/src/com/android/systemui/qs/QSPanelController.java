@@ -17,7 +17,6 @@
 package com.android.systemui.qs;
 
 import static com.android.systemui.classifier.Classifier.QS_SWIPE_SIDE;
-import static com.android.systemui.flags.Flags.COMBINED_QS_HEADERS;
 import static com.android.systemui.media.dagger.MediaModule.QS_PANEL;
 import static com.android.systemui.qs.dagger.QSFragmentModule.QS_USING_MEDIA_PLAYER;
 
@@ -27,7 +26,6 @@ import android.view.View;
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.UiEventLogger;
 import com.android.systemui.dump.DumpManager;
-import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.media.controls.ui.MediaHierarchyManager;
 import com.android.systemui.media.controls.ui.MediaHost;
 import com.android.systemui.media.controls.ui.MediaHostState;
@@ -71,7 +69,7 @@ public class QSPanelController extends QSPanelControllerBase<QSPanel> {
 
     @Inject
     QSPanelController(QSPanel view,
-            QSTileHost qstileHost, QSCustomizerController qsCustomizerController,
+            QSHost qsHost, QSCustomizerController qsCustomizerController,
             @Named(QS_USING_MEDIA_PLAYER) boolean usingMediaPlayer,
             @Named(QS_PANEL) MediaHost mediaHost,
             QSTileRevealController.Factory qsTileRevealControllerFactory,
@@ -79,9 +77,8 @@ public class QSPanelController extends QSPanelControllerBase<QSPanel> {
             QSLogger qsLogger, BrightnessController.Factory brightnessControllerFactory,
             BrightnessSliderController.Factory brightnessSliderFactory,
             FalsingManager falsingManager,
-            StatusBarKeyguardViewManager statusBarKeyguardViewManager,
-            FeatureFlags featureFlags) {
-        super(view, qstileHost, qsCustomizerController, usingMediaPlayer, mediaHost,
+            StatusBarKeyguardViewManager statusBarKeyguardViewManager) {
+        super(view, qsHost, qsCustomizerController, usingMediaPlayer, mediaHost,
                 metricsLogger, uiEventLogger, qsLogger, dumpManager);
         mQsCustomizerController = qsCustomizerController;
         mQsTileRevealControllerFactory = qsTileRevealControllerFactory;
@@ -94,7 +91,6 @@ public class QSPanelController extends QSPanelControllerBase<QSPanel> {
                 mBrightnessSliderController.getIconView(), mBrightnessSliderController);
         mBrightnessMirrorHandler = new BrightnessMirrorHandler(mBrightnessController);
         mStatusBarKeyguardViewManager = statusBarKeyguardViewManager;
-        mView.setUsingCombinedHeaders(featureFlags.isEnabled(COMBINED_QS_HEADERS));
     }
 
     @Override
@@ -150,9 +146,10 @@ public class QSPanelController extends QSPanelControllerBase<QSPanel> {
     }
 
     @Override
-    protected void onSplitShadeChanged() {
+    protected void onSplitShadeChanged(boolean shouldUseSplitNotificationShade) {
         ((PagedTileLayout) mView.getOrCreateTileLayout())
                 .forceTilesRedistribution("Split shade state changed");
+        mView.setCanCollapse(!shouldUseSplitNotificationShade);
     }
 
     private void updateBrightnessMirror() {
@@ -183,12 +180,6 @@ public class QSPanelController extends QSPanelControllerBase<QSPanel> {
         mBrightnessMirrorController = brightnessMirrorController;
         mBrightnessMirrorHandler.setController(brightnessMirrorController);
     }
-
-    /** Get the QSTileHost this panel uses. */
-    public QSTileHost getHost() {
-        return mHost;
-    }
-
 
     /** Update appearance of QSPanel. */
     public void updateResources() {

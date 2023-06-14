@@ -429,7 +429,6 @@ public class UpdateEngine {
     }
 
     /**
-<<<<<<< HEAD
      * Sets the A/B slot switch for the next boot after applying an ota update. If
      * {@link #applyPayload} hasn't switched the slot, the updater APP can call
      * this API to switch the slot and apply the update on next boot.

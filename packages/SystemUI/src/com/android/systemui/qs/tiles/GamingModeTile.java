@@ -63,6 +63,9 @@ import javax.inject.Inject;
 
 /** Quick settings tile: Gaming Mode tile **/
 public class GamingModeTile extends QSTileImpl<BooleanState> {
+
+    public static final String TILE_SPEC = "gaming";
+
     private static final int NOTIFICATION_ID = 10000;
     private static final String CHANNEL_ID = "gaming_mode";
     private static final Intent SETTINGS_INTENT = new Intent("com.android.settings.GAMING_MODE_SETTINGS");

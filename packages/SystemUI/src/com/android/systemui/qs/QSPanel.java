@@ -29,7 +29,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.ArrayMap;
@@ -90,7 +89,6 @@ public class QSPanel extends LinearLayout {
     protected boolean mExpanded;
     protected boolean mListening;
 
-    @Nullable protected QSTileHost mHost;
     private final List<OnConfigurationChangedListener> mOnConfigurationChangedListeners =
             new ArrayList<>();
 
@@ -115,8 +113,12 @@ public class QSPanel extends LinearLayout {
     private final Rect mClippingRect = new Rect();
     private ViewGroup mMediaHostView;
     private boolean mShouldMoveMediaOnExpansion = true;
-    private boolean mUsingCombinedHeaders = false;
     private QSLogger mQsLogger;
+    /**
+     * Specifies if we can collapse to QQS in current state. In split shade that should be always
+     * false. It influences available accessibility actions.
+     */
+    private boolean mCanCollapse = true;
 
     private final CustomSettingsObserver mCustomSettingsObserver = new CustomSettingsObserver();
     private class CustomSettingsObserver extends ContentObserver {
@@ -223,10 +225,6 @@ public class QSPanel extends LinearLayout {
             lp = new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1);
             addView(mHorizontalLinearLayout, lp);
         }
-    }
-
-    void setUsingCombinedHeaders(boolean usingCombinedHeaders) {
-        mUsingCombinedHeaders = usingCombinedHeaders;
     }
 
     protected void setHorizontalContentContainerClipping() {
@@ -445,11 +443,6 @@ public class QSPanel extends LinearLayout {
         }
     }
 
-    @Nullable
-    public QSTileHost getHost() {
-        return mHost;
-    }
-
     public void updateResources() {
         updatePadding();
 
@@ -463,9 +456,7 @@ public class QSPanel extends LinearLayout {
 
     protected void updatePadding() {
         final Resources res = mContext.getResources();
-        int paddingTop = res.getDimensionPixelSize(
-                mUsingCombinedHeaders ? R.dimen.qs_panel_padding_top_combined_headers
-                        : R.dimen.qs_panel_padding_top);
+        int paddingTop = res.getDimensionPixelSize(R.dimen.qs_panel_padding_top);
         int paddingBottom = res.getDimensionPixelSize(R.dimen.qs_panel_padding_bottom);
         setPaddingRelative(getPaddingStart(),
                 paddingTop,
@@ -756,7 +747,9 @@ public class QSPanel extends LinearLayout {
     @Override
     public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
         super.onInitializeAccessibilityNodeInfo(info);
-        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_COLLAPSE);
+        if (mCanCollapse) {
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_COLLAPSE);
+        }
     }
 
     @Override
@@ -775,15 +768,11 @@ public class QSPanel extends LinearLayout {
         mCollapseExpandAction = action;
     }
 
-    private class H extends Handler {
-        private static final int ANNOUNCE_FOR_ACCESSIBILITY = 1;
-
-        @Override
-        public void handleMessage(Message msg) {
-            if (msg.what == ANNOUNCE_FOR_ACCESSIBILITY) {
-                announceForAccessibility((CharSequence) msg.obj);
-            }
-        }
+    /**
+     * Specifies if these expanded QS can collapse to QQS.
+     */
+    public void setCanCollapse(boolean canCollapse) {
+        mCanCollapse = canCollapse;
     }
 
     public interface QSTileLayout {

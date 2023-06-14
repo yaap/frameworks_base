@@ -113,6 +113,7 @@ public class DozeTriggers implements DozeMachine.Part {
     private boolean mWantProxSensor;
     private boolean mWantTouchScreenSensors;
     private boolean mWantSensors;
+    private boolean mInAod;
 
     private final UserTracker.Callback mUserChangedCallback =
             new UserTracker.Callback() {
@@ -292,8 +293,7 @@ public class DozeTriggers implements DozeMachine.Part {
     }
 
     @VisibleForTesting
-    void onSensor(int pulseReason, boolean sensorPerformedProxCheck,
-            float screenX, float screenY, float[] rawValues) {
+    void onSensor(int pulseReason, float screenX, float screenY, float[] rawValues) {
         boolean isDoubleTap = pulseReason == DozeLog.REASON_SENSOR_DOUBLE_TAP;
         boolean isTap = pulseReason == DozeLog.REASON_SENSOR_TAP;
         boolean isPickup = pulseReason == DozeLog.REASON_SENSOR_PICKUP;
@@ -310,11 +310,11 @@ public class DozeTriggers implements DozeMachine.Part {
                     mMachine.isExecutingTransition() ? null : mMachine.getState(),
                     pulseReason);
         } else if (isLongPress) {
-            requestPulse(pulseReason, sensorPerformedProxCheck /* alreadyPerformedProxCheck */,
+            requestPulse(pulseReason, true /* alreadyPerformedProxCheck */,
                     null /* onPulseSuppressedListener */);
         } else if (isWakeOnReach || isQuickPickup) {
             if (isWakeDisplayEvent) {
-                requestPulse(pulseReason, sensorPerformedProxCheck /* alreadyPerformedProxCheck */,
+                requestPulse(pulseReason, true /* alreadyPerformedProxCheck */,
                         null /* onPulseSuppressedListener */);
             }
         } else {
@@ -352,7 +352,7 @@ public class DozeTriggers implements DozeMachine.Part {
                 } else {
                     mDozeHost.extendPulse(pulseReason);
                 }
-            }, sensorPerformedProxCheck /* alreadyPerformedProxCheck */, pulseReason);
+            }, true /* alreadyPerformedProxCheck */, pulseReason);
         }
 
         if (isPickup && !shouldDropPickupEvent()) {
@@ -479,12 +479,19 @@ public class DozeTriggers implements DozeMachine.Part {
                 mDozeSensors.requestTemporaryDisable();
                 break;
             case DOZE:
-            case DOZE_AOD:
                 mAodInterruptRunnable = null;
-                mWantProxSensor = newState != DozeMachine.State.DOZE;
+                mWantProxSensor = false;
                 mWantSensors = true;
                 mWantTouchScreenSensors = true;
-                if (newState == DozeMachine.State.DOZE_AOD && !sWakeDisplaySensorState) {
+                mInAod = false;
+                break;
+            case DOZE_AOD:
+                mAodInterruptRunnable = null;
+                mWantProxSensor = true;
+                mWantSensors = true;
+                mWantTouchScreenSensors = true;
+                mInAod = true;
+                if (!sWakeDisplaySensorState) {
                     onWakeScreen(false, newState, DozeLog.REASON_SENSOR_WAKE_UP_PRESENCE);
                 }
                 break;
@@ -510,7 +517,7 @@ public class DozeTriggers implements DozeMachine.Part {
                 break;
             default:
         }
-        mDozeSensors.setListening(mWantSensors, mWantTouchScreenSensors);
+        mDozeSensors.setListening(mWantSensors, mWantTouchScreenSensors, mInAod);
     }
 
     private void registerCallbacks() {
@@ -529,11 +536,12 @@ public class DozeTriggers implements DozeMachine.Part {
 
     private void stopListeningToAllTriggers() {
         unregisterCallbacks();
-        mDozeSensors.setListening(false, false);
+        mDozeSensors.setListening(false, false, false);
         mDozeSensors.setProxListening(false);
         mWantSensors = false;
         mWantProxSensor = false;
         mWantTouchScreenSensors = false;
+        mInAod = false;
     }
 
     @Override
@@ -542,7 +550,8 @@ public class DozeTriggers implements DozeMachine.Part {
         final boolean lowPowerStateOrOff = state == Display.STATE_DOZE
                 || state == Display.STATE_DOZE_SUSPEND || state == Display.STATE_OFF;
         mDozeSensors.setProxListening(mWantProxSensor && lowPowerStateOrOff);
-        mDozeSensors.setListening(mWantSensors, mWantTouchScreenSensors, lowPowerStateOrOff);
+        mDozeSensors.setListeningWithPowerState(mWantSensors, mWantTouchScreenSensors,
+                mInAod, lowPowerStateOrOff);
 
         if (mAodInterruptRunnable != null && state == Display.STATE_ON) {
             mAodInterruptRunnable.run();

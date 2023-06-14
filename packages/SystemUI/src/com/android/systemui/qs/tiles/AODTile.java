@@ -52,6 +52,8 @@ public class AODTile extends QSTileImpl<State> {
     private boolean mListening;
     private final Icon mIcon = ResourceIcon.get(R.drawable.ic_qs_aod);
 
+    public static final String TILE_SPEC = "aod";
+
     @Inject
     public AODTile(QSHost host,
             @Background Looper backgroundLooper,

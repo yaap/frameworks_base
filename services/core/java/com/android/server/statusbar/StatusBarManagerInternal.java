@@ -192,5 +192,13 @@ public interface StatusBarManagerInternal {
      */
     void enterStageSplitFromRunningApp(boolean leftOrTop);
 
+    /**
+     * Shows the media output switcher dialog.
+     *
+     * @param packageName of the session for which the output switcher is shown.
+     * @see com.android.internal.statusbar.IStatusBar#showMediaOutputSwitcher
+     */
+    void showMediaOutputSwitcher(String packageName);
+
     void toggleCameraFlash();
 }

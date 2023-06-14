@@ -51,6 +51,8 @@ import javax.inject.Inject;
 /** Quick settings tile: Heads up **/
 public class HeadsUpTile extends QSTileImpl<BooleanState> {
 
+    public static final String TILE_SPEC = "heads_up";
+
     private final CustomObserver mObserver = new CustomObserver();
 
     @Inject

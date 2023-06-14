@@ -43,6 +43,7 @@ import com.android.systemui.Dependency;
 import com.android.systemui.R;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
+import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.settings.UserTracker;
 
 import java.util.List;
@@ -56,6 +57,7 @@ public class BrightnessDialog extends Activity {
     private BrightnessController mBrightnessController;
     private final BrightnessSliderController.Factory mToggleSliderFactory;
     private final UserTracker mUserTracker;
+    private final DisplayTracker mDisplayTracker;
     private final Executor mMainExecutor;
     private final Handler mBackgroundHandler;
 
@@ -89,10 +91,12 @@ public class BrightnessDialog extends Activity {
     @Inject
     public BrightnessDialog(
             UserTracker userTracker,
+            DisplayTracker displayTracker,
             BrightnessSliderController.Factory factory,
             @Main Executor mainExecutor,
             @Background Handler bgHandler) {
         mUserTracker = userTracker;
+        mDisplayTracker = displayTracker;
         mToggleSliderFactory = factory;
         mMainExecutor = mainExecutor;
         mBackgroundHandler = bgHandler;
@@ -143,7 +147,7 @@ public class BrightnessDialog extends Activity {
                 Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON, 1) == 1;
         mAutoBrightnessIcon.setVisibility(show ? View.VISIBLE : View.GONE);
         mBrightnessController = new BrightnessController(this, mAutoBrightnessIcon,
-                controller, mUserTracker, mMainExecutor, mBackgroundHandler);
+                controller, mUserTracker, mDisplayTracker, mMainExecutor, mBackgroundHandler);
     }
 
     @Override

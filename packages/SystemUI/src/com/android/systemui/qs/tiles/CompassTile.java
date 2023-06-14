@@ -51,6 +51,9 @@ import com.android.systemui.statusbar.policy.KeyguardStateController;
 import javax.inject.Inject;
 
 public class CompassTile extends QSTileImpl<BooleanState> implements SensorEventListener {
+
+    public static final String TILE_SPEC = "compass";
+
     private final static float ALPHA = 0.97f;
 
     private boolean mActive = false;

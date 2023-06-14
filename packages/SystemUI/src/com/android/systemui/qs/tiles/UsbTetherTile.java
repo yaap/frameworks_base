@@ -56,6 +56,8 @@ import static android.net.TetheringManager.TETHERING_USB;
  */
 public class UsbTetherTile extends QSTileImpl<BooleanState> {
 
+    public static final String TILE_SPEC = "usb_tether";
+
     private final Icon mIcon = ResourceIcon.get(R.drawable.ic_qs_usb_tether);
 
     private static final String TAG = "UsbTetherTile";
