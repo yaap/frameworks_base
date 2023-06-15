@@ -371,16 +371,33 @@ public class DozeTriggers implements DozeMachine.Part {
     private boolean dozeInsteadOfWake(@DozeLog.Reason int reason) {
         switch (reason) {
             case DozeLog.REASON_SENSOR_PICKUP:
-                return mConfig.pickupGestureAmbient(UserHandle.USER_CURRENT);
+                return mConfig.pickupGestureAmbient(mUserTracker.getUserId());
             case DozeLog.REASON_SENSOR_DOUBLE_TAP:
-                return mConfig.doubleTapGestureAmbient(UserHandle.USER_CURRENT);
+                return mConfig.doubleTapGestureAmbient(mUserTracker.getUserId());
             case DozeLog.REASON_SENSOR_TAP:
-                return mConfig.tapGestureAmbient(UserHandle.USER_CURRENT);
+                return mConfig.tapGestureAmbient(mUserTracker.getUserId());
+        }
+        return false;
+    }
+
+    private boolean dropForAmbient(@DozeLog.Reason int reason) {
+        final DozeMachine.State state = mMachine.getState();
+        if (!state.isAlwaysOn() && state != DozeMachine.State.DOZE_PULSING &&
+                state != DozeMachine.State.DOZE_PULSING_BRIGHT)
+            return false;
+        switch (reason) {
+            case DozeLog.REASON_SENSOR_PICKUP:
+                return !mConfig.pickupGestureOnAmbient(mUserTracker.getUserId());
+            case DozeLog.REASON_SENSOR_DOUBLE_TAP:
+                return !mConfig.doubleTapGestureOnAmbient(mUserTracker.getUserId());
+            case DozeLog.REASON_SENSOR_TAP:
+                return !mConfig.tapGestureOnAmbient(mUserTracker.getUserId());
         }
         return false;
     }
 
     private void gentleWakeUp(@DozeLog.Reason int reason) {
+        if (dropForAmbient(reason)) return;
         if (dozeInsteadOfWake(reason)) {
             requestPulse(reason, true, null);
             return;
