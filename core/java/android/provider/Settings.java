@@ -12261,6 +12261,24 @@ public final class Settings {
         public static final String DOZE_PICK_UP_GESTURE_AMBIENT = "doze_pick_up_gesture_ambient";
 
         /**
+         * Whether to allow the dt2w gesture on ambient
+         * @hide
+         */
+        public static final String DOZE_DOUBLE_TAP_GESTURE_ALLOW_AMBIENT = "doze_double_tap_gesture_allow_ambient";
+
+        /**
+         * Whether to allow the tap gesture on ambient
+         * @hide
+         */
+        public static final String DOZE_TAP_GESTURE_ALLOW_AMBIENT = "doze_tap_gesture_allow_ambient";
+
+        /**
+         * Whether to allow the pickup gesture on ambient
+         * @hide
+         */
+        public static final String DOZE_PICK_UP_GESTURE_ALLOW_AMBIENT = "doze_pick_up_gesture_allow_ambient";
+
+        /**
          * These entries are considered common between the personal and the managed profile,
          * since the managed profile doesn't get to change them.
          */
