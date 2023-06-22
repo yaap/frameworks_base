@@ -5640,6 +5640,13 @@ public final class Settings {
         public static final String GAMING_MODE_BATTERY_SCHEDULE = "gaming_mode_battery_schedule";
 
         /**
+         * Whether to enable bluetooth when gaming mode is on
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_BLUETOOTH = "gaming_mode_bluetooth";
+
+        /**
          * Whether gaming mode toggles auto brightness
          * @hide
          */
