@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 FireHound
- *               2022 Yet Another AOSP Project
+ *               2022-2023 Yet Another AOSP Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ import com.android.systemui.qs.tileimpl.QSTileImpl;
 import com.android.systemui.R;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
 import com.android.systemui.statusbar.policy.BatteryController;
+import com.android.systemui.statusbar.policy.BluetoothController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 
 import java.util.ArrayList;
@@ -80,6 +81,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private static final String KEY_BATTERY_SAVER = "gaming_mode_battery_saver";
     private static final String KEY_BATTERY_SAVER_MODE = "gaming_mode_battery_saver_mode";
     private static final String KEY_BATTERY_SAVER_LEVEL = "gaming_mode_battery_saver_level";
+    private static final String KEY_BLUETOOTH = "gaming_mode_bluetooth";
     private static final String KEY_BRIGHTNESS_STATE = "gaming_mode_state_brightness";
     private static final String KEY_BRIGHTNESS_LEVEL = "gaming_mode_level_brightness";
     private static final String KEY_MEDIA_LEVEL = "gaming_mode_level_media";
@@ -95,6 +97,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private final BatteryController mBatteryController;
     private final DisplayManager mDisplayManager;
     private final ColorDisplayManager mColorManager;
+    private final BluetoothController mBluetoothController;
     // private final boolean mHasHWKeys;
     private boolean mShutdownRegistered;
     private boolean mScreenRegistered;
@@ -106,6 +109,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     // private boolean mHwKeysEnabled;
     private boolean mNightLightEnabled;
     private boolean mBatterySaverEnabled;
+    private boolean mBluetoothEnabled;
     private boolean mBrightnessEnabled;
     private boolean mMediaEnabled;
     private boolean mScreenOffEnabled;
@@ -126,7 +130,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             BroadcastDispatcher broadcastDispatcher,
             KeyguardStateController keyguardStateController,
             ColorDisplayManager colorManager,
-            BatteryController batteryController
+            BatteryController batteryController,
+            BluetoothController bluetoothController
     ) {
         super(host, backgroundLooper, mainHandler, falsingManager, metricsLogger,
                 statusBarStateController, activityStarter, qsLogger);
@@ -136,6 +141,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         mDisplayManager = (DisplayManager) mContext.getSystemService(DisplayManager.class);
         mColorManager = colorManager;
         mBatteryController = batteryController;
+        mBluetoothController = bluetoothController;
 
         // find out if a physical navbar is present
         // Configuration c = mContext.getResources().getConfiguration();
@@ -230,6 +236,11 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                         Settings.Global.AUTOMATIC_POWER_SAVE_MODE,
                         PowerManager.POWER_SAVE_MODE_TRIGGER_PERCENTAGE);
                 enabledStrings.add(mContext.getString(R.string.gaming_mode_battery_saver));
+            }
+
+            if (mBluetoothEnabled) {
+                mBluetoothController.setBluetoothEnabled(true);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_bluetooth));
             }
 
             if (mBrightnessEnabled) {
@@ -344,6 +355,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 Settings.System.GAMING_MODE_NIGHT_LIGHT, 0) == 1;
         mBatterySaverEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_BATTERY_SCHEDULE, 0) == 1;
+        mBluetoothEnabled = Settings.System.getInt(mResolver,
+                Settings.System.GAMING_MODE_BLUETOOTH, 0) == 1;
         mBrightnessEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_BRIGHTNESS_ENABLED, 0) == 1;
         mBrightnessLevel = Settings.System.getInt(mResolver,
@@ -376,6 +389,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 PowerManager.POWER_SAVE_MODE_TRIGGER_PERCENTAGE));
         Prefs.putInt(mContext, KEY_BATTERY_SAVER_LEVEL, Settings.Global.getInt(mResolver,
                 Settings.Global.LOW_POWER_MODE_TRIGGER_LEVEL, 0));
+        Prefs.putInt(mContext, KEY_BLUETOOTH, mBluetoothController.isBluetoothEnabled() ? 1 : 0);
         Prefs.putInt(mContext, KEY_BRIGHTNESS_STATE, Settings.System.getInt(mResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC));
@@ -436,6 +450,11 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                     Settings.Global.AUTOMATIC_POWER_SAVE_MODE, prevMode);
             mBatteryController.setPowerSaveMode(
                     Prefs.getInt(mContext, KEY_BATTERY_SAVER, 0) == 1);
+        }
+
+        if (mBluetoothEnabled) {
+            mBluetoothController.setBluetoothEnabled(
+                Prefs.getInt(mContext, KEY_BLUETOOTH, 0) == 1);
         }
 
         if (mBrightnessEnabled) {
