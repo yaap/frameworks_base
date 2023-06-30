@@ -21,6 +21,7 @@ import android.database.ContentObserver
 import android.graphics.PorterDuff
 import android.graphics.drawable.AnimatedStateListDrawable
 import android.graphics.drawable.StateListDrawable
+import android.net.Uri
 import android.os.UserHandle
 import android.provider.Settings
 import android.view.MotionEvent
@@ -163,7 +164,19 @@ fun BrightnessSlider(
                     cr, Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
                     1, UserHandle.USER_CURRENT) != 0
             } catch (_: Throwable) {
-                false
+                true
+            }
+        )
+    }
+
+    var hapticsEnabled by remember {
+        mutableStateOf(
+            try {
+                Settings.System.getIntForUser(
+                    cr, Settings.System.BRIGHTNESS_SLIDER_HAPTICS,
+                    1, UserHandle.USER_CURRENT) != 0
+            } catch (_: Throwable) {
+                true
             }
         )
     }
@@ -239,26 +252,40 @@ fun BrightnessSlider(
         com.android.internal.R.bool.config_automatic_brightness_available
     )
 
+    val showIconUri = Settings.Secure.getUriFor(Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON)
+
+    val enableHapticsUri = Settings.System.getUriFor(Settings.System.BRIGHTNESS_SLIDER_HAPTICS)
+
     DisposableEffect(Unit) {
         val observer = object : ContentObserver(null) {
-            override fun onChange(selfChange: Boolean) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
                 context.mainExecutor.execute {
-                    showAutoBrightness =
-                        try {
-                            Settings.Secure.getIntForUser(
-                                cr, Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
-                                1, UserHandle.USER_CURRENT) != 0
-                        } catch (_: Throwable) {
-                            false
-                        }
+                    if (showIconUri.equals(uri)) {
+                        showAutoBrightness =
+                            try {
+                                Settings.Secure.getIntForUser(
+                                    cr, Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
+                                    1, UserHandle.USER_CURRENT) != 0
+                            } catch (_: Throwable) {
+                                true
+                            }
+                    } else if (enableHapticsUri.equals(uri)) {
+                        hapticsEnabled =
+                            try {
+                                Settings.System.getIntForUser(
+                                    cr, Settings.System.BRIGHTNESS_SLIDER_HAPTICS,
+                                    1, UserHandle.USER_CURRENT) != 0
+                            } catch (_: Throwable) {
+                                true
+                            }
+                    }
                 }
             }
         }
 
-        cr.registerContentObserver(
-            Settings.Secure.getUriFor(Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON),
-            false, observer, UserHandle.USER_ALL
-        )
+        cr.registerContentObserver(showIconUri, false, observer, UserHandle.USER_ALL)
+
+        cr.registerContentObserver(enableHapticsUri, false, observer, UserHandle.USER_ALL)
 
         onDispose {
             cr.unregisterContentObserver(observer)
@@ -277,7 +304,7 @@ fun BrightnessSlider(
             onValueChange = {
                 if (enabled) {
                     if (!overriddenByAppState) {
-                        hapticsViewModel.onValueChange(it)
+                        if (hapticsEnabled) hapticsViewModel.onValueChange(it)
                         value = it.toInt()
                         onDrag(value)
                     }
@@ -286,7 +313,7 @@ fun BrightnessSlider(
             onValueChangeFinished = {
                 if (enabled) {
                     if (!overriddenByAppState) {
-                        hapticsViewModel.onValueChangeEnded()
+                        if (hapticsEnabled) hapticsViewModel.onValueChangeEnded()
                         onStop(value)
                     }
                 }
