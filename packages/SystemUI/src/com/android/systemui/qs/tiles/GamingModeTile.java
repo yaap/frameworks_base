@@ -17,6 +17,10 @@
 
 package com.android.systemui.qs.tiles;
 
+import static com.android.settingslib.display.BrightnessUtils.GAMMA_SPACE_MIN;
+import static com.android.settingslib.display.BrightnessUtils.GAMMA_SPACE_MAX;
+import static com.android.settingslib.display.BrightnessUtils.convertGammaToLinearFloat;
+
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -27,6 +31,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Resources;
+import android.hardware.display.BrightnessInfo;
 import android.hardware.display.ColorDisplayManager;
 import android.hardware.display.DisplayManager;
 import android.os.Handler;
@@ -118,6 +123,9 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private int mBrightnessLevel = 80;
     private int mMediaLevel = 80;
 
+    private float mBrightnessMin = PowerManager.BRIGHTNESS_MIN;
+    private float mBrightnessMax = PowerManager.BRIGHTNESS_MAX;
+
     @Inject
     public GamingModeTile(QSHost host,
             @Background Looper backgroundLooper,
@@ -142,6 +150,12 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         mColorManager = colorManager;
         mBatteryController = batteryController;
         mBluetoothController = bluetoothController;
+
+        final BrightnessInfo info = mContext.getDisplay().getBrightnessInfo();
+        if (info != null) {
+            mBrightnessMin = info.brightnessMinimum;
+            mBrightnessMax = info.brightnessMaximum;
+        }
 
         // find out if a physical navbar is present
         // Configuration c = mContext.getResources().getConfiguration();
@@ -250,8 +264,11 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                         Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
                 if (mBrightnessLevel != 0) {
                     // Set level
+                    final int gamma = Math.round(GAMMA_SPACE_MIN +
+                            (mBrightnessLevel / 100f) * (GAMMA_SPACE_MAX - GAMMA_SPACE_MIN));
+                    final float lFloat = convertGammaToLinearFloat(gamma, mBrightnessMin, mBrightnessMax);
                     mDisplayManager.setBrightness(mContext.getDisplayId(),
-                            mBrightnessLevel / 100f);
+                            Math.min(lFloat, mBrightnessMax));
                 }
                 enabledStrings.add(mContext.getString(R.string.gaming_mode_brightness));
             }
