@@ -214,7 +214,7 @@ public class DozeSensors {
                 new TriggerSensor(
                         findSensors(config.tapSensorTypeMapping()),
                         Settings.Secure.DOZE_TAP_SCREEN_GESTURE,
-                        true /* settingDef */,
+                        false /* settingDef */,
                         true /* configured */,
                         DozeLog.REASON_SENSOR_TAP,
                         true /* reports touch coordinates */,
