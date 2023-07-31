@@ -126,6 +126,7 @@ import com.android.server.coverage.CoverageService;
 import com.android.server.devicepolicy.DevicePolicyManagerService;
 import com.android.server.devicestate.DeviceStateManagerService;
 import com.android.server.display.AutoAODService;
+import com.android.server.display.AutoDCDimService;
 import com.android.server.display.AutoDimService;
 import com.android.server.display.DisplayManagerService;
 import com.android.server.display.color.ColorDisplayService;
@@ -1683,6 +1684,13 @@ public final class SystemServer implements Dumpable {
             if (context.getResources().getBoolean(R.bool.config_reduceBrightColorsAvailable)) {
                 t.traceBegin("AutoDimService");
                 mSystemServiceManager.startService(AutoDimService.class);
+                t.traceEnd();
+            }
+
+            final String dcdNodePath = context.getResources().getString(R.string.config_dcdNodePath);
+            if (dcdNodePath != null && !dcdNodePath.isEmpty()) {
+                t.traceBegin("AutoDCDimService");
+                mSystemServiceManager.startService(AutoDCDimService.class);
                 t.traceEnd();
             }
         } catch (Throwable e) {

@@ -78,4 +78,8 @@
 
     <!-- The list of package IDs that are not allowed to use aux cameras. -->
     <string-array name="config_cameraAuxPackageBlackList" translatable="false" />
+
+    <!-- Absolute path of the DC dimming node -->
+    <string name="config_dcdNodePath"></string>
+
 </resources>
