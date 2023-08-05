@@ -68,4 +68,8 @@
     <!-- Title & summary of notification letting users know that battery saver is now on -->
     <java-symbol type="string" name="battery_saver_on_notification_title" />
     <java-symbol type="string" name="battery_saver_on_notification_summary" />
+
+    <!-- Delay in ms before invoking single tap gesture
+         Should be set to dt2w max time / 2 when needed -->
+    <java-symbol type="integer" name="config_singleTapDelay" />
 </resources>
