@@ -28,6 +28,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.display.AmbientDisplayConfiguration;
+import android.os.Looper;
+import android.os.Handler;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.VibrationAttributes;
@@ -109,9 +111,12 @@ public class DozeTriggers implements DozeMachine.Part {
     private final UserTracker mUserTracker;
     private final UiEventLogger mUiEventLogger;
     private final Vibrator mVibrator;
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+    private final int mTapDelay;
 
     private long mNotificationPulseTime;
     private Runnable mAodInterruptRunnable;
+    private Object mTapToken;
 
     /** see {@link #onProximityFar} prox for callback */
     private boolean mWantProxSensor;
@@ -229,6 +234,8 @@ public class DozeTriggers implements DozeMachine.Part {
         mKeyguardStateController = keyguardStateController;
         mUserTracker = userTracker;
         mVibrator = (Vibrator) mContext.getSystemService(Context.VIBRATOR_SERVICE);
+        mTapDelay = mContext.getResources().getInteger(
+                com.android.internal.R.integer.config_singleTapDelay);
     }
 
     @Override
@@ -329,11 +336,23 @@ public class DozeTriggers implements DozeMachine.Part {
                     mDozeLog.traceSensorEventDropped(pulseReason, "prox reporting near");
                     return;
                 }
-                if (isDoubleTap || isTap) {
+                if (isDoubleTap || (isTap && mTapDelay <= 0)) {
+                    if (mTapToken != null) {
+                        mMainHandler.removeCallbacksAndMessages(mTapToken);
+                        mTapToken = null;
+                    }
                     if (screenX != -1 && screenY != -1) {
                         mDozeHost.onSlpiTap(screenX, screenY);
                     }
                     gentleWakeUp(pulseReason);
+                } else if (isTap) {
+                    mMainHandler.postDelayed(() -> {
+                        if (screenX != -1 && screenY != -1) {
+                            mDozeHost.onSlpiTap(screenX, screenY);
+                        }
+                        gentleWakeUp(pulseReason);
+                        mTapToken = null;
+                    }, mTapToken, mTapDelay);
                 } else if (isPickup) {
                     if (shouldDropPickupEvent())  {
                         mDozeLog.traceSensorEventDropped(pulseReason, "keyguard occluded");
