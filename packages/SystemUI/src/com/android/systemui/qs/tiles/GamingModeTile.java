@@ -57,6 +57,7 @@ import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.Prefs;
 import com.android.systemui.qs.logging.QSLogger;
 import com.android.systemui.qs.QSHost;
+import com.android.systemui.qs.QsEventLogger;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
 import com.android.systemui.R;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
@@ -128,6 +129,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
 
     @Inject
     public GamingModeTile(QSHost host,
+            QsEventLogger uiEventLogger,
             @Background Looper backgroundLooper,
             @Main Handler mainHandler,
             FalsingManager falsingManager,
@@ -141,7 +143,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             BatteryController batteryController,
             BluetoothController bluetoothController
     ) {
-        super(host, backgroundLooper, mainHandler, falsingManager, metricsLogger,
+        super(host, uiEventLogger, backgroundLooper, mainHandler, falsingManager, metricsLogger,
                 statusBarStateController, activityStarter, qsLogger);
         mResolver = mContext.getContentResolver();
         mAudio = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
