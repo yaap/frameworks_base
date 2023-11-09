@@ -54,12 +54,14 @@ public final class PixelPropsUtils {
     private static final String build_fp = mResources.getString(R.string.build_fp);
     private static final String build_model = mResources.getString(R.string.build_model);
 
-    private static final HashMap<String, String> marlinProps = new HashMap<>(Map.of(
-        "ID", "NJH47F",
-        "MODEL", "Pixel XL",
-        "PRODUCT", "marlin",
-        "DEVICE", "marlin",
-        "FINGERPRINT", "google/marlin/marlin:7.1.2/NJH47F/4146041:user/release-keys"
+    private static final HashMap<String, String> certifiedProps = new HashMap<>(Map.of(
+        "ID", "NMF26F",
+        "BRAND", "Asus",
+        "MANUFACTURER", "Asus",
+        "MODEL", "ASUS_X00HD",
+        "PRODUCT", "WW_Phone",
+        "DEVICE", "ASUS_X00HD_4",
+        "FINGERPRINT", "asus/WW_Phone/ASUS_X00HD_4:7.1.1/NMF26F/14.2016.1801.372-20180119:user/release-keys"
     ));
 
     private static final HashMap<String, String> buildProps = new HashMap<>(Map.of(
@@ -137,7 +139,7 @@ public final class PixelPropsUtils {
             if (!isUnstable && !isPersistent && !isExtra) return;
             commonProps.forEach(PixelPropsUtils::setPropValue);
             if (isUnstable) {
-                marlinProps.forEach(PixelPropsUtils::setPropValue);
+                certifiedProps.forEach(PixelPropsUtils::setPropValue);
                 return;
             }
             buildProps.forEach(PixelPropsUtils::setPropValue);
