@@ -253,7 +253,6 @@ public class SecureSettings {
         Settings.Secure.QS_SHOW_BRIGHTNESS,
         Settings.Secure.QS_BRIGHTNESS_POSITION_BOTTOM,
         Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
-        Settings.Secure.SHOW_WIFI_STANDARD_ICON,
         Settings.Secure.DOZE_FOR_NOTIFICATIONS,
         Settings.Secure.MEDIA_CONTROLS_ALWAYS_SHOW_TIME,
         Settings.Secure.MEDIA_CONTROLS_SQUIGGLE,
