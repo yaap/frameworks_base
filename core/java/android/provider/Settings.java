@@ -12206,12 +12206,6 @@ public final class Settings {
         public static final String QS_SHOW_AUTO_BRIGHTNESS_BUTTON = "qs_show_auto_brightness_button";
 
         /**
-         * Whether to show Wi-Fi standard icon
-         * @hide
-         */
-        public static final String SHOW_WIFI_STANDARD_ICON = "show_wifi_standard_icon";
-
-        /**
          * Whether to trigger doze for new notifications
          * @hide
          */
