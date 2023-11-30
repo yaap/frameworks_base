@@ -55,13 +55,14 @@ public final class PixelPropsUtils {
     private static final String build_model = mResources.getString(R.string.build_model);
 
     private static final HashMap<String, String> certifiedProps = new HashMap<>(Map.of(
-        "ID", "OPM2.171019.029",
-        "BRAND", "google",
-        "MANUFACTURER", "Google",
-        "MODEL", "Pixel",
-        "PRODUCT", "sailfish",
-        "DEVICE", "sailfish",
-        "FINGERPRINT", "google/sailfish/sailfish:8.1.0/OPM2.171019.029/4657601:user/release-keys"
+        "ID", "NRD90M",
+        "BRAND", "NVIDIA",
+        "MANUFACTURER", "NVIDIA",
+        "MODEL", "SHIELD Android TV",
+        "PRODUCT", "foster_e",
+        "DEVICE", "foster",
+        "SECURITY_PATCH", "2018-01-05",
+        "FINGERPRINT", "NVIDIA/foster_e/foster:7.0/NRD90M/2427173_1038.2788:user/release-keys"
     ));
 
     private static final HashMap<String, String> buildProps = new HashMap<>(Map.of(
