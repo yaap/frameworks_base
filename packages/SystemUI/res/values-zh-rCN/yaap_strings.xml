@@ -88,13 +88,13 @@
     <string name="global_action_reboot_more">高级选项</string>
 
     <!-- DataSwitch Tile -->
-    <string name="qs_data_switch_label">切换流量卡</string>
-    <string name="qs_data_switch_toast_0">无 SIM 卡</string>
-    <string name="qs_data_switch_toast_1">仅有 1 张 SIM 卡</string>
+    <string name="qs_data_switch_label">切换数据卡</string>
+    <string name="qs_data_switch_toast_0">当前未插入 SIM 卡</string>
+    <string name="qs_data_switch_toast_1">当前仅插入一张 SIM 卡</string>
     <string name="qs_data_switch_text_1">卡 1</string>
     <string name="qs_data_switch_text_2">卡 2</string>
-    <string name="qs_data_switch_changed_1">切换到卡 1</string>
-    <string name="qs_data_switch_changed_2">切换到卡 2</string>
+    <string name="qs_data_switch_changed_1">已切换到卡1</string>
+    <string name="qs_data_switch_changed_2">已切换到卡2</string>
 
     <!-- Bluetooth dialog -->
     <string name="turn_on_bluetooth">蓝牙</string>
@@ -103,5 +103,4 @@
 
     <!-- USB tethering QS tile -->
     <string name="quick_settings_usb_tether_label">USB 网络共享</string>
-
 </resources>
