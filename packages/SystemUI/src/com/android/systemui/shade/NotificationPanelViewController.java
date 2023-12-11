@@ -4879,6 +4879,10 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
                         "NPVC not intercepting touch, panel touches disallowed");
                 return false;
             }
+            if (mIsLockscreenDoubleTapEnabled && !mPulsing && !mDozing
+                    && mBarState == StatusBarState.KEYGUARD) {
+                mDoubleTapToSleepGesture.onTouchEvent(event);
+            }
             initDownStates(event);
             // Do not let touches go to shade or QS if the bouncer is visible,
             // but still let user swipe down to expand the panel, dismissing the bouncer.
@@ -5068,10 +5072,8 @@ public final class NotificationPanelViewController implements ShadeSurface, Dump
                 expand(true /* animate */);
             }
 
-            if ((mIsLockscreenDoubleTapEnabled && !mPulsing && !mDozing
-                    && mBarState == StatusBarState.KEYGUARD) ||
-                    (!isFullyExpanded() && mIsSbDoubleTapEnabled
-                    && event.getY() < mStatusBarHeaderHeight)) {
+            if (!isFullyExpanded() && mIsSbDoubleTapEnabled
+                    && event.getY() < mStatusBarHeaderHeight) {
                 mDoubleTapToSleepGesture.onTouchEvent(event);
             }
 
