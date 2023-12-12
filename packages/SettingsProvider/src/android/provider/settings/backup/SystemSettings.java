@@ -137,7 +137,6 @@ public class SystemSettings {
         Settings.System.DOUBLE_TAP_SLEEP_GESTURE,
         Settings.System.VOLUME_BUTTON_MUSIC_CONTROL,
         Settings.System.VOLUME_BUTTON_MUSIC_CONTROL_DELAY,
-        Settings.System.KEYGAURD_MEDIA_ART,
         Settings.System.QS_SHOW_BATTERY_ESTIMATE,
         Settings.System.ENABLE_FLOATING_ROTATION_BUTTON,
         Settings.System.NAVIGATION_BAR_INVERSE,
