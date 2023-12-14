@@ -18792,6 +18792,15 @@ public final class Settings {
         public static final String REPAIR_MODE_ACTIVE = "repair_mode_active";
 
         /**
+         * Whether airplane mode enhancement is enabled
+         * <p>
+         * Set to 1 for true and 0 for false.
+         *
+         * @hide
+         */
+        public static final String APM_ENHANCEMENT = "apm_enhancement_enabled";
+
+        /**
          * Settings migrated from Wear OS settings provider.
          * @hide
          */
