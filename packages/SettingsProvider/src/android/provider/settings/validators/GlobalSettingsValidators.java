@@ -431,5 +431,7 @@ public class GlobalSettingsValidators {
                         }));
         VALIDATORS.put(Global.Wearable.PHONE_SWITCHING_SUPPORTED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Global.APM_ENHANCEMENT, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Global.LOW_POWER_MODE_HBM, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Global.LOW_POWER_MODE_DMD, BOOLEAN_VALIDATOR);
     }
 }

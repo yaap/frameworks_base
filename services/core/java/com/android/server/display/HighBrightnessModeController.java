@@ -627,6 +627,8 @@ class HighBrightnessModeController {
     private final class SettingsObserver extends ContentObserver {
         private final Uri mLowPowerModeSetting = Settings.Global.getUriFor(
                 Settings.Global.LOW_POWER_MODE);
+        private final Uri mLowPowerModeAllowedSetting = Settings.Global.getUriFor(
+                Settings.Global.LOW_POWER_MODE_HBM);
         private boolean mStarted;
 
         SettingsObserver(Handler handler) {
@@ -641,6 +643,8 @@ class HighBrightnessModeController {
         void startObserving() {
             if (!mStarted) {
                 mContext.getContentResolver().registerContentObserver(mLowPowerModeSetting,
+                        false /*notifyForDescendants*/, this, UserHandle.USER_ALL);
+                mContext.getContentResolver().registerContentObserver(mLowPowerModeAllowedSetting,
                         false /*notifyForDescendants*/, this, UserHandle.USER_ALL);
                 mStarted = true;
                 updateLowPower();
@@ -662,8 +666,9 @@ class HighBrightnessModeController {
             }
             if (DEBUG) {
                 Slog.d(TAG, "Settings.Global.LOW_POWER_MODE enabled: " + isLowPowerMode);
+                Slog.d(TAG, "Settings.Global.LOW_POWER_MODE_HBM enabled: " + isLowPowerMode);
             }
-            mIsBlockedByLowPowerMode = isLowPowerMode;
+            mIsBlockedByLowPowerMode = isLowPowerMode && isLowPowerModeAllowed();
             // this recalculates HbmMode and runs mHbmChangeCallback if the mode has changed
             updateHbmMode();
         }
@@ -671,6 +676,11 @@ class HighBrightnessModeController {
         private boolean isLowPowerMode() {
             return Settings.Global.getInt(
                     mContext.getContentResolver(), Settings.Global.LOW_POWER_MODE, 0) != 0;
+        }
+
+        private boolean isLowPowerModeAllowed() {
+            return Settings.Global.getInt(
+                    mContext.getContentResolver(), Settings.Global.LOW_POWER_MODE_HBM, 1) != 0;
         }
     }
 

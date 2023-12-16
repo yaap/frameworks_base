@@ -106,5 +106,7 @@ public class GlobalSettings {
         Settings.Global.Wearable.RTL_SWIPE_TO_DISMISS_ENABLED_DEV,
         Settings.Global.Wearable.REDUCE_MOTION,
         Settings.Global.APM_ENHANCEMENT,
+        Settings.Global.LOW_POWER_MODE_HBM,
+        Settings.Global.LOW_POWER_MODE_DMD,
     };
 }

@@ -1078,6 +1078,8 @@ public class DisplayModeDirector {
                 Settings.System.getUriFor(Settings.System.MIN_REFRESH_RATE);
         private final Uri mLowPowerModeSetting =
                 Settings.Global.getUriFor(Settings.Global.LOW_POWER_MODE);
+        private final Uri mLowPowerModeAllowedSetting =
+                Settings.Global.getUriFor(Settings.Global.LOW_POWER_MODE_DMD);
         private final Uri mMatchContentFrameRateSetting =
                 Settings.Secure.getUriFor(Settings.Secure.MATCH_CONTENT_FRAME_RATE);
 
@@ -1115,6 +1117,8 @@ public class DisplayModeDirector {
             cr.registerContentObserver(mMinRefreshRateSetting, false /*notifyDescendants*/, this,
                     UserHandle.USER_SYSTEM);
             cr.registerContentObserver(mLowPowerModeSetting, false /*notifyDescendants*/, this,
+                    UserHandle.USER_SYSTEM);
+            cr.registerContentObserver(mLowPowerModeAllowedSetting, false /*notifyDescendants*/, this,
                     UserHandle.USER_SYSTEM);
             cr.registerContentObserver(mMatchContentFrameRateSetting, false /*notifyDescendants*/,
                     this);
@@ -1158,7 +1162,8 @@ public class DisplayModeDirector {
                 if (mPeakRefreshRateSetting.equals(uri)
                         || mMinRefreshRateSetting.equals(uri)) {
                     updateRefreshRateSettingLocked();
-                } else if (mLowPowerModeSetting.equals(uri)) {
+                } else if (mLowPowerModeSetting.equals(uri)
+                        || mLowPowerModeAllowedSetting.equals(uri)) {
                     updateLowPowerModeSettingLocked();
                 } else if (mMatchContentFrameRateSetting.equals(uri)) {
                     updateModeSwitchingTypeSettingLocked();
@@ -1199,8 +1204,10 @@ public class DisplayModeDirector {
         private void updateLowPowerModeSettingLocked() {
             boolean inLowPowerMode = Settings.Global.getInt(mContext.getContentResolver(),
                     Settings.Global.LOW_POWER_MODE, 0 /*default*/) != 0;
+            boolean lowPowerModeAllowed = Settings.Global.getInt(mContext.getContentResolver(),
+                    Settings.Global.LOW_POWER_MODE_DMD, 1 /*default*/) != 0;
             final Vote vote;
-            if (inLowPowerMode) {
+            if (inLowPowerMode && lowPowerModeAllowed) {
                 vote = Vote.forRenderFrameRates(0f, 60f);
             } else {
                 vote = null;
