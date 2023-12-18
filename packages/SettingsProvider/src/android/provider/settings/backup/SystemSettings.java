@@ -120,6 +120,7 @@ public class SystemSettings {
         Settings.System.GAMING_MODE_NIGHT_LIGHT,
         Settings.System.GAMING_MODE_BATTERY_SCHEDULE,
         Settings.System.GAMING_MODE_BLUETOOTH,
+        Settings.System.GAMING_MODE_EXTRA_DIM,
         Settings.System.GAMING_MODE_BRIGHTNESS_ENABLED,
         Settings.System.GAMING_MODE_BRIGHTNESS,
         Settings.System.GAMING_MODE_MEDIA_ENABLED,

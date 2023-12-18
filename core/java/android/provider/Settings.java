@@ -5928,6 +5928,13 @@ public final class Settings {
         public static final String GAMING_MODE_BLUETOOTH = "gaming_mode_bluetooth";
 
         /**
+         * Whether gaming mode toggles extra dim and schedule
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_EXTRA_DIM = "gaming_mode_extra_dim";
+
+        /**
          * Whether gaming mode toggles auto brightness
          * @hide
          */

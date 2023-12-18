@@ -58,6 +58,7 @@ import com.android.systemui.Prefs;
 import com.android.systemui.qs.logging.QSLogger;
 import com.android.systemui.qs.QSHost;
 import com.android.systemui.qs.QsEventLogger;
+import com.android.systemui.qs.ReduceBrightColorsController;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
 import com.android.systemui.R;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
@@ -88,6 +89,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private static final String KEY_BATTERY_SAVER_MODE = "gaming_mode_battery_saver_mode";
     private static final String KEY_BATTERY_SAVER_LEVEL = "gaming_mode_battery_saver_level";
     private static final String KEY_BLUETOOTH = "gaming_mode_bluetooth";
+    private static final String KEY_EXTRA_DIM = "gaming_mode_extra_dim";
+    private static final String KEY_EXTRA_DIM_SCHEDULE = "gaming_mode_extra_dim_schedule";
     private static final String KEY_BRIGHTNESS_STATE = "gaming_mode_state_brightness";
     private static final String KEY_BRIGHTNESS_LEVEL = "gaming_mode_level_brightness";
     private static final String KEY_MEDIA_LEVEL = "gaming_mode_level_media";
@@ -101,6 +104,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private final ShutdownBroadcastReciever mShutdownBroadcastReciever;
     private final ScreenBroadcastReceiver mScreenBroadcastReceiver;
     private final BatteryController mBatteryController;
+    private final ReduceBrightColorsController mReduceBrightColorsController;
     private final DisplayManager mDisplayManager;
     private final ColorDisplayManager mColorManager;
     private final BluetoothController mBluetoothController;
@@ -116,6 +120,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     private boolean mNightLightEnabled;
     private boolean mBatterySaverEnabled;
     private boolean mBluetoothEnabled;
+    private boolean mExtraDimEnabled;
     private boolean mBrightnessEnabled;
     private boolean mMediaEnabled;
     private boolean mScreenOffEnabled;
@@ -130,6 +135,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     @Inject
     public GamingModeTile(QSHost host,
             QsEventLogger uiEventLogger,
+            ReduceBrightColorsController reduceBrightColorsController,
             @Background Looper backgroundLooper,
             @Main Handler mainHandler,
             FalsingManager falsingManager,
@@ -149,6 +155,7 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         mAudio = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
         mNm = (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
         mDisplayManager = (DisplayManager) mContext.getSystemService(DisplayManager.class);
+        mReduceBrightColorsController = reduceBrightColorsController;
         mColorManager = colorManager;
         mBatteryController = batteryController;
         mBluetoothController = bluetoothController;
@@ -257,6 +264,13 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
             if (mBluetoothEnabled) {
                 mBluetoothController.setBluetoothEnabled(true);
                 enabledStrings.add(mContext.getString(R.string.gaming_mode_bluetooth));
+            }
+
+            if (mExtraDimEnabled) {
+                mReduceBrightColorsController.setReduceBrightColorsActivated(false);
+                Settings.Secure.putInt(mResolver,
+                        Settings.Secure.EXTRA_DIM_AUTO_MODE, 0);
+                enabledStrings.add(mContext.getString(R.string.gaming_mode_extra_dim));
             }
 
             if (mBrightnessEnabled) {
@@ -376,6 +390,8 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
                 Settings.System.GAMING_MODE_BATTERY_SCHEDULE, 0) == 1;
         mBluetoothEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_BLUETOOTH, 0) == 1;
+        mExtraDimEnabled = Settings.System.getInt(mResolver,
+                Settings.System.GAMING_MODE_EXTRA_DIM, 0) == 1;
         mBrightnessEnabled = Settings.System.getInt(mResolver,
                 Settings.System.GAMING_MODE_BRIGHTNESS_ENABLED, 0) == 1;
         mBrightnessLevel = Settings.System.getInt(mResolver,
@@ -409,6 +425,9 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         Prefs.putInt(mContext, KEY_BATTERY_SAVER_LEVEL, Settings.Global.getInt(mResolver,
                 Settings.Global.LOW_POWER_MODE_TRIGGER_LEVEL, 0));
         Prefs.putInt(mContext, KEY_BLUETOOTH, mBluetoothController.isBluetoothEnabled() ? 1 : 0);
+        Prefs.putInt(mContext, KEY_EXTRA_DIM, mReduceBrightColorsController.isReduceBrightColorsActivated() ? 1 : 0);
+        Prefs.putInt(mContext, KEY_EXTRA_DIM_SCHEDULE, Settings.Secure.getInt(mResolver,
+                Settings.Secure.EXTRA_DIM_AUTO_MODE, 0));
         Prefs.putInt(mContext, KEY_BRIGHTNESS_STATE, Settings.System.getInt(mResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC));
@@ -474,6 +493,14 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
         if (mBluetoothEnabled) {
             mBluetoothController.setBluetoothEnabled(
                 Prefs.getInt(mContext, KEY_BLUETOOTH, 0) == 1);
+        }
+
+        if (mExtraDimEnabled) {
+            mReduceBrightColorsController.setReduceBrightColorsActivated(
+                    Prefs.getInt(mContext, KEY_EXTRA_DIM, 0) == 1);
+            final int prevMode = Prefs.getInt(mContext, KEY_EXTRA_DIM_SCHEDULE, 0);
+            Settings.Secure.putInt(mResolver,
+                    Settings.Secure.EXTRA_DIM_AUTO_MODE, prevMode);
         }
 
         if (mBrightnessEnabled) {

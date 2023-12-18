@@ -78,6 +78,7 @@
     <string name="gaming_mode_battery_saver">Battery Saver</string>
     <string name="gaming_mode_bluetooth">Bluetooth</string>
     <string name="gaming_mode_brightness">Brightness</string>
+    <string name="gaming_mode_extra_dim">Extra dim</string>
     <string name="gaming_mode_media">Media Volume</string>
 
     <!-- Screen record delete action -->
