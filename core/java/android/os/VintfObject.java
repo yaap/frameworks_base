@@ -75,13 +75,12 @@ public class VintfObject {
             return 0;
         }
         Slog.w(LOG_TAG, "VintfObject.verify() is deprecated. Call verifyWithoutAvb() instead.");
-        return verifyWithoutAvb();
+        return verifyBuildAtBoot();
     }
 
     /**
-     * Verify Vintf compatibility on the device without checking AVB
-     * (Android Verified Boot). It is useful to verify a running system
-     * image where AVB check is irrelevant.
+     * Verify Vintf compatibility on the device at boot time. Certain checks
+     * like kernel checks, AVB checks are disabled.
      *
      * @return = 0 if success (compatible)
      *         > 0 if incompatible
@@ -89,7 +88,7 @@ public class VintfObject {
      *
      * @hide
      */
-    public static native int verifyWithoutAvb();
+    public static native int verifyBuildAtBoot();
 
     /**
      * @return a list of HAL names and versions that is supported by this

@@ -1362,9 +1362,7 @@ public class Build {
         if (IS_ENG) return true;
 
         if (IS_TREBLE_ENABLED) {
-            // If we can run this code, the device should already pass AVB.
-            // So, we don't need to check AVB here.
-            int result = VintfObject.verifyWithoutAvb();
+            int result = VintfObject.verifyBuildAtBoot();
 
             if (result != 0) {
                 Slog.e(TAG, "Vendor interface is incompatible, error="
