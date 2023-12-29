@@ -51,20 +51,31 @@ public final class PixelPropsUtils {
         mResources = res;
     }
 
+    private static final String cert_device = mResources.getString(R.string.cert_device);
+    private static final String cert_fp = mResources.getString(R.string.cert_fp);
+    private static final String cert_model = mResources.getString(R.string.cert_model);
+    private static final String cert_spl = mResources.getString(R.string.cert_spl);
+    private static final int cert_sdk = mResources.getInteger(R.integer.cert_sdk);
     private static final String build_device = mResources.getString(R.string.build_device);
     private static final String build_fp = mResources.getString(R.string.build_fp);
     private static final String build_model = mResources.getString(R.string.build_model);
 
-    private static final HashMap<String, String> certifiedProps = new HashMap<>(Map.of(
-        "ID", "NRD90M",
-        "BRAND", "NVIDIA",
-        "MANUFACTURER", "NVIDIA",
-        "MODEL", "SHIELD Android TV",
-        "PRODUCT", "foster_e",
-        "DEVICE", "foster",
-        VERSION_PREFIX + "SECURITY_PATCH", "2018-01-05",
-        "FINGERPRINT", "NVIDIA/foster_e/foster:7.0/NRD90M/2427173_1038.2788:user/release-keys"
-    ));
+
+    private static final HashMap<String, Object> certifiedProps;
+    static {
+        Map<String, Object> tMap = new HashMap<>();
+        String[] sections = cert_fp.split("/");
+        tMap.put("ID", sections[3]);
+        tMap.put("BRAND", sections[0]);
+        tMap.put("MANUFACTURER", sections[0]);
+        tMap.put("MODEL", cert_model);
+        tMap.put("PRODUCT", sections[1]);
+        tMap.put("DEVICE", cert_device);
+        tMap.put(VERSION_PREFIX + "SECURITY_PATCH", cert_spl);
+        tMap.put(VERSION_PREFIX + "DEVICE_INITIAL_SDK_INT", cert_sdk);
+        tMap.put("FINGERPRINT", cert_fp);
+        certifiedProps = new HashMap<>(tMap);
+    }
 
     private static final HashMap<String, String> buildProps = new HashMap<>(Map.of(
         "ID", build_fp.split("/", 5)[3],

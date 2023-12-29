@@ -18,6 +18,11 @@
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <!-- Strings for PixelPropUtils DO NOT TRANSLATE! -->
+    <string name="cert_device" translatable="false"></string>
+    <string name="cert_fp" translatable="false"></string>
+    <string name="cert_model" translatable="false"></string>
+    <string name="cert_spl" translatable="false"></string>
+    <integer name="cert_sdk" translatable="false"></integer>
     <string name="build_device" translatable="false"></string>
     <string name="build_fp" translatable="false"></string>
     <string name="build_model" translatable="false"></string>
