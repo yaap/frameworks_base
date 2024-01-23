@@ -1007,6 +1007,12 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 return false;
             }
             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
+            // reboot to system when advanced reboot is enabled
+            // keep safe mode long pressing the "system" option 
+            if (!mRebootMenu && advancedRebootEnabled(mContext)) {
+                doReboot();
+                return true;
+            }
             if (!mUserManager.hasUserRestriction(UserManager.DISALLOW_SAFE_BOOT)) {
                 mWindowManagerFuncs.reboot(true, null);
                 return true;
