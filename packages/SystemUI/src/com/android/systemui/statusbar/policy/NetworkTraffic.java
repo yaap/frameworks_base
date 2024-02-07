@@ -62,6 +62,9 @@ public class NetworkTraffic extends TextView {
     private static final int GB = MB * KB;
     private static final String SYMBOL = "B/s";
     private static final String THREAD_NAME = "NetworkTraffic";
+    static final int LOCATION_STATUSBAR = 0;
+    static final int LOCATION_QS_HEADER = 1;
+    static final int LOCATION_BOTH = 2;
 
     private static final DecimalFormat decimalFormat = new DecimalFormat("##0.#");
     static {
@@ -82,7 +85,7 @@ public class NetworkTraffic extends TextView {
     private boolean oBytes;
 
     boolean mIsEnabled;
-    boolean mTrafficInHeaderView;
+    int mLocation;
 
     private final int mResourceFontSize;
     private final HandlerThread mHandlerThread = new HandlerThread(THREAD_NAME);
@@ -158,7 +161,7 @@ public class NetworkTraffic extends TextView {
                         else oBytes = true;
                         break;
                 }
-                if (!mTrafficInHeaderView) {
+                if (mLocation == LOCATION_BOTH || mLocation == LOCATION_STATUSBAR) {
                     // don't show a vary tiny text (4dp minimum)
                     // if we reached this size just hide the entire view
                     final float dpTextSize = getTextSize() / mDisplayDensity;
@@ -381,9 +384,9 @@ public class NetworkTraffic extends TextView {
         mShowArrow = Settings.System.getIntForUser(resolver,
                 Settings.System.NETWORK_TRAFFIC_ARROW, 1,
 	        UserHandle.USER_CURRENT) == 1;
-        mTrafficInHeaderView = Settings.System.getIntForUser(resolver,
+        mLocation = Settings.System.getIntForUser(resolver,
                 Settings.System.NETWORK_TRAFFIC_VIEW_LOCATION, 0,
-                UserHandle.USER_CURRENT) == 1;
+                UserHandle.USER_CURRENT);
         mFontSize = Settings.System.getIntForUser(getContext().getContentResolver(),
                 Settings.System.NETWORK_TRAFFIC_FONT_SIZE, 10,
                 UserHandle.USER_CURRENT);
@@ -430,7 +433,7 @@ public class NetworkTraffic extends TextView {
     }
 
     boolean isDisabled() {
-        return !mIsEnabled || !mTrafficInHeaderView;
+        return !mIsEnabled || mLocation == LOCATION_STATUSBAR;
     }
 
     /**
@@ -442,13 +445,13 @@ public class NetworkTraffic extends TextView {
         int size = mResourceFontSize;
         int unit = TypedValue.COMPLEX_UNIT_PX;
         if (mTrafficType == BOTH) {
-            if (mTrafficInHeaderView) setTextSize(unit, (float)size);
+            setTextSize(unit, (float)size);
             setMaxLines(2);
             return new int[] { size, unit };
         }
         size = mFontSize;
         unit = TypedValue.COMPLEX_UNIT_DIP;
-        if (mTrafficInHeaderView) setTextSize(unit, (float)size);
+        setTextSize(unit, (float)size);
         setMaxLines(1);
         return new int[] { size, unit };
     }

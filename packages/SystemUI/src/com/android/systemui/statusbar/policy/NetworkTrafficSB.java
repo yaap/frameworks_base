@@ -61,6 +61,6 @@ public class NetworkTrafficSB extends NetworkTraffic implements DarkReceiver {
 
     @Override
     boolean isDisabled() {
-        return !mIsEnabled || mTrafficInHeaderView;
+        return !mIsEnabled || mLocation == LOCATION_QS_HEADER;
     }
 }

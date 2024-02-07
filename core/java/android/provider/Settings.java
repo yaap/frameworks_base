@@ -5863,6 +5863,7 @@ public final class Settings {
          * Show network traffic indicator
          * 0 - Statusbar (default)
          * 1 - QS Header
+         * 2 - both
          * @hide
          */
         @Readable
