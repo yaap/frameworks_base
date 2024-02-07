@@ -147,6 +147,7 @@ constructor(
     private var nextAlarmIntent: PendingIntent? = null
 
     private var qsDisabled = false
+    private var privacyVisible = false
     private var visible = false
         set(value) {
             if (field == value) {
@@ -248,6 +249,7 @@ constructor(
                     combinedShadeHeadersConstraintManager.privacyChipVisibilityConstraints(visible)
                 header.updateAllConstraints(update)
                 setNetworkTrafficVisible(qsExpandedFraction == 1f && !visible)
+                privacyVisible = visible
             }
         }
 
@@ -342,6 +344,8 @@ constructor(
         systemIcons.setOnHoverListener(
             statusOverlayHoverListenerFactory.createListener(systemIcons)
         )
+
+        privacyVisible = privacyIconsController.getIsChipVisible()
     }
 
     override fun onViewDetached() {
@@ -520,7 +524,7 @@ constructor(
             header.progress = qsExpandedFraction
             updateBatteryMode()
         }
-        setNetworkTrafficVisible(qsExpandedFraction == 1f && !visible)
+        setNetworkTrafficVisible(qsExpandedFraction == 1f && !privacyVisible && visible)
     }
 
     private fun logInstantEvent(message: String) {
