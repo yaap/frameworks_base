@@ -97,6 +97,22 @@ public class NavigationBarInflaterView extends FrameLayout {
                 self.onNavigationModeChanged(mode);
             }
         }
+
+        @Override
+        public void onNavBarLayoutInverseChanged(boolean inverse) {
+            NavigationBarInflaterView self = mSelf.get();
+            if (self != null) {
+                self.onNavBarLayoutInverseChanged(inverse);
+            }
+        }
+
+        @Override
+        public void onNavBarCustomLayoutChanged(String layout) {
+            NavigationBarInflaterView self = mSelf.get();
+            if (self != null) {
+                self.onNavBarCustomLayoutChanged(layout);
+            }
+        }
     }
 
     private final Listener mListener;
