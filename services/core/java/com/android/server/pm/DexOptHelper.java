@@ -157,7 +157,7 @@ public final class DexOptHelper {
                         } else {
                             // Disabled as this causes speed-profile compilation during first boot
                             // even if things are already compiled.
-                            // useProfileForDexopt = true;
+                            useProfileForDexopt = true;
                         }
                     } catch (InstallerException | RuntimeException e) {
                         Log.e(TAG, "Failed to copy profile " + profileFile.getAbsolutePath() + " ",
