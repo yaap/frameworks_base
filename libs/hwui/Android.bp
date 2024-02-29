@@ -640,6 +640,10 @@ cc_library {
         android: {
             version_script: "libhwui.map.txt",
         },
+        android_arm64: {
+            cflags: ["-fsplit-machine-functions"],
+            ldflags: ["-fsplit-machine-functions"],
+        },
     },
     afdo: true,
 }
