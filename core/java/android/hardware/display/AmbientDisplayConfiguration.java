@@ -302,11 +302,13 @@ public class AmbientDisplayConfiguration {
         return Settings.System.getIntForUser(mContext.getContentResolver(), name, def, user) != 0;
     }
 
+    /** @hide */
     public boolean alwaysOnEnabledSetting(int user) {
         boolean alwaysOnEnabled = boolSetting(Settings.Secure.DOZE_ALWAYS_ON, user, mAlwaysOnByDefault ? 1 : 0);
         return alwaysOnEnabled && alwaysOnAvailable() && !accessibilityInversionEnabled(user);
     }
 
+    /** @hide */
     public boolean alwaysOnChargingEnabled(int user) {
         final boolean dozeOnChargeEnabled = boolSetting(Settings.Secure.DOZE_ON_CHARGE, user, 0);
         if (dozeOnChargeEnabled) {

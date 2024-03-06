@@ -326,22 +326,18 @@ public class GamingModeTile extends QSTileImpl<BooleanState> {
     @Override
     protected void handleUpdateState(BooleanState state, Object arg) {
         boolean enable = state.value;
-        if (state.slash == null) {
-            state.slash = new SlashState();
-        }
         if (arg instanceof Boolean) {
             enable = (Boolean) arg;
         }
         state.icon = mIcon;
         state.value = enable;
-        state.slash.isSlashed = !state.value;
         state.label = mContext.getString(R.string.gaming_mode_tile_title);
         if (enable) {
-            state.contentDescription =  mContext.getString(
+            state.contentDescription = mContext.getString(
                     R.string.accessibility_quick_settings_gaming_mode_on);
             state.state = Tile.STATE_ACTIVE;
         } else {
-            state.contentDescription =  mContext.getString(
+            state.contentDescription = mContext.getString(
                     R.string.accessibility_quick_settings_gaming_mode_off);
             state.state = Tile.STATE_INACTIVE;
         }

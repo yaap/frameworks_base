@@ -21,12 +21,18 @@ import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
 import android.text.TextUtils;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceScreen;
 
 import com.android.settingslib.R;
 import com.android.settingslib.core.lifecycle.Lifecycle;
+import com.android.settingslib.utils.ThreadUtils;
+
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 
 /**
  * Preference controller for bluetooth address
@@ -84,18 +90,27 @@ public abstract class AbstractBluetoothAddressPreferenceController
     protected void updateConnectivity() {
         BluetoothAdapter bluetooth = BluetoothAdapter.getDefaultAdapter();
         if (bluetooth != null && mBtAddress != null) {
-            String address = bluetooth.isEnabled() ? bluetooth.getAddress() : null;
-            if (TextUtils.isEmpty(address)) {
-                mBtAddress.setSummary(R.string.status_unavailable);
-                mBtAddress.setCopyingEnabled(false);
-            } else if (mTapped) {
-                // Convert the address to lowercase for consistency with the wifi MAC address.
-                mBtAddress.setSummary(address.toLowerCase());
-                mBtAddress.setCopyingEnabled(true);
-            } else {
-                mBtAddress.setSummary(R.string.device_info_protected_single_press);
-                mBtAddress.setCopyingEnabled(false);
-            }
+            ListenableFuture<String> future = ThreadUtils.getBackgroundExecutor()
+                    .submit(() -> bluetooth.isEnabled() ? bluetooth.getAddress() : null);
+            Futures.addCallback(future, new FutureCallback<>() {
+                @Override
+                public void onSuccess(@Nullable String address) {
+                    if (TextUtils.isEmpty(address)) {
+                        mBtAddress.setSummary(R.string.status_unavailable);
+                        mBtAddress.setCopyingEnabled(false);
+                    } else if (mTapped) {
+                        // Convert the address to lowercase for consistency with the wifi MAC address.
+                        mBtAddress.setSummary(address.toLowerCase());
+                        mBtAddress.setCopyingEnabled(true);
+                    } else {
+                        mBtAddress.setSummary(R.string.device_info_protected_single_press);
+                        mBtAddress.setCopyingEnabled(false);
+                    }
+                }
+
+                @Override
+                public void onFailure(Throwable t) {}
+            }, mContext.getMainExecutor());
         }
     }
 }

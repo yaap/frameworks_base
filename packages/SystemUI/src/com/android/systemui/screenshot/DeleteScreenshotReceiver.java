@@ -26,6 +26,7 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.view.Display;
 
 import com.android.systemui.dagger.qualifiers.Background;
 
@@ -45,10 +46,10 @@ public class DeleteScreenshotReceiver extends BroadcastReceiver {
     @Inject
     public DeleteScreenshotReceiver(ScreenshotSmartActions screenshotSmartActions,
             @Background Executor backgroundExecutor,
-            ScreenshotNotificationsController notificationsController) {
+            ScreenshotNotificationsController.Factory notificationsControllerFactory) {
         mScreenshotSmartActions = screenshotSmartActions;
         mBackgroundExecutor = backgroundExecutor;
-        mNotificationsController = notificationsController;
+        mNotificationsController = notificationsControllerFactory.create(Display.DEFAULT_DISPLAY);
     }
 
     @Override

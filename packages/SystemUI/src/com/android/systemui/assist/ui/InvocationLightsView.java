@@ -32,11 +32,10 @@ import android.view.ContextThemeWrapper;
 import android.view.View;
 
 import com.android.settingslib.Utils;
-import com.android.systemui.Dependency;
-import com.android.systemui.R;
-import com.android.systemui.navigationbar.NavigationBarController;
 import com.android.systemui.navigationbar.NavigationBar;
+import com.android.systemui.navigationbar.NavigationBarController;
 import com.android.systemui.navigationbar.NavigationBarTransitions;
+import com.android.systemui.res.R;
 
 import java.util.ArrayList;
 
@@ -65,6 +64,8 @@ public class InvocationLightsView extends View
     private final int mLightColor;
     @ColorInt
     private final int mDarkColor;
+    @Nullable
+    private NavigationBarController mNavigationBarController;
 
     // Allocate variable for screen location lookup to avoid memory alloc onDraw()
     private int[] mScreenLocation = new int[2];
@@ -287,12 +288,11 @@ public class InvocationLightsView extends View
 
     private void attemptRegisterNavBarListener() {
         if (!mRegistered) {
-            NavigationBarController controller = Dependency.get(NavigationBarController.class);
-            if (controller == null) {
+            if (mNavigationBarController == null) {
                 return;
             }
 
-            NavigationBar navBar = controller.getDefaultNavigationBar();
+            NavigationBar navBar = mNavigationBarController.getDefaultNavigationBar();
             if (navBar == null) {
                 return;
             }
@@ -304,12 +304,11 @@ public class InvocationLightsView extends View
 
     private void attemptUnregisterNavBarListener() {
         if (mRegistered) {
-            NavigationBarController controller = Dependency.get(NavigationBarController.class);
-            if (controller == null) {
+            if (mNavigationBarController == null) {
                 return;
             }
 
-            NavigationBar navBar = controller.getDefaultNavigationBar();
+            NavigationBar navBar = mNavigationBarController.getDefaultNavigationBar();
             if (navBar == null) {
                 return;
             }
@@ -317,5 +316,9 @@ public class InvocationLightsView extends View
             navBar.getBarTransitions().removeDarkIntensityListener(this);
             mRegistered = false;
         }
+    }
+
+    public void setNavigationBarController(NavigationBarController navigationBarController) {
+        mNavigationBarController = navigationBarController;
     }
 }

@@ -24,25 +24,30 @@ import android.util.AttributeSet;
 import android.widget.ImageView;
 
 
+/** @hide */
 public class WallpaperView extends ImageView {
 
     Context contextM;
 
+    /** @hide */
     public WallpaperView(@Nullable Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         contextM = context;
     }
 
+    /** @hide */
     public WallpaperView(@Nullable Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         contextM = context;
     }
 
+    /** @hide */
     public WallpaperView(@Nullable Context context) {
         super(context);
         contextM = context;
     }
 
+    /** @hide */
     @Override
     public void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);

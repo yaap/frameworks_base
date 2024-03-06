@@ -30,15 +30,6 @@ import static com.android.server.notification.NotificationRecordLogger.Notificat
 import static com.android.server.notification.NotificationRecordLogger.NotificationReportedEvent.NOTIFICATION_UPDATED;
 import static com.google.common.truth.Truth.assertThat;
 
-import static android.service.notification.NotificationListenerService.REASON_CANCEL;
-import static android.service.notification.NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED;
-import static android.service.notification.NotificationStats.DISMISSAL_BUBBLE;
-import static android.service.notification.NotificationStats.DISMISSAL_OTHER;
-
-import static com.android.server.notification.NotificationRecordLogger.NotificationCancelledEvent.NOTIFICATION_CANCEL_CLICK;
-import static com.android.server.notification.NotificationRecordLogger.NotificationCancelledEvent.NOTIFICATION_CANCEL_GROUP_SUMMARY_CANCELED;
-import static com.android.server.notification.NotificationRecordLogger.NotificationCancelledEvent.NOTIFICATION_CANCEL_USER_OTHER;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -180,19 +171,8 @@ public class NotificationRecordLoggerTest extends UiServiceTestCase {
     }
 
     @Test
-    public void testGetFsiState_stickyHunFlagDisabled_zero() {
-        final int fsiState = NotificationRecordLogger.getFsiState(
-                /* isStickyHunFlagEnabled= */ false,
-                /* hasFullScreenIntent= */ true,
-                /* hasFsiRequestedButDeniedFlag= */ true,
-                /* eventType= */ NOTIFICATION_POSTED);
-        assertEquals(0, fsiState);
-    }
-
-    @Test
     public void testGetFsiState_isUpdate_zero() {
         final int fsiState = NotificationRecordLogger.getFsiState(
-                /* isStickyHunFlagEnabled= */ true,
                 /* hasFullScreenIntent= */ true,
                 /* hasFsiRequestedButDeniedFlag= */ true,
                 /* eventType= */ NOTIFICATION_UPDATED);
@@ -202,7 +182,6 @@ public class NotificationRecordLoggerTest extends UiServiceTestCase {
     @Test
     public void testGetFsiState_hasFsi_allowedEnum() {
         final int fsiState = NotificationRecordLogger.getFsiState(
-                /* isStickyHunFlagEnabled= */ true,
                 /* hasFullScreenIntent= */ true,
                 /* hasFsiRequestedButDeniedFlag= */ false,
                 /* eventType= */ NOTIFICATION_POSTED);
@@ -212,7 +191,6 @@ public class NotificationRecordLoggerTest extends UiServiceTestCase {
     @Test
     public void testGetFsiState_fsiPermissionDenied_deniedEnum() {
         final int fsiState = NotificationRecordLogger.getFsiState(
-                /* isStickyHunFlagEnabled= */ true,
                 /* hasFullScreenIntent= */ false,
                 /* hasFsiRequestedButDeniedFlag= */ true,
                 /* eventType= */ NOTIFICATION_POSTED);
@@ -222,7 +200,6 @@ public class NotificationRecordLoggerTest extends UiServiceTestCase {
     @Test
     public void testGetFsiState_noFsi_noFsiEnum() {
         final int fsiState = NotificationRecordLogger.getFsiState(
-                /* isStickyHunFlagEnabled= */ true,
                 /* hasFullScreenIntent= */ false,
                 /* hasFsiRequestedButDeniedFlag= */ false,
                 /* eventType= */ NOTIFICATION_POSTED);

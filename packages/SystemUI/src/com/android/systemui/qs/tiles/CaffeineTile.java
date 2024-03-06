@@ -226,9 +226,6 @@ public class CaffeineTile extends QSTileImpl<BooleanState> {
         if (mWakeLock == null) {
             return;
         }
-        if (state.slash == null) {
-            state.slash = new SlashState();
-        }
         state.label = mContext.getString(R.string.quick_settings_caffeine_label);
         state.icon = mIcon;
         state.value = mWakeLock.isHeld();

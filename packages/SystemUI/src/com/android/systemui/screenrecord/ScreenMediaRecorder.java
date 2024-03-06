@@ -52,8 +52,8 @@ import android.util.Size;
 import android.view.Surface;
 import android.view.WindowManager;
 
-import com.android.systemui.R;
-import com.android.systemui.media.MediaProjectionCaptureTarget;
+import com.android.systemui.mediaprojection.MediaProjectionCaptureTarget;
+import com.android.systemui.res.R;
 
 import java.io.Closeable;
 import java.io.File;
