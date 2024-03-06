@@ -57,6 +57,7 @@ public final class VibratorHelper {
     @Nullable private final long[] mCustomPattern;
     @Nullable private final float[] mDefaultPwlePattern;
     @Nullable private final float[] mFallbackPwlePattern;
+    private final int mDefaultVibrationAmplitude;
 
     public VibratorHelper(Context context) {
         mVibrator = context.getSystemService(Vibrator.class);
@@ -72,6 +73,8 @@ public final class VibratorHelper {
                 com.android.internal.R.array.config_defaultNotificationVibeWaveform);
         mFallbackPwlePattern = getFloatArray(context.getResources(),
                 com.android.internal.R.array.config_notificationFallbackVibeWaveform);
+        mDefaultVibrationAmplitude = context.getResources().getInteger(
+                com.android.internal.R.integer.config_defaultVibrationAmplitude);
 
         final int value = Settings.System.getInt(context.getContentResolver(),
                 Settings.System.NOTIFICATION_VIBRATION_PATTERN, 0);
@@ -184,6 +187,14 @@ public final class VibratorHelper {
                     + Arrays.toString(values));
         }
         return null;
+    }
+
+    /**
+     *  Scale vibration effect, valid range is [0.0f, 1.0f]
+     *  Resolves default amplitude value if not already set.
+     */
+    public VibrationEffect scale(VibrationEffect effect, float scale) {
+        return effect.resolve(mDefaultVibrationAmplitude).scale(scale);
     }
 
     /**

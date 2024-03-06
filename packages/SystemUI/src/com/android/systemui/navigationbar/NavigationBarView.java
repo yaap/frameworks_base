@@ -69,7 +69,6 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.settingslib.Utils;
 import com.android.systemui.Dependency;
 import com.android.systemui.Gefingerpoken;
-import com.android.systemui.R;
 import com.android.systemui.model.SysUiState;
 import com.android.systemui.navigationbar.buttons.ButtonDispatcher;
 import com.android.systemui.navigationbar.buttons.ContextualButton;
@@ -81,6 +80,7 @@ import com.android.systemui.navigationbar.buttons.RotationContextButton;
 import com.android.systemui.navigationbar.gestural.EdgeBackGestureHandler;
 import com.android.systemui.navigationbar.gestural.NavigationHandle;
 import com.android.systemui.recents.Recents;
+import com.android.systemui.res.R;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.shade.ShadeViewController;
 import com.android.systemui.shared.rotation.FloatingRotationButton;
@@ -514,14 +514,9 @@ public class NavigationBarView extends FrameLayout
     }
 
     public KeyButtonDrawable getBackDrawable() {
-        KeyButtonDrawable drawable = getDrawable(getBackDrawableRes());
+        KeyButtonDrawable drawable = getDrawable(R.drawable.ic_sysbar_back);
         orientBackButton(drawable);
         return drawable;
-    }
-
-    public @DrawableRes int getBackDrawableRes() {
-        return chooseNavigationIconDrawableRes(R.drawable.ic_sysbar_back,
-                R.drawable.ic_sysbar_back_quick_step);
     }
 
     public KeyButtonDrawable getHomeDrawable() {
@@ -561,11 +556,6 @@ public class NavigationBarView extends FrameLayout
 
     private void orientHomeButton(KeyButtonDrawable drawable) {
         drawable.setRotation(mIsVertical ? 90 : 0);
-    }
-
-    private @DrawableRes int chooseNavigationIconDrawableRes(@DrawableRes int icon,
-            @DrawableRes int quickStepIcon) {
-        return mShowSwipeUpUi ? quickStepIcon : icon;
     }
 
     private KeyButtonDrawable getDrawable(@DrawableRes int icon) {

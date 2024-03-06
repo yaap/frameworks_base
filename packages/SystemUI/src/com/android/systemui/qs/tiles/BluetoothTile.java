@@ -39,9 +39,10 @@ import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.settingslib.Utils;
 import com.android.settingslib.bluetooth.BluetoothUtils;
 import com.android.settingslib.bluetooth.CachedBluetoothDevice;
-import com.android.systemui.R;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
+import com.android.systemui.flags.FeatureFlags;
+import com.android.systemui.flags.Flags;
 import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.plugins.FalsingManager;
 import com.android.systemui.plugins.qs.QSTile.BooleanState;
@@ -50,7 +51,8 @@ import com.android.systemui.qs.QSHost;
 import com.android.systemui.qs.QsEventLogger;
 import com.android.systemui.qs.logging.QSLogger;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
-import com.android.systemui.qs.tiles.dialog.BluetoothDialogFactory;
+import com.android.systemui.qs.tiles.dialog.bluetooth.BluetoothTileDialogViewModel;
+import com.android.systemui.res.R;
 import com.android.systemui.statusbar.policy.BluetoothController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 
@@ -70,11 +72,14 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
 
     private final Handler mHandler;
     private final BluetoothController mController;
-    private final BluetoothDialogFactory mBluetoothDialogFactory;
 
     private CachedBluetoothDevice mMetadataRegisteredDevice = null;
 
     private final Executor mExecutor;
+
+    private final BluetoothTileDialogViewModel mDialogViewModel;
+
+    private final FeatureFlags mFeatureFlags;
 
     @Inject
     public BluetoothTile(
@@ -88,16 +93,17 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
             ActivityStarter activityStarter,
             QSLogger qsLogger,
             BluetoothController bluetoothController,
-            BluetoothDialogFactory bluetoothDialogFactory,
-            KeyguardStateController keyguardStateController
+            FeatureFlags featureFlags,
+            BluetoothTileDialogViewModel dialogViewModel
     ) {
         super(host, uiEventLogger, backgroundLooper, mainHandler, falsingManager, metricsLogger,
                 statusBarStateController, activityStarter, qsLogger, keyguardStateController);
         mHandler = mainHandler;
         mController = bluetoothController;
-        mBluetoothDialogFactory = bluetoothDialogFactory;
         mController.observe(getLifecycle(), mCallback);
         mExecutor = new HandlerExecutor(mainHandler);
+        mFeatureFlags = featureFlags;
+        mDialogViewModel = dialogViewModel;
     }
 
     @Override
@@ -108,11 +114,16 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
     }
 
     @Override
-    protected void handleClick(@Nullable View view, boolean keyguardShowing) {
-        if (checkKeyguard(view, keyguardShowing)) {
-            return;
+    protected void handleClick(@Nullable View view) {
+        if (mFeatureFlags.isEnabled(Flags.BLUETOOTH_QS_TILE_DIALOG)) {
+            mDialogViewModel.showDialog(mContext, view);
+        } else {
+            // Secondary clicks are header clicks, just toggle.
+            final boolean isEnabled = mState.value;
+            // Immediately enter transient enabling state when turning bluetooth on.
+            refreshState(isEnabled ? null : ARG_SHOW_TRANSIENT_ENABLING);
+            mController.setBluetoothEnabled(!isEnabled);
         }
-        mHandler.post(() -> mBluetoothDialogFactory.create(true, view));
     }
 
     @Override
@@ -160,10 +171,6 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
         }
         state.dualTarget = true;
         state.value = enabled;
-        if (state.slash == null) {
-            state.slash = new SlashState();
-        }
-        state.slash.isSlashed = !enabled;
         state.label = mContext.getString(R.string.quick_settings_bluetooth_label);
         state.secondaryLabel = TextUtils.emptyIfNull(
                 getSecondaryLabel(enabled, connecting, connected, state.isTransient));
@@ -196,6 +203,7 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
         }
 
         state.expandedAccessibilityClassName = Switch.class.getName();
+        state.forceExpandIcon = mFeatureFlags.isEnabled(Flags.BLUETOOTH_QS_TILE_DIALOG);
     }
 
     /**

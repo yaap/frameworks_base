@@ -46,9 +46,9 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.logging.UiEventLogger;
 import com.android.internal.widget.RemeasuringLinearLayout;
-import com.android.systemui.R;
 import com.android.systemui.plugins.qs.QSTile;
 import com.android.systemui.qs.logging.QSLogger;
+import com.android.systemui.res.R;
 import com.android.systemui.settings.brightness.BrightnessSliderController;
 
 import java.lang.Runnable;
@@ -119,6 +119,7 @@ public class QSPanel extends LinearLayout {
      * false. It influences available accessibility actions.
      */
     private boolean mCanCollapse = true;
+    private boolean mSceneContainerEnabled;
 
     private final CustomSettingsObserver mCustomSettingsObserver = new CustomSettingsObserver();
     private class CustomSettingsObserver extends ContentObserver {
@@ -224,6 +225,13 @@ public class QSPanel extends LinearLayout {
 
             lp = new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1);
             addView(mHorizontalLinearLayout, lp);
+        }
+    }
+
+    void setSceneContainerEnabled(boolean enabled) {
+        mSceneContainerEnabled = enabled;
+        if (mSceneContainerEnabled) {
+            updatePadding();
         }
     }
 
@@ -458,7 +466,7 @@ public class QSPanel extends LinearLayout {
         int paddingTop = res.getDimensionPixelSize(R.dimen.qs_panel_padding_top);
         int paddingBottom = res.getDimensionPixelSize(R.dimen.qs_panel_padding_bottom);
         setPaddingRelative(getPaddingStart(),
-                paddingTop,
+                mSceneContainerEnabled ? 0 : paddingTop,
                 getPaddingEnd(),
                 paddingBottom);
     }

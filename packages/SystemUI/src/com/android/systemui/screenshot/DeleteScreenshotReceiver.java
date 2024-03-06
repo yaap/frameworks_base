@@ -45,10 +45,10 @@ public class DeleteScreenshotReceiver extends BroadcastReceiver {
     @Inject
     public DeleteScreenshotReceiver(ScreenshotSmartActions screenshotSmartActions,
             @Background Executor backgroundExecutor,
-            ScreenshotNotificationsController notificationsController) {
+            ScreenshotNotificationsController.Factory notificationsControllerFactory) {
         mScreenshotSmartActions = screenshotSmartActions;
         mBackgroundExecutor = backgroundExecutor;
-        mNotificationsController = notificationsController;
+        mNotificationsController = notificationsControllerFactory.create(Display.DEFAULT_DISPLAY);
     }
 
     @Override

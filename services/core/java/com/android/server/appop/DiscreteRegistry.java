@@ -55,9 +55,11 @@ import static android.app.AppOpsManager.OP_READ_PHONE_STATE;
 import static android.app.AppOpsManager.OP_READ_SMS;
 import static android.app.AppOpsManager.OP_RECEIVE_AMBIENT_TRIGGER_AUDIO;
 import static android.app.AppOpsManager.OP_RECEIVE_MMS;
+import static android.app.AppOpsManager.OP_RECEIVE_SANDBOX_TRIGGER_AUDIO;
 import static android.app.AppOpsManager.OP_RECEIVE_SMS;
 import static android.app.AppOpsManager.OP_RECEIVE_WAP_PUSH;
 import static android.app.AppOpsManager.OP_RECORD_AUDIO;
+import static android.app.AppOpsManager.OP_RESERVED_FOR_TESTING;
 import static android.app.AppOpsManager.OP_SEND_SMS;
 import static android.app.AppOpsManager.OP_USE_SIP;
 import static android.app.AppOpsManager.OP_UWB_RANGING;
@@ -163,7 +165,8 @@ final class DiscreteRegistry {
     private static final String PROPERTY_DISCRETE_OPS_LIST = "discrete_history_ops_cslist";
     private static final String DEFAULT_DISCRETE_OPS = OP_FINE_LOCATION + "," + OP_COARSE_LOCATION
             + "," + OP_CAMERA + "," + OP_RECORD_AUDIO + "," + OP_PHONE_CALL_MICROPHONE + ","
-            + OP_PHONE_CALL_CAMERA + "," + OP_RECEIVE_AMBIENT_TRIGGER_AUDIO
+            + OP_PHONE_CALL_CAMERA + "," + OP_RECEIVE_AMBIENT_TRIGGER_AUDIO + ","
+            + OP_RECEIVE_SANDBOX_TRIGGER_AUDIO + "," + OP_RESERVED_FOR_TESTING
 
     /**
     * Keep track of more app ops for privacy dashboard display.

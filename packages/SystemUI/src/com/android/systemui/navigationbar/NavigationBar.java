@@ -71,6 +71,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.os.Trace;
 import android.provider.DeviceConfig;
 import android.telecom.TelecomManager;
 import android.text.TextUtils;
@@ -111,7 +112,6 @@ import com.android.internal.statusbar.LetterboxDetails;
 import com.android.internal.util.LatencyTracker;
 import com.android.internal.view.AppearanceRegion;
 import com.android.systemui.Gefingerpoken;
-import com.android.systemui.R;
 import com.android.systemui.assist.AssistManager;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.DisplayId;
@@ -128,10 +128,10 @@ import com.android.systemui.navigationbar.gestural.EdgeBackGestureHandler;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.recents.OverviewProxyService;
 import com.android.systemui.recents.Recents;
+import com.android.systemui.res.R;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.settings.UserContextProvider;
 import com.android.systemui.settings.UserTracker;
-import com.android.systemui.shade.ShadeController;
 import com.android.systemui.shade.ShadeViewController;
 import com.android.systemui.shared.navigationbar.RegionSamplingHelper;
 import com.android.systemui.shared.recents.utilities.Utilities;
@@ -154,6 +154,7 @@ import com.android.systemui.statusbar.phone.CentralSurfaces;
 import com.android.systemui.statusbar.phone.LightBarController;
 import com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager;
 import com.android.systemui.statusbar.policy.DeviceProvisionedController;
+import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.util.DeviceConfigProxy;
 import com.android.systemui.util.ViewController;
 import com.android.wm.shell.back.BackAnimation;
@@ -198,7 +199,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     private final StatusBarKeyguardViewManager mStatusBarKeyguardViewManager;
     private final SysUiState mSysUiFlagsContainer;
     private final Lazy<Optional<CentralSurfaces>> mCentralSurfacesOptionalLazy;
-    private final ShadeController mShadeController;
+    private final KeyguardStateController mKeyguardStateController;
     private final ShadeViewController mShadeViewController;
     private final NotificationRemoteInputManager mNotificationRemoteInputManager;
     private final OverviewProxyService mOverviewProxyService;
@@ -260,7 +261,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     @VisibleForTesting
     public int mDisplayId;
     private boolean mIsOnDefaultDisplay;
-    public boolean mHomeBlockedThisTouch;
+    private boolean mHomeBlockedThisTouch;
 
     private int mCurrentRotation;
     private final DeadZone mDeadZone;
@@ -365,6 +366,11 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         @Override
         public void setAssistantOverridesRequested(int[] invocationTypes) {
             mAssistManagerLazy.get().setAssistantOverridesRequested(invocationTypes);
+        }
+
+        @Override
+        public void animateNavBarLongPress(boolean isTouchDown, boolean shrink, long durationMs) {
+            mView.getHomeHandle().animateLongPress(isTouchDown, shrink, durationMs);
         }
 
         @Override
@@ -492,7 +498,6 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     @Inject
     NavigationBar(
             NavigationBarView navigationBarView,
-            ShadeController shadeController,
             NavigationBarFrame navigationBarFrame,
             @Nullable Bundle savedState,
             @DisplayId Context context,
@@ -511,6 +516,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
             Optional<Pip> pipOptional,
             Optional<Recents> recentsOptional,
             Lazy<Optional<CentralSurfaces>> centralSurfacesOptionalLazy,
+            KeyguardStateController keyguardStateController,
             ShadeViewController shadeViewController,
             NotificationRemoteInputManager notificationRemoteInputManager,
             NotificationShadeDepthController notificationShadeDepthController,
@@ -546,7 +552,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         mStatusBarKeyguardViewManager = statusBarKeyguardViewManager;
         mSysUiFlagsContainer = sysUiFlagsContainer;
         mCentralSurfacesOptionalLazy = centralSurfacesOptionalLazy;
-        mShadeController = shadeController;
+        mKeyguardStateController = keyguardStateController;
         mShadeViewController = shadeViewController;
         mNotificationRemoteInputManager = notificationRemoteInputManager;
         mOverviewProxyService = overviewProxyService;
@@ -688,17 +694,27 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     }
 
     public void destroyView() {
-        setAutoHideController(/* autoHideController */ null);
-        mCommandQueue.removeCallback(this);
-        mWindowManager.removeViewImmediate(mView.getRootView());
-        mNavigationModeController.removeListener(mModeChangedListener);
-        mEdgeBackGestureHandler.setStateChangeCallback(null);
+        Trace.beginSection("NavigationBar#destroyView");
+        try {
+            setAutoHideController(/* autoHideController */ null);
+            mCommandQueue.removeCallback(this);
+            Trace.beginSection("NavigationBar#removeViewImmediate");
+            try {
+                mWindowManager.removeViewImmediate(mView.getRootView());
+            } finally {
+                Trace.endSection();
+            }
+            mNavigationModeController.removeListener(mModeChangedListener);
+            mEdgeBackGestureHandler.setStateChangeCallback(null);
 
-        mNavBarHelper.removeNavTaskStateUpdater(mNavbarTaskbarStateUpdater);
-        mNotificationShadeDepthController.removeListener(mDepthListener);
+            mNavBarHelper.removeNavTaskStateUpdater(mNavbarTaskbarStateUpdater);
+            mNotificationShadeDepthController.removeListener(mDepthListener);
 
-        mDeviceConfigProxy.removeOnPropertiesChangedListener(mOnPropertiesChangedListener);
-        mTaskStackChangeListeners.unregisterTaskStackListener(mTaskStackListener);
+            mDeviceConfigProxy.removeOnPropertiesChangedListener(mOnPropertiesChangedListener);
+            mTaskStackChangeListeners.unregisterTaskStackListener(mTaskStackListener);
+        } finally {
+            Trace.endSection();
+        }
     }
 
     @Override
@@ -752,7 +768,8 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
             // Reset user rotation pref to match that of the WindowManager if starting in locked
             // mode. This will automatically happen when switching from auto-rotate to locked mode.
             if (display != null && rotationButtonController.isRotationLocked()) {
-                rotationButtonController.setRotationLockedAtAngle(display.getRotation());
+                rotationButtonController.setRotationLockedAtAngle(
+                        display.getRotation(), /* caller= */ "NavigationBar#onViewAttached");
             }
         } else {
             mDisabledFlags2 |= StatusBarManager.DISABLE2_ROTATE_SUGGESTIONS;
@@ -836,8 +853,6 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
             mCurrentRotation = rotation;
         }
     }
-
-    
 
     private void parseCurrentSysuiState() {
         NavBarHelper.CurrentSysuiState state = mNavBarHelper.getCurrentSysuiState();
@@ -1168,8 +1183,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
                 mHomeBlockedThisTouch = false;
                 if (mTelecomManagerOptional.isPresent()
                         && mTelecomManagerOptional.get().isRinging()) {
-                    if (centralSurfacesOptional.map(CentralSurfaces::isKeyguardShowing)
-                            .orElse(false)) {
+                    if (mKeyguardStateController.isShowing()) {
                         Log.i(TAG, "Ignoring HOME; there's a ringing incoming call. " +
                                 "No heads up");
                         mHomeBlockedThisTouch = true;
@@ -1220,7 +1234,17 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         args.putInt(
                 AssistManager.INVOCATION_TYPE_KEY,
                 AssistManager.INVOCATION_TYPE_HOME_BUTTON_LONG_PRESS);
-        mAssistManagerLazy.get().startAssist(args);
+        // If Launcher has requested to override long press home, add a delay for the ripple.
+        // TODO(b/304146255): Remove this delay once we can exclude 3-button nav from screenshot.
+        boolean delayAssistInvocation = mAssistManagerLazy.get().shouldOverrideAssist(
+                AssistManager.INVOCATION_TYPE_HOME_BUTTON_LONG_PRESS);
+        // In practice, I think v should always be a KeyButtonView, but just being safe.
+        if (delayAssistInvocation && v instanceof KeyButtonView) {
+            ((KeyButtonView) v).setOnRippleInvisibleRunnable(
+                    () -> mAssistManagerLazy.get().startAssist(args));
+        } else {
+            mAssistManagerLazy.get().startAssist(args);
+        }
         mCentralSurfacesOptionalLazy.get().ifPresent(CentralSurfaces::awakenDreams);
         mView.abortCurrentGesture();
         return true;

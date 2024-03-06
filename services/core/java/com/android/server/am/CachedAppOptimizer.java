@@ -251,7 +251,8 @@ public final class CachedAppOptimizer {
     private static final int FREEZE_BINDER_TIMEOUT_MS = 0;
     private static final int FREEZE_DEADLOCK_TIMEOUT_MS = 1000;
 
-    @VisibleForTesting static final boolean ENABLE_FILE_COMPACT = false;
+    // If enabled, any compaction issued will apply to code mappings and share memory mappings.
+    @VisibleForTesting static final boolean ENABLE_SHARED_AND_CODE_COMPACT = false;
 
     // Defaults for phenotype flags.
     @VisibleForTesting static final boolean DEFAULT_USE_COMPACTION = true;
@@ -1470,10 +1471,13 @@ public final class CachedAppOptimizer {
             }
             return;
         }
+        boolean processFreezableChangeReported = false;
         if (opt.isPendingFreeze()) {
             // Remove pending DO_FREEZE message
             mFreezeHandler.removeMessages(SET_FROZEN_PROCESS_MSG, app);
             opt.setPendingFreeze(false);
+            reportProcessFreezableChangedLocked(app);
+            processFreezableChangeReported = true;
             if (DEBUG_FREEZER) {
                 Slog.d(TAG_AM, "Cancel freezing " + pid + " " + app.processName);
             }
@@ -1484,7 +1488,6 @@ public final class CachedAppOptimizer {
             uidRec.setFrozen(false);
             postUidFrozenMessage(uidRec.getUid(), false);
         }
-        reportProcessFreezableChangedLocked(app);
 
         opt.setFreezerOverride(false);
         if (pid == 0 || !opt.isFrozen()) {
@@ -1522,6 +1525,9 @@ public final class CachedAppOptimizer {
 
         if (processKilled) {
             return;
+        }
+        if (!processFreezableChangeReported) {
+            reportProcessFreezableChangedLocked(app);
         }
 
         long freezeTime = opt.getFreezeUnfreezeTime();
@@ -1637,15 +1643,22 @@ public final class CachedAppOptimizer {
 
     void onWakefulnessChanged(int wakefulness) {
         if(wakefulness == PowerManagerInternal.WAKEFULNESS_AWAKE) {
-            // Remove any pending compaction we may have scheduled to happen while screen was off
-            Slog.e(TAG_AM, "Cancel pending or running compactions as system is awake");
-            cancelAllCompactions(CancelCompactReason.SCREEN_ON);
+            if (useCompaction()) {
+                // Remove any pending compaction we may have scheduled to happen while screen was
+                // off
+                cancelAllCompactions(CancelCompactReason.SCREEN_ON);
+            }
         }
     }
 
     void cancelAllCompactions(CancelCompactReason reason) {
         synchronized (mProcLock) {
             while(!mPendingCompactionProcesses.isEmpty()) {
+                if (DEBUG_COMPACTION) {
+                    Slog.e(TAG_AM,
+                            "Cancel pending compaction as system is awake for process="
+                                    + mPendingCompactionProcesses.get(0).processName);
+                }
                 cancelCompactionForProcess(mPendingCompactionProcesses.get(0), reason);
             }
             mPendingCompactionProcesses.clear();
@@ -1722,7 +1735,7 @@ public final class CachedAppOptimizer {
             }
         }
 
-        if (!ENABLE_FILE_COMPACT) {
+        if (!ENABLE_SHARED_AND_CODE_COMPACT) {
             if (profile == CompactProfile.SOME) {
                 profile = CompactProfile.NONE;
             } else if (profile == CompactProfile.FULL) {
