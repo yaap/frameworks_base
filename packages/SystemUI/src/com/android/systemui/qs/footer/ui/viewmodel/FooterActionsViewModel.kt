@@ -188,13 +188,13 @@ fun FooterActionsViewModel(
         footerActionsInteractor.showSettings(expandable)
     }
 
-    fun onSettingsButtonLongClicked(expandable: Expandable): Boolean {
+    fun onSettingsButtonLongClicked(expandable: Expandable) {
         if (falsingManager.isFalseTap(FalsingManager.LOW_PENALTY)) {
-            return false
+            return
         }
 
         footerActionsInteractor.showYASP(expandable)
-        return true
+        return
     }
 
     fun onPowerButtonClicked(expandable: Expandable) {
@@ -203,10 +203,6 @@ fun FooterActionsViewModel(
         }
 
         footerActionsInteractor.showPowerMenuDialog(globalActionsDialogLite, expandable)
-    }
-
-    fun doNothingOnLongClick(expandable: Expandable): Boolean {
-        return false;
     }
 
     val qsThemedContext = ContextThemeWrapper(appContext, R.style.Theme_SystemUI_QuickSettings)
@@ -257,7 +253,6 @@ fun FooterActionsViewModel(
                             qsThemedContext,
                             userSwitcherStatus,
                             ::onUserSwitcherClicked,
-                            ::doNothingOnLongClick,
                         )
                     }
                 }
@@ -268,7 +263,7 @@ fun FooterActionsViewModel(
             ::onSettingsButtonLongClicked)
     val power =
         if (showPowerButton) {
-            powerButtonViewModel(qsThemedContext, ::onPowerButtonClicked, ::doNothingOnLongClick)
+            powerButtonViewModel(qsThemedContext, ::onPowerButtonClicked)
         } else {
             null
         }
@@ -322,7 +317,6 @@ fun userSwitcherButtonViewModel(
     qsThemedContext: Context,
     status: UserSwitcherStatusModel.Enabled,
     onUserSwitcherClicked: (Expandable) -> Unit,
-    onUserSwitcherLongClicked: (Expandable) -> Boolean,
 ): FooterActionsButtonViewModel {
     val icon = status.currentUserImage!!
     return FooterActionsButtonViewModel(
@@ -337,7 +331,6 @@ fun userSwitcherButtonViewModel(
         iconTint = null,
         backgroundColor = R.attr.shadeInactive,
         onClick = onUserSwitcherClicked,
-        onLongClick = onUserSwitcherLongClicked,
     )
 }
 
@@ -353,7 +346,7 @@ private fun userSwitcherContentDescription(
 fun settingsButtonViewModel(
     qsThemedContext: Context,
     onSettingsButtonClicked: (Expandable) -> Unit,
-    onSettingsButtonLongClicked: (Expandable) -> Boolean,
+    onSettingsButtonLongClicked: (Expandable) -> Unit,
 ): FooterActionsButtonViewModel {
     return FooterActionsButtonViewModel(
         id = R.id.settings_button_container,
@@ -375,7 +368,6 @@ fun settingsButtonViewModel(
 fun powerButtonViewModel(
     qsThemedContext: Context,
     onPowerButtonClicked: (Expandable) -> Unit,
-    onPowerButtonLongClicked: (Expandable) -> Boolean,
 ): FooterActionsButtonViewModel {
     return FooterActionsButtonViewModel(
         id = R.id.pm_lite,
@@ -390,6 +382,5 @@ fun powerButtonViewModel(
             ),
         backgroundColor = R.attr.shadeActive,
         onClick = onPowerButtonClicked,
-        onLongClick = onPowerButtonLongClicked,
     )
 }

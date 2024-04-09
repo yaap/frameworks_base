@@ -89,7 +89,7 @@ interface FooterActionsInteractor {
     fun showSettings(expandable: Expandable)
 
     /** Show YASP */
-    fun showYASP(expandable: Expandable): Boolean
+    fun showYASP(expandable: Expandable)
 
     /** Show the user switcher. */
     fun showUserSwitcher(expandable: Expandable)
@@ -180,11 +180,11 @@ constructor(
         )
     }
 
-    override fun showYASP(expandable: Expandable): Boolean {
+    override fun showYASP(expandable: Expandable) {
         if (!deviceProvisionedController.isCurrentUserSetup) {
             // If user isn't setup just unlock the device and dump them back at SUW.
             activityStarter.postQSRunnableDismissingKeyguard {}
-            return false
+            return
         }
 
         metricsLogger.action(MetricsProto.MetricsEvent.ACTION_QS_EXPANDED_SETTINGS_LAUNCH)
@@ -195,7 +195,7 @@ constructor(
                 InteractionJankMonitor.CUJ_SHADE_APP_LAUNCH_FROM_SETTINGS_BUTTON
             ),
         )
-        return true
+        return
     }
 
     override fun showUserSwitcher(expandable: Expandable) {
