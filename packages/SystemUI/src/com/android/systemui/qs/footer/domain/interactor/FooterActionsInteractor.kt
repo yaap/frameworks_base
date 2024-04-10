@@ -18,6 +18,7 @@ package com.android.systemui.qs.footer.domain.interactor
 
 import android.app.admin.DevicePolicyEventLogger
 import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -88,8 +89,8 @@ interface FooterActionsInteractor {
     /** Show the settings. */
     fun showSettings(expandable: Expandable)
 
-    /** Show YASP */
-    fun showYASP(expandable: Expandable)
+    /** Show running services settings page */
+    fun showRunningServices(expandable: Expandable)
 
     /** Show the user switcher. */
     fun showUserSwitcher(expandable: Expandable)
@@ -180,7 +181,7 @@ constructor(
         )
     }
 
-    override fun showYASP(expandable: Expandable) {
+    override fun showRunningServices(expandable: Expandable) {
         if (!deviceProvisionedController.isCurrentUserSetup) {
             // If user isn't setup just unlock the device and dump them back at SUW.
             activityStarter.postQSRunnableDismissingKeyguard {}
@@ -189,13 +190,12 @@ constructor(
 
         metricsLogger.action(MetricsProto.MetricsEvent.ACTION_QS_EXPANDED_SETTINGS_LAUNCH)
         activityStarter.startActivity(
-            Intent("com.android.settings.YAAP_SETTINGS"),
+            Intent(Settings.ACTION_RUNNING_SERVICES_SETTING),
             true /* dismissShade */,
             expandable.activityLaunchController(
                 InteractionJankMonitor.CUJ_SHADE_APP_LAUNCH_FROM_SETTINGS_BUTTON
             ),
         )
-        return
     }
 
     override fun showUserSwitcher(expandable: Expandable) {

@@ -193,8 +193,7 @@ fun FooterActionsViewModel(
             return
         }
 
-        footerActionsInteractor.showYASP(expandable)
-        return
+        footerActionsInteractor.showRunningServices(expandable)
     }
 
     fun onPowerButtonClicked(expandable: Expandable) {

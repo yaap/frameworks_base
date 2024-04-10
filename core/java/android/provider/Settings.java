@@ -2752,6 +2752,21 @@ public final class Settings {
     public static final String ACTION_APP_PERMISSIONS_SETTINGS =
             "android.settings.APP_PERMISSIONS_SETTINGS";
 
+    /**
+     * Activity Action: Show screen that lets user see running services
+     * <p>
+     * In some cases, a matching Activity may not exist, so ensure you safeguard against this.
+     * <p>
+     * Input: Nothing
+     * <p>
+     * Output: Nothing
+     *
+     * @hide
+     */
+    @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
+    public static final String ACTION_RUNNING_SERVICES_SETTING =
+            "com.android.settings.RUNNING_SERVICES";
+
     // End of Intent actions for Settings
 
     /**
