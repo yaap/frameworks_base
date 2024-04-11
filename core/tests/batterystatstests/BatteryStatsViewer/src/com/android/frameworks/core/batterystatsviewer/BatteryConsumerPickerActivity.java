@@ -51,7 +51,6 @@ import java.util.Locale;
  * Opens BatteryStatsViewerActivity upon item selection.
  */
 public class BatteryConsumerPickerActivity extends CollapsingToolbarBaseActivity {
-    private static final String PREF_SELECTED_BATTERY_CONSUMER = "batteryConsumerId";
     private static final int BATTERY_STATS_REFRESH_RATE_MILLIS = 60 * 1000;
     private static final String FORCE_FRESH_STATS = "force_fresh_stats";
     private BatteryConsumerListAdapter mBatteryConsumerListAdapter;
@@ -75,23 +74,8 @@ public class BatteryConsumerPickerActivity extends CollapsingToolbarBaseActivity
         mAppList = findViewById(R.id.list_view);
         mAppList.setLayoutManager(new LinearLayoutManager(this));
         mBatteryConsumerListAdapter =
-                new BatteryConsumerListAdapter((this::setSelectedBatteryConsumer));
+                new BatteryConsumerListAdapter((this::startBatteryStatsActivity));
         mAppList.setAdapter(mBatteryConsumerListAdapter);
-
-        if (icicle == null) {
-            final String batteryConsumerId = getPreferences(Context.MODE_PRIVATE)
-                    .getString(PREF_SELECTED_BATTERY_CONSUMER, null);
-            if (batteryConsumerId != null) {
-                startBatteryStatsActivity(batteryConsumerId);
-            }
-        }
-    }
-
-    public void setSelectedBatteryConsumer(String batteryConsumerId) {
-        getPreferences(Context.MODE_PRIVATE).edit()
-                .putString(PREF_SELECTED_BATTERY_CONSUMER, batteryConsumerId)
-                .apply();
-        startBatteryStatsActivity(batteryConsumerId);
     }
 
     private void startBatteryStatsActivity(String batteryConsumerId) {
