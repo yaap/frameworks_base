@@ -75,8 +75,6 @@
     <!-- A toast message shown after successfully deleting a screen recording [CHAR LIMIT=NONE] -->
     <string name="screenrecord_delete_description">Запис екрану видалено</string>
     <string name="screenrecord_stopdot_label">Показувати кнопку стоп-коло\nЗатисніть, щоб пересунути</string>
-    <string name="screenrecord_lowquality_label">Знижена якість</string>
-    <string name="screenrecord_longer_timeout_switch_label">Вище ліміт розміру файлу\nОбмеження до 15ГБ</string>
     <string name="screenrecord_hevc_switch_label">Увімкнути HEVC</string>
 
     <!-- Power menu reboot -->

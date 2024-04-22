@@ -75,8 +75,6 @@
     <string name="screenrecord_delete_label">删除</string>
     <string name="screenrecord_delete_description">录屏已删除</string>
     <string name="screenrecord_stopdot_label">显示停止圆点\n长按移除</string>
-    <string name="screenrecord_lowquality_label">降低画质以节省空间</string>
-    <string name="screenrecord_longer_timeout_switch_label">扩展录屏文件大小\n调整录屏文件最大为 15GB</string>
     <string name="screenrecord_hevc_switch_label">启用 HEVC</string>
 
     <!-- Power menu reboot -->

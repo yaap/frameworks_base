@@ -75,8 +75,6 @@
     <!-- A toast message shown after successfully deleting a screen recording [CHAR LIMIT=NONE] -->
     <string name="screenrecord_delete_description">Запись экрана удалена</string>
     <string name="screenrecord_stopdot_label">Показывать кнопку стоп-круг\nЗажмите чтобы передвинуть</string>
-    <string name="screenrecord_lowquality_label">Пониженное качество</string>
-    <string name="screenrecord_longer_timeout_switch_label">Выше лимит размера файла\nОгранчение до 15ГБ</string>
     <string name="screenrecord_hevc_switch_label">Включить HEVC</string>
 
     <!-- Power menu reboot -->
