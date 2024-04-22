@@ -145,6 +145,7 @@ public class InternetDialog extends SystemUIDialog implements
     private int mDefaultDataSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
     private boolean mCanConfigMobileData;
     private boolean mCanChangeWifiState;
+    private boolean mIsAutoOn = false;
     // Wi-Fi entries
     private int mWifiNetworkHeight;
     @Nullable
@@ -164,7 +165,8 @@ public class InternetDialog extends SystemUIDialog implements
             boolean canConfigWifi, boolean aboveStatusBar, UiEventLogger uiEventLogger,
             DialogLaunchAnimator dialogLaunchAnimator,
             @Main Handler handler, @Background Executor executor,
-            KeyguardStateController keyguardStateController) {
+            KeyguardStateController keyguardStateController,
+            boolean isAutoOn) {
         super(context);
         if (DEBUG) {
             Log.d(TAG, "Init InternetDialog");
@@ -183,6 +185,7 @@ public class InternetDialog extends SystemUIDialog implements
         mCanConfigWifi = canConfigWifi;
         mCanChangeWifiState = WifiEnterpriseRestrictionUtils.isChangeWifiStateAllowed(context);
         mKeyguard = keyguardStateController;
+        mIsAutoOn = isAutoOn;
 
         mUiEventLogger = uiEventLogger;
         mDialogLaunchAnimator = dialogLaunchAnimator;
@@ -256,7 +259,7 @@ public class InternetDialog extends SystemUIDialog implements
         if (DEBUG) {
             Log.d(TAG, "onStart");
         }
-        mInternetDialogController.onStart(this, mCanConfigWifi);
+        mInternetDialogController.onStart(this, mCanConfigWifi, mIsAutoOn);
         if (!mCanConfigWifi) {
             hideWifiViews();
         }
