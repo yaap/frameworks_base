@@ -179,6 +179,13 @@ public class LockSettingsServiceTestable extends LockSettingsService {
         }
 
         @Override
+        public DuressPasswordHelper getDuressPasswordHelper(LockSettingsService lockSettingsService,
+                LockSettingsStorage lockSettingsStorage,
+                SyntheticPasswordManager syntheticPasswordManager) {
+            return mock(DuressPasswordHelper.class);
+        }
+
+        @Override
         public KeyStore getKeyStore() {
             return mKeyStore;
         }
