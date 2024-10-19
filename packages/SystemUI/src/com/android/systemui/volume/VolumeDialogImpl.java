@@ -374,7 +374,7 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
                     VOLUME_PANEL_ON_LEFT_LAND, def ? 1 : 0) == 1;
             mHapticsEnabled = Settings.System.getInt(mContext.getContentResolver(),
                     VOLUME_PANEL_HAPTICS, 1) == 1;
-            mDialogTimeoutMillis = Settings.System.getInt(mContext.getContentResolver(),
+            mDialogTimeoutMillis = Settings.Secure.getInt(mContext.getContentResolver(),
                     Settings.Secure.VOLUME_DIALOG_DISMISS_TIMEOUT, DIALOG_TIMEOUT_MILLIS);
             mHandler.post(() -> {
                 mControllerCallbackH.onConfigurationChanged();
