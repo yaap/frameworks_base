@@ -123,7 +123,7 @@ constructor(
     val iconPadding: Flow<Int> =
         udfpsOverlayParams.map { params ->
             val sensorWidth = params.nativeSensorBounds.right - params.nativeSensorBounds.left
-            val nativePadding = (sensorWidth - iconSize) / 2
+            val nativePadding = (sensorWidth - iconSize) / 5
             (nativePadding * params.scaleFactor).toInt()
         }
 
