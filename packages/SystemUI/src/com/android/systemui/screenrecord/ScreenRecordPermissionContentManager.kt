@@ -35,8 +35,8 @@ import android.view.View.VISIBLE
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.CompoundButton
 import android.widget.Spinner
-import android.widget.Switch
 import androidx.annotation.LayoutRes
 import com.android.systemui.Prefs
 import com.android.systemui.mediaprojection.MediaProjectionCaptureTarget
@@ -107,13 +107,13 @@ class ScreenRecordPermissionContentManager(
 
     private val isHEVCAllowed: Boolean = userContextProvider
         .userContext.resources.getBoolean(R.bool.config_screenRecordHEVC)
-    private lateinit var tapsSwitch: Switch
-    private lateinit var audioSwitch: Switch
+    private lateinit var tapsSwitch: CompoundButton
+    private lateinit var audioSwitch: CompoundButton
     private lateinit var tapsView: View
     private lateinit var options: Spinner
     private lateinit var lowQualitySpinner: Spinner
-    private lateinit var skipTimeSwitch: Switch
-    private lateinit var hevcSwitch: Switch
+    private lateinit var skipTimeSwitch: CompoundButton
+    private lateinit var hevcSwitch: CompoundButton
 
     override fun bind(view: View) {
         super.bind(view)

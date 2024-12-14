@@ -66,14 +66,14 @@
             android:dropDownWidth="274dp"
             android:importantForAccessibility="yes"/>
 
-        <Switch
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:layout_width="wrap_content"
             android:minWidth="48dp"
             android:layout_height="48dp"
             android:layout_gravity="end"
             android:id="@+id/screenrecord_audio_switch"
             android:contentDescription="@string/screenrecord_audio_label"
-            style="@style/ScreenRecord.Switch"
+            android:theme="@style/Theme.Material3.DynamicColors.DayNight"
             android:importantForAccessibility="yes" />
     </LinearLayout>
     <LinearLayout
@@ -99,13 +99,13 @@
             android:text="@string/screenrecord_taps_label"
             android:textAppearance="@style/TextAppearance.ScreenRecord.SwitchLabel"
             android:contentDescription="@string/screenrecord_taps_label"/>
-        <Switch
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:layout_width="wrap_content"
             android:minWidth="48dp"
             android:layout_height="48dp"
             android:id="@+id/screenrecord_taps_switch"
             android:contentDescription="@string/screenrecord_taps_label"
-            style="@style/ScreenRecord.Switch"
+            android:theme="@style/Theme.Material3.DynamicColors.DayNight"
             android:importantForAccessibility="yes" />
     </LinearLayout>
     <LinearLayout
@@ -134,13 +134,13 @@
             android:fontFamily="@*android:string/config_bodyFontFamily"
             android:textColor="?android:attr/textColorPrimary"
             android:contentDescription="@string/screenrecord_skip_time_label"/>
-        <Switch
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:layout_width="wrap_content"
             android:minWidth="48dp"
             android:layout_height="48dp"
             android:layout_weight="0"
             android:id="@+id/screenrecord_skip_time_switch"
-            style="@style/ScreenRecord.Switch"
+            android:theme="@style/Theme.Material3.DynamicColors.DayNight"
             android:importantForAccessibility="yes"/>
     </LinearLayout>
     <LinearLayout
@@ -169,13 +169,13 @@
             android:fontFamily="@*android:string/config_bodyFontFamily"
             android:textColor="?android:attr/textColorPrimary"
             android:contentDescription="@string/screenrecord_hevc_switch_label"/>
-        <Switch
+        <com.google.android.material.materialswitch.MaterialSwitch
             android:layout_width="wrap_content"
             android:minWidth="48dp"
             android:layout_height="48dp"
             android:layout_weight="0"
             android:id="@+id/screenrecord_hevc_switch"
-            style="@style/ScreenRecord.Switch"
+            android:theme="@style/Theme.Material3.DynamicColors.DayNight"
             android:importantForAccessibility="yes"/>
     </LinearLayout>
 </LinearLayout>
