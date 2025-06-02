@@ -3401,10 +3401,12 @@ public class KeyguardViewMediator implements CoreStartable,
             mHiding = false;
             if (mLockPatternUtils.isSecure(currentUserId)) {
                 doKeyguardLocked(null);
-                mKeyguardInteractor.showKeyguard();
-                mShadeController.get().instantCollapseShade();
-                setShowingLocked(true /* showing */, true /* force */,
-                        "handleStartKeyguardExitAnimation - error");
+                if (!KeyguardWmStateRefactor.isEnabled()) {
+                    mKeyguardInteractor.showKeyguard();
+                    mShadeController.get().instantCollapseShade();
+                    setShowingLocked(true /* showing */, true /* force */,
+                            "handleStartKeyguardExitAnimation - mismatch");
+                }
             } else {
                 resetStateLocked();
                 dismiss(null, null);
