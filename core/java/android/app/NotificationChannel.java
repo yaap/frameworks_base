@@ -654,7 +654,7 @@ public final class NotificationChannel implements Parcelable {
      * @hide
      */
     public void setId(String id) {
-        mId = id;
+        mId = getTrimmedString(id);
     }
 
     // Modifiable by apps on channel creation.
@@ -909,8 +909,8 @@ public final class NotificationChannel implements Parcelable {
      */
     public void setConversationId(@NonNull String parentChannelId,
             @NonNull String conversationId) {
-        mParentId = parentChannelId;
-        mConversationId = conversationId;
+        mParentId = getTrimmedString(parentChannelId);
+        mConversationId = getTrimmedString(conversationId);
     }
 
     /**
