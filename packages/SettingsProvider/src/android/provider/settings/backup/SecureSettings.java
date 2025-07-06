@@ -393,5 +393,7 @@ public class SecureSettings {
         Settings.Secure.VOLUME_UP_DOWN_MUTE_GESTURE,
         Settings.Secure.WAKE_ON_CHARGE,
         Settings.Secure.SCREENSHOT_SOUNDS,
+        Settings.Secure.DISPLAY_COLOR_TEMPERATURE,
+        Settings.Secure.DISPLAY_COLOR_SATURATION,
     };
 }
