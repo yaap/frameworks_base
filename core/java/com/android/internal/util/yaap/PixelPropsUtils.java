@@ -40,7 +40,6 @@ public final class PixelPropsUtils {
 
     private final HashMap<String, Object> certifiedProps;
 
-    private static volatile boolean sIsFinsky = false;
     private static volatile boolean sIsEnabled = false;
 
     private static PixelPropsUtils sInstance = null;
@@ -119,8 +118,7 @@ public final class PixelPropsUtils {
             return;
         }
         Logger.d("Package = " + packageName);
-        sIsFinsky = packageName.equals(PACKAGE_FINSKY);
-        if (sIsFinsky || !packageName.equals(PACKAGE_GMS) ||
+        if (!PACKAGE_GMS.equals(packageName) ||
                 !PROCESS_GMS_UNSTABLE.equals(Application.getProcessName())) {
             return;
         }
@@ -143,10 +141,6 @@ public final class PixelPropsUtils {
         } catch (NoSuchFieldException | IllegalAccessException e) {
             Logger.e("Failed to set prop " + key, e);
         }
-    }
-
-    public static boolean getIsFinsky() {
-        return sIsFinsky;
     }
 
     public static boolean getIsEnabled() {
