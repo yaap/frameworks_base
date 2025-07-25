@@ -396,16 +396,24 @@ public class NetworkTraffic extends TextView {
                 UserHandle.USER_CURRENT);
         mShowArrow = Settings.System.getIntForUser(resolver,
                 Settings.System.NETWORK_TRAFFIC_ARROW, 1,
-	        UserHandle.USER_CURRENT) == 1;
+                UserHandle.USER_CURRENT) == 1;
         mLocation = Settings.System.getIntForUser(resolver,
                 Settings.System.NETWORK_TRAFFIC_VIEW_LOCATION, 0,
                 UserHandle.USER_CURRENT);
-        mFontSize = Settings.System.getIntForUser(getContext().getContentResolver(),
+        mFontSize = Settings.System.getIntForUser(resolver,
                 Settings.System.NETWORK_TRAFFIC_FONT_SIZE, 10,
                 UserHandle.USER_CURRENT);
-        mTextEnabled = Settings.System.getIntForUser(getContext().getContentResolver(),
+        mTextEnabled = Settings.System.getIntForUser(resolver,
                 Settings.System.NETWORK_TRAFFIC_TEXT_ENABLED, 1,
                 UserHandle.USER_CURRENT) == 1;
+
+        // safeguard against arrows and text being off at the same time
+        if (!mShowArrow && !mTextEnabled) {
+            Settings.System.putIntForUser(resolver,
+                    Settings.System.NETWORK_TRAFFIC_ARROW, 1,
+                    UserHandle.USER_CURRENT);
+            mShowArrow = true;
+        }
     }
 
     private void updateTrafficDrawable() {
