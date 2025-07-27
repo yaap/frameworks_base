@@ -213,7 +213,8 @@ public class SystemSettings {
                 Settings.System.RAMPING_RINGER_START_VOLUME,
                 Settings.System.RAMPING_RINGER_NO_SILENCE,
                 Settings.System.NOTIFICATION_SOUND_VIB_SCREEN_ON,
-                Settings.System.DC_DIM_ENABLED
+                Settings.System.DC_DIM_ENABLED,
+                Settings.System.SHADE_BLUR_RADIUS
         ));
         if (Flags.backUpSmoothDisplayAndForcePeakRefreshRate()) {
             settings.add(Settings.System.PEAK_REFRESH_RATE);
