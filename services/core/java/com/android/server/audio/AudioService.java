@@ -6248,7 +6248,7 @@ public class AudioService extends IAudioService.Stub
                 .getBoolean(com.android.internal.R.bool.config_volumeHushGestureEnabled))
             return; // disabled by overlay
 
-        if (settingsValue == YAAP_VOLUME_HUSH_OFF)
+        if (settingsValue.equals(YAAP_VOLUME_HUSH_OFF))
             return; // disabled by user
 
         // Cycle through enabled modes

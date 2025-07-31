@@ -158,7 +158,7 @@ final class KeyGestureController {
     private int mSettingsKeyBehavior;
 
     // Settings behaviors
-    private int mRingerToggleChord = Settings.Secure.VOLUME_HUSH_OFF;
+    private String mRingerToggleChord = Settings.Secure.YAAP_VOLUME_HUSH_OFF;
     private int mPowerVolUpBehavior;
 
 
@@ -232,9 +232,11 @@ final class KeyGestureController {
 
     private void initBehaviorsFromSettings() {
         ContentResolver resolver = mContext.getContentResolver();
-        mRingerToggleChord = Settings.Secure.getIntForUser(resolver,
-                Settings.Secure.VOLUME_HUSH_GESTURE, Settings.Secure.VOLUME_HUSH_OFF,
-                UserHandle.USER_CURRENT);
+        mRingerToggleChord = Settings.Secure.getStringForUser(resolver,
+                Settings.Secure.VOLUME_HUSH_GESTURE, UserHandle.USER_CURRENT);
+        if (mRingerToggleChord == null) {
+            mRingerToggleChord = Settings.Secure.YAAP_VOLUME_HUSH_OFF;
+        }
 
         mPowerVolUpBehavior = Settings.Global.getInt(resolver,
                 Settings.Global.KEY_CHORD_POWER_VOLUME_UP,
@@ -333,7 +335,7 @@ final class KeyGestureController {
                     public boolean preCondition() {
                         switch (mPowerVolUpBehavior) {
                             case POWER_VOLUME_UP_BEHAVIOR_MUTE:
-                                return mRingerToggleChord != Settings.Secure.VOLUME_HUSH_OFF;
+                                return !mRingerToggleChord.equals(Settings.Secure.VOLUME_HUSH_OFF);
                             default:
                                 return true;
                         }
