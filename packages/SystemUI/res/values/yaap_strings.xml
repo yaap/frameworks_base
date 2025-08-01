@@ -112,6 +112,10 @@
     <string name="qs_data_switch_changed_1">Switch data card to SIM 1.</string>
     <string name="qs_data_switch_changed_2">Switch data card to SIM 2.</string>
 
+    <!-- Smooth display tile -->
+    <string name="peak_refresh_tile_title">Smooth Display</string>
+    <string name="peak_refresh_tile_subtitle" formatted="false">%d Hz</string>
+
     <!-- Weather -->
     <string name="weather_condition_clouds">Cloudy</string>
     <string name="weather_condition_rain">Rainy</string>
