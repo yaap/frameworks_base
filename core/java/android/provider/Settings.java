@@ -6788,6 +6788,13 @@ public final class Settings {
         public static final String GAMING_MODE_HIGH_TOUCH_RATE = "gaming_mode_high_touch_rate";
 
         /**
+         * Whether gaming mode toggles smooth display
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_SMOOTH_DISPLAY = "gaming_mode_smooth_display";
+
+        /**
          * Apps gaming macro should automatically activate for
          * package name list delimeted by comma
          * @hide

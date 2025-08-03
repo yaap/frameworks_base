@@ -114,6 +114,8 @@ public class GamingMacro {
                 Settings.System.GAMING_MODE_BRIGHTNESS_ENABLED));
         mActions.add(new MediaLevelAction(context, mPrefs,
                 Settings.System.GAMING_MODE_MEDIA_ENABLED));
+        mActions.add(new SmoothDisplayAction(context, mPrefs,
+                Settings.System.GAMING_MODE_SMOOTH_DISPLAY));
     }
 
     /**
