@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.systemui.statusbar;
+package com.android.systemui.statusbar.gaming;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
