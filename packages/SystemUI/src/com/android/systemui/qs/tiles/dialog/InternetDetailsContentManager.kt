@@ -39,6 +39,7 @@ import android.view.View
 import android.view.ViewStub
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.CompoundButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -131,8 +132,8 @@ constructor(
     private lateinit var mobileTitleTextView: TextView
     private lateinit var mobileSummaryTextView: TextView
     private lateinit var airplaneModeSummaryTextView: TextView
-    private lateinit var mobileDataToggle: MaterialSwitch
-    private lateinit var wifiToggle: MaterialSwitch
+    private lateinit var mobileDataToggle: CompoundButton
+    private lateinit var wifiToggle: CompoundButton
     private lateinit var shareWifiButton: LinearLayout
     private lateinit var addNetworkButton: LinearLayout
     private lateinit var airplaneModeButton: Button
