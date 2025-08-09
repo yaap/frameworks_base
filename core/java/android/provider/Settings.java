@@ -14313,6 +14313,12 @@ public final class Settings {
         public static final String UI_NIGHT_LIGHT_DIM_WALL_ACTIVATED = "ui_night_light_dim_wall_activated";
 
         /**
+         * Whether screenshot gesture (power + volume down) is enabled
+         * @hide
+         */
+        public static final String SCREENSHOT_KEY_GESTURE_ENABLED = "screenshot_key_gesture_enabled";
+
+        /**
          * These entries are considered common between the personal and the managed profile,
          * since the managed profile doesn't get to change them.
          */
