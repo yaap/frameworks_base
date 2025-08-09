@@ -14319,6 +14319,21 @@ public final class Settings {
         public static final String SCREENSHOT_KEY_GESTURE_ENABLED = "screenshot_key_gesture_enabled";
 
         /**
+         * Whether to mute media when pressing both volume keys
+         * a11y shortcut takes precedence
+         * @hide
+         */
+        public static final String VOLUME_UP_DOWN_MUTE_GESTURE = "volume_up_down_mute_gesture";
+
+        /**
+         * Saves last volume value when {@link #VOLUME_UP_DOWN_MUTE_GESTURE} is activated
+         * A negative value would mean it's currently inactive
+         * Not for backup, for shutdown persistence.
+         * @hide
+         */
+        public static final String VOLUME_UP_DOWN_MUTE_GESTURE_LAST_VOLUME = "volume_up_down_mute_gesture_last_volume";
+
+        /**
          * These entries are considered common between the personal and the managed profile,
          * since the managed profile doesn't get to change them.
          */

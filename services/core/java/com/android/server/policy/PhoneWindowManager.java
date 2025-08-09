@@ -821,6 +821,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private static final int MSG_SET_DEFERRED_KEY_ACTIONS_EXECUTABLE = 27;
     private static final int MSG_DISPATCH_VOLKEY_WITH_WAKE_LOCK = 28;
     private static final int MSG_QUICK_MUTE = 29;
+    private static final int MSG_VOLUME_UP_DOWN_MUTE = 30;
 
     private boolean mVolumeMusicControlActive;
     private boolean mVolumeMusicControl;
@@ -933,6 +934,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     break;
                 case MSG_QUICK_MUTE:
                     maybePerformQuickMute();
+                    break;
+                case MSG_VOLUME_UP_DOWN_MUTE:
+                    toggleVolumeUpDownMute();
                     break;
             }
         }
@@ -1960,6 +1964,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 getRingerToggleChordDelay());
     }
 
+    private void interceptVolumeUpDownMute() {
+        mHandler.removeMessages(MSG_VOLUME_UP_DOWN_MUTE);
+        mHandler.sendMessageDelayed(mHandler.obtainMessage(MSG_VOLUME_UP_DOWN_MUTE),
+                getRingerToggleChordDelay());
+    }
+
     private long getAccessibilityShortcutTimeout() {
         final ViewConfiguration config = ViewConfiguration.get(mContext);
         final boolean hasDialogShown = Settings.Secure.getIntForUser(mContext.getContentResolver(),
@@ -2002,6 +2012,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     private void cancelPendingRingerToggleChordAction() {
         mHandler.removeMessages(MSG_RINGER_TOGGLE_CHORD);
+    }
+
+    private void cancelPendingVolumeUpDownMuteAction() {
+        mHandler.removeMessages(MSG_VOLUME_UP_DOWN_MUTE);
     }
 
     private final Runnable mEndCallLongPress = new Runnable() {
@@ -4392,7 +4406,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 KeyGestureEvent.KEY_GESTURE_TYPE_SCREENSHOT_CHORD,
                 KeyGestureEvent.KEY_GESTURE_TYPE_RINGER_TOGGLE_CHORD,
                 KeyGestureEvent.KEY_GESTURE_TYPE_GLOBAL_ACTIONS,
-                KeyGestureEvent.KEY_GESTURE_TYPE_TV_TRIGGER_BUG_REPORT
+                KeyGestureEvent.KEY_GESTURE_TYPE_TV_TRIGGER_BUG_REPORT,
+                KeyGestureEvent.KEY_GESTURE_TYPE_VOLUME_UP_DOWN_MUTE
         ));
         if (enableTalkbackAndMagnifierKeyGestures()) {
             supportedGestures.add(KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_TALKBACK);
@@ -4621,6 +4636,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                     nm.setZenMode(isEnabled ? Settings.Global.ZEN_MODE_OFF
                                     : Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS, null,
                             "Key gesture DND", true);
+                }
+                break;
+            case KeyGestureEvent.KEY_GESTURE_TYPE_VOLUME_UP_DOWN_MUTE:
+                if (start) {
+                    interceptVolumeUpDownMute();
+                } else {
+                    cancelPendingVolumeUpDownMuteAction();
                 }
                 break;
             default:
@@ -8090,21 +8112,30 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         mVolumeMusicControlActive = true;
     }
 
-    private void maybePerformQuickMute() {
+    private boolean checkShouldMute() {
         // never mute in-call volume
         int audioMode = AudioManager.MODE_NORMAL;
         try {
             audioMode = getAudioService().getMode();
         } catch (Exception e) {
-            Log.e(TAG, "Error getting AudioService in maybePerformQuickMute.", e);
+            Log.e(TAG, "Error getting AudioService in checkShouldMute", e);
+            return false;
         }
         TelecomManager telecomManager = getTelecommService();
         final boolean isInCall = (telecomManager != null && telecomManager.isInCall()) ||
                 audioMode != AudioManager.MODE_NORMAL;
-        if (isInCall) return;
+        if (isInCall) return false;
 
         // when we cast the default volume stream becomes the remote one, do not mute
-        if (isMusicActiveRemotely()) return;
+        if (isMusicActiveRemotely()) return false;
+
+        return true;
+    }
+
+    private void maybePerformQuickMute() {
+        if (!checkShouldMute()) {
+            return;
+        }
 
         // making sure there are no more volume down presses queued
         mHandler.removeMessages(MSG_SYSTEM_KEY_PRESS);
@@ -8115,8 +8146,51 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             Log.w(TAG, "maybePerformQuickMute: couldn't get AudioManager reference");
             return;
         }
-        final int mediaStream = AudioManager.STREAM_MUSIC;
-        final int minVol = am.getStreamMinVolumeInt(mediaStream);
-        am.setStreamVolume(mediaStream, minVol, AudioManager.FLAG_SHOW_UI);
+        final int minVol = am.getStreamMinVolumeInt(AudioManager.STREAM_MUSIC);
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, minVol, AudioManager.FLAG_SHOW_UI);
+    }
+
+    private void toggleVolumeUpDownMute() {
+        if (!checkShouldMute()) {
+            return;
+        }
+
+        // making sure there are no more volume presses queued
+        mHandler.removeMessages(MSG_SYSTEM_KEY_PRESS);
+
+        final AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) {
+            Log.w(TAG, "toggleVolumeUpDownMute: couldn't get AudioManager reference");
+            return;
+        }
+
+        final ContentResolver resolver = mContext.getContentResolver();
+        final int currentVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+        final int minVolume = am.getStreamMinVolumeInt(AudioManager.STREAM_MUSIC);
+        final int lastVolume = Settings.Secure.getIntForUser(resolver,
+                Settings.Secure.VOLUME_UP_DOWN_MUTE_GESTURE_LAST_VOLUME, -1,
+                UserHandle.USER_CURRENT);
+        if (currentVolume <= minVolume) {
+            // active, restore previous volume, only if still muted
+            if (lastVolume > 0) {
+                am.setStreamVolume(AudioManager.STREAM_MUSIC,
+                        lastVolume, AudioManager.FLAG_SHOW_UI);
+            } else {
+                // fallback to 50% if it was muted manually
+                final int maxVolume = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                final int half = Math.round(0.5f * (maxVolume - minVolume)) + minVolume;
+                am.setStreamVolume(AudioManager.STREAM_MUSIC,
+                        half, AudioManager.FLAG_SHOW_UI);
+            }
+            Settings.Secure.putIntForUser(resolver,
+                    Settings.Secure.VOLUME_UP_DOWN_MUTE_GESTURE_LAST_VOLUME, -1,
+                    UserHandle.USER_CURRENT);
+            return;
+        }
+        // inactive, store and mute volume
+        Settings.Secure.putIntForUser(resolver,
+                Settings.Secure.VOLUME_UP_DOWN_MUTE_GESTURE_LAST_VOLUME, currentVolume,
+                UserHandle.USER_CURRENT);
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, minVolume, AudioManager.FLAG_SHOW_UI);
     }
 }

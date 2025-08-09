@@ -343,5 +343,6 @@ public class SecureSettings {
         Settings.Secure.UI_NIGHT_LIGHT_DIM_WALL,
         Settings.Secure.UI_NIGHT_LIGHT_DIM_WALL_AMOUNT,
         Settings.Secure.SCREENSHOT_KEY_GESTURE_ENABLED,
+        Settings.Secure.VOLUME_UP_DOWN_MUTE_GESTURE,
     };
 }
