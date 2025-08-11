@@ -1128,11 +1128,11 @@ public class Notifier {
     };
 
     private void playChargingStartedFeedback(@UserIdInt int userId, boolean wireless) {
-        if (!isChargingFeedbackEnabled(userId)) {
-            return;
-        }
-
-        if (!mIsPlayingChargingStartedFeedback.compareAndSet(false, true)) {
+        final boolean vibrate = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                    Settings.Secure.CHARGING_VIBRATION_ENABLED, 1, userId) != 0;
+        final boolean playSound = isChargingFeedbackEnabled(userId);
+        if ((playSound || vibrate) &&
+                !mIsPlayingChargingStartedFeedback.compareAndSet(false, true)) {
             // there's already a charging started feedback Runnable scheduled to run on the
             // background thread, so let's not execute another
             return;
@@ -1141,8 +1141,6 @@ public class Notifier {
         // vibrate & play sound on a background thread
         mBackgroundExecutor.execute(() -> {
             // vibrate
-            final boolean vibrate = Settings.Secure.getIntForUser(mContext.getContentResolver(),
-                    Settings.Secure.CHARGING_VIBRATION_ENABLED, 1, userId) != 0;
             if (vibrate) {
                 mVibrator.vibrate(Process.SYSTEM_UID, mContext.getOpPackageName(),
                         CHARGING_VIBRATION_EFFECT, /* reason= */ "Charging started",
@@ -1150,6 +1148,10 @@ public class Notifier {
             }
 
             // play sound
+            if (!playSound) {
+                mIsPlayingChargingStartedFeedback.set(false);
+                return;
+            }
             final String soundPath = Settings.Global.getString(mContext.getContentResolver(),
                     wireless ? Settings.Global.WIRELESS_CHARGING_STARTED_SOUND
                             : Settings.Global.CHARGING_STARTED_SOUND);
