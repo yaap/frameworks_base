@@ -14334,6 +14334,17 @@ public final class Settings {
         public static final String VOLUME_UP_DOWN_MUTE_GESTURE_LAST_VOLUME = "volume_up_down_mute_gesture_last_volume";
 
         /**
+         * Whether to wake / doze the screen on chargin events (plug & unplug)
+         * Default should follow {@link com.android.internal.R.bool.config_unplugTurnsOnScreen}
+         * Possible values:
+         * 0 = Disabled
+         * 1 = Fully wake
+         * 2 = Pulse doze if available
+         * @hide
+         */
+        public static final String WAKE_ON_CHARGE = "wake_on_charge";
+
+        /**
          * These entries are considered common between the personal and the managed profile,
          * since the managed profile doesn't get to change them.
          */

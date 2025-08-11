@@ -104,6 +104,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @VisibleForTesting(visibility = VisibleForTesting.Visibility.PROTECTED)
 public class Notifier {
     private static final String TAG = "PowerManagerNotifier";
+    private static final String PULSE_ACTION = "com.android.systemui.doze.pulse";
 
     private static final boolean DEBUG = false;
 
@@ -118,6 +119,7 @@ public class Notifier {
     private static final int MSG_PROFILE_TIMED_OUT = 5;
     private static final int MSG_WIRED_CHARGING_STARTED = 6;
     private static final int MSG_SCREEN_POLICY = 7;
+    private static final int MSG_CHARGING_STOPPED = 8;
 
     private static final long[] CHARGING_VIBRATION_TIME = {
             40, 40, 40, 40, 40, 40, 40, 40, 40, // ramp-up sampling rate = 40ms
@@ -170,6 +172,8 @@ public class Notifier {
     // True if the device should show the wireless charging animation when the device
     // begins charging wirelessly
     private final boolean mShowWirelessChargingAnimationConfig;
+
+    private final boolean mUnplugTurnsOnScreenConfig;
 
     // Encapsulates interactivity information about a particular display group.
     private static class Interactivity {
@@ -252,6 +256,8 @@ public class Notifier {
                 com.android.internal.R.bool.config_suspendWhenScreenOffDueToProximity);
         mShowWirelessChargingAnimationConfig = context.getResources().getBoolean(
                 com.android.internal.R.bool.config_showBuiltinWirelessChargingAnim);
+        mUnplugTurnsOnScreenConfig = context.getResources().getBoolean(
+                com.android.internal.R.bool.config_unplugTurnsOnScreen);
 
         mFullWakeLockLog = mInjector.getWakeLockLog(context);
         mPartialWakeLockLog = mInjector.getWakeLockLog(context);
@@ -943,6 +949,21 @@ public class Notifier {
     }
 
     /**
+     * Called when wired / wireless charging has stopped - to provide user feedback
+     */
+    public void onChargingStopped(@UserIdInt int userId) {
+        if (DEBUG) {
+            Slog.d(TAG, "onChargingStopped");
+        }
+
+        mSuspendBlocker.acquire();
+        Message msg = mHandler.obtainMessage(MSG_CHARGING_STOPPED);
+        msg.setAsynchronous(true);
+        msg.arg1 = userId;
+        mHandler.sendMessage(msg);
+    }
+
+    /**
      * Called when the screen policy changes.
      */
     public void onScreenPolicyUpdate(int displayGroupId, int newPolicy) {
@@ -1127,7 +1148,24 @@ public class Notifier {
         }
     };
 
+    private void maybeDozeForCharge(@UserIdInt int userId) {
+        final int wakeOnChargeDefault = mUnplugTurnsOnScreenConfig
+                ? PowerManagerService.WAKE_ON_CHARGE_ENABLED
+                : PowerManagerService.WAKE_ON_CHARGE_DISABLED;
+        final boolean shouldDoze = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                Settings.Secure.WAKE_ON_CHARGE, wakeOnChargeDefault, userId)
+                == PowerManagerService.WAKE_ON_CHARGE_PULSE_DOZE;
+        if (!shouldDoze) {
+            return;
+        }
+        mBackgroundExecutor.execute(() -> {
+            final Intent intent = new Intent(PULSE_ACTION);
+            mContext.sendBroadcastAsUser(intent, UserHandle.CURRENT);
+        });
+    }
+
     private void playChargingStartedFeedback(@UserIdInt int userId, boolean wireless) {
+        maybeDozeForCharge(userId);
         final boolean vibrate = Settings.Secure.getIntForUser(mContext.getContentResolver(),
                     Settings.Secure.CHARGING_VIBRATION_ENABLED, 1, userId) != 0;
         final boolean playSound = isChargingFeedbackEnabled(userId);
@@ -1477,6 +1515,9 @@ public class Notifier {
                     break;
                 case MSG_SCREEN_POLICY:
                     screenPolicyChanging(msg.arg1, msg.arg2);
+                    break;
+                case MSG_CHARGING_STOPPED:
+                    maybeDozeForCharge(msg.arg1);
                     break;
             }
         }
