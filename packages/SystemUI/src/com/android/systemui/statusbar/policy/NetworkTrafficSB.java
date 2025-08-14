@@ -54,7 +54,7 @@ public class NetworkTrafficSB extends NetworkTraffic implements DarkReceiver {
     int[] updateTextSize() {
         final int[] arr = super.updateTextSize();
         if (arr == null) return null;
-        final int size = arr[0];
+        final int size = Math.max(arr[0], 2);
         final int unit = arr[1];
         setAutoSizeTextTypeUniformWithConfiguration(1, size, 1, unit);
         return arr;
