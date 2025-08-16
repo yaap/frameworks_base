@@ -17,7 +17,10 @@
 package com.android.systemui.brightness.ui.compose
 
 import android.content.Context
+import android.database.ContentObserver
 import android.graphics.PorterDuff
+import android.os.UserHandle
+import android.provider.Settings
 import android.view.MotionEvent
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -147,6 +150,21 @@ fun BrightnessSlider(
     showToast: () -> Unit = {},
     hapticsViewModelFactory: SliderHapticsViewModel.Factory,
 ) {
+    val context = LocalContext.current
+    val cr = context.contentResolver
+
+    var showAutoBrightness by remember {
+        mutableStateOf(
+            try {
+                Settings.Secure.getIntForUser(
+                    cr, Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
+                    1, UserHandle.USER_CURRENT) != 0
+            } catch (_: Throwable) {
+                false
+            }
+        )
+    }
+
     var value by remember(gammaValue) { mutableIntStateOf(gammaValue) }
     val animatedValue by
         animateFloatAsState(targetValue = value.toFloat(), label = "BrightnessSliderAnimatedValue")
@@ -180,7 +198,6 @@ fun BrightnessSlider(
                 iconResProvider(percentage)
             }
         }
-    val context = LocalContext.current
     val painter: Painter by
         produceState<Painter>(
             initialValue = ColorPainter(Color.Transparent),
@@ -218,6 +235,32 @@ fun BrightnessSlider(
     val hasAutoBrightness = context.resources.getBoolean(
         com.android.internal.R.bool.config_automatic_brightness_available
     )
+
+    DisposableEffect(Unit) {
+        val observer = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                context.mainExecutor.execute {
+                    showAutoBrightness =
+                        try {
+                            Settings.Secure.getIntForUser(
+                                cr, Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON,
+                                1, UserHandle.USER_CURRENT) != 0
+                        } catch (_: Throwable) {
+                            false
+                        }
+                }
+            }
+        }
+
+        cr.registerContentObserver(
+            Settings.Secure.getUriFor(Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS_BUTTON),
+            false, observer, UserHandle.USER_ALL
+        )
+
+        onDispose {
+            cr.unregisterContentObserver(observer)
+        }
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -357,7 +400,7 @@ fun BrightnessSlider(
             },
         )
 
-        if (hasAutoBrightness) {
+        if (hasAutoBrightness && showAutoBrightness) {
             Spacer(modifier = Modifier.width(8.dp))
 
             val coroutineScope = rememberCoroutineScope()
