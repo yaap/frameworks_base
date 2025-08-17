@@ -1148,6 +1148,11 @@ public class Notifier {
         }
     };
 
+    private void maybeDozeForChargeMsg(@UserIdInt int userId) {
+        maybeDozeForCharge(userId);
+        mSuspendBlocker.release();
+    }
+
     private void maybeDozeForCharge(@UserIdInt int userId) {
         final int wakeOnChargeDefault = mUnplugTurnsOnScreenConfig
                 ? PowerManagerService.WAKE_ON_CHARGE_ENABLED
@@ -1517,7 +1522,7 @@ public class Notifier {
                     screenPolicyChanging(msg.arg1, msg.arg2);
                     break;
                 case MSG_CHARGING_STOPPED:
-                    maybeDozeForCharge(msg.arg1);
+                    maybeDozeForChargeMsg(msg.arg1);
                     break;
             }
         }
