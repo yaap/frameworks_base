@@ -141,4 +141,7 @@
     <!-- Toast for timer chips long press -->
     <string name="chip_longpress_hint">Long press to directly stop</string>
 
+    <!-- QS DC Dim -->
+    <string name="quick_settings_dc_dim">DC Dimming</string>
+
 </resources>
