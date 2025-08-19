@@ -17,11 +17,14 @@ package com.android.server.display;
 
 import static android.provider.Settings.Secure.DC_DIM_AUTO_MODE;
 import static android.provider.Settings.Secure.DC_DIM_AUTO_TIME;
+import static android.provider.Settings.System.DC_DIM_ENABLED;
 import static com.android.internal.util.yaap.AutoSettingConsts.MODE_DISABLED;
 
 import android.content.Context;
-import android.content.Intent;
+import android.database.ContentObserver;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.UserHandle;
 import android.provider.Settings;
 
@@ -39,8 +42,6 @@ import java.util.List;
 public class AutoDCDimService extends AutoSettingService {
 
     private static final String TAG = "AutoDCDimService";
-    private static final String ACTION_DCMODE_CHANGED = "com.yaap.device.DeviceSettings.ModeSwitch.DCMODE_CHANGED";
-    private static final String EXTRA_DCMODE_STATE = "enabled";
     private static final String ON = "1";
     private static final String OFF = "0";
 
@@ -51,22 +52,32 @@ public class AutoDCDimService extends AutoSettingService {
         Settings.Secure.getUriFor(DC_DIM_AUTO_TIME)
     ));
 
+    private final SettingsObserver mSettingsObserver;
+
+    private volatile boolean mSelfChange = false;
+
     public AutoDCDimService(Context context) {
         super(context);
         mNodePath = context.getResources().getString(
                 com.android.internal.R.string.config_dcdNodePath);
-        if (mNodePath != null && !mNodePath.isEmpty()) {
-            mNodeUri = Uri.fromFile(new File(mNodePath));
-            mListenUris.add(0, mNodeUri);
-        } else {
+        mSettingsObserver = new SettingsObserver(new Handler(Looper.getMainLooper()));
+        if (mNodePath == null || mNodePath.isEmpty()) {
             mNodeUri = null;
+            return;
         }
+        mNodeUri = Uri.fromFile(new File(mNodePath));
+        mListenUris.add(0, mNodeUri);
+        // restore value on boot
+        final boolean enabled = Settings.System.getIntForUser(context.getContentResolver(),
+                DC_DIM_ENABLED, 0, UserHandle.USER_CURRENT) == 1;
+        writeValue(mNodePath, enabled ? ON : OFF);
     }
 
     @Override
     public void publish() {
         if (mNodePath == null || mNodePath.isEmpty()) return;
         publishLocalService(AutoDCDimService.class, this);
+        mSettingsObserver.observe();
     }
 
     @Override
@@ -101,11 +112,10 @@ public class AutoDCDimService extends AutoSettingService {
     @Override
     public void setActive(boolean active) {
         if (mNodePath == null || mNodePath.isEmpty()) return;
+        mSelfChange = true;
         writeValue(mNodePath, active ? ON : OFF);
-        Intent intent = new Intent(ACTION_DCMODE_CHANGED);
-        intent.putExtra(EXTRA_DCMODE_STATE, active);
-        intent.setFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY);
-        mContext.sendBroadcastAsUser(intent, UserHandle.CURRENT);
+        Settings.System.putIntForUser(mContext.getContentResolver(),
+                DC_DIM_ENABLED, active ? 1 : 0, UserHandle.USER_CURRENT);
     }
 
     @Override
@@ -138,6 +148,28 @@ public class AutoDCDimService extends AutoSettingService {
             fos.write(value.getBytes());
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private final class SettingsObserver extends ContentObserver {
+        SettingsObserver(Handler handler) {
+            super(handler);
+        }
+
+        void observe() {
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(DC_DIM_ENABLED), false, this);
+        }
+
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            if (mSelfChange) {
+                mSelfChange = false;
+                return;
+            }
+            boolean active = Settings.System.getIntForUser(mContext.getContentResolver(),
+                    DC_DIM_ENABLED, 0, UserHandle.USER_CURRENT) == 1;
+            writeValue(mNodePath, active ? ON : OFF);
         }
     }
 }

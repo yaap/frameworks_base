@@ -356,5 +356,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.RAMPING_RINGER_START_VOLUME, new InclusiveIntegerRangeValidator(0, 90));
         VALIDATORS.put(System.RAMPING_RINGER_NO_SILENCE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.NOTIFICATION_SOUND_VIB_SCREEN_ON, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.DC_DIM_ENABLED, BOOLEAN_VALIDATOR);
     }
 }

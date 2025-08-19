@@ -204,7 +204,8 @@ public class SystemSettings {
                 Settings.System.RAMPING_RINGER_DURATION,
                 Settings.System.RAMPING_RINGER_START_VOLUME,
                 Settings.System.RAMPING_RINGER_NO_SILENCE,
-                Settings.System.NOTIFICATION_SOUND_VIB_SCREEN_ON
+                Settings.System.NOTIFICATION_SOUND_VIB_SCREEN_ON,
+                Settings.System.DC_DIM_ENABLED
         ));
         if (Flags.backUpSmoothDisplayAndForcePeakRefreshRate()) {
             settings.add(Settings.System.PEAK_REFRESH_RATE);
