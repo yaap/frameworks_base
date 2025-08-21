@@ -103,8 +103,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @SuppressWarnings("deprecation")
 public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvider {
 
-    private static final String TAG = "FingerprintProvider";
-
     private boolean mTestHalEnabled;
 
     @NonNull
@@ -295,7 +293,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
     }
 
     private String getTag() {
-        return TAG + "/" + mHalInstanceName;
+        return "FingerprintProvider/" + mHalInstanceName;
     }
 
     boolean hasHalInstance() {
@@ -949,7 +947,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
     // TODO(b/174868353): workaround for gaps in HAL interface (remove and get directly from HAL)
     // reads values via an overlay instead of querying the HAL
     @NonNull
-    public static List<SensorLocationInternal> getWorkaroundSensorProps(@NonNull Context context) {
+    private List<SensorLocationInternal> getWorkaroundSensorProps(@NonNull Context context) {
         final List<SensorLocationInternal> sensorLocations = new ArrayList<>();
 
         final TypedArray sfpsProps = context.getResources().obtainTypedArray(
@@ -970,7 +968,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
     }
 
     @Nullable
-    private static SensorLocationInternal parseSensorLocation(@Nullable TypedArray array) {
+    private SensorLocationInternal parseSensorLocation(@Nullable TypedArray array) {
         if (array == null) {
             return null;
         }
@@ -982,7 +980,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
                     array.getInt(2, 0),
                     array.getInt(3, 0));
         } catch (Exception e) {
-            Slog.w(TAG, "malformed sensor location", e);
+            Slog.w(getTag(), "malformed sensor location", e);
         }
         return null;
     }
