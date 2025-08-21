@@ -7081,6 +7081,18 @@ public final class Settings {
         public static final String LOCKSCREEN_WEATHER_TEXT = "lockscreen_weather_text";
 
         /**
+         * Wind text for OmniJaws
+         * @hide
+         */
+        public static final String LOCKSCREEN_WEATHER_WIND_INFO = "lockscreen_weather_wind_info";
+
+        /**
+         * Humidity text for OmniJaws
+         * @hide
+         */
+        public static final String LOCKSCREEN_WEATHER_HUMIDITY_INFO = "lockscreen_weather_humidity_info";
+
+        /**
          * Whether clicking on the weather view updates the weather instead of launching the activity
          * @hide
          */

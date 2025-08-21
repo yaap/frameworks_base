@@ -34,6 +34,7 @@ import android.provider.Settings.Secure.LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS
 import android.provider.Settings.Secure.LOCK_SCREEN_SHOW_NOTIFICATIONS
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_PROVIDER
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_PROVIDER_DEFAULT
+import android.provider.Settings.System.LOCKSCREEN_WEATHER_PROVIDER_OMNI
 import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.View
@@ -316,7 +317,7 @@ constructor(
         dumpManager.registerDumpable(this)
     }
 
-    val isEnabled: Boolean = plugin != null
+    val isEnabled: Boolean = plugin != null && isWeatherEnabled
 
     val isDateWeatherDecoupled: Boolean = datePlugin != null && weatherPlugin != null
 
@@ -327,6 +328,16 @@ constructor(
                 LOCKSCREEN_WEATHER_PROVIDER_DEFAULT,
                 userTracker.userId) == LOCKSCREEN_WEATHER_PROVIDER_DEFAULT
             return showWeather
+        }
+
+    val isOmniWeatherEnabled: Boolean
+        get() {
+            val showCustomWeather =
+                systemSettings.getIntForUser(
+                    LOCKSCREEN_WEATHER_PROVIDER,
+                    LOCKSCREEN_WEATHER_PROVIDER_DEFAULT,
+                    userTracker.userId) == LOCKSCREEN_WEATHER_PROVIDER_OMNI
+            return showCustomWeather
         }
 
     private fun updateBypassEnabled() {

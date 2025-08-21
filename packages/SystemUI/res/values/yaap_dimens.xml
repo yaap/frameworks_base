@@ -42,4 +42,8 @@
     <!-- Width of the landscape battery icon in the status bar. -->
     <dimen name="status_bar_battery_icon_width_landscape">28dp</dimen>
 
+    <!-- Weather -->
+    <dimen name="weather_image_max_size">24dp</dimen>
+    <dimen name="weather_humidity_margin_start">16dp</dimen>
+
 </resources>
