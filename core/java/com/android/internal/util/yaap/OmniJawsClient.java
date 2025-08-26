@@ -118,28 +118,19 @@ public class OmniJawsClient {
         }
     }
 
-    public Intent getSettingsIntent(Context context) {
-        if (isOmniJawsEnabled(context)) {
-            return new Intent(Intent.ACTION_MAIN)
-                    .setClassName(SERVICE_PACKAGE, SERVICE_PACKAGE + ".SettingsActivity");
-        }
-        return null;
+    public Intent getSettingsIntent() {
+        return new Intent(Intent.ACTION_MAIN)
+                .setClassName(SERVICE_PACKAGE, SERVICE_PACKAGE + ".SettingsActivity");
     }
 
-    public static Intent getWeatherActivityIntent(Context context) {
-        if (isOmniJawsEnabled(context)) {
-            return new Intent(Intent.ACTION_MAIN)
-                    .setClassName(SERVICE_PACKAGE, SERVICE_PACKAGE + ".WeatherActivity");
-        }
-        return null;
+    public static Intent getWeatherActivityIntent() {
+        return new Intent(Intent.ACTION_MAIN)
+                .setClassName(SERVICE_PACKAGE, SERVICE_PACKAGE + ".WeatherActivity")
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     }
 
-    public static Intent getForceUpdateIntent(Context context) {
-        if (isOmniJawsEnabled(context)) {
-            return new Intent(FORCE_UPDATE)
-                    .setPackage(SERVICE_PACKAGE);
-        }
-        return null;
+    public static Intent getForceUpdateIntent() {
+            return new Intent(FORCE_UPDATE).setPackage(SERVICE_PACKAGE);
     }
 
 

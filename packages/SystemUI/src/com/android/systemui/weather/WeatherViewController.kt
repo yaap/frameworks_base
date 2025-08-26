@@ -166,10 +166,9 @@ class WeatherViewController(
             listOf(weatherInfoView, weatherIcon, weatherTemp).forEach { view ->
                 view.setOnClickListener {
                     if (clickUpdatesEnabled) {
-                        context.sendBroadcast(OmniJawsClient.getForceUpdateIntent(context))
+                        context.sendBroadcast(OmniJawsClient.getForceUpdateIntent())
                     } else {
-                        val intent = OmniJawsClient.getWeatherActivityIntent(context)
-                            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val intent = OmniJawsClient.getWeatherActivityIntent()
                         activityStarter?.postStartActivityDismissingKeyguard(intent, 0)
                     }
                 }
