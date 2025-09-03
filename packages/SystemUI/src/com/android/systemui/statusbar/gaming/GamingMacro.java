@@ -108,6 +108,8 @@ public class GamingMacro {
                 Settings.System.GAMING_MODE_TOUCH_SENSITIVITY));
         mActions.add(new TouchPollingRateAction(context, mPrefs,
                 Settings.System.GAMING_MODE_HIGH_TOUCH_RATE));
+        mActions.add(new LtpoFeaturesAction(context, mPrefs,
+                Settings.System.GAMING_MODE_LTPO_FEATURES));
         mActions.add(new ExtraDimAction(context, mPrefs,
                 Settings.System.GAMING_MODE_EXTRA_DIM, colorManager));
         mActions.add(new BrightnessAction(context, mPrefs,

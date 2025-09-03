@@ -157,6 +157,7 @@ public class SystemSettings {
                 Settings.System.GAMING_MODE_THREE_FINGER,
                 Settings.System.GAMING_MODE_TOUCH_SENSITIVITY,
                 Settings.System.GAMING_MODE_HIGH_TOUCH_RATE,
+                Settings.System.GAMING_MODE_LTPO_FEATURES,
                 Settings.System.GAMING_MODE_SMOOTH_DISPLAY,
                 Settings.System.GAMING_MODE_APPS,
                 Settings.System.NOTIFICATION_HEADERS,

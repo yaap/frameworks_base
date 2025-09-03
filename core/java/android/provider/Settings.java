@@ -6788,6 +6788,13 @@ public final class Settings {
         public static final String GAMING_MODE_HIGH_TOUCH_RATE = "gaming_mode_high_touch_rate";
 
         /**
+         * Whether gaming mode toggles ltpo features
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_LTPO_FEATURES = "gaming_mode_ltpo_features";
+
+        /**
          * Whether gaming mode toggles smooth display
          * @hide
          */
@@ -14198,6 +14205,12 @@ public final class Settings {
          * @hide
          */
         public static final String HIGH_TOUCH_RATE_ENABLED = "high_touch_rate_enabled";
+
+        /**
+         * Whether to enable ltpo features
+         * @hide
+         */
+        public static final String LTPO_FEATURES_ENABLED = "ltpo_features_enabled";
 
         /**
          * Whether to enable screen off udfps
