@@ -294,6 +294,11 @@ constructor(
             }
             internetDetailsContentController.connectCarrierNetwork()
         }
+        mobileNetworkLayout.setOnLongClickListener { view: View? ->
+            internetDetailsContentController.launchMobileNetworkSettings(view, defaultDataSubId)
+            true
+        }
+
 
         // Mobile data toggle
         mobileDataToggle.setOnClickListener {
