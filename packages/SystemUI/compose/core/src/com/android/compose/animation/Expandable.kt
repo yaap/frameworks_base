@@ -310,7 +310,7 @@ fun Expandable(
                 modifier
                     .updateExpandableSize()
                     .then(minInteractiveSizeModifier)
-                    .then(clickModifier(controller, onClick, interactionSource=interactionSource))
+                    .then(clickModifier(controller, onClick, onLongClick, interactionSource=interactionSource))
                     .animatedBackground(color, shape = shape)
                     .border(controller)
                     .onGloballyPositioned { controller.boundsInComposeViewRoot = it.boundsInRoot() }
@@ -487,14 +487,14 @@ private fun clickModifier(
             // will draw the click indication themselves.
             return Modifier.combinedClickable(
                 interactionSource, indication = null,
-                onLongClick = { onLongClick(controller.expandable) },
+                onLongClick = { onLongClick?.invoke(controller.expandable) },
                 onClick = { onClick?.invoke(controller.expandable) }
             )
         } else {
             // If no interaction source is provided, we draw the default indication (a
             // ripple) and make sure it's clipped by the expandable shape.
             return Modifier.combinedClickable(
-                onLongClick = { onLongClick(controller.expandable) },
+                onLongClick = { onLongClick?.invoke(controller.expandable) },
                 onClick = { onClick?.invoke(controller.expandable) }
             )
         }
