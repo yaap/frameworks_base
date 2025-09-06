@@ -50,7 +50,7 @@
             android:paddingStart="@dimen/keyguard_indication_text_padding"
             android:paddingEnd="@dimen/keyguard_indication_text_padding"
             android:textAppearance="@style/TextAppearance.Keyguard.BottomArea"
-            android:maxLines="2"
+            android:maxLines="3"
             android:ellipsize="end"
             android:alpha=".8"
             android:accessibilityLiveRegion="polite"
