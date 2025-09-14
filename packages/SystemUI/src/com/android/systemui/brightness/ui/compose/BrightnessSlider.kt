@@ -24,6 +24,7 @@ import android.graphics.drawable.StateListDrawable
 import android.net.Uri
 import android.os.UserHandle
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -447,6 +448,8 @@ fun BrightnessSlider(
                         setBackgroundResource(0)
                         scaleType = ImageView.ScaleType.CENTER_INSIDE
 
+                        isHapticFeedbackEnabled = hapticsEnabled
+
                         val animatedOrNull = runCatching {
                             ResourcesCompat.getDrawable(
                                 resources, R.drawable.ic_qs_brightness_auto, ctx.theme
@@ -499,7 +502,12 @@ fun BrightnessSlider(
                     }
 
                     button.setColorFilter(autoBrightnessIconTint.toArgb(), PorterDuff.Mode.SRC_IN)
-                    button.setOnClickListener { coroutineScope.launch { onIconClick() } }
+                    button.setOnClickListener {
+                        if (hapticsEnabled) {
+                            button.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        }
+                        coroutineScope.launch { onIconClick() }
+                    }
                 }
             )
         }
