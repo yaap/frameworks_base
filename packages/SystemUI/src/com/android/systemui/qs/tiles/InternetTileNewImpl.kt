@@ -88,6 +88,11 @@ constructor(
                 Settings.System.QS_WIFI_AUTO_ON, 0) == 1
     }
 
+    private fun getMobileAutoOn(): Boolean {
+        return Settings.System.getInt(mContext.getContentResolver(),
+                Settings.System.QS_MOBILE_AUTO_ON, 0) == 1
+    }
+
     override fun getTileLabel(): CharSequence =
         mContext.getString(R.string.quick_settings_internet_label)
 
@@ -106,6 +111,7 @@ constructor(
                 accessPointController.canConfigWifi(),
                 expandable,
                 getAutoOn(),
+                getMobileAutoOn(),
             )
         }
     }

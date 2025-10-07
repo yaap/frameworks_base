@@ -835,7 +835,7 @@ public class NetworkControllerImpl extends BroadcastReceiver
             case Settings.Panel.ACTION_INTERNET_CONNECTIVITY:
                 mMainHandler.post(() -> mInternetDialogManager.create(true,
                         mAccessPoints.canConfigMobileData(), mAccessPoints.canConfigWifi(),
-                        null /* view */, false));
+                        null /* view */, false, false));
                 break;
             default:
                 int subId = intent.getIntExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,

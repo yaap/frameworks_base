@@ -200,6 +200,7 @@ public class SystemSettings {
                 Settings.System.LOCKSCREEN_WEATHER_HUMIDITY_INFO,
                 Settings.System.LOCKSCREEN_WEATHER_CLICK_UPDATES,
                 Settings.System.QS_WIFI_AUTO_ON,
+                Settings.System.QS_MOBILE_AUTO_ON,
                 Settings.System.QS_BT_AUTO_ON,
                 Settings.System.BRIGHTNESS_SLIDER_HAPTICS,
                 Settings.System.VOLUME_PANEL_HAPTICS,

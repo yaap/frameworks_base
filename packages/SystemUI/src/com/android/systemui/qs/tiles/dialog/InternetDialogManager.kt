@@ -61,6 +61,7 @@ constructor(
         canConfigWifi: Boolean,
         expandable: Expandable?,
         isAutoOn: Boolean = false,
+        isMobileAutoOn: Boolean = false,
     ) {
         if (shadeModeInteractor.isDualShade) {
             // If `QsDetailedView` is enabled, it should show the details view.
@@ -75,7 +76,8 @@ constructor(
             coroutineScope = CoroutineScope(bgDispatcher + newTracingContext("InternetDialogScope"))
             dialog =
                 dialogFactory
-                    .create(aboveStatusBar, canConfigMobileData, canConfigWifi, coroutineScope, isAutoOn)
+                    .create(aboveStatusBar, canConfigMobileData, canConfigWifi, coroutineScope,
+                        isAutoOn, isMobileAutoOn)
                     .createDialog()
 
             val controller =

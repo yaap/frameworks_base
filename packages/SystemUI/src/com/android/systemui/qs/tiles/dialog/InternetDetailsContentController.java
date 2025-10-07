@@ -295,10 +295,11 @@ public class InternetDetailsContentController implements AccessPointController.A
     }
 
     void onStart(@NonNull InternetDialogCallback callback, boolean canConfigWifi) {
-        onStart(callback, canConfigWifi, false);
+        onStart(callback, canConfigWifi, false, false);
     }
 
-    void onStart(@NonNull InternetDialogCallback callback, boolean canConfigWifi, boolean isAutoOn) {
+    void onStart(@NonNull InternetDialogCallback callback, boolean canConfigWifi,
+            boolean isAutoOn, boolean isMobileAutoOn) {
         if (DEBUG) {
             Log.d(TAG, "onStart");
         }
@@ -325,7 +326,14 @@ public class InternetDetailsContentController implements AccessPointController.A
         mCanConfigWifi = canConfigWifi;
         scanWifiAccessPoints();
 
-        if (isAutoOn && !isWifiEnabled()) setWifiEnabled(true);
+        if (mCanConfigWifi) {
+            if (isAutoOn && !isWifiEnabled()) {
+                setWifiEnabled(true);
+            }
+            if (isMobileAutoOn && !isMobileDataEnabled()) {
+                setMobileDataEnabled(mContext, getDefaultDataSubscriptionId(), true, false);
+            }
+        }
     }
 
     void onStop() {

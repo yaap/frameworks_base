@@ -101,6 +101,7 @@ public class InternetDialogDelegateLegacy implements
     private static final String CAN_CONFIG_MOBILE_DATA = "can_config_mobile_data";
     private static final String CAN_CONFIG_WIFI = "can_config_wifi";
     private static final String IS_AUTO_ON = "is_auto_on";
+    private static final String IS_MOBILE_AUTO_ON = "is_mobile_auto_on";
 
     static final int MAX_NETWORK_COUNT = 4;
 
@@ -161,6 +162,7 @@ public class InternetDialogDelegateLegacy implements
     private boolean mCanConfigMobileData;
     private boolean mCanChangeWifiState;
     private boolean mIsAutoOn = false;
+    private boolean mIsMobileAutoOn = false;
     // Wi-Fi entries
     private int mWifiNetworkHeight;
     @Nullable
@@ -192,7 +194,8 @@ public class InternetDialogDelegateLegacy implements
                 @Assisted(CAN_CONFIG_MOBILE_DATA) boolean canConfigMobileData,
                 @Assisted(CAN_CONFIG_WIFI) boolean canConfigWifi,
                 @Assisted CoroutineScope coroutineScope,
-                @Assisted(IS_AUTO_ON) boolean isAutoOn);
+                @Assisted(IS_AUTO_ON) boolean isAutoOn,
+                @Assisted(IS_MOBILE_AUTO_ON) boolean isMobileAutoOn);
     }
 
     @AssistedInject
@@ -212,7 +215,8 @@ public class InternetDialogDelegateLegacy implements
             SystemUIDialog.Factory systemUIDialogFactory,
             ShadeDialogContextInteractor shadeDialogContextInteractor,
             ShadeModeInteractor shadeModeInteractor,
-            @Assisted(IS_AUTO_ON) boolean isAutoOn) {
+            @Assisted(IS_AUTO_ON) boolean isAutoOn,
+            @Assisted(IS_MOBILE_AUTO_ON) boolean isMobileAutoOn) {
         // TODO (b/393628355): remove this after the details view is supported for single shade.
         if (shadeModeInteractor.isDualShade()){
             // If `QsDetailedView` is enabled, it should show the details view.
@@ -240,6 +244,7 @@ public class InternetDialogDelegateLegacy implements
         mUiEventLogger = uiEventLogger;
         mDialogTransitionAnimator = dialogTransitionAnimator;
         mIsAutoOn = isAutoOn;
+        mIsMobileAutoOn = isMobileAutoOn;
         mAdapter = new InternetAdapter(mInternetDetailsContentController, coroutineScope);
     }
 
@@ -338,7 +343,7 @@ public class InternetDialogDelegateLegacy implements
 
         mLifecycleRegistry.setCurrentState(Lifecycle.State.RESUMED);
 
-        mInternetDetailsContentController.onStart(this, mCanConfigWifi, mIsAutoOn);
+        mInternetDetailsContentController.onStart(this, mCanConfigWifi, mIsAutoOn, mIsMobileAutoOn);
         if (!mCanConfigWifi) {
             hideWifiViews();
         }

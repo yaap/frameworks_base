@@ -7195,11 +7195,18 @@ public final class Settings {
         public static final String DEFAULT_MAX_ALARM_VOLUME = "default_max_alarm_volume";
 
         /**
-         * Whether to turn on WiFi automatically when showing the QS WiFi dialog
+         * Whether to turn on WiFi automatically when showing the QS Internet dialog
          * @hide
          */
         @Readable
         public static final String QS_WIFI_AUTO_ON = "qs_wifi_auto_on";
+
+        /**
+         * Whether to turn on Mobile Data automatically when showing the QS Internet dialog
+         * @hide
+         */
+        @Readable
+        public static final String QS_MOBILE_AUTO_ON = "qs_mobile_auto_on";
 
         /**
          * Whether to turn on Bluetooth automatically when showing the Bluetooth WiFi dialog
