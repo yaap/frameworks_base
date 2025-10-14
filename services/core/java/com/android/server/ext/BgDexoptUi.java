@@ -81,6 +81,7 @@ public class BgDexoptUi {
         b.setStyle(new Notification.BigTextStyle());
         b.setContentText(ctx.getString(R.string.bg_dexopt_completed_notif_text,
             DateUtils.formatDuration(durationMs)));
+        b.setOngoing(true);
         b.setAutoCancel(true);
 
         var args = new Bundle();
