@@ -363,7 +363,7 @@ struct DrawImage final : Op {
     SkGainmapInfo gainmapInfo;
 
     void draw(SkCanvas* c, const SkMatrix&) const {
-        if (gainmap) {
+        if (gainmap && Properties::enableUhdrGore) {
             SkRect src = SkRect::MakeWH(image->width(), image->height());
             SkRect dst = SkRect::MakeXYWH(x, y, src.width(), src.height());
             DrawGainmapBitmap(c, image, src, dst, sampling, &paint,
@@ -402,7 +402,7 @@ struct DrawImageRect final : Op {
     SkGainmapInfo gainmapInfo;
 
     void draw(SkCanvas* c, const SkMatrix&) const {
-        if (gainmap) {
+        if (gainmap && Properties::enableUhdrGore) {
             DrawGainmapBitmap(c, image, src, dst, sampling, &paint, constraint, gainmap,
                               gainmapInfo);
         } else {

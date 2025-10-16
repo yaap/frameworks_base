@@ -119,6 +119,7 @@ float Properties::maxHdrHeadroomOn8bit = 5.f;  // TODO: Refine this number
 bool Properties::clipSurfaceViews = false;
 bool Properties::hdr10bitPlus = false;
 bool Properties::skipTelemetry = false;
+bool Properties::enableUhdrGore = false;
 bool Properties::queryGlobalPriority = false;
 
 int Properties::timeoutMultiplier = 1;
@@ -188,6 +189,8 @@ bool Properties::load() {
     if (hdrHeadroom >= 1.f) {
         maxHdrHeadroomOn8bit = std::min(hdrHeadroom, 100.f);
     }
+
+    enableUhdrGore = base::GetBoolProperty(PROPERTY_ENABLE_UHDR_GORE, /*default*/ false);
 
     // call isDrawingEnabled to force loading of the property
     isDrawingEnabled();

@@ -332,6 +332,11 @@ void CanvasContext::setOpaque(bool opaque) {
 }
 
 float CanvasContext::setColorMode(ColorMode mode) {
+
+    if (!Properties::enableUhdrGore && mode == ColorMode::Hdr) {
+        mode = ColorMode::Default;
+    }
+
     if (mode != mColorMode) {
         mColorMode = mode;
         mRenderPipeline->setSurfaceColorProperties(mode);
