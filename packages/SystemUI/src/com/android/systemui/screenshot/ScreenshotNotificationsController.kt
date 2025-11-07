@@ -155,8 +155,16 @@ internal constructor(
                 .addAction(actionDelete.build())
                 .setContentIntent(pi)
 
+        val g = Notification.Builder(context, NotificationChannels.SCREENSHOTS_HEADSUP)
+                .setSmallIcon(com.android.systemui.res.R.drawable.screenshot_image)
+                .setContentTitle(context.getResources().getString(
+                        com.android.systemui.res.R.string.screenshot_saved_title))
+                .setGroup(GROUP_KEY)
+                .setGroupSummary(true)
+                .setAutoCancel(true)
+
+        notificationManager.notify(TAG, GROUP_ID, g.build())
         notificationManager.notify(TAG, requestCode, b.build())
-        maybePostGroup()
     }
 
     public fun dismissPostActionNotification(id: Int) {
@@ -165,21 +173,8 @@ internal constructor(
         maybeCloseSystemDialogs()
     }
 
-    public fun maybePostGroup() {
-        if (countGroupedNotifications() < 2)
-            return // only post after we show the 2nd notification
-        val b = Notification.Builder(context, NotificationChannels.SCREENSHOTS_HEADSUP)
-                .setSmallIcon(com.android.systemui.res.R.drawable.screenshot_image)
-                .setContentTitle(context.getResources().getString(
-                        com.android.systemui.res.R.string.screenshot_saved_title))
-                .setGroup(GROUP_KEY)
-                .setGroupSummary(true)
-                .setAutoCancel(true)
-        notificationManager.notify(TAG, GROUP_ID, b.build())
-    }
-
     public fun maybeDismissGroup() {
-        if (countGroupedNotifications() >= 1)
+        if (countGroupedNotifications() > 1)
             return // dismiss only when we have one notification left
         notificationManager.cancel(TAG, GROUP_ID)
     }
