@@ -641,6 +641,17 @@ constructor(
         return startedKeyguardTransitionStep.value.to
     }
 
+    fun initialDozeAmount(): Float {
+        val current = getCurrentState()
+        val started = getStartedState()
+        return if (
+            current == KeyguardState.AOD ||
+            current == KeyguardState.DOZING ||
+            started == KeyguardState.AOD ||
+            started == KeyguardState.DOZING
+        ) 1f else 0f
+    }
+
     private val finishedKeyguardState: StateFlow<KeyguardState> =
         repository.transitions
             .filter { it.transitionState == TransitionState.FINISHED }

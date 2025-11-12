@@ -81,6 +81,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -150,7 +151,11 @@ constructor(
         val clockStr = clock.toString()
         loggers.forEach { it.d({ "New Clock: $str1" }) { str1 = clockStr } }
 
-        clock.initialize(isDarkTheme(), dozeAmount.value, 0f, clockListener)
+        val initialDoze = keyguardTransitionInteractor.initialDozeAmount()
+        clock.initialize(isDarkTheme(), initialDoze, 0f, clockListener)
+        clock.smallClock.animations.doze(initialDoze)
+        clock.largeClock.animations.doze(initialDoze)
+        dozeAmount.value = initialDoze
 
         if (!regionSamplingEnabled) {
             updateColors()
@@ -197,6 +202,7 @@ constructor(
 
                 override fun onViewAttachedToWindow(view: View) {
                     clock.events.onTimeFormatChanged(is24HourFormat())
+                    clock.smallClock.animations.doze(keyguardTransitionInteractor.initialDozeAmount())
                     // Match the asing for view.parent's layout classes.
                     smallClockFrame =
                         (view.parent as ViewGroup)?.also { frame ->
@@ -229,6 +235,7 @@ constructor(
             object : OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(p0: View) {
                     clock.events.onTimeFormatChanged(is24HourFormat())
+                    clock.largeClock.animations.doze(keyguardTransitionInteractor.initialDozeAmount())
                 }
 
                 override fun onViewDetachedFromWindow(p0: View) {}
@@ -474,6 +481,8 @@ constructor(
                     else -> 0f
                 }
             )
+        } else {
+            handleDoze(keyguardTransitionInteractor.initialDozeAmount())
         }
         disposableHandle =
             parent.repeatWhenAttached {
@@ -610,8 +619,10 @@ constructor(
                     },
                     keyguardTransitionInteractor.transition(Edge.create(LOCKSCREEN, DOZING)),
                 )
-                .filter { it.transitionState != TransitionState.FINISHED }
-                .collect { handleDoze(it.value) }
+                .map { it.value }
+                .distinctUntilChanged()
+                .collect { value -> mainExecutor.execute { handleDoze(value) } }
+
         }
     }
 
@@ -624,9 +635,7 @@ constructor(
         return scope.launch {
             keyguardTransitionInteractor
                 .transition(Edge.create(to = AOD))
-                .filter { it.transitionState == TransitionState.STARTED }
-                .filter { it.from != LOCKSCREEN }
-                .collect { handleDoze(1f) }
+                .collect { mainExecutor.execute { handleDoze(1f) } }
         }
     }
 
@@ -636,9 +645,7 @@ constructor(
         return scope.launch {
             keyguardTransitionInteractor
                 .transition(Edge.create(to = LOCKSCREEN))
-                .filter { it.transitionState == TransitionState.STARTED }
-                .filter { it.from != AOD && it.from != DOZING }
-                .collect { handleDoze(0f) }
+                .collect { mainExecutor.execute { handleDoze(0f) } }
         }
     }
 
@@ -652,8 +659,7 @@ constructor(
         return scope.launch {
             keyguardTransitionInteractor
                 .transition(Edge.create(to = DOZING))
-                .filter { it.transitionState == TransitionState.FINISHED }
-                .collect { handleDoze(1f) }
+                .collect { mainExecutor.execute { handleDoze(1f) } }
         }
     }
 
