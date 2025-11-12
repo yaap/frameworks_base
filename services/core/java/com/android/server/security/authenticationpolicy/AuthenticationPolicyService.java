@@ -27,6 +27,7 @@ import static android.security.Flags.failedAuthLockToggle;
 import static android.security.Flags.secureLockDevice;
 import static android.security.Flags.secureLockdown;
 
+import static com.android.internal.widget.LockDomain.Primary;
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE;
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.SOME_AUTH_REQUIRED_AFTER_ADAPTIVE_AUTH_REQUEST;
 
@@ -74,6 +75,7 @@ import android.util.SparseLongArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.FrameworkStatsLog;
+import com.android.internal.widget.LockDomain;
 import com.android.internal.widget.LockPatternUtils;
 import com.android.server.LocalServices;
 import com.android.server.SystemService;
@@ -96,10 +98,12 @@ public class AuthenticationPolicyService extends SystemService {
     private static final int MSG_REPORT_BIOMETRIC_AUTH_SUCCESS = 2;
     private static final int MSG_REPORT_BIOMETRIC_AUTH_FAILURE = 3;
     private static final int MSG_REPORT_BIOMETRIC_AUTH_ERROR = 4;
+    private static final int MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT = 5;
     private static final int AUTH_SUCCESS = 1;
     private static final int AUTH_FAILURE = 0;
     private static final int TYPE_PRIMARY_AUTH = 0;
     private static final int TYPE_BIOMETRIC_AUTH = 1;
+    private static final int TYPE_BIOMETRIC_SECOND_FACTOR_AUTH = 2;
 
     private final LockPatternUtils mLockPatternUtils;
     private final LockSettingsInternal mLockSettings;
@@ -209,19 +213,21 @@ public class AuthenticationPolicyService extends SystemService {
     private final LockSettingsStateListener mLockSettingsStateListener =
             new LockSettingsStateListener() {
                 @Override
-                public void onAuthenticationSucceeded(int userId) {
+                public void onAuthenticationSucceeded(int userId, LockDomain lockDomain) {
                     if (DEBUG) {
-                        Slog.d(TAG, "LockSettingsStateListener#onAuthenticationSucceeded");
+                        Slog.d(TAG, "LockSettingsStateListener#onAuthenticationSucceeded, domain: " + lockDomain);
                     }
-                    mHandler.obtainMessage(MSG_REPORT_PRIMARY_AUTH_ATTEMPT, AUTH_SUCCESS, userId)
-                            .sendToTarget();
+                    mHandler.obtainMessage(lockDomain == Primary ? MSG_REPORT_PRIMARY_AUTH_ATTEMPT :
+                                    MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT, AUTH_SUCCESS,
+                                    userId).sendToTarget();
                 }
 
                 @Override
-                public void onAuthenticationFailed(int userId) {
-                    Slog.i(TAG, "LockSettingsStateListener#onAuthenticationFailed");
-                    mHandler.obtainMessage(MSG_REPORT_PRIMARY_AUTH_ATTEMPT, AUTH_FAILURE, userId)
-                            .sendToTarget();
+                public void onAuthenticationFailed(int userId, LockDomain lockDomain) {
+                    Slog.i(TAG, "LockSettingsStateListener#onAuthenticationFailed, domain: " + lockDomain);
+                    mHandler.obtainMessage(lockDomain == Primary ? MSG_REPORT_PRIMARY_AUTH_ATTEMPT :
+                                    MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT, AUTH_FAILURE,
+                                    userId).sendToTarget();
                 }
             };
 
@@ -281,6 +287,10 @@ public class AuthenticationPolicyService extends SystemService {
                 case MSG_REPORT_BIOMETRIC_AUTH_ERROR:
                     AuthenticationErrorInfo errorInfo = (AuthenticationErrorInfo) msg.obj;
                     handleReportBiometricAuthError(errorInfo);
+                    break;
+                case MSG_REPORT_BIOMETRIC_SECOND_FACTOR_AUTH_ATTEMPT:
+                    handleReportBiometricSecondFactorAuthAttempt(msg.arg1 != AUTH_FAILURE,
+                            msg.arg2);
                     break;
             }
         }
@@ -343,6 +353,14 @@ public class AuthenticationPolicyService extends SystemService {
         }
     }
 
+    private void handleReportBiometricSecondFactorAuthAttempt(boolean success, int userId) {
+        if (DEBUG) {
+            Slog.d(TAG, "handleReportBiometricSecondFactorAuthAttempt: success=" + success
+                    + ", userId=" + userId);
+        }
+        reportAuthAttempt(TYPE_BIOMETRIC_SECOND_FACTOR_AUTH, success, userId);
+    }
+
     private void reportAuthAttempt(int authType, boolean success, int userId) {
         // Do not report auth attempts and do not proceed to lock the device if the failed auth lock
         // feature (aka adaptive auth) is completely disabled by the device manufacturer
@@ -353,6 +371,18 @@ public class AuthenticationPolicyService extends SystemService {
 
         // Disable adaptive auth for automotive devices by default
         if (getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
+            return;
+        }
+
+        boolean isDeviceLockedForUser = mKeyguardManager.isDeviceLocked(userId)
+                && mKeyguardManager.isKeyguardLocked();
+        // If there's a biometric second factor and we're on the lockscreen then don't count
+        // biometric as success. Second factor is not used for BiometricPrompt so do count as
+        // success when not on lockscreen.
+        if (authType == TYPE_BIOMETRIC_AUTH
+                && success
+                && isDeviceLockedForUser
+                && mLockPatternUtils.isBiometricSecondFactorEnabled(userId)) {
             return;
         }
 
@@ -380,7 +410,7 @@ public class AuthenticationPolicyService extends SystemService {
 
         // Don't lock again if the device is already locked and if Keyguard is already showing and
         // isn't trivially dismissible
-        if (mKeyguardManager.isDeviceLocked(userId) && mKeyguardManager.isKeyguardLocked()) {
+        if (isDeviceLockedForUser) {
             Slog.d(TAG, "Not locking the device because the device is already locked.");
             return;
         }

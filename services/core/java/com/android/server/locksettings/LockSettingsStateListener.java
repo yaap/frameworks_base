@@ -16,6 +16,8 @@
 
 package com.android.server.locksettings;
 
+import com.android.internal.widget.LockDomain;
+
 /**
  * Callback interface between LockSettingService and other system services to be notified about the
  * state of primary authentication (i.e. PIN/pattern/password).
@@ -24,12 +26,14 @@ public interface LockSettingsStateListener {
     /**
      * Defines behavior in response to a successful authentication
      * @param userId The user Id for the requested authentication
+     * @param lockDomain Whether primary or biometric second factor auth
      */
-    void onAuthenticationSucceeded(int userId);
+    void onAuthenticationSucceeded(int userId, LockDomain lockDomain);
 
     /**
      * Defines behavior in response to a failed authentication
      * @param userId The user Id for the requested authentication
+     * @param lockDomain Whether primary or biometric second factor auth
      */
-    void onAuthenticationFailed(int userId);
+    void onAuthenticationFailed(int userId, LockDomain lockDomain);
 }

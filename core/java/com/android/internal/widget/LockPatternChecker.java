@@ -1,6 +1,7 @@
 package com.android.internal.widget;
 
 import static com.android.internal.widget.flags.Flags.runCheckCredentialWithHigherPriority;
+import static com.android.internal.widget.LockDomain.Primary;
 
 import android.annotation.NonNull;
 import android.os.AsyncTask;
@@ -95,6 +96,13 @@ public final class LockPatternChecker {
         return task;
     }
 
+    public static AsyncTask<?, ?, ?> checkCredential(LockPatternUtils utils,
+            final LockscreenCredential credential,
+            final int userId,
+            final OnCheckCallback callback) {
+        return checkCredential(utils, Primary, credential, userId, callback);
+    }
+
     /**
      * Checks a lockscreen credential asynchronously.
      *
@@ -104,6 +112,7 @@ public final class LockPatternChecker {
      * @param callback The callback to be invoked with the check result.
      */
     public static AsyncTask<?, ?, ?> checkCredential(final LockPatternUtils utils,
+            final LockDomain lockDomain,
             final LockscreenCredential credential,
             final int userId,
             final OnCheckCallback callback) {
@@ -126,7 +135,8 @@ public final class LockPatternChecker {
                                             + "priority display", e);
                         }
                     }
-                    return utils.checkCredential(credentialCopy, userId, callback::onEarlyMatched);
+                    return utils.checkCredential(credentialCopy, lockDomain, userId,
+                            callback::onEarlyMatched);
                 } catch (RequestThrottledException ex) {
                     mThrottleTimeout = ex.getTimeoutMs();
                     return false;

@@ -31,6 +31,7 @@ import android.os.Looper;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.ServiceManager.ServiceNotFoundException;
+import android.security.KeyStoreAuthorization;
 import android.util.Pair;
 import android.util.Slog;
 import android.view.Display;
@@ -40,8 +41,10 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.logging.InstanceId;
 import com.android.internal.statusbar.ISessionListener;
 import com.android.internal.statusbar.IStatusBarService;
+import com.android.internal.widget.LockPatternUtils;
 import com.android.server.biometrics.BiometricHandlerProvider;
 import com.android.server.biometrics.sensors.AuthSessionCoordinator;
+import com.android.server.biometrics.sensors.BiometricAuthTokenStore;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,7 +73,9 @@ public final class BiometricContextProvider implements BiometricContext {
                             IStatusBarService.Stub.asInterface(ServiceManager.getServiceOrThrow(
                                     Context.STATUS_BAR_SERVICE)),
                             BiometricHandlerProvider.getInstance().getBiometricCallbackHandler(),
-                            new AuthSessionCoordinator());
+                            new AuthSessionCoordinator(),
+                            new BiometricAuthTokenStore(KeyStoreAuthorization.getInstance()),
+                            new LockPatternUtils(context));
                 } catch (ServiceNotFoundException e) {
                     throw new IllegalStateException("Failed to find required service", e);
                 }
@@ -91,6 +96,11 @@ public final class BiometricContextProvider implements BiometricContext {
     private int mFoldState = IBiometricContextListener.FoldState.UNKNOWN;
     private int mDisplayState = AuthenticateOptions.DISPLAY_STATE_UNKNOWN;
     private boolean mIsHardwareIgnoringTouches = false;
+    @NonNull
+    private BiometricAuthTokenStore mAuthTokenStore;
+    @NonNull
+    private LockPatternUtils mLockPatternUtils;
+
     @VisibleForTesting
     final BroadcastReceiver mDockStateReceiver = new BroadcastReceiver() {
         @Override
@@ -105,10 +115,14 @@ public final class BiometricContextProvider implements BiometricContext {
     public BiometricContextProvider(@NonNull Context context,
             @NonNull WindowManager windowManager,
             @NonNull IStatusBarService service, @NonNull Handler handler,
-            @NonNull AuthSessionCoordinator authSessionCoordinator) {
+            @NonNull AuthSessionCoordinator authSessionCoordinator,
+            @NonNull BiometricAuthTokenStore authTokenStore,
+            @NonNull LockPatternUtils lockPatternUtils) {
         mWindowManager = windowManager;
         mAuthSessionCoordinator = authSessionCoordinator;
         mHandler = handler;
+        mAuthTokenStore = authTokenStore;
+        mLockPatternUtils = lockPatternUtils;
 
         subscribeBiometricContextListener(service);
         subscribeDockState(context);
@@ -258,6 +272,15 @@ public final class BiometricContextProvider implements BiometricContext {
     private void notifyChanged() {
         mHandler.post(() -> mSubscribers.notifySubscribers(this));
     }
+
+    @Override
+    public BiometricAuthTokenStore getAuthTokenStore() { return mAuthTokenStore; }
+
+    @Override
+    public LockPatternUtils getLockPatternUtils() { return mLockPatternUtils; }
+
+    @Override
+    public KeyStoreAuthorization getKeyStore() { return KeyStoreAuthorization.getInstance(); }
 
     @Override
     public String toString() {
