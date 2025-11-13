@@ -147,7 +147,7 @@ public abstract class WindowManagerInternal {
              * @param bottom The rectangle bottom.
              */
             void onRectangleOnScreenRequested(int displayId, int left, int top, int right,
-                    int bottom);
+                    int bottom, int source);
         }
     }
 
@@ -202,11 +202,18 @@ public abstract class WindowManagerInternal {
 
         /**
          * Called when the region where magnification operates changes. Note that this isn't the
-         * entire screen. For example, IMEs are not magnified.
+         * entire screen. For example, IMEs are not always magnified.
          *
          * @param magnificationRegion the current magnification region
          */
         void onMagnificationRegionChanged(Region magnificationRegion);
+
+        /**
+         * Called when the region used by TYPE_INPUT_METHOD windows changes.
+         *
+         * @param imeRegion the current region taken by TYPE_INPUT_METHOD window(s).
+         */
+        void onImeRegionChanged(Region imeRegion);
 
         /**
          * Called when an application requests a rectangle on the screen to allow
@@ -555,6 +562,13 @@ public abstract class WindowManagerInternal {
     public abstract boolean isKeyguardLocked();
 
     /**
+     * @return Whether the keyguard is showing, reported by WindowManager policy. This value matches
+     * the initial value reported by {@link android.app.KeyguardManager#isKeyguardLocked()}, for
+     * system_server internal use only.
+     */
+    public abstract boolean isKeyguardShowing();
+
+    /**
     * @return Whether the keyguard is showing and not occluded.
     */
     public abstract boolean isKeyguardShowingAndNotOccluded();
@@ -697,15 +711,15 @@ public abstract class WindowManagerInternal {
     public abstract void setDismissImeOnBackKeyPressed(boolean dismissImeOnBackKeyPressed);
 
     /**
-     * Notifies WindowManagerService that the current IME window status is being changed.
+     * Notifies WindowManagerService that the current IME target window has changed. This will get
+     * set as the new {@link DisplayContent#mImeInputTarget}.
      *
      * <p>Only {@link com.android.server.inputmethod.InputMethodManagerService} is the expected and
      * tested caller of this method.</p>
      *
-     * @param imeTargetWindowToken token to identify the target window that the IME is associated
-     *                             with
+     * @param windowToken the token to identify the IME target window.
      */
-    public abstract void updateInputMethodTargetWindow(@NonNull IBinder imeTargetWindowToken);
+    public abstract void updateImeTargetWindow(@NonNull IBinder windowToken);
 
     /**
       * Returns true when the hardware keyboard is available.
@@ -786,7 +800,7 @@ public abstract class WindowManagerInternal {
     /**
      * Checks whether the specified IME client has IME focus or not.
      *
-     * @param windowToken The window token of the input method client
+     * @param windowToken The token of the IME client window
      * @param uid UID of the process to be queried
      * @param pid PID of the process to be queried
      * @param displayId Display ID reported from the client. Note that this method also verifies
@@ -794,8 +808,9 @@ public abstract class WindowManagerInternal {
      * @return {@code true} if the IME client specified with {@code uid}, {@code pid}, and
      *         {@code displayId} has IME focus
      */
-    public abstract @ImeClientFocusResult int hasInputMethodClientFocus(IBinder windowToken,
-            int uid, int pid, int displayId);
+    @ImeClientFocusResult
+    public abstract int hasInputMethodClientFocus(IBinder windowToken, int uid, int pid,
+            int displayId);
 
     @Retention(SOURCE)
     @IntDef({
@@ -834,6 +849,13 @@ public abstract class WindowManagerInternal {
      * @return The UI context of top focused display.
      */
     public abstract Context getTopFocusedDisplayUiContext();
+
+    /**
+     * @return The UI context of the display.
+     *
+     * @param displayId The id of the display
+     */
+    public abstract Context getDisplayUiContext(int displayId);
 
     /**
      * Sets the rotation of a non-default display.
@@ -891,25 +913,6 @@ public abstract class WindowManagerInternal {
      * @return The policy for how the display should show IME.
      */
     public abstract @DisplayImePolicy int getDisplayImePolicy(int displayId);
-
-    /**
-     * Show IME on imeTargetWindow once IME has finished layout.
-     *
-     * @param imeTargetWindowToken token of the (IME target) window which IME should be shown.
-     * @param statsToken the token tracking the current IME request.
-     */
-    public abstract void showImePostLayout(IBinder imeTargetWindowToken,
-            @NonNull ImeTracker.Token statsToken);
-
-    /**
-     * Hide IME using imeTargetWindow when requested.
-     *
-     * @param imeTargetWindowToken token of the (IME target) window which requests hiding IME.
-     * @param displayId the id of the display the IME is on.
-     * @param statsToken the token tracking the current IME request.
-     */
-    public abstract void hideIme(IBinder imeTargetWindowToken, int displayId,
-            @NonNull ImeTracker.Token statsToken);
 
     /**
      * Tell window manager about a package that should be running with a restricted range of
@@ -977,33 +980,40 @@ public abstract class WindowManagerInternal {
 
     /** The information of input method target when IME is requested to show or hide. */
     public static class ImeTargetInfo {
-        public final String focusedWindowName;
-        public final String requestWindowName;
 
-        /** The window name of IME Insets control target. */
-        public final String imeControlTargetName;
+        /** The name of the focused window. */
+        @NonNull
+        public final String mFocusedWindowName;
 
-        /**
-         * The current window name of the input method is on top of.
-         * <p>
-         * Note that the concept of this window is only used to reparent the target window behind
-         * the input method window, it may be different from the window reported by
-         * {@link com.android.server.inputmethod.InputMethodManagerService#reportStartInput} which
-         * has input connection.
-         */
-        public final String imeLayerTargetName;
+        /** The name of the window that requested the IME visibility change. */
+        @NonNull
+        public final String mRequestWindowName;
+
+        /** The name of the {@link DisplayContent#mImeLayeringTarget}. */
+        @NonNull
+        public final String mImeLayeringTargetName;
+
+        /** The name of the {@link DisplayContent#mImeInputTarget}. */
+        @NonNull
+        public final String mImeInputTargetName;
+
+        /** The name of the {@link DisplayContent#mImeControlTarget}. */
+        @NonNull
+        public final String mImeControlTargetName;
 
         /** The surface parent of the IME container. */
-        public final String imeSurfaceParentName;
+        @NonNull
+        public final String mImeSurfaceParentName;
 
-        public ImeTargetInfo(String focusedWindowName, String requestWindowName,
-                String imeControlTargetName, String imeLayerTargetName,
-                String imeSurfaceParentName) {
-            this.focusedWindowName = focusedWindowName;
-            this.requestWindowName = requestWindowName;
-            this.imeControlTargetName = imeControlTargetName;
-            this.imeLayerTargetName = imeLayerTargetName;
-            this.imeSurfaceParentName = imeSurfaceParentName;
+        public ImeTargetInfo(@NonNull String focusedWindowName, @NonNull String requestWindowName,
+                @NonNull String imeLayeringTargetName, @NonNull String imeInputTargetName,
+                @NonNull String imeControlTargetName, @NonNull String imeSurfaceParentName) {
+            mFocusedWindowName = focusedWindowName;
+            mRequestWindowName = requestWindowName;
+            mImeLayeringTargetName = imeLayeringTargetName;
+            mImeInputTargetName = imeInputTargetName;
+            mImeControlTargetName = imeControlTargetName;
+            mImeSurfaceParentName = imeSurfaceParentName;
         }
     }
 

@@ -80,6 +80,7 @@ import android.telephony.TelephonyManager;
 import android.util.ArraySet;
 import android.util.Log;
 import android.view.ContextThemeWrapper;
+import android.view.Display;
 import android.view.GestureDetector;
 import android.view.IWindowManager;
 import android.view.LayoutInflater;
@@ -135,11 +136,14 @@ import com.android.systemui.globalactions.domain.interactor.GlobalActionsInterac
 import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.plugins.GlobalActions.GlobalActionsManager;
 import com.android.systemui.plugins.GlobalActionsPanelPlugin;
+import com.android.systemui.qs.flags.QsInCompose;
 import com.android.systemui.scrim.ScrimDrawable;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.shade.ShadeController;
+import com.android.systemui.shade.ShadeDisplayAware;
 import com.android.systemui.shade.shared.flag.ShadeWindowGoesAround;
 import com.android.systemui.statusbar.NotificationShadeWindowController;
+import com.android.systemui.topui.TopUiController;
 import com.android.systemui.statusbar.VibratorHelper;
 import com.android.systemui.statusbar.phone.LightBarController;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
@@ -148,6 +152,7 @@ import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.statusbar.window.StatusBarWindowController;
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.telephony.TelephonyListenerManager;
+import com.android.systemui.topui.TopUiControllerRefactor;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
 import com.android.systemui.user.domain.interactor.UserLogoutInteractor;
 import com.android.systemui.util.EmergencyDialerConstants;
@@ -277,6 +282,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
     private final IStatusBarService mStatusBarService;
     protected final LightBarController mLightBarController;
     protected final NotificationShadeWindowController mNotificationShadeWindowController;
+    protected final TopUiController mTopUiController;
     private final StatusBarWindowControllerStore mStatusBarWindowControllerStore;
     private final IWindowManager mIWindowManager;
     private final Executor mBackgroundExecutor;
@@ -292,6 +298,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
     private final GlobalActionsInteractor mInteractor;
     private final Lazy<DisplayWindowPropertiesRepository> mDisplayWindowPropertiesRepositoryLazy;
     private final PowerManager mPowerManager;
+    private int mGlobalActionDialogTimeout;
     private final Handler mHandler;
     private final BlurUtils mBlurUtils;
 
@@ -372,6 +379,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         @UiEvent(doc = "System Update button was pressed.")
         GA_SYSTEM_UPDATE_PRESS(1716),
 
+        @UiEvent(doc = "Power menu was closed due to timeout.")
+        GA_CLOSE_TIMEOUT(2148),
+
         @UiEvent(doc = "The global actions standby button was pressed.")
         GA_STANDBY_PRESS(2210);
 
@@ -392,7 +402,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
      */
     @Inject
     public GlobalActionsDialogLite(
-            Context context,
+            @ShadeDisplayAware Context context,
             GlobalActionsManager windowManagerFuncs,
             AudioManager audioManager,
             LockPatternUtils lockPatternUtils,
@@ -401,8 +411,8 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             GlobalSettings globalSettings,
             SecureSettings secureSettings,
             @NonNull VibratorHelper vibrator,
-            @Main Resources resources,
-            ConfigurationController configurationController,
+            @ShadeDisplayAware Resources resources,
+            @ShadeDisplayAware ConfigurationController configurationController,
             ActivityStarter activityStarter,
             UserTracker userTracker,
             KeyguardStateController keyguardStateController,
@@ -415,6 +425,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             IStatusBarService statusBarService,
             LightBarController lightBarController,
             NotificationShadeWindowController notificationShadeWindowController,
+            TopUiController topUiController,
             StatusBarWindowControllerStore statusBarWindowControllerStore,
             IWindowManager iWindowManager,
             @Background Executor backgroundExecutor,
@@ -454,6 +465,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         mStatusBarService = statusBarService;
         mLightBarController = lightBarController;
         mNotificationShadeWindowController = notificationShadeWindowController;
+        mTopUiController = topUiController;
         mStatusBarWindowControllerStore = statusBarWindowControllerStore;
         mIWindowManager = iWindowManager;
         mBackgroundExecutor = backgroundExecutor;
@@ -474,6 +486,9 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         mHandler = new Handler(mMainHandler.getLooper()) {
             public void handleMessage(Message msg) {
                 switch (msg.what) {
+                    case MESSAGE_TIMEOUT_DISMISS:
+                        mUiEventLogger.log(GlobalActionsEvent.GA_CLOSE_TIMEOUT);
+                        // fallthrough
                     case MESSAGE_DISMISS:
                         if (mDialog != null) {
                             if (SYSTEM_DIALOG_REASON_DREAM.equals(msg.obj)) {
@@ -509,6 +524,10 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         mGlobalSettings.registerContentObserverSync(
                 Settings.Global.getUriFor(Settings.Global.AIRPLANE_MODE_ON), true,
                 mAirplaneModeObserver);
+        mGlobalSettings.registerContentObserverSync(
+                Settings.Global.getUriFor(Settings.Global.GLOBAL_ACTIONS_TIMEOUT_MILLIS), true,
+                mGlobalActionsTimeoutObserver);
+
         mHasVibrator = vibrator.hasVibrator();
 
         mShowSilentToggle = SHOW_SILENT_TOGGLE && !resources.getBoolean(
@@ -537,6 +556,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         mBroadcastDispatcher.unregisterReceiver(mBroadcastReceiver);
         mTelephonyListenerManager.removeServiceStateListener(mPhoneStateListener);
         mGlobalSettings.unregisterContentObserverSync(mAirplaneModeObserver);
+        mGlobalSettings.unregisterContentObserverSync(mGlobalActionsTimeoutObserver);
         mConfigurationController.removeCallback(this);
         if (mShowSilentToggle) {
             mRingerModeTracker.getRingerMode().removeObservers(this);
@@ -604,7 +624,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         prepareDialog();
 
         WindowManager.LayoutParams attrs = mDialog.getWindow().getAttributes();
-        attrs.setTitle("ActionsDialog");
+        attrs.setTitle("GlobalActionsDialogLite");
         attrs.layoutInDisplayCutoutMode = LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
         mDialog.getWindow().setAttributes(attrs);
         // Don't acquire soft keyboard focus, to avoid destroying state when capturing bugreports
@@ -621,6 +641,8 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mDialog.show();
         }
         mWindowManagerFuncs.onGlobalActionsShown();
+
+        rescheduleBurninTimeout(mGlobalActionDialogTimeout);
     }
 
     @VisibleForTesting
@@ -677,6 +699,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
         mAirplaneModeOn = new AirplaneModeAction();
         onAirplaneModeChanged();
+        onGlobalActionsTimeoutChanged();
 
         mItems.clear();
         mOverflowItems.clear();
@@ -821,9 +844,14 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
     private Context getContextForDisplay(int displayId) {
         if (!ShadeWindowGoesAround.isEnabled()) {
-            Log.e(TAG, "Asked for the displayId=" + displayId
-                    + " context but returning default display one as ShadeWindowGoesAround flag "
-                    + "is disabled.");
+            if (displayId != Display.DEFAULT_DISPLAY) {
+                Log.e(
+                        TAG,
+                        "Asked for the displayId="
+                                + displayId
+                                + " context but returning default display one as"
+                                + " ShadeWindowGoesAround flag is disabled.");
+            }
             return mContext;
         }
         try {
@@ -855,6 +883,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 mLightBarController,
                 mKeyguardStateController,
                 mNotificationShadeWindowController,
+                mTopUiController,
                 mStatusBarWindowControllerStore.forDisplay(context.getDisplayId()),
                 this::onRefresh,
                 mKeyguardShowing,
@@ -864,7 +893,13 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 mKeyguardUpdateMonitor,
                 mLockPatternUtils,
                 mSelectedUserInteractor,
-                mBlurUtils);
+                mBlurUtils) {
+            @Override
+            public boolean dispatchTouchEvent(MotionEvent event) {
+                rescheduleBurninTimeout(mGlobalActionDialogTimeout);
+                return super.dispatchTouchEvent(event);
+            }
+        };
 
         dialog.setOnDismissListener(this);
         dialog.setOnShowListener(this);
@@ -876,6 +911,14 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         boolean advancedRebootEnabled = Settings.System.getIntForUser(context.getContentResolver(),
                 Settings.System.OMNI_ADVANCED_REBOOT, 0, UserHandle.USER_CURRENT) == 1;
         return advancedRebootEnabled;
+    }
+
+    @VisibleForTesting
+    protected void rescheduleBurninTimeout(int timeout) {
+        if (timeout > 0) {
+            mHandler.removeMessages(MESSAGE_TIMEOUT_DISMISS);
+            mHandler.sendEmptyMessageDelayed(MESSAGE_TIMEOUT_DISMISS, timeout);
+        }
     }
 
     @VisibleForTesting
@@ -1065,17 +1108,21 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
 
     protected int getEmergencyTextColor(Context context) {
         return context.getResources().getColor(
-                com.android.systemui.res.R.color.global_actions_lite_text);
+                QsInCompose.isEnabled() ? R.color.materialColorOnSurface
+                        : com.android.systemui.res.R.color.global_actions_lite_text);
     }
 
     protected int getEmergencyIconColor(Context context) {
-        return context.getResources().getColor(
-                com.android.systemui.res.R.color.global_actions_lite_emergency_icon);
+        return context.getResources().getColor(QsInCompose.isEnabled()
+                ? com.android.systemui.res.R.color.global_actions_lite_emergency_icon_new_color
+                : com.android.systemui.res.R.color.global_actions_lite_emergency_icon);
     }
 
     protected int getEmergencyBackgroundColor(Context context) {
-        return context.getResources().getColor(
-                com.android.systemui.res.R.color.global_actions_lite_emergency_background);
+        return context.getResources().getColor(QsInCompose.isEnabled()
+                ?
+                com.android.systemui.res.R.color.global_actions_lite_emergency_background_new_color
+                : com.android.systemui.res.R.color.global_actions_lite_emergency_background);
     }
 
     private class EmergencyAffordanceAction extends EmergencyAction {
@@ -2207,6 +2254,17 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 messageView.setText(mMessageResId);
             }
 
+            if (QsInCompose.isEnabled()) {
+                int textAndIconColor = context.getColor(R.color.materialColorOnSurface);
+                messageView.setTextColor(textAndIconColor);
+                mIconView.setBackgroundTintList(
+                        ColorStateList.valueOf(
+                                context.getColor(R.color.materialColorSurfaceContainerHighest)
+                        )
+                );
+                mIconView.setImageTintList(ColorStateList.valueOf(textAndIconColor));
+            }
+
             return v;
         }
 
@@ -2583,8 +2641,16 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         }
     };
 
+    private ContentObserver mGlobalActionsTimeoutObserver = new ContentObserver(mMainHandler) {
+        @Override
+        public void onChange(boolean selfChange) {
+            onGlobalActionsTimeoutChanged();
+        }
+    };
+
     private static final int MESSAGE_DISMISS = 0;
     private static final int MESSAGE_REFRESH = 1;
+    private static final int MESSAGE_TIMEOUT_DISMISS = 2;
     private static final int DIALOG_DISMISS_DELAY = 300; // ms
     private static final int DIALOG_PRESS_DELAY = 850; // ms
 
@@ -2601,6 +2667,14 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 0) == 1;
         mAirplaneState = airplaneModeOn ? ToggleState.On : ToggleState.Off;
         mAirplaneModeOn.updateState(mAirplaneState);
+    }
+
+    private void onGlobalActionsTimeoutChanged() {
+        int defaultTimeout = mContext.getResources().getInteger(
+                R.integer.config_globalActionsDialogTimeout);
+        mGlobalActionDialogTimeout = mGlobalSettings.getInt(
+                Settings.Global.GLOBAL_ACTIONS_TIMEOUT_MILLIS,
+                defaultTimeout);
     }
 
     /**
@@ -2641,6 +2715,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         protected final LightBarController mLightBarController;
         private final KeyguardStateController mKeyguardStateController;
         protected final NotificationShadeWindowController mNotificationShadeWindowController;
+        protected final TopUiController mTopUiController;
         private final StatusBarWindowController mStatusBarWindowController;
         private ListPopupWindow mOverflowPopup;
         private Dialog mPowerOptionsDialog;
@@ -2726,6 +2801,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 LightBarController lightBarController,
                 KeyguardStateController keyguardStateController,
                 NotificationShadeWindowController notificationShadeWindowController,
+                TopUiController topUiController,
                 StatusBarWindowController statusBarWindowController,
                 Runnable onRefreshCallback,
                 boolean keyguardShowing,
@@ -2748,6 +2824,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mLightBarController = lightBarController;
             mKeyguardStateController = keyguardStateController;
             mNotificationShadeWindowController = notificationShadeWindowController;
+            mTopUiController = topUiController;
             mStatusBarWindowController = statusBarWindowController;
             mOnRefreshCallback = onRefreshCallback;
             mKeyguardShowing = keyguardShowing;
@@ -2888,6 +2965,12 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             if (mBackgroundDrawable == null) {
                 mBackgroundDrawable = new ScrimDrawable();
             }
+            if (QsInCompose.isEnabled()) {
+                View v = findViewById(R.id.list);
+                v.setBackgroundTintList(ColorStateList.valueOf(
+                        getContext().getColor(R.color.materialColorSurfaceContainerLow)
+                ));
+            }
 
             getWindow().setDimAmount(mBlurUtils.supportsBlursOnWindows() ? 0.54f : 0.88f);
 
@@ -2993,7 +3076,11 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         @Override
         public void show() {
             super.show();
-            mNotificationShadeWindowController.setRequestTopUi(true, TAG);
+            if (TopUiControllerRefactor.isEnabled()) {
+                mTopUiController.setRequestTopUi(true, TAG);
+            } else {
+                mNotificationShadeWindowController.setRequestTopUi(true, TAG);
+            }
 
             // By default this dialog windowAnimationStyle is null, and therefore windowAnimations
             // should be equal to 0 which means we need to animate the dialog in-window. If it's not
@@ -3090,8 +3177,11 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         public void dismiss() {
             dismissOverflow();
             dismissPowerOptions();
-
-            mNotificationShadeWindowController.setRequestTopUi(false, TAG);
+            if (TopUiControllerRefactor.isEnabled()) {
+                mTopUiController.setRequestTopUi(false, TAG);
+            } else {
+                mNotificationShadeWindowController.setRequestTopUi(false, TAG);
+            }
             super.dismiss();
         }
 

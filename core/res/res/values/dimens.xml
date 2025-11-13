@@ -268,9 +268,6 @@
      72dp (content margin) - 12dp (action padding) - 4dp (button inset) -->
     <dimen name="notification_2025_actions_margin_start">56dp</dimen>
 
-    <!-- Notification action button text size -->
-    <dimen name="notification_2025_action_text_size">16sp</dimen>
-
     <!-- The margin on the end of most content views (ignores the expander) -->
     <dimen name="notification_content_margin_end">16dp</dimen>
 
@@ -338,9 +335,9 @@
 
     <!-- The spacing between the content and the header text above it, scaling with text size.
          This value is chosen so that, taking into account the text spacing for both the text in the
-         top line and the text in the content, the distance between them is ~2dp with the default
+         top line and the text in the content, the distance between them is 4dp with the default
          screen configuration (and will grow accordingly for larger font sizes) -->
-    <dimen name="notification_2025_content_margin_top">8sp</dimen>
+    <dimen name="notification_2025_content_margin_top">10sp</dimen>
 
     <!-- height of the content margin that is applied at the end of the notification content -->
     <dimen name="notification_content_margin">20dp</dimen>
@@ -411,10 +408,12 @@
     <dimen name="notification_header_expand_icon_size">56dp</dimen>
 
     <!-- Margin to allow space for the expand button when showing the right icon in expanded -->
-    <!-- notifications. This is equal to notification_2025_expand_button_pill_width -->
-    <!-- + notification_2025_margin (end padding for expand button) -->
-    <!-- + notification_2025_expand_button_right_icon_spacing (space between pill and icon) -->
-    <dimen name="notification_2025_right_icon_expanded_margin_end">52dp</dimen>
+    <!-- notifications. The notification_2025_extra_space_for_expander should be used in -->
+    <!-- addition to this to ensure the spacing adjusts with the font size accordingly -->
+    <dimen name="notification_2025_right_icon_expanded_margin_end">42dp</dimen>
+
+    <!-- sp-based additional spacing for the expand button, to scale with the font size -->
+    <dimen name="notification_2025_extra_space_for_expander">10sp</dimen>
 
     <!-- The large icon has a smaller vertical margin than most other notification content, to -->
     <!-- allow it to grow up to 48dp. -->
@@ -762,7 +761,7 @@
     <dimen name="accessibility_window_magnifier_min_size">122dp</dimen>
 
     <!-- The accessibility autoclick panel button spacing -->
-    <dimen name="accessibility_autoclick_type_panel_button_spacing">12dp</dimen>
+    <dimen name="accessibility_autoclick_type_panel_button_spacing">8dp</dimen>
 
     <!-- The accessibility autoclick panel button width and height -->
     <dimen name="accessibility_autoclick_type_panel_button_size">36dp</dimen>

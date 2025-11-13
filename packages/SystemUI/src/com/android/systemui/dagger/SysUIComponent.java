@@ -45,6 +45,7 @@ import com.android.wm.shell.splitscreen.SplitScreen;
 import com.android.wm.shell.startingsurface.StartingSurface;
 import com.android.wm.shell.sysui.ShellInterface;
 import com.android.wm.shell.taskview.TaskViewFactory;
+import com.android.wm.shell.windowdecor.viewholder.AppHandles;
 
 import com.google.android.systemui.smartspace.KeyguardSmartspaceController;
 
@@ -120,6 +121,9 @@ public interface SysUIComponent {
 
         @BindsInstance
         Builder setAppZoomOut(Optional<AppZoomOut> a);
+
+        @BindsInstance
+        Builder setAppHandles(Optional<AppHandles> appHandles);
 
         SysUIComponent build();
     }

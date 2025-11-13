@@ -104,6 +104,7 @@ public class SettingsBackupTest {
                     Settings.Global.BATTERY_SAVER_DEVICE_SPECIFIC_CONSTANTS,
                     Settings.Global.BATTERY_STATS_CONSTANTS,
                     Settings.Global.BINDER_CALLS_STATS,
+                    Settings.Global.NATIVE_BINDER_STATS,
                     Settings.Global.BLE_SCAN_ALWAYS_AVAILABLE,
                     Settings.Global.BLE_SCAN_LOW_POWER_WINDOW_MS,
                     Settings.Global.BLE_SCAN_LOW_POWER_INTERVAL_MS,
@@ -372,6 +373,7 @@ public class SettingsBackupTest {
                     Settings.Global.PDP_WATCHDOG_TRIGGER_PACKET_COUNT,
                     Settings.Global.PEOPLE_SPACE_CONVERSATION_TYPE,
                     Settings.Global.POLICY_CONTROL,
+                    Settings.Global.POWER_BUTTON_LONG_PRESS_RESTORED,
                     Settings.Global.POWER_BUTTON_SUPPRESSION_DELAY_AFTER_GESTURE_WAKE,
                     Settings.Global.POWER_MANAGER_CONSTANTS,
                     Settings.Global.PREFERRED_NETWORK_MODE,
@@ -809,8 +811,11 @@ public class SettingsBackupTest {
                  Settings.Secure.NAVIGATION_MODE_RESTORE,
                  Settings.Secure.V_TO_U_RESTORE_ALLOWLIST,
                  Settings.Secure.V_TO_U_RESTORE_DENYLIST,
+                 Settings.Secure.PACK_THEME_FEATURE_ENABLED,
+                 Settings.Secure.SUGGESTED_THEME_FEATURE_ENABLED,
                  Settings.Secure.REDACT_OTP_NOTIFICATION_WHILE_CONNECTED_TO_WIFI,
-                 Settings.Secure.OTP_NOTIFICATION_REDACTION_LOCK_TIME);
+                 Settings.Secure.OTP_NOTIFICATION_REDACTION_LOCK_TIME,
+                 Settings.Secure.APP_FUNCTION_AGENT_ALLOWLIST_ENABLED);
 
     @Test
     public void systemSettingsBackedUpOrDenied() {
@@ -870,6 +875,7 @@ public class SettingsBackupTest {
                         Settings.Secure.NAS_SETTINGS_UPDATED,
                         Settings.Secure.NAV_BAR_FORCE_VISIBLE,
                         Settings.Secure.NAV_BAR_KIDS_MODE,
+                        Settings.Secure.NAV_BAR_ORDER,
                         Settings.Secure.NEARBY_FAST_PAIR_SETTINGS_DEVICES_COMPONENT,
                         Settings.Secure.NEARBY_SHARING_SLICE_URI,
                         Settings.Secure.NOTIFIED_NON_ACCESSIBILITY_CATEGORY_SERVICES,

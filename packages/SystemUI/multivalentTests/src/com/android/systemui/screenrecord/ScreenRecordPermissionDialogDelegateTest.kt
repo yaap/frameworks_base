@@ -32,11 +32,11 @@ import com.android.systemui.Dependency
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.animation.DialogTransitionAnimator
 import com.android.systemui.broadcast.BroadcastDispatcher
+import com.android.systemui.common.domain.interactor.SysUIStateDisplaysInteractor
 import com.android.systemui.mediaprojection.MediaProjectionMetricsLogger
 import com.android.systemui.mediaprojection.appselector.MediaProjectionAppSelectorActivity
 import com.android.systemui.mediaprojection.permission.ENTIRE_SCREEN
 import com.android.systemui.mediaprojection.permission.SINGLE_APP
-import com.android.systemui.model.SysUiState
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
 import com.android.systemui.settings.UserContextProvider
@@ -63,7 +63,7 @@ import org.mockito.MockitoAnnotations
 class ScreenRecordPermissionDialogDelegateTest : SysuiTestCase() {
 
     @Mock private lateinit var starter: ActivityStarter
-    @Mock private lateinit var controller: RecordingController
+    @Mock private lateinit var controller: ScreenRecordUxController
     @Mock private lateinit var userContextProvider: UserContextProvider
     @Mock private lateinit var onStartRecordingClicked: Runnable
     @Mock private lateinit var mediaProjectionMetricsLogger: MediaProjectionMetricsLogger
@@ -78,7 +78,7 @@ class ScreenRecordPermissionDialogDelegateTest : SysuiTestCase() {
             SystemUIDialog.Factory(
                 context,
                 Dependency.get(SystemUIDialogManager::class.java),
-                Dependency.get(SysUiState::class.java),
+                Dependency.get(SysUIStateDisplaysInteractor::class.java),
                 Dependency.get(BroadcastDispatcher::class.java),
                 Dependency.get(DialogTransitionAnimator::class.java),
             )

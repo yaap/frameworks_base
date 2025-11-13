@@ -63,7 +63,7 @@ constructor(
 ) {
 
     val mediaControl: Flow<MediaControlModel?> =
-        repository.selectedUserEntries
+        repository.currentUserEntries
             .map { entries -> entries[instanceId]?.let { toMediaControlModel(it) } }
             .distinctUntilChanged()
 
@@ -98,6 +98,7 @@ constructor(
                 showExplicit = isExplicit,
                 artwork = artwork,
                 deviceData = device,
+                suggestionData = suggestionData,
                 semanticActionButtons = semanticActions,
                 notificationActionButtons = getNotificationActions(data.actions, activityStarter),
                 actionsToShowInCollapsed = actionsToShowInCompact,

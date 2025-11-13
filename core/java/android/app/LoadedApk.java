@@ -955,7 +955,8 @@ public final class LoadedApk {
                             .getApplicationInfo(mPackageName, PackageManager.GET_META_DATA,
                                     UserHandle.myUserId());
                     final String debugLayerPath = GraphicsEnvironment.getInstance()
-                            .getDebugLayerPathsFromSettings(mActivityThread.getCoreSettings(),
+                            .getDebugLayerPathsFromSettings(
+                                    mActivityThread.getDefaultDeviceCoreSettings(),
                                     ActivityThread.getPackageManager(), mPackageName, ai);
                     if (debugLayerPath != null) {
                         libraryPermittedPath += File.pathSeparator + debugLayerPath;
@@ -969,6 +970,15 @@ public final class LoadedApk {
             }
         }
 
+        List<String> nativeSharedLibraries = new ArrayList<>();
+        if (mApplicationInfo.sharedLibraryInfos != null) {
+            for (SharedLibraryInfo info : mApplicationInfo.sharedLibraryInfos) {
+                if (info.isNative()) {
+                    nativeSharedLibraries.add(info.getName());
+                }
+            }
+        }
+
         // If we're not asked to include code, we construct a classloader that has
         // no code path included. We still need to set up the library search paths
         // and permitted path because NativeActivity relies on it (it attempts to
@@ -977,10 +987,14 @@ public final class LoadedApk {
         if (!mIncludeCode) {
             if (mDefaultClassLoader == null) {
                 StrictMode.ThreadPolicy oldPolicy = allowThreadDiskReads();
-                mDefaultClassLoader = ApplicationLoaders.getDefault().getClassLoader(
-                        "" /* codePath */, mApplicationInfo.targetSdkVersion, isBundledApp,
-                        librarySearchPath, libraryPermittedPath, mBaseClassLoader,
-                        null /* classLoaderName */);
+                mDefaultClassLoader = ApplicationLoaders.getDefault()
+                        .getClassLoaderWithSharedLibraries(
+                                "" /* codePath */, mApplicationInfo.targetSdkVersion, isBundledApp,
+                                librarySearchPath, libraryPermittedPath, mBaseClassLoader,
+                                null /* classLoaderName */,
+                                null /* sharedLibraries */,
+                                nativeSharedLibraries,
+                                null /* sharedLibrariesLoadedAfterApp */);
                 setThreadPolicy(oldPolicy);
                 mAppComponentFactory = AppComponentFactory.DEFAULT;
             }
@@ -1029,15 +1043,6 @@ public final class LoadedApk {
             Pair<List<ClassLoader>, List<ClassLoader>> sharedLibraries =
                     createSharedLibrariesLoaders(mApplicationInfo.sharedLibraryInfos, isBundledApp,
                             librarySearchPath, libraryPermittedPath);
-
-            List<String> nativeSharedLibraries = new ArrayList<>();
-            if (mApplicationInfo.sharedLibraryInfos != null) {
-                for (SharedLibraryInfo info : mApplicationInfo.sharedLibraryInfos) {
-                    if (info.isNative()) {
-                        nativeSharedLibraries.add(info.getName());
-                    }
-                }
-            }
 
             mDefaultClassLoader = ApplicationLoaders.getDefault().getClassLoaderWithSharedLibraries(
                     zip, mApplicationInfo.targetSdkVersion, isBundledApp, librarySearchPath,
@@ -1483,7 +1488,7 @@ public final class LoadedApk {
                 if (!mActivityThread.mInstrumentation.onException(app, e)) {
                     throw new RuntimeException(
                         "Unable to instantiate application " + appClass
-                        + " package " + mPackageName + ": " + e.toString(), e);
+                        + " package " + mPackageName, e);
                 }
             }
             mActivityThread.addApplication(app);
@@ -1500,8 +1505,7 @@ public final class LoadedApk {
                 } catch (Exception e) {
                     if (!instrumentation.onException(app, e)) {
                         throw new RuntimeException(
-                            "Unable to create application " + app.getClass().getName()
-                            + ": " + e.toString(), e);
+                            "Unable to create application " + app.getClass().getName(), e);
                     }
                 }
             }
@@ -1818,13 +1822,15 @@ public final class LoadedApk {
 
                     if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
                         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER,
-                                "broadcastReceiveReg: " + intent.getAction());
+                                "broadcastReceiveReg: " + intent.getAction()
+                                + ";clz=" + receiver.getClass().getName());
                     }
                     long debugStoreId = -1;
                     if (DEBUG_STORE_ENABLED) {
                         debugStoreId =
                                 DebugStore.recordBroadcastReceiveReg(
-                                        intent, System.identityHashCode(this));
+                                    System.identityHashCode(this),
+                                    receiver.getClass().getName());
                     }
 
                     try {
@@ -1929,6 +1935,10 @@ public final class LoadedApk {
                     Slog.i(ActivityThread.TAG, "Enqueueing broadcast " + intent.getAction()
                             + " seq=" + seq + " to " + mReceiver);
                 }
+            }
+
+            if (DEBUG_STORE_ENABLED) {
+                DebugStore.recordScheduleBroadcastReceiveReg(System.identityHashCode(args), intent);
             }
             if (intent == null || !mActivityThread.post(args.getRunnable())) {
                 IActivityManager mgr = ActivityManager.getService();
@@ -2070,11 +2080,11 @@ public final class LoadedApk {
                 mDispatcher = new WeakReference<LoadedApk.ServiceDispatcher>(sd);
             }
 
-            public void connected(ComponentName name, IBinder service, boolean dead)
-                    throws RemoteException {
+            public void connected(ComponentName name, IBinder service, IBinderSession binderSession,
+                    boolean dead) throws RemoteException {
                 LoadedApk.ServiceDispatcher sd = mDispatcher.get();
                 if (sd != null) {
-                    sd.connected(name, service, dead);
+                    sd.connected(name, service, binderSession, dead);
                 }
             }
         }
@@ -2162,27 +2172,29 @@ public final class LoadedApk {
             return mUnbindLocation;
         }
 
-        public void connected(ComponentName name, IBinder service, boolean dead) {
+        public void connected(ComponentName name, IBinder service, IBinderSession session,
+                boolean dead) {
             if (mActivityExecutor != null) {
-                mActivityExecutor.execute(new RunConnection(name, service, 0, dead));
+                mActivityExecutor.execute(new RunConnection(name, service, session, 0, dead));
             } else if (mActivityThread != null) {
-                mActivityThread.post(new RunConnection(name, service, 0, dead));
+                mActivityThread.post(new RunConnection(name, service, session, 0, dead));
             } else {
-                doConnected(name, service, dead);
+                doConnected(name, service, session, dead);
             }
         }
 
         public void death(ComponentName name, IBinder service) {
             if (mActivityExecutor != null) {
-                mActivityExecutor.execute(new RunConnection(name, service, 1, false));
+                mActivityExecutor.execute(new RunConnection(name, service, null, 1, false));
             } else if (mActivityThread != null) {
-                mActivityThread.post(new RunConnection(name, service, 1, false));
+                mActivityThread.post(new RunConnection(name, service, null, 1, false));
             } else {
                 doDeath(name, service);
             }
         }
 
-        public void doConnected(ComponentName name, IBinder service, boolean dead) {
+        public void doConnected(ComponentName name, IBinder service, IBinderSession session,
+                boolean dead) {
             ServiceDispatcher.ConnectionInfo old;
             ServiceDispatcher.ConnectionInfo info;
 
@@ -2232,7 +2244,7 @@ public final class LoadedApk {
             } else {
                 // If there is a new viable service, it is now connected.
                 if (service != null) {
-                    mConnection.onServiceConnected(name, service);
+                    mConnection.onServiceConnected(name, service, session);
                 } else {
                     // The binding machinery worked, but the remote returned null from onBind().
                     mConnection.onNullBinding(name);
@@ -2256,16 +2268,18 @@ public final class LoadedApk {
         }
 
         private final class RunConnection implements Runnable {
-            RunConnection(ComponentName name, IBinder service, int command, boolean dead) {
+            RunConnection(ComponentName name, IBinder service, IBinderSession session, int command,
+                    boolean dead) {
                 mName = name;
                 mService = service;
+                mBinderSession = session;
                 mCommand = command;
                 mDead = dead;
             }
 
             public void run() {
                 if (mCommand == 0) {
-                    doConnected(mName, mService, mDead);
+                    doConnected(mName, mService, mBinderSession, mDead);
                 } else if (mCommand == 1) {
                     doDeath(mName, mService);
                 }
@@ -2273,6 +2287,7 @@ public final class LoadedApk {
 
             final ComponentName mName;
             final IBinder mService;
+            final IBinderSession mBinderSession;
             final int mCommand;
             final boolean mDead;
         }

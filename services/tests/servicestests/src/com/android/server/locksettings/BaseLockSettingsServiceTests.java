@@ -31,6 +31,7 @@ import android.app.NotificationManager;
 import android.app.admin.DevicePolicyManager;
 import android.app.admin.DevicePolicyManagerInternal;
 import android.app.admin.DeviceStateCache;
+import android.app.test.PropertyInvalidatedCacheTestRule;
 import android.app.trust.TrustManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -55,7 +56,6 @@ import androidx.test.runner.AndroidJUnit4;
 import com.android.internal.util.test.FakeSettingsProvider;
 import com.android.internal.util.test.FakeSettingsProviderRule;
 import com.android.internal.widget.LockPatternUtils;
-import com.android.internal.widget.LockSettingsInternal;
 import com.android.internal.widget.LockscreenCredential;
 import com.android.server.LocalServices;
 import com.android.server.locksettings.recoverablekeystore.RecoverableKeyStoreManager;
@@ -116,6 +116,9 @@ public abstract class BaseLockSettingsServiceTests {
     LockSettingsServiceTestable.MockInjector mInjector;
     @Rule
     public FakeSettingsProviderRule mSettingsRule = FakeSettingsProvider.rule();
+
+    @Rule
+    public PropertyInvalidatedCacheTestRule mCacheRule = new PropertyInvalidatedCacheTestRule();
 
     @Before
     public void setUp_baseServices() throws Exception {
@@ -230,7 +233,6 @@ public abstract class BaseLockSettingsServiceTests {
         // Adding a fake Device Owner app which will enable escrow token support in LSS.
         when(mDevicePolicyManager.getDeviceOwnerComponentOnAnyUser()).thenReturn(
                 new ComponentName("com.dummy.package", ".FakeDeviceOwner"));
-        when(mUserManagerInternal.isDeviceManaged()).thenReturn(true);
         when(mDeviceStateCache.isUserOrganizationManaged(anyInt())).thenReturn(true);
         when(mDeviceStateCache.isDeviceProvisioned()).thenReturn(true);
         mockBiometricsHardwareFingerprintsAndTemplates(PRIMARY_USER_ID);
@@ -238,6 +240,8 @@ public abstract class BaseLockSettingsServiceTests {
 
         setDeviceProvisioned(true);
         mLocalService = LocalServices.getService(LockSettingsInternal.class);
+
+        when(mUserManagerInternal.isMainUserPermanentAdmin()).thenReturn(true);
     }
 
     private Resources createMockResources() {
@@ -249,13 +253,18 @@ public abstract class BaseLockSettingsServiceTests {
         when(res.getBoolean(
                 eq(com.android.internal.R.bool.config_enableCredentialFactoryResetProtection)))
                 .thenReturn(true);
-        when(res.getBoolean(eq(com.android.internal.R.bool.config_isMainUserPermanentAdmin)))
-                .thenReturn(true);
         when(res.getBoolean(eq(com.android.internal.R.bool.config_strongAuthRequiredOnBoot)))
                 .thenReturn(true);
         when(res.getBoolean(eq(com.android.internal.R.bool.config_repairModeSupported)))
                 .thenReturn(true);
+        when(res.getBoolean(
+                        eq(com.android.internal.R.bool.config_softwareLskfRateLimiterEnforcing)))
+                .thenReturn(isSoftwareLskfRateLimiterEnforcing());
         return res;
+    }
+
+    protected boolean isSoftwareLskfRateLimiterEnforcing() {
+        return true;
     }
 
     protected void setDeviceProvisioned(boolean provisioned) {
@@ -286,8 +295,6 @@ public abstract class BaseLockSettingsServiceTests {
         when(mUserManager.isUserRunning(eq(profileId))).thenReturn(true);
         when(mUserManager.isUserUnlocked(eq(profileId))).thenReturn(true);
         when(mUserManagerInternal.getUserInfo(eq(profileId))).thenReturn(userInfo);
-        // TODO(b/258213147): Remove
-        when(mUserManagerInternal.isUserManaged(eq(profileId))).thenReturn(true);
         when(mDeviceStateCache.isUserOrganizationManaged(eq(profileId)))
                 .thenReturn(true);
         return userInfo;

@@ -31,13 +31,19 @@ import static com.android.server.wm.LaunchParamsUtil.calculateLayoutBounds;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityOptions;
+import android.app.WindowConfiguration;
+import android.content.Context;
 import android.content.pm.ActivityInfo.WindowLayout;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.os.SystemProperties;
 import android.util.Size;
+import android.view.Display;
 import android.view.Gravity;
+import android.window.DesktopExperienceFlags;
 import android.window.DesktopModeFlags;
+
+import com.android.internal.policy.DesktopModeCompatUtils;
 
 import java.util.function.Consumer;
 
@@ -82,9 +88,12 @@ public final class DesktopModeBoundsCalculator {
         // during the size update.
         final boolean shouldRespectOptionPosition =
                 updateOptionBoundsSize && DesktopModeFlags.ENABLE_CASCADING_WINDOWS.isTrue();
+        // Calculate caption height for target display if needed.
+        final Display targetDisplay = task.getDisplayArea().mDisplayContent.getDisplay();
+        final Context displayContext = task.mWmService.mContext.createDisplayContext(targetDisplay);
         final int captionHeight = activity != null && shouldExcludeCaptionFromAppBounds(
                 activity.info, task.isResizeable(), activity.mOptOutEdgeToEdge)
-                        ? getDesktopViewAppHeaderHeightPx(activity.mWmService.mContext) : 0;
+                        ? getDesktopViewAppHeaderHeightPx(displayContext) : 0;
 
         if (options != null && options.getLaunchBounds() != null
                 && !updateOptionBoundsSize) {
@@ -118,7 +127,7 @@ public final class DesktopModeBoundsCalculator {
         if (updateOptionBoundsSize && captionHeight != 0) {
             outParams.mAppBounds.set(outParams.mBounds);
             outParams.mAppBounds.top += captionHeight;
-            logger.accept("excluding caption height from app bounds");
+            logger.accept("exclude-caption-height-from-app-bounds");
         }
     }
 
@@ -151,8 +160,8 @@ public final class DesktopModeBoundsCalculator {
         }
         final DesktopAppCompatAspectRatioPolicy desktopAppCompatAspectRatioPolicy =
                 activity.mAppCompatController.getDesktopAspectRatioPolicy();
-        final int stableBoundsOrientation = stableBounds.height() >= stableBounds.width()
-                ? ORIENTATION_PORTRAIT : ORIENTATION_LANDSCAPE;
+        final int stableBoundsOrientation =
+                DesktopModeCompatUtils.computeConfigOrientation(stableBounds);
         int activityOrientation = getActivityConfigurationOrientation(
                 activity, task, stableBoundsOrientation);
         // Use orientation mismatch to resolve aspect ratio to match fixed orientation letterboxing
@@ -238,6 +247,15 @@ public final class DesktopModeBoundsCalculator {
     private static @Configuration.Orientation int getActivityConfigurationOrientation(
             @NonNull ActivityRecord activity, @NonNull Task task,
             @Configuration.Orientation int stableBoundsOrientation) {
+        if (DesktopExperienceFlags.PRESERVE_RECENTS_TASK_CONFIGURATION_ON_RELAUNCH.isTrue()
+                && task.inRecents && task.topRunningActivity() != null) {
+            // If task in resents with running activity, inherit existing activity orientation.
+            final WindowConfiguration windowConfiguration =
+                    task.topRunningActivity().getWindowConfiguration();
+            final Rect existingBounds = windowConfiguration.getAppBounds() != null
+                    ? windowConfiguration.getAppBounds() : windowConfiguration.getBounds();
+            return DesktopModeCompatUtils.computeConfigOrientation(existingBounds);
+        }
         final int activityOrientation = activity.getOverrideOrientation();
         final DesktopAppCompatAspectRatioPolicy desktopAppCompatAspectRatioPolicy =
                 activity.mAppCompatController.getDesktopAspectRatioPolicy();

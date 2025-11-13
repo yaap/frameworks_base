@@ -18,7 +18,6 @@ package android.platform.test.ravenwood;
 import static com.android.ravenwood.common.RavenwoodCommonUtils.RAVENWOOD_VERBOSE_LOGGING;
 import static com.android.ravenwood.common.RavenwoodCommonUtils.ensureIsPublicVoidMethod;
 
-import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 import android.annotation.NonNull;
@@ -126,7 +125,7 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
 
         mTestClass = new TestClass(testClass);
 
-        Log.v(TAG, "RavenwoodAwareTestRunner initializing for " + testClass.getCanonicalName());
+        Log.i(TAG, "RavenwoodAwareTestRunner initializing for " + testClass.getCanonicalName());
 
         // Hook point to allow more customization.
         runAnnotatedMethodsOnRavenwood(RavenwoodTestRunnerInitializing.class, null);
@@ -168,7 +167,9 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
         RavenwoodTestStats.getInstance().attachToRunNotifier(notifier);
 
         if (mRealRunner instanceof ClassSkippingTestRunner) {
-            Log.v(TAG, "onClassSkipped: description=" + description);
+            if (RAVENWOOD_VERBOSE_LOGGING) {
+                Log.v(TAG, "onClassSkipped: description=" + description);
+            }
             mRealRunner.run(notifier);
             return;
         }
@@ -227,11 +228,8 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
             s.evaluate();
             onAfter(description, scope, order, null);
         } catch (Throwable t) {
-            var shouldReportFailure = RavenwoodCommonUtils.runIgnoringException(
-                    () -> onAfter(description, scope, order, t));
-            if (shouldReportFailure == null || shouldReportFailure) {
-                throw t;
-            }
+            RavenwoodCommonUtils.runIgnoringException(() -> onAfter(description, scope, order, t));
+            throw t;
         }
     }
 
@@ -280,7 +278,9 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
      * Return false if it should be skipped.
      */
     private boolean onBefore(Description description, Scope scope, Order order) {
-        Log.v(TAG, "onBefore: description=" + description + ", " + scope + ", " + order);
+        if (RAVENWOOD_VERBOSE_LOGGING) {
+            Log.v(TAG, "onBefore: description=" + description + ", " + scope + ", " + order);
+        }
 
         final var classDescription = getDescription();
 
@@ -302,11 +302,12 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
 
     /**
      * Called after a test / class.
-     *
-     * Return false if the exception should be ignored.
      */
-    private boolean onAfter(Description description, Scope scope, Order order, Throwable th) {
-        Log.v(TAG, "onAfter: description=" + description + ", " + scope + ", " + order + ", " + th);
+    private void onAfter(Description description, Scope scope, Order order, Throwable th) {
+        if (RAVENWOOD_VERBOSE_LOGGING) {
+            Log.v(TAG, "onAfter: description=" + description + ", " + scope + ", " + order + ", "
+                    + th);
+        }
 
         final var classDescription = getDescription();
 
@@ -314,43 +315,15 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
             // End of a test method.
             mState.exitTestMethod(description);
         }
-
-        // If RUN_DISABLED_TESTS is set, and the method did _not_ throw, make it an error.
-        if (RavenwoodRule.private$ravenwood().isRunningDisabledTests()
-                && scope == Scope.Instance && order == Order.Outer) {
-
-            boolean isTestEnabled = RavenwoodEnablementChecker.shouldEnableOnRavenwood(
-                    description, false);
-            if (th == null) {
-                // Test passed. Is the test method supposed to be enabled?
-                if (isTestEnabled) {
-                    // Enabled and didn't throw, okay.
-                    return true;
-                } else {
-                    // Disabled and didn't throw. We should report it.
-                    fail("Test wasn't included under Ravenwood, but it actually "
-                            + "passed under Ravenwood; consider updating annotations");
-                    return true; // unreachable.
-                }
-            } else {
-                // Test failed.
-                if (isTestEnabled) {
-                    // Enabled but failed. We should throw the exception.
-                    return true;
-                } else {
-                    // Disabled and failed. Expected. Don't throw.
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     /**
      * Called by RavenwoodRule.
      */
     static void onRavenwoodRuleEnter(Description description, RavenwoodRule rule) {
-        Log.v(TAG, "onRavenwoodRuleEnter: description=" + description);
+        if (RAVENWOOD_VERBOSE_LOGGING) {
+            Log.v(TAG, "onRavenwoodRuleEnter: description=" + description);
+        }
         getCurrentRunner().mState.enterRavenwoodRule(rule);
     }
 
@@ -358,7 +331,9 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
      * Called by RavenwoodRule.
      */
     static void onRavenwoodRuleExit(Description description, RavenwoodRule rule) {
-        Log.v(TAG, "onRavenwoodRuleExit: description=" + description);
+        if (RAVENWOOD_VERBOSE_LOGGING) {
+            Log.v(TAG, "onRavenwoodRuleExit: description=" + description);
+        }
         getCurrentRunner().mState.exitRavenwoodRule(rule);
     }
 
@@ -367,7 +342,9 @@ public final class RavenwoodAwareTestRunner extends RavenwoodAwareTestRunnerBase
     }
 
     private void dumpDescription(Description desc, String header, String indent) {
-        Log.v(TAG, indent + header + desc);
+        if (RAVENWOOD_VERBOSE_LOGGING) {
+            Log.v(TAG, indent + header + desc);
+        }
 
         var children = desc.getChildren();
         var childrenIndent = "  " + indent;

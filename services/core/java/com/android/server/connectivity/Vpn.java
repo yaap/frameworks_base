@@ -30,6 +30,7 @@ import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
 import static android.net.vcn.util.PersistableBundleUtils.STRING_DESERIALIZER;
 import static android.os.PowerWhitelistManager.REASON_VPN;
 import static android.os.UserHandle.PER_USER_RANGE;
+import static android.net.platform.flags.Flags.collectVpnMetrics;
 import static android.telephony.CarrierConfigManager.KEY_MIN_UDP_PORT_4500_NAT_TIMEOUT_SEC_INT;
 import static android.telephony.CarrierConfigManager.KEY_PREFERRED_IKE_PROTOCOL_INT;
 
@@ -154,6 +155,7 @@ import com.android.net.module.util.NetworkStackConstants;
 import com.android.server.DeviceIdleInternal;
 import com.android.server.LocalServices;
 import com.android.server.net.BaseNetworkObserver;
+import com.android.server.utils.LazyJniRegistrar;
 
 import libcore.io.IoUtils;
 
@@ -387,6 +389,12 @@ public class Vpn {
     private final UserManager mUserManager;
 
     private final VpnProfileStore mVpnProfileStore;
+    /**
+     * Instance responsible for collecting VPN connectivity metrics.
+     * This field will be null if the {@link collectVpnMetrics} flag is set to false.
+     */
+    @Nullable
+    private final VpnConnectivityMetrics mVpnConnectivityMetrics;
 
     @VisibleForTesting
     VpnProfileStore getVpnProfileStore() {
@@ -470,6 +478,8 @@ public class Vpn {
 
     @VisibleForTesting
     public static class Dependencies {
+        protected Dependencies() {}
+
         public boolean isCallerSystem() {
             return Binder.getCallingUid() == Process.SYSTEM_UID;
         }
@@ -593,6 +603,24 @@ public class Vpn {
                 throw new SecurityException(packageName + " does not belong to uid " + callingUid);
             }
         }
+
+        /**
+         * @see VpnConnectivityMetrics.
+         *
+         * <p>This method is only called when {@link collectVpnMetrics} is true.
+         */
+        public VpnConnectivityMetrics makeVpnConnectivityMetrics(int userId,
+                ConnectivityManager cm) {
+            return new VpnConnectivityMetrics(userId, cm);
+        }
+    }
+
+    // A helper class to ensure JNI registration before use. This avoids native lib dependencies in
+    // test-only environments that mock or partially use the base Dependencies class.
+    private static final class DependenciesWithJniRegistration extends Dependencies {
+        static {
+            LazyJniRegistrar.registerVpn();
+        }
     }
 
     @VisibleForTesting
@@ -602,8 +630,8 @@ public class Vpn {
 
     public Vpn(Looper looper, Context context, INetworkManagementService netService, INetd netd,
             @UserIdInt int userId, VpnProfileStore vpnProfileStore) {
-        this(looper, context, new Dependencies(), netService, netd, userId, vpnProfileStore,
-                new SystemServices(context), new Ikev2SessionCreator());
+        this(looper, context, new DependenciesWithJniRegistration(), netService, netd, userId,
+                vpnProfileStore, new SystemServices(context), new Ikev2SessionCreator());
     }
 
     @VisibleForTesting
@@ -641,6 +669,8 @@ public class Vpn {
         mPackage = VpnConfig.LEGACY_VPN;
         mOwnerUID = getAppUid(mContext, mPackage, mUserId);
         mIsPackageTargetingAtLeastQ = doesPackageTargetAtLeastQ(mPackage);
+        mVpnConnectivityMetrics = collectVpnMetrics()
+                ? mDeps.makeVpnConnectivityMetrics(userId, mConnectivityManager) : null;
 
         try {
             netService.registerObserver(mObserver);
@@ -2291,6 +2321,24 @@ public class Vpn {
         return success;
     }
 
+    private void setMtu(int mtu) {
+        synchronized (Vpn.this) {
+            mConfig.mtu = mtu;
+            if (mVpnConnectivityMetrics != null) {
+                mVpnConnectivityMetrics.setMtu(mtu);
+            }
+        }
+    }
+
+    private void setUnderlyingNetworksAndMetrics(@NonNull Network[] networks) {
+        synchronized (Vpn.this) {
+            mConfig.underlyingNetworks = networks;
+            if (mVpnConnectivityMetrics != null) {
+                mVpnConnectivityMetrics.setUnderlyingNetwork(mConfig.underlyingNetworks);
+            }
+        }
+    }
+
     /**
      * Updates underlying network set.
      */
@@ -2976,6 +3024,9 @@ public class Vpn {
             // The update on VPN and the IPsec tunnel will be done when migration is fully complete
             // in onChildMigrated
             mIkeConnectionInfo = ikeConnectionInfo;
+            if (mVpnConnectivityMetrics != null) {
+                mVpnConnectivityMetrics.setServerIpProtocol(ikeConnectionInfo.getRemoteAddress());
+            }
         }
 
         /**
@@ -3040,11 +3091,14 @@ public class Vpn {
                     if (mVpnRunner != this) return;
 
                     mInterface = interfaceName;
-                    mConfig.mtu = vpnMtu;
+                    setMtu(vpnMtu);
                     mConfig.interfaze = mInterface;
 
                     mConfig.addresses.clear();
                     mConfig.addresses.addAll(internalAddresses);
+                    if (mVpnConnectivityMetrics != null) {
+                        mVpnConnectivityMetrics.setVpnNetworkIpProtocol(mConfig.addresses);
+                    }
 
                     mConfig.routes.clear();
                     mConfig.routes.addAll(newRoutes);
@@ -3053,7 +3107,7 @@ public class Vpn {
                     mConfig.dnsServers.clear();
                     mConfig.dnsServers.addAll(dnsAddrStrings);
 
-                    mConfig.underlyingNetworks = new Network[] {network};
+                    setUnderlyingNetworksAndMetrics(new Network[] {network});
 
                     networkAgent = mNetworkAgent;
 
@@ -3146,9 +3200,8 @@ public class Vpn {
 
                     final LinkProperties oldLp = makeLinkProperties();
 
-                    mConfig.underlyingNetworks = new Network[] {network};
-                    mConfig.mtu = calculateVpnMtu();
-
+                    setUnderlyingNetworksAndMetrics(new Network[] {network});
+                    setMtu(calculateVpnMtu());
                     final LinkProperties newLp = makeLinkProperties();
 
                     // If MTU is < 1280, IPv6 addresses will be removed. If there are no addresses
@@ -4253,6 +4306,11 @@ public class Vpn {
             config.allowBypass = profile.isBypassable;
             config.disallowedApplications = getAppExclusionList(mPackage);
             mConfig = config;
+            if (mVpnConnectivityMetrics != null) {
+                mVpnConnectivityMetrics.setVpnType(VpnManager.TYPE_VPN_PLATFORM);
+                mVpnConnectivityMetrics.setVpnProfileType(profile.type);
+                mVpnConnectivityMetrics.setAllowedAlgorithms(profile.getAllowedAlgorithms());
+            }
 
             switch (profile.type) {
                 case VpnProfile.TYPE_IKEV2_IPSEC_USER_PASS:

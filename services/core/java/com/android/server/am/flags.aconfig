@@ -2,32 +2,10 @@ package: "com.android.server.am"
 container: "system"
 
 flag {
-    name: "oomadjuster_correctness_rewrite"
-    namespace: "backstage_power"
-    description: "Utilize new OomAdjuster implementation"
-    bug: "298055811"
-    is_fixed_read_only: true
-}
-
-flag {
     name: "fgs_abuse_detection"
     namespace: "backstage_power"
     description: "Detect abusive FGS behavior for certain types (camera, mic, media, location)."
     bug: "295545575"
-}
-
-flag {
-    name: "fgs_boot_completed"
-    namespace: "backstage_power"
-    description: "Disable BOOT_COMPLETED broadcast FGS start for certain types"
-    bug: "296558535"
-}
-
-flag {
-    name: "fgs_disable_saw"
-    namespace: "backstage_power"
-    description: "Disable System Alert Window FGS start"
-    bug: "296558535"
 }
 
 flag {
@@ -71,45 +49,6 @@ flag {
 }
 
 flag {
-    namespace: "backstage_power"
-    name: "log_excessive_binder_proxies"
-    description: "Log the excessive incoming binder proxies into statsd"
-    bug: "298263955"
-}
-
-flag {
-    namespace: "backstage_power"
-    name: "avoid_resolving_type"
-    description: "Avoid resolving data type for sticky broadcasts"
-    bug: "323817802"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "backstage_power"
-    name: "trace_receiver_registration"
-    description: "Add tracing for broadcast receiver registration and un-registration"
-    bug: "336385821"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "migrate_full_oomadj_updates"
-    namespace: "backstage_power"
-    description: "Migrate full updates to partial updates where possible"
-    bug: "324915545"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "skip_unimportant_connections"
     namespace: "backstage_power"
     description: "Avoid OomAdjuster calculations for connections that won't change importance"
@@ -122,35 +61,6 @@ flag {
     description: "Output process oom adj and other metadata to trace in updateAppFreezeStateLSP"
     bug: "345547733"
     is_fixed_read_only: true
-}
-
-flag {
-    name: "simplify_process_traversal"
-    namespace: "backstage_power"
-    description: "Simplify the OomAdjuster's process traversal mechanism."
-    bug: "336178916"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "batching_oom_adj"
-    namespace: "backstage_power"
-    description: "Batch OOM adjustment calls to LMKD"
-    bug: "244232958"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "follow_up_oomadj_updates"
-    namespace: "backstage_power"
-    description: "Schedule follow up OomAdjuster updates for time sensitive states."
-    bug: "333450932"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -167,14 +77,6 @@ flag {
     description: "Add watchdog-specific dropbox headers"
     bug: "330682397"
     is_fixed_read_only: true
-}
-
-flag {
-    name: "defer_binders_when_paused"
-    namespace: "system_performance"
-    is_fixed_read_only: true
-    description: "Defer submitting binder calls to paused processes."
-    bug: "327038797"
 }
 
 flag {
@@ -220,16 +122,6 @@ flag {
 }
 
 flag {
-    name: "unfreeze_bind_policy_fix"
-    namespace: "backstage_power"
-    description: "Make sure shouldNotFreeze state change correctly triggers updates."
-    bug: "375691778"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "oomadjuster_prev_laddering"
     namespace: "system_performance"
     is_fixed_read_only: true
@@ -246,20 +138,13 @@ flag {
 }
 
 flag {
-    name: "phantom_processes_fix"
+    name: "cpu_time_capability_based_freeze_policy"
     namespace: "backstage_power"
-    description: "Make sure setProcessGroupForPhantomProcessOfApp deals with phantom processes properly"
-    bug: "375058190"
+    description: "Use PROCESS_CAPABILITY_CPU_TIME and PROCESS_CAPABILITY_IMPLICIT_CPU_TIME to control process freeze state."
+    bug: "370817323"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
-}
-
-flag {
-    name: "use_cpu_time_capability"
-    namespace: "backstage_power"
-    description: "Use PROCESS_CAPABILITY_CPU_TIME to control unfreeze state."
-    bug: "370817323"
 }
 
 flag {
@@ -267,16 +152,6 @@ flag {
     namespace: "backstage_power"
     description: "Grant PROCESS_CAPABILITY_CPU_TIME to as many valid states and aggressively freeze other states"
     bug: "370798593"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "add_modify_raw_oom_adj_service_level"
-    namespace: "backstage_power"
-    description: "Add a SERVICE_ADJ level to the modifyRawOomAdj method"
-    bug: "374810368"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -310,22 +185,58 @@ flag {
 }
 
 flag {
-    name: "raise_bound_ui_service_threshold"
+    name: "lower_sms_oom_importance"
     namespace: "backstage_power"
+    description: "Lower messaging app process oom importance to PERCEPTIBLE_APP_ADJ + 1."
+    bug: "372511805"
     is_fixed_read_only: true
-    description: "Raise the threshold OomAdjuster will drop a service with UI to cached."
-    bug: "391691057"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
 }
 
 flag {
-    name: "lower_sms_oom_importance"
+    name: "limit_logcat_collection"
+    namespace: "stability"
+    description: "Limit the number of logcat logs included to fit in dropbox entries"
+    bug: "354138103"
+}
+
+flag {
+    name: "consolidate_collect_reachable"
     namespace: "backstage_power"
-    description: "Lower messaging app process oom importance to PERCEPTIBLE_APP_ADJ + 1."
-    bug: "372511805"
-    is_fixed_read_only: true
+    description: "Consolidate collectReachable usage to one implementation."
+    bug: "364936739"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "syncmanager_off_main_thread"
+    namespace: "backstage_power"
+    description: "Move broadcast receivers off the main thread to reduce ANR chances"
+    bug: "409177829"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "push_broadcast_state_to_oomadjuster"
+    namespace: "backstage_power"
+    description: "Migrate OomAdjuster pulled broadcast state to a push model"
+    bug: "401350498"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "cache_content_capture_service"
+    namespace: "system_performance"
+    description: "Seed ContentCaptureManager into the bound application's initial service cache"
+    bug: "414380203"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

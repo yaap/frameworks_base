@@ -39,7 +39,7 @@ filegroup {
     srcs: [
         "**/*_ravenwood.java",
     ],
-    visibility: ["//frameworks/base"],
+    visibility: ["//frameworks/base/ravenwood"],
 }
 
 //Mock to allow service registry for ranging stack.
@@ -96,7 +96,7 @@ release_package_messagequeue_implementation_srcs {
         release_package_messagequeue_implementation: {
             srcs: ["android/os/%s"],
             conditions_default: {
-                srcs: ["android/os/CombinedMessageQueue/MessageQueue.java"],
+                srcs: ["android/os/CombinedMessageQueue/*.java"],
             },
         },
     },
@@ -294,7 +294,10 @@ java_library {
 java_library {
     name: "modules-utils-locallog",
     srcs: ["android/util/LocalLog.java"],
-    libs: ["unsupportedappusage"],
+    libs: [
+        "unsupportedappusage",
+        "ravenwood-annotations-lib",
+    ],
     sdk_version: "module_current",
     min_sdk_version: "30",
     apex_available: [
@@ -416,6 +419,20 @@ filegroup {
     name: "activity_manager_procstate_aidl",
     srcs: [
         "android/app/ProcessStateEnum.aidl",
+    ],
+}
+
+filegroup {
+    name: "activity_manager_iprocessobserver_aidl",
+    srcs: [
+        "android/app/IProcessObserver.aidl",
+    ],
+}
+
+filegroup {
+    name: "activity_manager_runningappprocessinfo_aidl",
+    srcs: [
+        "android/app/RunningAppProcessInfo.aidl",
     ],
 }
 
@@ -616,19 +633,14 @@ filegroup {
     ],
 }
 
-aidl_interface {
-    name: "android.os.statsbootstrap_aidl",
-    unstable: true,
+filegroup {
+    name: "android-os-statsbootstrap-aidl",
     srcs: [
         "android/os/IStatsBootstrapAtomService.aidl",
         "android/os/StatsBootstrapAtom.aidl",
         "android/os/StatsBootstrapAtomValue.aidl",
     ],
-    backend: {
-        cpp: {
-            enabled: true,
-        },
-    },
+    visibility: ["//frameworks/native/libs/binder"],
 }
 
 // utility classes statically linked into wifi-service

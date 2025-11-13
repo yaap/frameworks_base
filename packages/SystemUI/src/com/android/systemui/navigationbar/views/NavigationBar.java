@@ -35,8 +35,8 @@ import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_3BUTTON;
 import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_GESTURAL;
 
 import static com.android.internal.config.sysui.SystemUiDeviceConfigFlags.HOME_BUTTON_LONG_PRESS_DURATION_MS;
+import static com.android.systemui.LauncherProxyService.LauncherProxyListener;
 import static com.android.systemui.navigationbar.NavBarHelper.transitionMode;
-import static com.android.systemui.recents.LauncherProxyService.LauncherProxyListener;
 import static com.android.systemui.shared.recents.utilities.Utilities.isLargeScreen;
 import static com.android.systemui.shared.rotation.RotationButtonController.DEBUG_ROTATION;
 import static com.android.systemui.shared.statusbar.phone.BarTransitions.MODE_OPAQUE;
@@ -112,6 +112,7 @@ import com.android.internal.statusbar.LetterboxDetails;
 import com.android.internal.util.LatencyTracker;
 import com.android.internal.view.AppearanceRegion;
 import com.android.systemui.Gefingerpoken;
+import com.android.systemui.LauncherProxyService;
 import com.android.systemui.assist.AssistManager;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.DisplayId;
@@ -129,7 +130,6 @@ import com.android.systemui.navigationbar.views.buttons.KeyButtonView;
 import com.android.systemui.navigationbar.views.buttons.NavBarButtonClickLogger;
 import com.android.systemui.navigationbar.views.buttons.NavbarOrientationTrackingLogger;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
-import com.android.systemui.recents.LauncherProxyService;
 import com.android.systemui.recents.Recents;
 import com.android.systemui.res.R;
 import com.android.systemui.settings.DisplayTracker;
@@ -138,6 +138,7 @@ import com.android.systemui.settings.UserTracker;
 import com.android.systemui.shade.ShadeViewController;
 import com.android.systemui.shade.domain.interactor.PanelExpansionInteractor;
 import com.android.systemui.shared.recents.utilities.Utilities;
+import com.android.systemui.shared.rotation.RotationButton;
 import com.android.systemui.shared.rotation.RotationButtonController;
 import com.android.systemui.shared.rotation.RotationPolicyUtil;
 import com.android.systemui.shared.statusbar.phone.BarTransitions;
@@ -151,6 +152,7 @@ import com.android.systemui.statusbar.CommandQueue.Callbacks;
 import com.android.systemui.statusbar.NotificationRemoteInputManager;
 import com.android.systemui.statusbar.NotificationShadeDepthController;
 import com.android.systemui.statusbar.StatusBarState;
+import com.android.systemui.statusbar.data.repository.LightBarControllerStore;
 import com.android.systemui.statusbar.notification.stack.StackStateAnimator;
 import com.android.systemui.statusbar.phone.AutoHideController;
 import com.android.systemui.statusbar.phone.AutoHideControllerStore;
@@ -261,8 +263,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     private boolean mTransientShownFromGestureOnSystemBar;
     private int mNavBarMode = NAV_BAR_MODE_3BUTTON;
     private LightBarController mLightBarController;
-    private final LightBarController mMainLightBarController;
-    private final LightBarController.Factory mLightBarControllerFactory;
+    private final LightBarControllerStore mLightBarControllerStore;
     private AutoHideController mAutoHideController;
     private final AutoHideControllerStore mAutoHideControllerStore;
     private final Optional<TelecomManager> mTelecomManagerOptional;
@@ -318,7 +319,6 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
 
         @Override
         public void hide() {
-            clearTransient();
         }
     };
 
@@ -540,8 +540,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
             @Background Executor bgExecutor,
             UiEventLogger uiEventLogger,
             NavBarHelper navBarHelper,
-            LightBarController mainLightBarController,
-            LightBarController.Factory lightBarControllerFactory,
+            LightBarControllerStore lightBarControllerStore,
             AutoHideControllerStore autoHideControllerStore,
             Optional<TelecomManager> telecomManagerOptional,
             InputMethodManager inputMethodManager,
@@ -586,8 +585,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         mUiEventLogger = uiEventLogger;
         mNavBarHelper = navBarHelper;
         mNotificationShadeDepthController = notificationShadeDepthController;
-        mMainLightBarController = mainLightBarController;
-        mLightBarControllerFactory = lightBarControllerFactory;
+        mLightBarControllerStore = lightBarControllerStore;
         mAutoHideControllerStore = autoHideControllerStore;
         mTelecomManagerOptional = telecomManagerOptional;
         mInputMethodManager = inputMethodManager;
@@ -805,7 +803,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
             // mode. This will automatically happen when switching from auto-rotate to locked mode.
             @Nullable Boolean isRotationLocked = RotationPolicyUtil.isRotationLocked(mContext);
             if (display != null && isRotationLocked) {
-                rotationButtonController.setRotationLockedAtAngle(isRotationLocked,
+                rotationButtonController.setRotationAtAngle(isRotationLocked,
                         display.getRotation(), /* caller= */ "NavigationBar#onViewAttached");
             }
         } else {
@@ -816,8 +814,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         // Unfortunately, we still need it because status bar needs LightBarController
         // before notifications creation. We cannot directly use getLightBarController()
         // from NavigationBarFragment directly.
-        LightBarController lightBarController = mIsOnDefaultDisplay
-                ? mMainLightBarController : mLightBarControllerFactory.create(mContext);
+        LightBarController lightBarController = mLightBarControllerStore.forDisplay(mDisplayId);
         setLightBarController(lightBarController);
 
         AutoHideController autoHideController = mAutoHideControllerStore.forDisplay(mDisplayId);
@@ -979,12 +976,13 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         final RotationButtonController rotationButtonController =
                 mView.getRotationButtonController();
         if (DEBUG_ROTATION) {
+            RotationButton rotationButton = rotationButtonController.getRotationButton();
             Log.v(TAG, "onRotationProposal proposedRotation=" + Surface.rotationToString(rotation)
                     + ", isValid=" + isValid + ", mNavBarWindowState="
                     + StatusBarManager.windowStateToString(mNavigationBarWindowState)
                     + ", rotateSuggestionsDisabled=" + rotateSuggestionsDisabled
                     + ", isRotateButtonVisible="
-                    + rotationButtonController.getRotationButton().isVisible());
+                    + (rotationButton != null && rotationButton.isVisible()));
         }
         // Respect the disabled flag, no need for action as flag change callback will handle hiding
         if (rotateSuggestionsDisabled) return;

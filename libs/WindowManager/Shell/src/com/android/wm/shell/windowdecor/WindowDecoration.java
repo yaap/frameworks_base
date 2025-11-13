@@ -17,12 +17,11 @@
 package com.android.wm.shell.windowdecor;
 
 import static android.content.res.Configuration.DENSITY_DPI_UNDEFINED;
-import static android.view.WindowInsets.Type.captionBar;
-import static android.view.WindowInsets.Type.mandatorySystemGestures;
 import static android.view.WindowInsets.Type.statusBars;
 import static android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
 import static android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
 import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION;
+import static android.view.WindowManager.TRANSIT_CHANGE;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -36,7 +35,10 @@ import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.Region;
+import android.gui.BorderSettings;
+import android.gui.BoxShadowSettings;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.Trace;
 import android.view.Display;
 import android.view.InsetsSource;
@@ -51,13 +53,15 @@ import android.window.DesktopExperienceFlags;
 import android.window.DesktopModeFlags;
 import android.window.SurfaceSyncGroup;
 import android.window.TaskConstants;
-import android.window.WindowContainerToken;
 import android.window.WindowContainerTransaction;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.wm.shell.ShellTaskOrganizer;
+import com.android.wm.shell.common.BoxShadowHelper;
 import com.android.wm.shell.common.DisplayController;
 import com.android.wm.shell.desktopmode.DesktopModeEventLogger;
+import com.android.wm.shell.shared.annotations.ShellMainThread;
+import com.android.wm.shell.transition.Transitions;
 import com.android.wm.shell.windowdecor.WindowDecoration.RelayoutParams.OccludingCaptionElement;
 import com.android.wm.shell.windowdecor.additionalviewcontainer.AdditionalViewHostViewContainer;
 import com.android.wm.shell.windowdecor.common.viewhost.WindowDecorViewHost;
@@ -65,9 +69,8 @@ import com.android.wm.shell.windowdecor.common.viewhost.WindowDecorViewHostSuppl
 import com.android.wm.shell.windowdecor.extension.InsetsStateKt;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 /**
@@ -119,6 +122,8 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
      * System-wide context. Only used to create context with overridden configurations.
      */
     final Context mContext;
+    private final @NonNull @ShellMainThread Handler mHandler;
+    private final @NonNull Transitions mTransitions;
     final @NonNull Context mUserContext;
     final @NonNull DisplayController mDisplayController;
     final @NonNull DesktopModeEventLogger mDesktopModeEventLogger;
@@ -170,13 +175,15 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
 
     WindowDecoration(
             Context context,
+            @NonNull @ShellMainThread Handler handler,
+            @NonNull Transitions transitions,
             @NonNull Context userContext,
             DisplayController displayController,
             ShellTaskOrganizer taskOrganizer,
             RunningTaskInfo taskInfo,
             SurfaceControl taskSurface,
             @NonNull WindowDecorViewHostSupplier<WindowDecorViewHost> windowDecorViewHostSupplier) {
-        this(context, userContext, displayController, taskOrganizer, taskInfo,
+        this(context, handler, transitions, userContext, displayController, taskOrganizer, taskInfo,
                 taskSurface, SurfaceControl.Builder::new, SurfaceControl.Transaction::new,
                 WindowContainerTransaction::new, SurfaceControl::new,
                 new SurfaceControlViewHostFactory() {}, windowDecorViewHostSupplier,
@@ -185,6 +192,8 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
 
     WindowDecoration(
             Context context,
+            @NonNull @ShellMainThread Handler handler,
+            @NonNull Transitions transitions,
             @NonNull Context userContext,
             @NonNull DisplayController displayController,
             ShellTaskOrganizer taskOrganizer,
@@ -199,6 +208,8 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
             @NonNull DesktopModeEventLogger desktopModeEventLogger
     ) {
         mContext = context;
+        mHandler = handler;
+        mTransitions = transitions;
         mUserContext = userContext;
         mDisplayController = displayController;
         mTaskOrganizer = taskOrganizer;
@@ -281,13 +292,24 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
         outResult.mHeight = taskBounds.height();
         outResult.mRootView.setTaskFocusState(mHasGlobalFocus);
         final Resources resources = mDecorWindowContext.getResources();
-        outResult.mCaptionHeight = loadDimensionPixelSize(resources, params.mCaptionHeightId)
-                + params.mCaptionTopPadding;
+        outResult.mCaptionHeight = params.mCaptionHeightCalculator.apply(mDecorWindowContext,
+                mDisplay) + params.mCaptionTopPadding;
         outResult.mCaptionWidth = params.mCaptionWidthId != Resources.ID_NULL
                 ? loadDimensionPixelSize(resources, params.mCaptionWidthId) : taskBounds.width();
         outResult.mCaptionX = (outResult.mWidth - outResult.mCaptionWidth) / 2;
         outResult.mCaptionY = 0;
         outResult.mCaptionTopPadding = params.mCaptionTopPadding;
+
+        if (params.mBorderSettingsId != Resources.ID_NULL) {
+            outResult.mBorderSettings = BoxShadowHelper.getBorderSettings(mDecorWindowContext,
+                    params.mBorderSettingsId);
+        }
+
+        if (params.mBoxShadowSettingsIds != null) {
+            outResult.mBoxShadowSettings = BoxShadowHelper.getBoxShadowSettings(mDecorWindowContext,
+                    params.mBoxShadowSettingsIds);
+        }
+
         if (DesktopExperienceFlags.ENABLE_DYNAMIC_RADIUS_COMPUTATION_BUGFIX.isTrue()) {
             outResult.mCornerRadius = params.mCornerRadiusId == Resources.ID_NULL
                     ? INVALID_CORNER_RADIUS : loadDimensionPixelSize(resources,
@@ -507,18 +529,6 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
                     .setPosition(mTaskSurface, taskPosition.x, taskPosition.y);
         }
 
-        if (DesktopExperienceFlags.ENABLE_DYNAMIC_RADIUS_COMPUTATION_BUGFIX.isTrue()) {
-            if (outResult.mShadowRadius != INVALID_SHADOW_RADIUS) {
-                startT.setShadowRadius(mTaskSurface, outResult.mShadowRadius);
-                finishT.setShadowRadius(mTaskSurface, outResult.mShadowRadius);
-            }
-        } else {
-            if (params.mShadowRadius != INVALID_SHADOW_RADIUS) {
-                startT.setShadowRadius(mTaskSurface, params.mShadowRadius);
-                finishT.setShadowRadius(mTaskSurface, params.mShadowRadius);
-            }
-        }
-
         if (params.mSetTaskVisibilityPositionAndCrop) {
             startT.show(mTaskSurface);
         }
@@ -534,12 +544,48 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
             startT.unsetColor(mTaskSurface);
         }
 
+        updateTaskSurfaceOutline(params, startT, finishT, outResult);
+    }
+
+    private void updateTaskSurfaceOutline(
+            RelayoutParams params, SurfaceControl.Transaction startT,
+            SurfaceControl.Transaction finishT, RelayoutResult<T> outResult) {
+        if ((DesktopExperienceFlags.ENABLE_DYNAMIC_RADIUS_COMPUTATION_BUGFIX.isTrue()
+                || DesktopExperienceFlags.ENABLE_FREEFORM_BOX_SHADOWS.isTrue())
+                && !params.mInSyncWithTransition) {
+            // Update these outline properties only when the relayout is driven by Transition
+            // callbacks because they must be updated together with some of other properties (e.g.,
+            // position) which is set by transition handler although the outline properties are
+            // expected to be set by WindowDecoration instead of the transition handler.
+            return;
+        }
+
+        if (outResult.mBorderSettings != null
+                && outResult.mBorderSettings.strokeWidth > 0) {
+            startT.setBorderSettings(mTaskSurface, outResult.mBorderSettings);
+            finishT.setBorderSettings(mTaskSurface, outResult.mBorderSettings);
+        }
+
+        if (outResult.mBoxShadowSettings != null
+                && outResult.mBoxShadowSettings.boxShadows.length > 0) {
+            startT.setBoxShadowSettings(mTaskSurface, outResult.mBoxShadowSettings);
+            finishT.setBoxShadowSettings(mTaskSurface, outResult.mBoxShadowSettings);
+        }
+
         if (DesktopExperienceFlags.ENABLE_DYNAMIC_RADIUS_COMPUTATION_BUGFIX.isTrue()) {
+            if (outResult.mShadowRadius != INVALID_SHADOW_RADIUS) {
+                startT.setShadowRadius(mTaskSurface, outResult.mShadowRadius);
+                finishT.setShadowRadius(mTaskSurface, outResult.mShadowRadius);
+            }
             if (outResult.mCornerRadius != INVALID_CORNER_RADIUS) {
                 startT.setCornerRadius(mTaskSurface, outResult.mCornerRadius);
                 finishT.setCornerRadius(mTaskSurface, outResult.mCornerRadius);
             }
         } else {
+            if (params.mShadowRadius != INVALID_SHADOW_RADIUS) {
+                startT.setShadowRadius(mTaskSurface, params.mShadowRadius);
+                finishT.setShadowRadius(mTaskSurface, params.mShadowRadius);
+            }
             if (params.mCornerRadius != INVALID_CORNER_RADIUS) {
                 startT.setCornerRadius(mTaskSurface, params.mCornerRadius);
                 finishT.setCornerRadius(mTaskSurface, params.mCornerRadius);
@@ -673,8 +719,8 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
         captionView.setVisibility(v);
     }
 
-    int getCaptionHeightId(@WindowingMode int windowingMode) {
-        return Resources.ID_NULL;
+    int getCaptionHeight(@WindowingMode int windowingMode) {
+        return 0;
     }
 
     int getCaptionViewId() {
@@ -690,7 +736,11 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
     private boolean obtainDisplayOrRegisterListener() {
         mDisplay = mDisplayController.getDisplay(mTaskInfo.displayId);
         if (mDisplay == null) {
-            mDisplayController.addDisplayWindowListener(mOnDisplaysChangedListener);
+            // Post to the handler to avoid an infinite loop. See b/415631133 for more details.
+            // TODO(b/419398609): Remove this whole work around once the root timing issue is
+            //  resolved.
+            mHandler.post(
+                    () -> mDisplayController.addDisplayWindowListener(mOnDisplaysChangedListener));
             return false;
         }
         return true;
@@ -730,7 +780,12 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
         }
         final WindowContainerTransaction wct = mWindowContainerTransactionSupplier.get();
         releaseViews(wct);
-        mTaskOrganizer.applyTransaction(wct);
+        if (DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_PIP.isTrue() && !wct.isEmpty()) {
+            mHandler.post(() -> mTransitions.startTransition(TRANSIT_CHANGE, wct,
+                    /* handler= */ null));
+        } else {
+            mTaskOrganizer.applyTransaction(wct);
+        }
         mTaskSurface.release();
         Trace.endSection();
     }
@@ -822,12 +877,11 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
      * Adds caption inset source to a WCT
      */
     public void addCaptionInset(WindowContainerTransaction wct) {
-        final int captionHeightId = getCaptionHeightId(mTaskInfo.getWindowingMode());
-        if (captionHeightId == Resources.ID_NULL || !mIsCaptionVisible) {
+        final int captionHeight = getCaptionHeight(mTaskInfo.getWindowingMode());
+        if (captionHeight == 0 || !mIsCaptionVisible) {
             return;
         }
 
-        final int captionHeight = loadDimensionPixelSize(mContext.getResources(), captionHeightId);
         final Rect captionInsets = new Rect(0, 0, 0, captionHeight);
         final WindowDecorationInsets newInsets = new WindowDecorationInsets(mTaskInfo.token,
                 mOwner, captionInsets, null  /* taskFrame */,  null /* boundingRects */,
@@ -841,7 +895,7 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
     static class RelayoutParams {
         RunningTaskInfo mRunningTaskInfo;
         int mLayoutResId;
-        int mCaptionHeightId;
+        BiFunction<Context, Display, Integer> mCaptionHeightCalculator = (ctx, display) -> 0;
         int mCaptionWidthId;
         final List<OccludingCaptionElement> mOccludingCaptionElements = new ArrayList<>();
         boolean mLimitTouchRegionToSystemAreas;
@@ -857,6 +911,8 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
 
         int mShadowRadiusId = Resources.ID_NULL;
         int mCornerRadiusId = Resources.ID_NULL;
+        int mBorderSettingsId = Resources.ID_NULL;
+        int[] mBoxShadowSettingsIds = null;
 
         int mCaptionTopPadding;
         boolean mIsCaptionVisible;
@@ -870,9 +926,11 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
         boolean mShouldSetAppBounds;
         boolean mShouldSetBackground;
 
+        boolean mInSyncWithTransition;
+
         void reset() {
             mLayoutResId = Resources.ID_NULL;
-            mCaptionHeightId = Resources.ID_NULL;
+            mCaptionHeightCalculator = (ctx, display) -> 0;
             mCaptionWidthId = Resources.ID_NULL;
             mOccludingCaptionElements.clear();
             mLimitTouchRegionToSystemAreas = false;
@@ -880,6 +938,9 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
             mIsInsetSource = true;
             mInsetSourceFlags = 0;
             mDisplayExclusionRegion.setEmpty();
+            mBorderSettingsId = Resources.ID_NULL;
+            mBoxShadowSettingsIds = null;
+
             if (DesktopExperienceFlags.ENABLE_DYNAMIC_RADIUS_COMPUTATION_BUGFIX.isTrue()) {
                 mShadowRadiusId = Resources.ID_NULL;
                 mCornerRadiusId = Resources.ID_NULL;
@@ -898,6 +959,7 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
             mHasGlobalFocus = false;
             mShouldSetAppBounds = false;
             mShouldSetBackground = false;
+            mInSyncWithTransition = false;
         }
 
         boolean hasInputFeatureSpy() {
@@ -930,6 +992,8 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
         T mRootView;
         int mCornerRadius;
         int mShadowRadius;
+        BorderSettings mBorderSettings;
+        BoxShadowSettings mBoxShadowSettings;
 
         void reset() {
             mWidth = 0;
@@ -941,6 +1005,8 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
             mCaptionTopPadding = 0;
             mCustomizableCaptionRegion.setEmpty();
             mRootView = null;
+            mBorderSettings = null;
+            mBoxShadowSettings = null;
             if (DesktopExperienceFlags.ENABLE_DYNAMIC_RADIUS_COMPUTATION_BUGFIX.isTrue()) {
                 mCornerRadius = INVALID_CORNER_RADIUS;
                 mShadowRadius = INVALID_SHADOW_RADIUS;
@@ -968,71 +1034,6 @@ public abstract class WindowDecoration<T extends View & TaskFocusStateConsumer>
         default SurfaceControlViewHost create(Context c, Display d,
                 WindowlessWindowManager wmm, String callsite) {
             return new SurfaceControlViewHost(c, d, wmm, callsite);
-        }
-    }
-
-    private static class WindowDecorationInsets {
-        private static final int INDEX = 0;
-        private final WindowContainerToken mToken;
-        private final Binder mOwner;
-        private final Rect mFrame;
-        private final Rect mTaskFrame;
-        private final Rect[] mBoundingRects;
-        private final @InsetsSource.Flags int mFlags;
-        private final boolean mShouldAddCaptionInset;
-        private final boolean mExcludedFromAppBounds;
-
-        private WindowDecorationInsets(WindowContainerToken token, Binder owner, Rect frame,
-                Rect taskFrame, Rect[] boundingRects, @InsetsSource.Flags int flags,
-                boolean shouldAddCaptionInset, boolean excludedFromAppBounds) {
-            mToken = token;
-            mOwner = owner;
-            mFrame = frame;
-            mTaskFrame = taskFrame;
-            mBoundingRects = boundingRects;
-            mFlags = flags;
-            mShouldAddCaptionInset = shouldAddCaptionInset;
-            mExcludedFromAppBounds = excludedFromAppBounds;
-        }
-
-        void update(WindowContainerTransaction wct) {
-            if (mShouldAddCaptionInset) {
-                wct.addInsetsSource(mToken, mOwner, INDEX, captionBar(), mFrame, mBoundingRects,
-                        mFlags);
-                wct.addInsetsSource(mToken, mOwner, INDEX, mandatorySystemGestures(), mFrame,
-                        mBoundingRects, 0 /* flags */);
-                if (mExcludedFromAppBounds) {
-                    final Rect appBounds = new Rect(mTaskFrame);
-                    appBounds.top += mFrame.height();
-                    wct.setAppBounds(mToken, appBounds);
-                }
-            }
-        }
-
-        void remove(WindowContainerTransaction wct) {
-            wct.removeInsetsSource(mToken, mOwner, INDEX, captionBar());
-            wct.removeInsetsSource(mToken, mOwner, INDEX, mandatorySystemGestures());
-            if (mExcludedFromAppBounds) {
-                wct.setAppBounds(mToken, new Rect());
-            }
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof WindowDecoration.WindowDecorationInsets that)) return false;
-            return Objects.equals(mToken, that.mToken) && Objects.equals(mOwner,
-                    that.mOwner) && Objects.equals(mFrame, that.mFrame)
-                    && Objects.equals(mTaskFrame, that.mTaskFrame)
-                    && Objects.deepEquals(mBoundingRects, that.mBoundingRects)
-                    && mFlags == that.mFlags
-                    && mShouldAddCaptionInset == that.mShouldAddCaptionInset
-                    && mExcludedFromAppBounds == that.mExcludedFromAppBounds;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(mToken, mOwner, mFrame, Arrays.hashCode(mBoundingRects), mFlags);
         }
     }
 }

@@ -25,9 +25,10 @@ import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
 import com.android.systemui.statusbar.featurepods.media.domain.interactor.MediaControlChipInteractor
 import com.android.systemui.statusbar.featurepods.media.shared.model.MediaControlChipModel
-import com.android.systemui.statusbar.featurepods.popups.shared.model.HoverBehavior
-import com.android.systemui.statusbar.featurepods.popups.shared.model.PopupChipId
-import com.android.systemui.statusbar.featurepods.popups.shared.model.PopupChipModel
+import com.android.systemui.statusbar.featurepods.popups.ui.model.ChipIcon
+import com.android.systemui.statusbar.featurepods.popups.ui.model.HoverBehavior
+import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipId
+import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipModel
 import com.android.systemui.statusbar.featurepods.popups.ui.viewmodel.StatusBarPopupChipViewModel
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -80,7 +81,7 @@ constructor(
                 )
         return PopupChipModel.Shown(
             chipId = PopupChipId.MediaControl,
-            icon = defaultIcon,
+            icons = listOf(ChipIcon(icon = defaultIcon)),
             chipText = model.songName.toString(),
             hoverBehavior = createHoverBehavior(model),
         )
@@ -94,9 +95,15 @@ constructor(
         val contentDescription =
             ContentDescription.Loaded(description = playOrPause.contentDescription.toString())
 
-        return HoverBehavior.Button(
-            icon = Icon.Loaded(drawable = icon, contentDescription = contentDescription),
-            onIconPressed = { action.run() },
+        return HoverBehavior.Buttons(
+            icons =
+                listOf(
+                    ChipIcon(
+                        icon =
+                            Icon.Loaded(drawable = icon, contentDescription = contentDescription),
+                        onClick = { action.run() },
+                    )
+                )
         )
     }
 

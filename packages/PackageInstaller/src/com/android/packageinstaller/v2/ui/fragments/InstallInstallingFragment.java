@@ -17,6 +17,7 @@
 package com.android.packageinstaller.v2.ui.fragments;
 
 import static com.android.packageinstaller.v2.model.PackageUtil.ARGS_APP_SNIPPET;
+import static com.android.packageinstaller.v2.model.PackageUtil.ARGS_IS_UPDATING;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -24,6 +25,8 @@ import android.content.DialogInterface;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,6 +35,7 @@ import androidx.fragment.app.DialogFragment;
 import com.android.packageinstaller.R;
 import com.android.packageinstaller.v2.model.InstallInstalling;
 import com.android.packageinstaller.v2.model.PackageUtil.AppSnippet;
+import com.android.packageinstaller.v2.ui.UiUtil;
 
 /**
  * Dialog to show when an install is in progress.
@@ -50,12 +54,13 @@ public class InstallInstallingFragment extends DialogFragment {
      * Creates a new instance of this fragment with necessary data set as fragment arguments
      *
      * @param dialogData {@link InstallInstalling} object containing data to display in the
-     *         dialog
+     *                   dialog
      * @return an instance of the fragment
      */
     public static InstallInstallingFragment newInstance(@NonNull InstallInstalling dialogData) {
         Bundle args = new Bundle();
         args.putParcelable(ARGS_APP_SNIPPET, dialogData.getAppSnippet());
+        args.putBoolean(ARGS_IS_UPDATING, dialogData.isAppUpdating());
 
         InstallInstallingFragment fragment = new InstallInstallingFragment();
         fragment.setArguments(args);
@@ -68,15 +73,22 @@ public class InstallInstallingFragment extends DialogFragment {
         setDialogData(requireArguments());
 
         Log.i(LOG_TAG, "Creating " + LOG_TAG + "\n" + mDialogData);
-        View dialogView = getLayoutInflater().inflate(R.layout.install_content_view, null);
+
+        View dialogView = getLayoutInflater().inflate(
+                UiUtil.getInstallationLayoutResId(requireContext()), null);
+
+        dialogView.requireViewById(R.id.progress_bar).setVisibility(View.VISIBLE);
+        dialogView.requireViewById(R.id.app_snippet).setVisibility(View.VISIBLE);
+        ((ImageView) dialogView.requireViewById(R.id.app_icon))
+            .setImageDrawable(mDialogData.getAppIcon());
+        ((TextView) dialogView.requireViewById(R.id.app_label)).setText(mDialogData.getAppLabel());
+
         mDialog = new AlertDialog.Builder(requireContext())
-            .setTitle(mDialogData.getAppLabel())
-            .setIcon(mDialogData.getAppIcon())
+            .setTitle(
+                mDialogData.isAppUpdating() ? R.string.title_updating : R.string.title_installing)
             .setView(dialogView)
-            .setNegativeButton(R.string.cancel, null)
             .create();
 
-        dialogView.requireViewById(R.id.installing).setVisibility(View.VISIBLE);
         this.setCancelable(false);
 
         return mDialog;
@@ -90,6 +102,7 @@ public class InstallInstallingFragment extends DialogFragment {
 
     private void setDialogData(Bundle args) {
         AppSnippet appSnippet = args.getParcelable(ARGS_APP_SNIPPET, AppSnippet.class);
-        mDialogData = new InstallInstalling(appSnippet);
+        boolean isAppUpdating = args.getBoolean(ARGS_IS_UPDATING);
+        mDialogData = new InstallInstalling(appSnippet, isAppUpdating);
     }
 }

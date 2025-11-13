@@ -21,6 +21,7 @@ import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.Kosmos.Fixture
 import com.android.systemui.kosmos.testDispatcher
 import com.android.systemui.shade.domain.interactor.shadeInteractor
+import com.android.systemui.shade.domain.interactor.shadeModeInteractor
 import com.android.systemui.statusbar.chips.ui.viewmodel.ongoingActivityChipsViewModel
 import com.android.systemui.statusbar.domain.interactor.remoteInputInteractor
 import com.android.systemui.statusbar.notification.domain.interactor.activeNotificationsInteractor
@@ -34,19 +35,22 @@ import java.util.Optional
 
 val Kosmos.notificationListViewModel by Fixture {
     NotificationListViewModel(
-        notificationShelfViewModel,
-        hideListViewModel,
-        ongoingActivityChipsViewModel,
-        footerViewModelFactory,
-        emptyShadeViewModelFactory,
-        Optional.of(notificationListLoggerViewModel),
-        activeNotificationsInteractor,
-        notificationStackInteractor,
-        headsUpNotificationInteractor,
-        remoteInputInteractor,
-        shadeInteractor,
-        userSetupInteractor,
-        testDispatcher,
-        dumpManager,
+        shelf = notificationShelfViewModel,
+        hideListViewModel = hideListViewModel,
+        ongoingActivityChipsViewModel = ongoingActivityChipsViewModel,
+        footerViewModelFactory = footerViewModelFactory,
+        emptyShadeViewModelFactory = emptyShadeViewModelFactory,
+        bundleOnboarding = bundleOnboardingViewModel,
+        summarizationOnboarding = summarizationOnboardingViewModel,
+        logger = Optional.of(notificationListLoggerViewModel),
+        activeNotificationsInteractor = activeNotificationsInteractor,
+        notificationStackInteractor = notificationStackInteractor,
+        headsUpNotificationInteractor = headsUpNotificationInteractor,
+        remoteInputInteractor = remoteInputInteractor,
+        shadeInteractor = shadeInteractor,
+        shadeModeInteractor = shadeModeInteractor,
+        userSetupInteractor = userSetupInteractor,
+        bgDispatcher = testDispatcher,
+        dumpManager = dumpManager,
     )
 }

@@ -23,7 +23,6 @@ import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.android.systemui.FontSizeUtils;
 import com.android.systemui.res.R;
 
 /**
@@ -58,10 +57,11 @@ public class ShadeCarrierGroup extends LinearLayout {
         return findViewById(R.id.shade_carrier_divider2);
     }
 
-    public void updateTextAppearance(@StyleRes int resId) {
-        FontSizeUtils.updateFontSizeFromStyle(getNoSimTextView(), resId);
-        getCarrier1View().updateTextAppearance(resId);
-        getCarrier2View().updateTextAppearance(resId);
-        getCarrier3View().updateTextAppearance(resId);
+    /** Update the text appearance of the text and the tint of the icon */
+    public void updateTextAppearanceAndTint(@StyleRes int resId, int fgColor, int bgColor) {
+        getNoSimTextView().setTextAppearance(resId);
+        getCarrier1View().updateTextAppearanceAndTint(resId, fgColor, bgColor);
+        getCarrier2View().updateTextAppearanceAndTint(resId, fgColor, bgColor);
+        getCarrier3View().updateTextAppearanceAndTint(resId, fgColor, bgColor);
     }
 }

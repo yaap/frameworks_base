@@ -13,14 +13,6 @@ flag {
 
 flag {
     namespace: "window_surfaces"
-    name: "delete_capture_display"
-    description: "Delete uses of ScreenCapture#captureDisplay"
-    is_fixed_read_only: true
-    bug: "293445881"
-}
-
-flag {
-    namespace: "window_surfaces"
     name: "allow_disable_activity_record_input_sink"
     description: "Whether to allow system activity to disable ActivityRecordInputSink"
     is_fixed_read_only: true
@@ -73,17 +65,6 @@ flag {
 
 flag {
     namespace: "window_surfaces"
-    name: "enable_buffer_transform_hint_from_display"
-    description: "Always use display info to determine VRI's buffer transform hint"
-    is_fixed_read_only: true
-    bug: "301238858"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "window_surfaces"
     name: "set_sc_properties_in_client"
     description: "Set VRI SC properties in the client instead of system server"
     is_fixed_read_only: true
@@ -107,6 +88,14 @@ flag {
 }
 
 flag {
+  name: "enable_box_shadow_settings"
+  namespace: "window_surfaces"
+  description: "Enable SurfaceControl box shadow settings."
+  bug: "367464660"
+  is_fixed_read_only: true
+}
+
+flag {
     name: "jank_api"
     namespace: "window_surfaces"
     description: "Adds the jank data listener to AttachedSurfaceControl"
@@ -122,6 +111,28 @@ flag {
     is_fixed_read_only: true
     is_exported: true
     bug: "359424300"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "scvh_surface_control_lifetime_fix"
+    namespace: "window_surfaces"
+    description: "Fix lifetime issue with SurfaceControl's created by SCVH"
+    is_fixed_read_only: true
+    bug: "407989942"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "update_host_input_transfer_token"
+    namespace: "window_surfaces"
+    description: "Update host InpuTransferToken on view attach"
+    is_fixed_read_only: true
+    bug: "392965431"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

@@ -38,6 +38,7 @@ import org.junit.runner.RunWith
 @SmallTest
 @RunWith(AndroidJUnit4::class)
 @EnableSceneContainer
+@android.platform.test.annotations.EnabledOnRavenwood
 class SceneContainerRepositoryTest : SysuiTestCase() {
 
     private val kosmos = testKosmos()
@@ -59,7 +60,7 @@ class SceneContainerRepositoryTest : SysuiTestCase() {
             underTest.changeScene(Scenes.Shade)
             assertThat(currentScene).isEqualTo(Scenes.Shade)
 
-            underTest.snapToScene(Scenes.QuickSettings)
+            underTest.instantlyTransitionTo(Scenes.QuickSettings)
             assertThat(currentScene).isEqualTo(Scenes.QuickSettings)
         }
 
@@ -83,10 +84,10 @@ class SceneContainerRepositoryTest : SysuiTestCase() {
     }
 
     @Test(expected = IllegalStateException::class)
-    fun snapToScene_noSuchSceneInContainer_throws() {
+    fun instantlyTransitionTo_noSuchSceneInContainer_throws() {
         kosmos.sceneKeys = listOf(Scenes.QuickSettings, Scenes.Lockscreen)
         val underTest = kosmos.sceneContainerRepository
-        underTest.snapToScene(Scenes.Shade)
+        underTest.instantlyTransitionTo(Scenes.Shade)
     }
 
     @Test

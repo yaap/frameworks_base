@@ -18,6 +18,7 @@ package com.android.systemui.statusbar.notification.collection.render
 
 import com.android.app.tracing.traceSection
 import com.android.systemui.dagger.SysUISingleton
+import com.android.systemui.statusbar.notification.collection.BundleEntry
 import com.android.systemui.statusbar.notification.collection.GroupEntry
 import com.android.systemui.statusbar.notification.collection.PipelineEntry
 import com.android.systemui.statusbar.notification.collection.NotificationEntry
@@ -99,7 +100,7 @@ class RenderStageManager @Inject constructor() : PipelineDumpable {
             if (onAfterRenderGroupListeners.isEmpty()) {
                 return
             }
-            entries.asSequence().filterIsInstance<GroupEntry>().forEach { group ->
+            entries.forEachGroupEntry { group ->
                 val controller = viewRenderer.getGroupController(group)
                 onAfterRenderGroupListeners.forEach { listener ->
                     listener.onAfterRenderGroup(group, controller)
@@ -139,7 +140,42 @@ class RenderStageManager @Inject constructor() : PipelineDumpable {
                     action(entry.requireSummary)
                     entry.children.forEach(action)
                 }
+                is BundleEntry -> {
+                    for (bundleChild in entry.children) {
+                        if (bundleChild is GroupEntry) {
+                            action(bundleChild.requireSummary)
+                            bundleChild.children.forEach(action)
+                        } else if (bundleChild is NotificationEntry) {
+                            action(bundleChild)
+                        }
+                    }
+                }
                 else -> error("Unhandled entry: $entry")
+            }
+        }
+    }
+
+    /**
+     * Performs an action on all group entries, even if they are in a bundle
+     */
+    private inline fun List<PipelineEntry>.forEachGroupEntry(
+        action: (GroupEntry) -> Unit
+    ) {
+        forEach { entry ->
+            when (entry) {
+                is GroupEntry -> {
+                    action(entry)
+                }
+                is BundleEntry -> {
+                    for (bundleChild in entry.children) {
+                        if (bundleChild is GroupEntry) {
+                            action(bundleChild)
+                        }
+                    }
+                }
+                else -> {
+                    // Do nothing for leaf nodes
+                }
             }
         }
     }

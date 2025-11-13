@@ -63,12 +63,14 @@ import static android.provider.Settings.Global.DEVELOPMENT_FORCE_RTL;
 import static android.provider.Settings.Global.HIDE_ERROR_DIALOGS;
 import static android.provider.Settings.System.FONT_SCALE;
 import static android.service.controls.flags.Flags.homePanelDream;
+import static android.service.dreams.Flags.dreamsV2;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.INVALID_DISPLAY;
 import static android.view.WindowManager.TRANSIT_CHANGE;
 import static android.view.WindowManager.TRANSIT_PIP;
 import static android.view.WindowManager.TRANSIT_TO_FRONT;
 import static android.view.WindowManagerPolicyConstants.KEYGUARD_GOING_AWAY_FLAG_TO_LAUNCHER_CLEAR_SNAPSHOT;
+import static android.window.DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_PIP;
 import static android.window.TransitionInfo.FLAG_IN_TASK_WITH_EMBEDDED_ACTIVITY;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_CONFIGURATION;
@@ -129,9 +131,12 @@ import static com.android.server.wm.WindowManagerService.MY_PID;
 import static com.android.server.wm.WindowManagerService.UPDATE_FOCUS_NORMAL;
 
 import android.Manifest;
+import android.annotation.EnforcePermission;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SpecialUsers.CanBeCURRENT;
+import android.annotation.SpecialUsers.CannotBeSpecialUser;
 import android.annotation.UserIdInt;
 import android.app.ActivityManager;
 import android.app.ActivityManagerInternal;
@@ -160,6 +165,7 @@ import android.app.PictureInPictureParams;
 import android.app.PictureInPictureUiState;
 import android.app.ProfilerInfo;
 import android.app.WaitResult;
+import android.app.WindowConfiguration;
 import android.app.admin.DevicePolicyCache;
 import android.app.admin.DeviceStateCache;
 import android.app.assist.ActivityId;
@@ -238,9 +244,11 @@ import android.view.RemoteAnimationDefinition;
 import android.view.WindowManager;
 import android.window.BackAnimationAdapter;
 import android.window.BackNavigationInfo;
+import android.window.ITaskSnapshotManager;
 import android.window.IWindowOrganizerController;
 import android.window.SplashScreenView.SplashScreenViewParcelable;
 import android.window.TaskSnapshot;
+import android.window.TaskSnapshotManager;
 
 import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
@@ -313,8 +321,6 @@ import java.util.function.Supplier;
 
 /**
  * System service for managing activities and their containers (task, displays,... ).
- *
- * {@hide}
  */
 public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     private static final String TAG = TAG_WITH_CLASS_NAME ? "ActivityTaskManagerService" : TAG_ATM;
@@ -436,7 +442,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     static final int DEMOTE_TOP_REASON_EXPANDED_NOTIFICATION_SHADE = 1 << 1;
 
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
+    @IntDef(flag = true, value = {
             DEMOTE_TOP_REASON_DURING_UNLOCKING,
             DEMOTE_TOP_REASON_EXPANDED_NOTIFICATION_SHADE,
     })
@@ -706,7 +712,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     private static final long POWER_MODE_UNKNOWN_VISIBILITY_TIMEOUT_MS = 1000;
 
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
+    @IntDef(flag = true, value = {
             POWER_MODE_REASON_START_ACTIVITY,
             POWER_MODE_REASON_CHANGE_DISPLAY,
             POWER_MODE_REASON_UNKNOWN_VISIBILITY,
@@ -889,8 +895,6 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             mTaskSupervisor.onSystemReady();
             mActivityClientController.onSystemReady();
             mAppWarnings.onSystemReady();
-            // TODO(b/258792202) Cleanup once ASM is ready to launch
-            ActivitySecurityModelFeatureFlags.initialize(mContext.getMainExecutor());
             mGrammaticalManagerInternal = LocalServices.getService(
                     GrammaticalInflectionManagerInternal.class);
         }
@@ -1055,7 +1059,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         return new AppWarnings(this, uiContext, handler, uiHandler, systemDir);
     }
 
-    public void setWindowManager(WindowManagerService wm) {
+    public void setWindowManager(@NonNull WindowManagerService wm) {
         synchronized (mGlobalLock) {
             mWindowManager = wm;
             mRootWindowContainer = wm.mRoot;
@@ -1263,7 +1267,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     public int startActivityAsUser(IApplicationThread caller, String callingPackage,
             String callingFeatureId, Intent intent, String resolvedType, IBinder resultTo,
             String resultWho, int requestCode, int startFlags, ProfilerInfo profilerInfo,
-            Bundle bOptions, int userId) {
+            Bundle bOptions, @CanBeCURRENT @UserIdInt int userId) {
         return startActivityAsUser(caller, callingPackage, callingFeatureId, intent, resolvedType,
                 resultTo, resultWho, requestCode, startFlags, profilerInfo, bOptions, userId,
                 true /*validateIncomingUser*/);
@@ -1530,7 +1534,14 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         a.name = DreamActivity.class.getName();
         a.enabled = true;
         a.persistableMode = ActivityInfo.PERSIST_NEVER;
-        a.screenOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+        if (dreamsV2() && mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_alwaysAllowDreamRotation)) {
+            // Allow dream to start in the device's current orientation, regardless of the
+            // auto-rotation setting.
+            a.screenOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR;
+        } else {
+            a.screenOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+        }
         a.colorMode = ActivityInfo.COLOR_MODE_DEFAULT;
         a.flags |= ActivityInfo.FLAG_EXCLUDE_FROM_RECENTS | ActivityInfo.FLAG_SHOW_WHEN_LOCKED;
         a.configChanges = 0xffffffff;
@@ -1900,18 +1911,6 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         }
     }
 
-    @Override
-    public void registerBackGestureDelegate(RemoteCallback requestObserver) {
-        mAmInternal.enforceCallingPermission(START_TASKS_FROM_RECENTS,
-                "registerBackGestureDelegate()");
-        final long origId = Binder.clearCallingIdentity();
-        try {
-            mBackNavigationController.registerBackGestureDelegate(requestObserver);
-        } finally {
-            Binder.restoreCallingIdentity(origId);
-        }
-    }
-
     /**
      * Public API to check if the client is allowed to start an activity on specified display.
      *
@@ -1952,6 +1951,25 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                 ActivityStarter.computeResolveFilterUid(callingUid, callingUid,
                         UserHandle.USER_NULL), callingPid);
         return mAmInternal.getActivityInfoForUser(aInfo, userId);
+    }
+
+    /**
+     * Checks if a task opened on the display with the given ID can be repositioned on screen using
+     * the {@link android.app.ActivityManager.AppTask#moveTaskTo} method.
+     * <p>
+     * This method does not guarantee that a subsequent call to reposition a task on the given
+     * display will succeed. Instead, it indicates whether the given display's windowing mode
+     * configuration allows for handling repositioning requests.
+     *
+     * @param displayId Target display ID
+     * @return Whether the windowing mode active on display with given ID allows task repositioning
+     */
+    public boolean isTaskMoveAllowedOnDisplay(int displayId) {
+        if (checkCallingPermission(Manifest.permission.REPOSITION_SELF_WINDOWS)
+                != PackageManager.PERMISSION_GRANTED) {
+            return false;
+        }
+        return mRootWindowContainer.isTaskMoveAllowedOnDisplay(displayId);
     }
 
     @Override
@@ -2110,10 +2128,12 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             setLastResumedActivityUncheckLocked(r, "setFocusedTask-alreadyTop");
             return;
         }
-        final Transition transition = (getTransitionController().isCollecting()
-                || !getTransitionController().isShellTransitionsEnabled()) ? null
-                : getTransitionController().createTransition(TRANSIT_TO_FRONT);
+        final ActionChain chain = mChainTracker.startTransit("setFocusedTask");
+        final Transition transition = (!chain.isCollecting()
+                && getTransitionController().isShellTransitionsEnabled())
+                ? getTransitionController().createTransition(TRANSIT_TO_FRONT) : null;
         if (transition != null) {
+            chain.attachTransition(transition);
             // Set ready before doing anything. If order does change, then that will set it unready
             // so that we wait for the new lifecycles to complete.
             transition.setReady(task, true /* ready */);
@@ -2135,6 +2155,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                         true /* updateInputWindows */);
             }
         }
+        mChainTracker.end();
         if (transition != null && !movedToTop) {
             // No order changes and focus-changes, alone, aren't captured in transitions.
             transition.abort();
@@ -2537,7 +2558,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
      * ACTIVITY_TYPE_STANDARD or ACTIVITY_TYPE_UNDEFINED
      */
     @Override
-    public void removeRootTasksInWindowingModes(int[] windowingModes) {
+    public void removeRootTasksInWindowingModes(
+            @NonNull @WindowConfiguration.WindowingMode int[] windowingModes) {
         enforceTaskPermission("removeRootTasksInWindowingModes()");
 
         synchronized (mGlobalLock) {
@@ -2551,7 +2573,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     }
 
     @Override
-    public void removeRootTasksWithActivityTypes(int[] activityTypes) {
+    public void removeRootTasksWithActivityTypes(
+            @NonNull @WindowConfiguration.ActivityType int[] activityTypes) {
         enforceTaskPermission("removeRootTasksWithActivityTypes()");
 
         synchronized (mGlobalLock) {
@@ -2991,11 +3014,13 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                                 transition.abort();
                                 return;
                             }
+                            final ActionChain chain = mChainTracker.start("resizeTask", transition);
                             getTransitionController().requestStartTransition(transition, task,
                                     null /* remoteTransition */, null /* displayChange */);
-                            transition.collect(task);
+                            chain.collect(task);
                             task.resize(bounds, resizeMode, preserveWindow);
                             transition.setReady(task, true);
+                            mChainTracker.end();
                         });
             }
         } finally {
@@ -3127,7 +3152,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     }
 
     @Override
-    public Bitmap getTaskDescriptionIcon(String filePath, int userId) {
+    public Bitmap getTaskDescriptionIcon(String filePath, @CanBeCURRENT @UserIdInt int userId) {
         final int callingUid = Binder.getCallingUid();
         // Verify that the caller can make the request for the given userId
         userId = handleIncomingUser(Binder.getCallingPid(), callingUid, userId,
@@ -3177,6 +3202,22 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                 ProtoLog.d(WM_DEBUG_TASKS, "moveRootTaskToDisplay: moving taskId=%d to "
                         + "displayId=%d", taskId, displayId);
                 mRootWindowContainer.moveRootTaskToDisplay(taskId, displayId, ON_TOP);
+            } finally {
+                Binder.restoreCallingIdentity(ident);
+            }
+        }
+    }
+
+    @Override
+    public void moveRootTaskToDisplayOnTopOrBottom(int taskId, int displayId, boolean onTop) {
+        mAmInternal.enforceCallingPermission(INTERNAL_SYSTEM_WINDOW,
+                "moveRootTaskToDisplayOnTopOrBottom()");
+        synchronized (mGlobalLock) {
+            final long ident = Binder.clearCallingIdentity();
+            try {
+                ProtoLog.d(WM_DEBUG_TASKS, "moveRootTaskToDisplayOnTopOrBottom: " +
+                        "moving taskId=%d to displayId=%d, onTop=%b", taskId, displayId, onTop);
+                mRootWindowContainer.moveRootTaskToDisplay(taskId, displayId, onTop);
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }
@@ -3763,7 +3804,6 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
      *
      * @param taskId Id of task to handle the material to reconstruct the view.
      * @param parcelable Used to reconstruct the view, null means the surface is un-copyable.
-     * @hide
      */
     @Override
     public void onSplashScreenViewCopyFinished(int taskId,
@@ -3784,21 +3824,28 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     }
 
     /**
-     * Prepare to enter PiP mode after {@link TransitionController#requestStartDisplayTransition}.
+     * Sets a PiP candidate into an already collecting transition if needed.
      *
-     * @param r activity auto entering pip
-     * @return true if the activity is about to auto-enter pip or is already in pip mode.
+     * <p>Marking an activity as a PiP candidate in a collecting transition, will dispatch
+     * info about this activity to Shell when the transition is sent to Shell via
+     * requestStartTransition.</p>
+     *
+     * <p>This makes sense when an activity is either auto-enter PiP activity is requested to be
+     * launched into PiP as soon as the activity starts. For these cases, it makes sense to try and
+     * enter PiP in an already collecting transition instead of creating a separate TRANSIT_PIP.</p>
+     *
+     * @param r activity to be set as a PiP-ing candidate in an already collecting transition
      */
-    boolean prepareAutoEnterPictureAndPictureMode(ActivityRecord r) {
+    boolean setPipCandidateIfNeeded(@NonNull ActivityRecord r) {
         // If the activity is already in picture in picture mode, then just return early
         if (r.inPinnedWindowingMode()) {
             return true;
         }
 
         if (r.canAutoEnterPip() && getTransitionController().getCollectingTransition() != null) {
+            // If there is a collecting transition, try to signal a potential PiP candidate
+            // for Shell to consider when that transition is being requested.
             // This will be used later to construct TransitionRequestInfo for Shell to resolve.
-            // It will also be passed into a direct moveActivityToPinnedRootTask() call via
-            // startTransition()
             getTransitionController().getCollectingTransition().setPipActivity(r);
             return true;
         }
@@ -3841,25 +3888,46 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         }
 
         if (isPip2ExperimentEnabled()) {
-            // If PiP2 flag is on and request to enter PiP comes in,
-            // we request a direct transition TRANSIT_PIP from Shell to get the right entry bounds.
-            // So PiP activity isn't moved to a pinned task until after
-            // Shell calls back into Core with the entry bounds to be applied with startWCT.
-            final Transition enterPipTransition = new Transition(TRANSIT_PIP,
-                    0 /* flags */, getTransitionController(), mWindowManager.mSyncEngine);
-            r.setPictureInPictureParams(params);
-            enterPipTransition.setPipActivity(r);
-            r.mAutoEnteringPip = isAutoEnter;
+            final Runnable enterPipRunnable = () -> {
+                // If PiP2 flag is on and request to enter PiP comes in, we request a direct
+                // transition TRANSIT_PIP from Shell to get the right entry bounds.
+                // So PiP activity isn't moved to a pinned task until after
+                // Shell calls back into Core with the entry bounds to be applied with startWCT.
+                final Transition enterPipTransition = new Transition(TRANSIT_PIP,
+                        0 /* flags */, getTransitionController(), mWindowManager.mSyncEngine);
+                r.setPictureInPictureParams(params);
+                enterPipTransition.setPipActivity(r);
+                r.mAutoEnteringPip = isAutoEnter;
 
-            if (r.getTaskFragment() != null && r.getTaskFragment().isEmbeddedWithBoundsOverride()
-                    && enterPipTransition != null) {
-                enterPipTransition.addFlag(FLAG_IN_TASK_WITH_EMBEDDED_ACTIVITY);
+                if (r.getTaskFragment() != null
+                        && r.getTaskFragment().isEmbeddedWithBoundsOverride()) {
+                    enterPipTransition.addFlag(FLAG_IN_TASK_WITH_EMBEDDED_ACTIVITY);
+                }
+
+                getTransitionController().startCollectOrQueue(enterPipTransition, (deferred) -> {
+                    mChainTracker.start("enterPip2", enterPipTransition);
+                    // Collecting PiP activity explicitly to avoid stopping PiP activity while
+                    // Shell handles the request; see task supervisor's
+                    // processStoppingAndFinishingActivities.
+                    enterPipTransition.collect(r);
+                    getTransitionController().requestStartTransition(enterPipTransition,
+                            r.getTask(), null /* remoteTransition */, null /* displayChange */);
+                    // can run during finish, so partial
+                    mChainTracker.endPartial();
+                });
+            };
+            if (r.isKeyguardLocked()) {
+                mActivityClientController.dismissKeyguard(r.token, new KeyguardDismissCallback() {
+                    @Override
+                    public void onDismissSucceeded() {
+                        synchronized (mGlobalLock) {
+                            enterPipRunnable.run();
+                        }
+                    }
+                }, null /* message */);
+            } else {
+                enterPipRunnable.run();
             }
-
-            getTransitionController().startCollectOrQueue(enterPipTransition, (deferred) -> {
-                getTransitionController().requestStartTransition(enterPipTransition,
-                        r.getTask(), null /* remoteTransition */, null /* displayChange */);
-            });
             return true;
         }
 
@@ -3898,6 +3966,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                 r.mAutoEnteringPip = isAutoEnter;
 
                 if (transition != null) {
+                    mChainTracker.start("enterPip1", transition);
                     mRootWindowContainer.moveActivityToPinnedRootTaskAndRequestStart(r,
                             "enterPictureInPictureMode");
                 } else if (getTransitionController().isCollecting()
@@ -3919,6 +3988,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                             "auto-pip");
                 }
                 r.mAutoEnteringPip = false;
+                if (transition != null) {
+                    mChainTracker.end();
+                }
             }
         };
 
@@ -3957,6 +4029,13 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     @Override
     public IWindowOrganizerController getWindowOrganizerController() {
         return mWindowOrganizerController;
+    }
+
+    @EnforcePermission(allOf = {MANAGE_ACTIVITY_TASKS, READ_FRAME_BUFFER})
+    @Override
+    public ITaskSnapshotManager getTaskSnapshotManager() {
+        getTaskSnapshotManager_enforcePermission();
+        return mWindowManager.mSnapshotController.mSnapshotManagerService;
     }
 
     /**
@@ -4048,8 +4127,15 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                 return null;
             }
             // Try to load snapshot from cache first, and add reference if the snapshot is in cache.
-            final TaskSnapshot snapshot = mWindowManager.mTaskSnapshotController.getSnapshot(taskId,
-                    isLowResolution, usage);
+            final TaskSnapshot snapshot;
+            if (com.android.window.flags.Flags.reduceTaskSnapshotMemoryUsage()) {
+                final int retrieveFlag = TaskSnapshotManager.convertRetrieveFlag(isLowResolution);
+                snapshot = mWindowManager.mTaskSnapshotController.getSnapshot(
+                        taskId, retrieveFlag, usage);
+            } else {
+                snapshot = mWindowManager.mTaskSnapshotController.getSnapshot(taskId,
+                        isLowResolution, usage);
+            }
             if (snapshot != null) {
                 return snapshot;
             }
@@ -4072,8 +4158,16 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                     Slog.w(TAG, "getTaskSnapshot: taskId=" + taskId + " not found");
                     return null;
                 }
-                final TaskSnapshot snapshot = mWindowManager.mTaskSnapshotController.getSnapshot(
-                        taskId, isLowResolution, TaskSnapshot.REFERENCE_WRITE_TO_PARCEL);
+                final TaskSnapshot snapshot;
+                if (com.android.window.flags.Flags.reduceTaskSnapshotMemoryUsage()) {
+                    final int retrieveFlag = TaskSnapshotManager.convertRetrieveFlag(
+                            isLowResolution);
+                    snapshot = mWindowManager.mTaskSnapshotController.getSnapshot(
+                                    taskId, retrieveFlag, TaskSnapshot.REFERENCE_WRITE_TO_PARCEL);
+                } else {
+                    snapshot = mWindowManager.mTaskSnapshotController.getSnapshot(
+                            taskId, isLowResolution, TaskSnapshot.REFERENCE_WRITE_TO_PARCEL);
+                }
                 if (snapshot != null) {
                     return snapshot;
                 }
@@ -4104,8 +4198,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                 // be retrieved by recents. While if updateCache is false, the real snapshot will
                 // always be taken and the snapshot won't be put into SnapshotPersister.
                 if (updateCache) {
-                    supplier = mWindowManager.mTaskSnapshotController
-                            .getRecordSnapshotSupplier(task);
+                    supplier = mWindowManager.mTaskSnapshotController.getRecordSnapshotSupplier(
+                            task, TaskSnapshot.REFERENCE_WRITE_TO_PARCEL);
                 } else {
                     return mWindowManager.mTaskSnapshotController.snapshot(task);
                 }
@@ -4349,7 +4443,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             final ActivityRecord topActivity = task != null
                     ? task.getTopMostActivity()
                     : null;
-            if (topActivity != null && !topActivity.isState(FINISHING, DESTROYING, DESTROYED)) {
+            if (topActivity != null
+                    && !topActivity.isState(FINISHING, DESTROYING, DESTROYED)
+                    && topActivity.attachedToProcess()) {
                 mWindowManager.mAtmService.mActivityClientController
                         .onPictureInPictureUiStateChanged(topActivity, pipState);
             }
@@ -5239,11 +5335,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                 mTopProcessState = ActivityManager.PROCESS_STATE_TOP;
                 Slog.d(TAG, "Top Process State changed to PROCESS_STATE_TOP");
                 mTaskSupervisor.comeOutOfSleepIfNeededLocked();
-            }
-            mRootWindowContainer.applySleepTokens(true /* applyToRootTasks */);
-            if (wasSleeping) {
                 updateOomAdj = true;
             }
+            mRootWindowContainer.applySleepTokens(true /* applyToRootTasks */);
         } else if (!mSleeping && shouldSleep) {
             mSleeping = true;
             FrameworkStatsLog.write(FrameworkStatsLog.ACTIVITY_MANAGER_SLEEP_STATE_CHANGED,
@@ -5303,7 +5397,11 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                 // The stopped activity must have been visible later than the previous.
                 && stoppedActivity.lastVisibleTime > mPreviousProcessVisibleTime
                 // Home has its own retained state, so don't let it occupy the previous.
-                && stoppedActivity.app != mHomeProcess) {
+                && stoppedActivity.app != mHomeProcess
+                // Exclude recents that should be bound-foreground-service state.
+                && !mRecentTasks.isRecentsComponent(
+                        stoppedActivity.mActivityComponent,
+                        stoppedActivity.info.applicationInfo.uid)) {
             mPreviousProcess = stoppedActivity.app;
             mPreviousProcessVisibleTime = stoppedActivity.lastVisibleTime;
         }
@@ -5614,11 +5712,6 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
 
     @Nullable
     ActivityRecord.WindowStyle getWindowStyle(String packageName, int theme, int userId) {
-        if (!com.android.window.flags.Flags.cacheWindowStyle()) {
-            final AttributeCache.Entry ent = AttributeCache.instance().get(packageName,
-                    theme, com.android.internal.R.styleable.Window, userId);
-            return ent != null ? new ActivityRecord.WindowStyle(ent.array) : null;
-        }
         return mWindowStyleCache.get(packageName, theme, userId);
     }
 
@@ -6166,7 +6259,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         @Override
         public int startActivityAsUser(IApplicationThread caller, String callerPackage,
                 @Nullable String callerFeatureId, Intent intent, @Nullable IBinder resultTo,
-                int startFlags, Bundle options, int userId) {
+                int startFlags, Bundle options, @CannotBeSpecialUser @UserIdInt int userId) {
             return ActivityTaskManagerService.this.startActivityAsUser(
                     caller, callerPackage, callerFeatureId, intent,
                     intent.resolveTypeIfNeeded(mContext.getContentResolver()),
@@ -6177,7 +6270,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         @Override
         public int startActivityWithScreenshot(@NonNull Intent intent,
                 @NonNull String callingPackage, int callingUid, int callingPid,
-                @Nullable IBinder resultTo, @Nullable Bundle options, int userId) {
+                @Nullable IBinder resultTo, @Nullable Bundle options,
+                @CannotBeSpecialUser @UserIdInt int userId) {
             userId = getActivityStartController().checkTargetUser(userId,
                     false /* validateIncomingUser */, Binder.getCallingPid(),
                     Binder.getCallingUid(), "startActivityWithScreenshot");
@@ -7429,12 +7523,6 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
 
         @Override
         public boolean isNoDisplay(String packageName, int theme, int userId) {
-            if (!com.android.window.flags.Flags.cacheWindowStyle()) {
-                final AttributeCache.Entry ent = AttributeCache.instance()
-                        .get(packageName, theme, R.styleable.Window, userId);
-                return ent != null
-                        && ent.array.getBoolean(R.styleable.Window_windowNoDisplay, false);
-            }
             final ActivityRecord.WindowStyle style = getWindowStyle(packageName, theme, userId);
             return style != null && style.noDisplay();
         }
@@ -7603,11 +7691,6 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         public boolean isAssistDataAllowed() {
             return ActivityTaskManagerService.this.isAssistDataAllowed();
         }
-
-        @Override
-        public boolean requestBackGesture() {
-            return mBackNavigationController.requestBackGesture();
-        }
     }
 
     /** Cache the return value for {@link #isPip2ExperimentEnabled()} */
@@ -7617,6 +7700,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
      * @return {@code true} if PiP2 implementation should be used. Besides the trunk stable flag,
      * system property can be used to override this read only flag during development.
      * It's currently limited to phone form factor, i.e., not enabled on ARC / TV.
+     *
+     * Special note: if PiP on Desktop Windowing is enabled, override the PiP2 gantry flag to be ON.
      */
     static boolean isPip2ExperimentEnabled() {
         if (sIsPip2ExperimentEnabled == null) {
@@ -7626,7 +7711,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
                     FEATURE_LEANBACK);
             final boolean isArc = arcFeature != null && arcFeature.version >= 0;
             final boolean isTv = tvFeature != null && tvFeature.version >= 0;
-            sIsPip2ExperimentEnabled = Flags.enablePip2() && !isArc && !isTv;
+            final boolean shouldOverridePip2Flag = ENABLE_DESKTOP_WINDOWING_PIP.isTrue();
+            sIsPip2ExperimentEnabled = (Flags.enablePip2() || shouldOverridePip2Flag)
+                    && !isArc && !isTv;
         }
         return sIsPip2ExperimentEnabled;
     }

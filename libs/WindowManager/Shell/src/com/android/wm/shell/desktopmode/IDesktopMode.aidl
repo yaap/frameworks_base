@@ -32,8 +32,12 @@ interface IDesktopMode {
     /** If possible, creates a new desk on the display whose ID is `displayId`. */
     oneway void createDesk(int displayId);
 
-    /** Activates the desk whose ID is `deskId` on whatever display it currently exists on. */
-    oneway void activateDesk(int deskId, in RemoteTransition remoteTransition);
+    /**
+     * Activates the desk whose ID is [deskId] on whatever display it currently exists on.
+     * If [taskIdToReorderToFront] is a valid id (not [INVALID_TASK_ID]) and is already on the given
+     * desk, bring it to the front.
+     */
+    oneway void activateDesk(int deskId, in RemoteTransition remoteTransition, int taskIdToReorderToFront);
 
     /** Removes the desk with the given `deskId`. */
     oneway void removeDesk(int deskId);
@@ -41,8 +45,12 @@ interface IDesktopMode {
     /** Removes all the available desks on all displays. */
     oneway void removeAllDesks();
 
-    /** Show apps on the desktop on the given display */
-    void showDesktopApps(int displayId, in RemoteTransition remoteTransition);
+    /**
+     * Show apps on the desktop on the given display and bring [taskIdToReorderToFront] to front if
+     * it's provided and already on the default desk on the given display. If the provided
+     * [taskIdToReorderToFront]'s value is [INVALID_TASK_ID], do not change the windows' activation.
+     */
+    void showDesktopApps(int displayId, in RemoteTransition remoteTransition, int taskIdToReorderToFront);
 
     /** @deprecated use {@link #showDesktopApps} instead. */
     void stashDesktopApps(int displayId);
@@ -58,6 +66,18 @@ interface IDesktopMode {
      */
     oneway void showDesktopApp(int taskId, in @nullable RemoteTransition remoteTransition,
             in DesktopTaskToFrontReason toFrontReason);
+
+    /**
+    * Move or launch a given task {@code taskId} to fullscreen.
+    *
+    * <p> Note: In non-desktop by default environment this will mean to exit desktop mode. This API
+    * is also used to move to existing (or launch a background) fullscreen task while on desktop as
+    * startActivity will open the fullscreen task in freeform in current desktop. This is because
+    * in tablet desktop mode, system intercepts the transition and converts fullscreen to freeform
+    * task when the display has a desktop active.
+    */
+    oneway void moveToFullscreen(int taskId, in DesktopModeTransitionSource transitionSource,
+            in @nullable RemoteTransition remoteTransition);
 
     /** Perform cleanup transactions after the animation to split select is complete */
     oneway void onDesktopSplitSelectAnimComplete(in RunningTaskInfo taskInfo);

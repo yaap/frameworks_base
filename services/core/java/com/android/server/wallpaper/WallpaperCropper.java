@@ -20,7 +20,6 @@ import static android.app.WallpaperManager.ORIENTATION_LANDSCAPE;
 import static android.app.WallpaperManager.ORIENTATION_UNKNOWN;
 import static android.app.WallpaperManager.getOrientation;
 import static android.app.WallpaperManager.getRotatedOrientation;
-import static android.app.Flags.accurateWallpaperDownsampling;
 import static android.view.Display.DEFAULT_DISPLAY;
 
 import static com.android.server.wallpaper.WallpaperUtils.RECORD_FILE;
@@ -370,29 +369,42 @@ public class WallpaperCropper {
     }
 
     /**
-     * The crops stored in {@link WallpaperData#mCropHints} are relative to the original image.
-     * This computes the crops relative to the sub-image that will actually be rendered on a window.
+     * @see #getRelativeCropHints(WallpaperData, boolean)
      */
-    SparseArray<Rect> getRelativeCropHints(WallpaperData wallpaper) {
+    static SparseArray<Rect> getRelativeCropHints(WallpaperData wallpaper) {
+        return getRelativeCropHints(wallpaper, false);
+    }
+
+    /**
+     * The crops stored in {@link WallpaperData#mCropHints} are relative to the original image
+     * {@link WallpaperData#getWallpaperFile()}. Compute crops hints relative to the cropped image.
+     *
+     * @param ignoreSampleSize If true, do not divide crops by {@link WallpaperData#mSampleSize}.
+     *                        The resulting crops will be relative to the global crop defined by
+     *                        {@link WallpaperData#cropHint}.
+     *                         If false, the resulting crops will be relative to the cropped image
+     *                         {@link WallpaperData#getCropFile()}.
+     */
+    static SparseArray<Rect> getRelativeCropHints(WallpaperData wallpaper,
+            boolean ignoreSampleSize) {
         SparseArray<Rect> result = new SparseArray<>();
         for (int i = 0; i < wallpaper.mCropHints.size(); i++) {
             Rect adjustedRect = new Rect(wallpaper.mCropHints.valueAt(i));
             adjustedRect.offset(-wallpaper.cropHint.left, -wallpaper.cropHint.top);
-            if (accurateWallpaperDownsampling()) {
+            if (!ignoreSampleSize) {
                 adjustedRect.left = (int) (0.5f + adjustedRect.left / wallpaper.mSampleSize);
                 adjustedRect.top = (int) (0.5f + adjustedRect.top / wallpaper.mSampleSize);
                 adjustedRect.right = (int) Math.floor(adjustedRect.right / wallpaper.mSampleSize);
                 adjustedRect.bottom = (int) Math.floor(adjustedRect.bottom / wallpaper.mSampleSize);
-            } else {
-                adjustedRect.scale(1f / wallpaper.mSampleSize);
             }
+
             result.put(wallpaper.mCropHints.keyAt(i), adjustedRect);
         }
         return result;
     }
 
     /**
-     * Inverse operation of {@link #getRelativeCropHints}
+     * Inverse operation of {@link #getRelativeCropHints(WallpaperData)}
      */
     static List<Rect> getOriginalCropHints(
             WallpaperData wallpaper, List<Rect> relativeCropHints) {
@@ -476,6 +488,9 @@ public class WallpaperCropper {
         final WallpaperDisplayHelper.DisplayData wpData =
                 mWallpaperDisplayHelper.getDisplayDataOrCreate(DEFAULT_DISPLAY);
         final DisplayInfo displayInfo = mWallpaperDisplayHelper.getDisplayInfo(DEFAULT_DISPLAY);
+        if (displayInfo == null) {
+            Slog.w(TAG, "Null display info for the default display");
+        }
 
         // Analyse the source; needed in multiple cases
         BitmapFactory.Options options = new BitmapFactory.Options();
@@ -609,13 +624,8 @@ public class WallpaperCropper {
                             .getDefaultDisplaySizes().get(orientation);
                     if (displayForThisOrientation == null) continue;
                     float sampleSizeForThisOrientation = Math.max(1f, Math.min(
-                            crop.width() / displayForThisOrientation.x,
-                            crop.height() / displayForThisOrientation.y));
-                    if (accurateWallpaperDownsampling()) {
-                        sampleSizeForThisOrientation = Math.max(1f, Math.min(
-                                (float) crop.width() / displayForThisOrientation.x,
-                                (float) crop.height() / displayForThisOrientation.y));
-                    }
+                            (float) crop.width() / displayForThisOrientation.x,
+                            (float) crop.height() / displayForThisOrientation.y));
                     sampleSize = Math.min(sampleSize, sampleSizeForThisOrientation);
                 }
                 // If the total crop has more width or height than either the max texture size
@@ -844,6 +854,10 @@ public class WallpaperCropper {
         }
 
         DisplayInfo displayInfo = mWallpaperDisplayHelper.getDisplayInfo(displayId);
+        if (displayInfo == null) {
+            Slog.w(TAG, "Null display. Wallpaper unsupported for display " + displayId);
+            return false;
+        }
         Point displaySize = new Point(displayInfo.logicalWidth, displayInfo.logicalHeight);
         int displayOrientation = WallpaperManager.getOrientation(displaySize);
 

@@ -128,7 +128,7 @@
     <string name="bluetooth_active_media_only_no_battery_level" msgid="71106861912593126">"البلوتوث مفعَّل (للوسائط فقط)"</string>
     <string name="bluetooth_guest_no_battery_level" msgid="9122974160381136920">"جهاز ضيف"</string>
     <string name="bluetooth_guest_media_only_no_battery_level" msgid="7666347601796705721">"جهاز ضيف (للوسائط فقط)"</string>
-    <string name="bluetooth_saved_device_lea_support" msgid="7231323139968285768">"تتوفّر ميزة \"مشاركة الصوت\""</string>
+    <string name="bluetooth_saved_device_lea_support" msgid="7231323139968285768">"ميزة \"مشاركة الصوت\" متاحة"</string>
     <string name="bluetooth_guest_saved_device_lea_support" msgid="5621291599518569876">"جهاز ضيف. يوفِّر ميزة \"مشاركة الصوت\""</string>
     <string name="bluetooth_hearing_aid_media_only_left_active" msgid="1632152540901488645">"السماعة اليسرى فقط مشغَّلة (للوسائط فقط)"</string>
     <string name="bluetooth_hearing_aid_media_only_right_active" msgid="3854140683042617230">"السماعة اليمنى فقط مشغَّلة (للوسائط فقط)"</string>
@@ -292,7 +292,7 @@
     <string name="bugreport_in_power_summary" msgid="1885529649381831775">"عرض زر في قائمة زر التشغيل لإعداد تقرير بالأخطاء"</string>
     <string name="keep_screen_on" msgid="1187161672348797558">"البقاء في الوضع النشط"</string>
     <string name="keep_screen_on_summary" msgid="1510731514101925829">"عدم دخول الشاشة في وضع السكون مطلقًا أثناء الشحن"</string>
-    <string name="bt_hci_snoop_log" msgid="7291287955649081448">"تفعيل سجلّ تطفل بواجهة وحدة تحكم المضيف في بلوتوث"</string>
+    <string name="bt_hci_snoop_log" msgid="7291287955649081448">"تفعيل سجلّ التتبع لواجهة تحكم مضيف البلوتوث"</string>
     <string name="bt_hci_snoop_log_summary" msgid="6808538971394092284">"رَقمِن محتوى حزم بيانات البلوتوث. (تبديل البلوتوث بعد تغيير هذا الإعداد)"</string>
     <string name="oem_unlock_enable" msgid="5334869171871566731">"فتح قفل المصنّع الأصلي للجهاز"</string>
     <string name="oem_unlock_enable_summary" msgid="5857388174390953829">"‏السماح بإلغاء قفل برنامج bootloader"</string>
@@ -486,7 +486,7 @@
     <string name="webview_launch_devtools_no_activity" msgid="4066006313619617140">"تعذَّر تشغيل \"أدوات مطوري البرامج\"."</string>
     <string name="picture_color_mode" msgid="1013807330552931903">"نمط لون الصورة"</string>
     <string name="picture_color_mode_desc" msgid="151780973768136200">"‏استخدام sRGB"</string>
-    <string name="daltonizer_mode_disabled" msgid="403424372812399228">"غير مفعّل"</string>
+    <string name="daltonizer_mode_disabled" msgid="403424372812399228">"غير مفعّلة"</string>
     <string name="daltonizer_mode_monochromacy" msgid="362060873835885014">"عمى ألوان كامل"</string>
     <string name="daltonizer_mode_deuteranomaly" msgid="3507284319584683963">"العجز في رؤية اللونين الأخضر والأحمر"</string>
     <string name="daltonizer_mode_protanomaly" msgid="7805583306666608440">"غطش الأحمر (الأحمر والأخضر)"</string>
@@ -515,7 +515,7 @@
     <string name="power_remaining_only_more_than_subtext" msgid="4873750633368888062">"سيبقى شحن البطارية أكثر من <xliff:g id="TIME_REMAINING">%1$s</xliff:g>."</string>
     <string name="power_charging" msgid="6727132649743436802">"<xliff:g id="LEVEL">%1$s</xliff:g> - <xliff:g id="STATE">%2$s</xliff:g>"</string>
     <string name="power_remaining_charging_duration_only" msgid="8085099012811384899">"يتبقّى <xliff:g id="TIME">%1$s</xliff:g> حتى اكتمال شحن البطارية"</string>
-    <string name="power_charging_duration" msgid="6127154952524919719">"<xliff:g id="LEVEL">%1$s</xliff:g> - يتبقّى <xliff:g id="TIME">%2$s</xliff:g> حتى اكتمال شحن البطارية."</string>
+    <string name="power_charging_duration" msgid="6127154952524919719">"‫<xliff:g id="LEVEL">%1$s</xliff:g> - يتبقّى <xliff:g id="TIME">%2$s</xliff:g> حتى اكتمال شحن البطارية"</string>
     <string name="power_charging_limited" msgid="4144004473976005214">"‫<xliff:g id="LEVEL">%1$s</xliff:g>: الشحن معلَّق لحماية البطارية"</string>
     <string name="power_charging_future_paused" msgid="1809543660923642799">"‫<xliff:g id="LEVEL">%1$s</xliff:g>: جارٍ الشحن"</string>
     <string name="power_fast_charging_duration_v2" msgid="3797735998640359490">"‏‫‎<xliff:g id="LEVEL">%1$s</xliff:g> - <xliff:g id="STATUS">%2$s</xliff:g> - سيكتمل الشحن بحلول <xliff:g id="TIME">%3$s</xliff:g>"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"قبل <xliff:g id="ID_1">%1$s</xliff:g>"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"يتبقى <xliff:g id="ID_1">%1$s</xliff:g>"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"الأصغر"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"أصغر"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"صغير"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"الإعداد التلقائي"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"كبير"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"أكبر"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"أكبر مستوى"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"أكبر"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"كبير جدًا"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"كبير جدًا"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"الأكبر"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"مخصص (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"القائمة"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"إدخال كلمة المرور لإعادة الضبط على الإعدادات الأصلية في الوضع التجريبي"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{هناك جهاز واحد متصل}zero{ليس هناك أي أجهزة متّصلة}two{هناك جهازان متصلان}few{هناك # أجهزة متصلة}many{هناك # جهازًا متصلاً}other{هناك # جهاز متصل}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"وقت أكثر."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"وقت أقل."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"التكبير"</string>
     <string name="cancel" msgid="5665114069455378395">"إلغاء"</string>
     <string name="next" msgid="2699398661093607009">"التالي"</string>
     <string name="back" msgid="5554327870352703710">"رجوع"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"إذا أجريت بث تطبيق <xliff:g id="SWITCHAPP">%1$s</xliff:g> أو غيَّرت جهاز الإخراج، سيتوقَف البث الحالي."</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"بث تطبيق <xliff:g id="SWITCHAPP">%1$s</xliff:g>"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"تغيير جهاز الإخراج"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"صور متحركة تعرض إيماءة الرجوع إلى الخلف التنبؤية"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"تفعيل الصور المتحركة في النظام لإيماءة الرجوع إلى الخلف التنبؤية"</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"‏يفعّل هذا الإعداد الصور المتحركة في النظام للصور المتحركة التي تعرض إيماءة الرجوع إلى الخلف التنبؤية. يتطلب الإعداد ضبط enableOnBackInvokedCallback إلى true لكل تطبيق في ملف البيان."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"%% <xliff:g id="PERCENTAGE">%1$d</xliff:g>"</string>
     <string name="not_specified" msgid="5423502443185110328">"صيغة مخاطبة غير محدَّدة"</string>
     <string name="neuter" msgid="2075249330106127310">"صيغة مخاطبة محايدة"</string>

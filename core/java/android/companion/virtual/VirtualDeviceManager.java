@@ -18,6 +18,7 @@ package android.companion.virtual;
 
 import static android.media.AudioManager.AUDIO_SESSION_ID_GENERATE;
 
+import android.Manifest;
 import android.annotation.CallbackExecutor;
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
@@ -45,6 +46,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.IntentSender;
 import android.graphics.Point;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.DisplayManager.VirtualDisplayFlag;
 import android.hardware.display.VirtualDisplay;
@@ -102,26 +106,6 @@ import java.util.function.IntConsumer;
 public final class VirtualDeviceManager {
 
     private static final String TAG = "VirtualDeviceManager";
-
-    /**
-     * Broadcast Action: A Virtual Device was removed.
-     *
-     * <p class="note">This is a protected intent that can only be sent by the system.</p>
-     *
-     * @hide
-     */
-    @SdkConstant(SdkConstant.SdkConstantType.BROADCAST_INTENT_ACTION)
-    public static final String ACTION_VIRTUAL_DEVICE_REMOVED =
-            "android.companion.virtual.action.VIRTUAL_DEVICE_REMOVED";
-
-    /**
-     * Int intent extra to be used with {@link #ACTION_VIRTUAL_DEVICE_REMOVED}.
-     * Contains the identifier of the virtual device, which was removed.
-     *
-     * @hide
-     */
-    public static final String EXTRA_VIRTUAL_DEVICE_ID =
-            "android.companion.virtual.extra.VIRTUAL_DEVICE_ID";
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -211,6 +195,20 @@ public final class VirtualDeviceManager {
         Objects.requireNonNull(params, "params must not be null");
         try {
             return new VirtualDevice(mService, mContext, associationId, params);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * @hide
+     */
+    @RequiresPermission(android.Manifest.permission.ACCESS_COMPUTER_CONTROL)
+    @NonNull
+    public VirtualDevice createVirtualDevice(@NonNull VirtualDeviceParams params) {
+        Objects.requireNonNull(params, "params must not be null");
+        try {
+            return new VirtualDevice(mService, mContext, params);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -567,6 +565,15 @@ public final class VirtualDeviceManager {
                 VirtualDeviceParams params) throws RemoteException {
             mVirtualDeviceInternal =
                     new VirtualDeviceInternal(service, context, associationId, params);
+        }
+
+        @RequiresPermission(Manifest.permission.ACCESS_COMPUTER_CONTROL)
+        private VirtualDevice(
+                IVirtualDeviceManager service,
+                Context context,
+                VirtualDeviceParams params) throws RemoteException {
+            mVirtualDeviceInternal =
+                    new VirtualDeviceInternal(service, context, params);
         }
 
         /** @hide */
@@ -1073,10 +1080,23 @@ public final class VirtualDeviceManager {
         }
 
         /**
-         * Creates a new virtual camera with the given {@link VirtualCameraConfig}. A virtual device
-         * can create a virtual camera only if it has
-         * {@link VirtualDeviceParams#DEVICE_POLICY_CUSTOM} as its
-         * {@link VirtualDeviceParams#POLICY_TYPE_CAMERA}.
+         * Creates a new virtual camera with the given {@link VirtualCameraConfig}.
+         *
+         * <p>A virtual device with {@link VirtualDeviceParams#DEVICE_POLICY_CUSTOM} for its
+         * {@link VirtualDeviceParams#POLICY_TYPE_CAMERA} can create virtual cameras
+         * with any {@link CameraCharacteristics#LENS_FACING}, though at most one of each
+         * {@link CameraMetadata#LENS_FACING_FRONT} and {@link CameraMetadata#LENS_FACING_BACK}.
+         * Multiple {@link CameraMetadata#LENS_FACING_EXTERNAL} virtual cameras are allowed.
+         * The virtual cameras (including the external ones) are guarded by a separate
+         * {@link Manifest.permission#CAMERA} permission relevant only to the virtual device.
+         *
+         * <p>A virtual device with {@link VirtualDeviceParams#DEVICE_POLICY_DEFAULT} for its
+         * {@link VirtualDeviceParams#POLICY_TYPE_CAMERA} can create <b>only</b> virtual cameras
+         * with {@link CameraMetadata#LENS_FACING_EXTERNAL}. The created virtual external cameras
+         * are visible from {@link CameraManager} created with a default device context.
+         * {@link Context#DEVICE_ID_DEFAULT}.
+         * In this case the virtual external cameras are guarded by the default's device
+         * {@link Manifest.permission#CAMERA} permission.
          *
          * @param config camera configuration.
          * @return newly created camera.

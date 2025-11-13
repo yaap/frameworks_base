@@ -36,7 +36,6 @@ import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Bundle
-import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
 import android.platform.test.annotations.RequiresFlagsEnabled
 import android.platform.test.flag.junit.DeviceFlagsValueProvider
@@ -49,6 +48,7 @@ import android.view.animation.Interpolator
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.constraintlayout.widget.Barrier
@@ -58,6 +58,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.internal.logging.InstanceId
 import com.android.internal.widget.CachingIconView
+import com.android.settingslib.media.LocalMediaManager.MediaDeviceState
 import com.android.systemui.ActivityIntentHelper
 import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
@@ -72,6 +73,8 @@ import com.android.systemui.media.controls.shared.model.MediaButton
 import com.android.systemui.media.controls.shared.model.MediaData
 import com.android.systemui.media.controls.shared.model.MediaDeviceData
 import com.android.systemui.media.controls.shared.model.MediaNotificationAction
+import com.android.systemui.media.controls.shared.model.SuggestedMediaDeviceData
+import com.android.systemui.media.controls.shared.model.SuggestionData
 import com.android.systemui.media.controls.ui.binder.SeekBarObserver
 import com.android.systemui.media.controls.ui.view.GutsViewHolder
 import com.android.systemui.media.controls.ui.view.MediaViewHolder
@@ -157,6 +160,7 @@ public class MediaControlPanelTest : SysuiTestCase() {
     @Mock private lateinit var falsingManager: FalsingManager
     @Mock private lateinit var transitionParent: ViewGroup
     @Mock private lateinit var broadcastDialogController: BroadcastDialogController
+    @Mock private lateinit var suggestionDrawable: Drawable
     private lateinit var appIcon: ImageView
     @Mock private lateinit var albumView: ImageView
     private lateinit var titleText: TextView
@@ -189,6 +193,11 @@ public class MediaControlPanelTest : SysuiTestCase() {
     private lateinit var multiRippleView: MultiRippleView
     private lateinit var turbulenceNoiseView: TurbulenceNoiseView
     private lateinit var loadingEffectView: LoadingEffectView
+    private lateinit var deviceSuggestionContainer: ViewGroup
+    private lateinit var deviceSuggestionText: TextView
+    private lateinit var deviceSuggestionIcon: ImageView
+    private lateinit var deviceSuggestionConnectingIcon: ProgressBar
+    private lateinit var deviceSuggestionButton: View
 
     private lateinit var session: MediaSession
     private lateinit var device: MediaDeviceData
@@ -368,6 +377,11 @@ public class MediaControlPanelTest : SysuiTestCase() {
         multiRippleView = MultiRippleView(context, null)
         turbulenceNoiseView = TurbulenceNoiseView(context, null)
         loadingEffectView = LoadingEffectView(context, null)
+        deviceSuggestionContainer = FrameLayout(context)
+        deviceSuggestionText = TextView(context)
+        deviceSuggestionIcon = ImageView(context)
+        deviceSuggestionConnectingIcon = ProgressBar(context)
+        deviceSuggestionButton = View(context)
 
         whenever(viewHolder.player).thenReturn(view)
         whenever(viewHolder.appIcon).thenReturn(appIcon)
@@ -414,6 +428,13 @@ public class MediaControlPanelTest : SysuiTestCase() {
         whenever(viewHolder.multiRippleView).thenReturn(multiRippleView)
         whenever(viewHolder.turbulenceNoiseView).thenReturn(turbulenceNoiseView)
         whenever(viewHolder.loadingEffectView).thenReturn(loadingEffectView)
+
+        whenever(viewHolder.deviceSuggestionContainer).thenReturn(deviceSuggestionContainer)
+        whenever(viewHolder.deviceSuggestionText).thenReturn(deviceSuggestionText)
+        whenever(viewHolder.deviceSuggestionIcon).thenReturn(deviceSuggestionIcon)
+        whenever(viewHolder.deviceSuggestionConnectingIcon)
+            .thenReturn(deviceSuggestionConnectingIcon)
+        whenever(viewHolder.deviceSuggestionButton).thenReturn(deviceSuggestionButton)
     }
 
     @After
@@ -1176,6 +1197,99 @@ public class MediaControlPanelTest : SysuiTestCase() {
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_SUGGESTED_DEVICE_UI)
+    fun bindDeviceWithDisconnectedSuggestedDeviceData() {
+        player.attachPlayer(viewHolder)
+
+        player.bindPlayer(
+            mediaData.copy(
+                suggestionData =
+                    createSuggestionData(DEVICE_NAME, MediaDeviceState.STATE_DISCONNECTED)
+            ),
+            PACKAGE,
+        )
+
+        assertThat(seamlessText.visibility).isEqualTo(View.GONE)
+        assertThat(deviceSuggestionButton.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionText.text)
+            .isEqualTo(mContext.getString(R.string.media_suggestion_disconnected_text, DEVICE_NAME))
+        assertThat(deviceSuggestionIcon.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionConnectingIcon.visibility).isEqualTo(View.GONE)
+        assertThat(deviceSuggestionContainer.isClickable).isTrue()
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_SUGGESTED_DEVICE_UI)
+    fun bindDeviceWithConnectingSuggestedDeviceData() {
+        player.attachPlayer(viewHolder)
+
+        player.bindPlayer(
+            mediaData.copy(
+                suggestionData =
+                    createSuggestionData(DEVICE_NAME, MediaDeviceState.STATE_CONNECTING)
+            ),
+            PACKAGE,
+        )
+
+        assertThat(seamlessText.visibility).isEqualTo(View.GONE)
+        assertThat(deviceSuggestionButton.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionText.text)
+            .isEqualTo(mContext.getString(R.string.media_suggestion_disconnected_text, DEVICE_NAME))
+        assertThat(deviceSuggestionIcon.visibility).isEqualTo(View.GONE)
+        assertThat(deviceSuggestionConnectingIcon.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionContainer.isClickable).isFalse()
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_SUGGESTED_DEVICE_UI)
+    fun bindDeviceWithErrorSuggestedDeviceData() {
+        player.attachPlayer(viewHolder)
+
+        player.bindPlayer(
+            mediaData.copy(
+                suggestionData =
+                    createSuggestionData(DEVICE_NAME, MediaDeviceState.STATE_CONNECTING_FAILED)
+            ),
+            PACKAGE,
+        )
+
+        assertThat(seamlessText.visibility).isEqualTo(View.GONE)
+        assertThat(deviceSuggestionButton.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionText.text)
+            .isEqualTo(mContext.getString(R.string.media_suggestion_failure_text))
+        assertThat(deviceSuggestionIcon.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionConnectingIcon.visibility).isEqualTo(View.GONE)
+        assertThat(deviceSuggestionContainer.isClickable).isTrue()
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_SUGGESTED_DEVICE_UI)
+    fun bindDeviceWithConnectedSuggestedDeviceData() {
+        player.attachPlayer(viewHolder)
+
+        player.bindPlayer(
+            mediaData.copy(
+                suggestionData = createSuggestionData(DEVICE_NAME, MediaDeviceState.STATE_CONNECTED)
+            ),
+            PACKAGE,
+        )
+
+        assertThat(seamlessText.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionButton.visibility).isEqualTo(View.GONE)
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_SUGGESTED_DEVICE_UI)
+    fun bindDeviceWithNoSuggestedDeviceData() {
+        player.attachPlayer(viewHolder)
+
+        player.bindPlayer(mediaData, PACKAGE)
+
+        assertThat(seamlessText.visibility).isEqualTo(View.VISIBLE)
+        assertThat(deviceSuggestionButton.visibility).isEqualTo(View.GONE)
+    }
+
+    @Test
     @RequiresFlagsEnabled(com.android.settingslib.flags.Flags.FLAG_LEGACY_LE_AUDIO_SHARING)
     fun bindBroadcastButton() {
         initMediaViewHolderMocks()
@@ -1548,7 +1662,6 @@ public class MediaControlPanelTest : SysuiTestCase() {
         verify(logger).logSeek(anyInt(), eq(PACKAGE), eq(instanceId))
     }
 
-    @EnableFlags(Flags.FLAG_MEDIA_LOCKSCREEN_LAUNCH_ANIMATION)
     @Test
     fun tapContentView_showOverLockscreen_openActivity_withOriginAnimation() {
         // WHEN we are on lockscreen and this activity can show over lockscreen
@@ -1577,30 +1690,6 @@ public class MediaControlPanelTest : SysuiTestCase() {
                 eq(null),
                 eq(null),
             )
-        verify(activityStarter, never()).postStartActivityDismissingKeyguard(eq(clickIntent), any())
-    }
-
-    @DisableFlags(Flags.FLAG_MEDIA_LOCKSCREEN_LAUNCH_ANIMATION)
-    @Test
-    fun tapContentView_showOverLockscreen_openActivity_withoutOriginAnimation() {
-        // WHEN we are on lockscreen and this activity can show over lockscreen
-        whenever(keyguardStateController.isShowing).thenReturn(true)
-        whenever(activityIntentHelper.wouldPendingShowOverLockscreen(any(), any())).thenReturn(true)
-
-        val clickIntent = mock(Intent::class.java)
-        val pendingIntent = mock(PendingIntent::class.java)
-        whenever(pendingIntent.intent).thenReturn(clickIntent)
-        val captor = ArgumentCaptor.forClass(View.OnClickListener::class.java)
-        val data = mediaData.copy(clickIntent = pendingIntent)
-        player.attachPlayer(viewHolder)
-        player.bindPlayer(data, KEY)
-        verify(viewHolder.player).setOnClickListener(captor.capture())
-
-        // THEN it sends the PendingIntent without dismissing keyguard first,
-        // and does not use the Intent directly (see b/271845008)
-        captor.value.onClick(viewHolder.player)
-        verify(pendingIntent).send(any<Bundle>())
-        verify(pendingIntent, never()).getIntent()
         verify(activityStarter, never()).postStartActivityDismissingKeyguard(eq(clickIntent), any())
     }
 
@@ -1833,4 +1922,19 @@ public class MediaControlPanelTest : SysuiTestCase() {
         whenever(mediaViewController.expandedLayout).thenReturn(expandedSet)
         whenever(mediaViewController.collapsedLayout).thenReturn(collapsedSet)
     }
+
+    private fun createSuggestionData(deviceName: String, state: Int) =
+        SuggestionData(
+            suggestedMediaDeviceData =
+                SuggestedMediaDeviceData(
+                    name = deviceName,
+                    icon = suggestionDrawable,
+                    connectionState = state,
+                    connect = {},
+                ),
+            onSuggestionSpaceVisible =
+                object : Runnable {
+                    override fun run() {}
+                },
+        )
 }

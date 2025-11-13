@@ -116,7 +116,7 @@ public class ProcessedPerfettoProtoLogImpl extends PerfettoProtoLogImpl {
      * @return status code
      */
     @Override
-    public int startLoggingToLogcat(String[] groups, @NonNull ILogger logger) {
+    public int startLoggingToLogcat(@NonNull String[] groups, @NonNull ILogger logger) {
         if (!validateGroups(logger, groups)) {
             return -1;
         }
@@ -132,7 +132,7 @@ public class ProcessedPerfettoProtoLogImpl extends PerfettoProtoLogImpl {
      * @return status code
      */
     @Override
-    public int stopLoggingToLogcat(String[] groups, @NonNull ILogger logger) {
+    public int stopLoggingToLogcat(@NonNull String[] groups, @NonNull ILogger logger) {
         if (!validateGroups(logger, groups)) {
             return -1;
         }
@@ -173,7 +173,8 @@ public class ProcessedPerfettoProtoLogImpl extends PerfettoProtoLogImpl {
         return messageString;
     }
 
-    private String getReasonForFailureToGetMessageString(Message message) {
+    @NonNull
+    private String getReasonForFailureToGetMessageString(@NonNull Message message) {
         if (message.getMessageHash() == null) {
             return "Trying to get message from null message hash";
         }
@@ -207,7 +208,7 @@ public class ProcessedPerfettoProtoLogImpl extends PerfettoProtoLogImpl {
         // Load in background to avoid delay in boot process.
         // The caveat is that any log message that is also logged to logcat will not be
         // successfully decoded until this completes.
-        mBackgroundLoggingService.execute(() -> {
+        mBackgroundHandler.post(() -> {
             mViewerConfigReader.loadViewerConfig(groupsLoggingToLogcat.toArray(new String[0]));
             readyToLogToLogcat();
         });

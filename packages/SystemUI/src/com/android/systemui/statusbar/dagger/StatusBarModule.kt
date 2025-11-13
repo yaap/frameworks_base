@@ -34,7 +34,6 @@ import com.android.systemui.statusbar.layout.ui.viewmodel.StatusBarContentInsets
 import com.android.systemui.statusbar.phone.AutoHideController
 import com.android.systemui.statusbar.phone.AutoHideControllerImpl
 import com.android.systemui.statusbar.phone.LightBarController
-import com.android.systemui.statusbar.phone.LightBarControllerImpl
 import com.android.systemui.statusbar.phone.StatusBarSignalPolicy
 import com.android.systemui.statusbar.phone.ongoingcall.OngoingCallController
 import com.android.systemui.statusbar.phone.ongoingcall.OngoingCallLog
@@ -48,6 +47,7 @@ import com.android.systemui.statusbar.window.SingleDisplayStatusBarWindowControl
 import com.android.systemui.statusbar.window.StatusBarWindowController
 import com.android.systemui.statusbar.window.StatusBarWindowControllerImpl
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore
+import com.android.systemui.statusbar.window.StatusBarWindowLog
 import dagger.Binds
 import dagger.Lazy
 import dagger.Module
@@ -90,11 +90,6 @@ interface StatusBarModule {
     ): StatusBarWindowController.Factory
 
     @Binds @SysUISingleton fun autoHideController(impl: AutoHideControllerImpl): AutoHideController
-
-    @Binds
-    fun lightBarControllerFactory(
-        legacyFactory: LightBarControllerImpl.LegacyFactory
-    ): LightBarController.Factory
 
     companion object {
         @Provides
@@ -171,6 +166,13 @@ interface StatusBarModule {
         @OngoingCallLog
         fun provideOngoingCallLogBuffer(factory: LogBufferFactory): LogBuffer {
             return factory.create("OngoingCall", 75)
+        }
+
+        @Provides
+        @SysUISingleton
+        @StatusBarWindowLog
+        fun provideWindowLogBuffer(factory: LogBufferFactory): LogBuffer {
+            return factory.create("StatusBarWindow", 120)
         }
 
         @Provides

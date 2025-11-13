@@ -181,13 +181,16 @@
     <dimen name="status_bar_clock_starting_padding">4dp</dimen>
 
     <!-- The end padding for the clock in the status bar. -->
-    <dimen name="status_bar_clock_end_padding">0dp</dimen>
+    <dimen name="status_bar_clock_end_padding">4dp</dimen>
 
     <!-- Starting padding for a left-aligned status bar clock -->
     <dimen name="status_bar_left_clock_starting_padding">0dp</dimen>
 
     <!-- End padding for left-aligned status bar clock -->
     <dimen name="status_bar_left_clock_end_padding">2sp</dimen>
+
+    <!-- Margins before/after the new wifi icon -->
+    <dimen name="status_bar_wifi_signal_horizontal_margin">3sp</dimen>
 
     <!-- Spacing after the wifi signals that is present if there are any icons following it. -->
     <dimen name="status_bar_wifi_signal_spacer_width">2.5sp</dimen>
@@ -197,6 +200,7 @@
     <!-- Size of the view displaying the wifi signal icon in the status bar. This value should
         match the core/status_bar_system_icon_size and change to sp unit -->
     <dimen name="status_bar_wifi_signal_size">15sp</dimen>
+    <dimen name="status_bar_wifi_signal_height_updated">12sp</dimen>
 
     <!-- Size of the view displaying the mobile inout icon in the status bar. -->
     <dimen name="status_bar_mobile_inout_container_size">17sp</dimen>
@@ -218,13 +222,18 @@
         Note: can be removed once new_status_bar_icons is rolled out -->
     <dimen name="status_bar_mobile_container_corner_radius">9sp</dimen>
 
+    <!-- Start-side margin for the mobile container (before the RAT or triangle) -->
+    <dimen name="status_bar_mobile_container_margin_start">3sp</dimen>
+    <dimen name="status_bar_mobile_container_margin_end">3sp</dimen>
+
     <!-- Size of the view displaying the mobile signal icon in the status bar. This value should
         match the viewport height of mobile signal drawables such as ic_lte_mobiledata -->
     <dimen name="status_bar_mobile_type_size_updated">12sp</dimen>
     <!-- Size of the view that contains the network type. Should be equal to
    status_bar_mobile_type_size + 2, to account for 1sp top and bottom padding -->
-    <dimen name="status_bar_mobile_container_height_updated">14sp</dimen>
-    <dimen name="status_bar_mobile_container_margin_end">2sp</dimen>
+    <dimen name="status_bar_mobile_container_height_updated">12sp</dimen>
+    <dimen name="status_bar_mobile_type_container_margin_end">6sp</dimen>
+    <dimen name="status_bar_end_side_roam_icon_margin_start">2sp</dimen>
     <!-- Corner radius for the background of the network type indicator. Should be equal to
         status_bar_mobile_container_height / 2 -->
     <dimen name="status_bar_mobile_container_corner_radius_updated">7sp</dimen>
@@ -232,6 +241,9 @@
     <!-- Size of the view displaying the mobile roam icon in the status bar. This value should
         match the viewport size of drawable stat_sys_roaming -->
     <dimen name="status_bar_mobile_roam_size">8sp</dimen>
+    <!-- Size of the roaming indicator. This indicator is positioned at the end of the mobile
+        group -->
+    <dimen name="status_bar_mobile_roam_size_updated">10sp</dimen>
 
     <!-- Spacing before the airplane mode icon if there are any icons preceding it. -->
     <dimen name="status_bar_airplane_spacer_width">4sp</dimen>
@@ -417,6 +429,8 @@
     <dimen name="notification_2025_importance_button_padding_vertical">12dp</dimen>
     <dimen name="notification_2025_importance_button_padding_horizontal">16dp</dimen>
 
+    <dimen name="notification_demote_button_icon_size">16sp</dimen>
+
     <!-- The minimum height for the snackbar shown after the snooze option has been chosen. -->
     <dimen name="snooze_snackbar_min_height">56dp</dimen>
 
@@ -574,7 +588,7 @@
     <dimen name="notifications_unseen_footer_icon_size">16dp</dimen>
 
     <!-- Height of the status bar header bar when on Keyguard -->
-    <dimen name="status_bar_header_height_keyguard">40dp</dimen>
+    <dimen name="status_bar_header_height_keyguard">@dimen/status_bar_height</dimen>
 
     <!-- Margin start of the system icons super container -->
     <dimen name="system_icons_super_container_margin_start">16dp</dimen>
@@ -585,7 +599,7 @@
     <dimen name="match_parent">-1px</dimen>
 
     <!-- Height of status bar in split shade mode - visible only on large screens -->
-    <dimen name="large_screen_shade_header_height">48dp</dimen>
+    <dimen name="large_screen_shade_header_height">@dimen/status_bar_height</dimen>
     <dimen name="large_screen_shade_header_min_height">@dimen/qs_header_row_min_height</dimen>
     <dimen name="large_screen_shade_header_left_padding">@dimen/qs_horizontal_margin</dimen>
     <dimen name="shade_header_system_icons_height">@dimen/large_screen_shade_header_min_height</dimen>
@@ -757,14 +771,17 @@
     <dimen name="qs_panel_padding_bottom">@dimen/footer_actions_height</dimen>
     <dimen name="qs_panel_padding_top">80dp</dimen>
 
+    <!-- Size is in sp because the icon is inlined in text -->
+    <dimen name="qs_edit_mode_app_icon">14sp</dimen>
+
     <dimen name="qs_data_usage_text_size">14sp</dimen>
     <dimen name="qs_data_usage_usage_text_size">36sp</dimen>
 
     <dimen name="qs_header_mobile_icon_size">@dimen/status_bar_icon_drawing_size</dimen>
     <dimen name="qs_header_carrier_separator_width">6dp</dimen>
     <dimen name="qs_carrier_margin_width">4dp</dimen>
-    <dimen name="qs_header_height">120dp</dimen>
-    <dimen name="qs_header_row_min_height">48dp</dimen>
+    <dimen name="qs_header_height">@dimen/status_bar_height</dimen>
+    <dimen name="qs_header_row_min_height">@dimen/status_bar_height</dimen>
 
     <dimen name="qs_header_non_clickable_element_height">24sp</dimen>
     <dimen name="new_qs_header_non_clickable_element_height">24sp</dimen>
@@ -795,6 +812,9 @@
     <!-- The height of the divider between the individual notifications. -->
     <dimen name="notification_divider_height">2dp</dimen>
 
+    <!-- The *additional* height of the divider between bundles. -->
+    <dimen name="bundle_divider_height">2dp</dimen>
+
     <!-- The min distance the notifications should be from the lock icon on the lock screen. -->
     <dimen name="min_lock_icon_padding">48dp</dimen>
 
@@ -804,9 +824,18 @@
     <!-- The alpha of the dividing line between child notifications of a notification group. -->
     <item name="notification_divider_alpha" format="float" type="dimen">1</item>
 
+
+    <!-- The minimum spacing to ensure between notifications in case they overlap -->
+    <dimen name="notification_minimum_spacing_between_children">0.5dp</dimen>
+
     <!-- The height of the divider between the individual notifications in a notification
          group. -->
-    <dimen name="notification_children_container_divider_height">0.5dp</dimen>
+    <dimen name="notification_children_container_divider_height">
+        @dimen/notification_minimum_spacing_between_children
+    </dimen>
+
+    <!-- The height of the divider between the individual notifications within a bundle -->
+    <dimen name="bundle_children_container_divider_height">2dp</dimen>
 
     <!-- The horizontal margin of the content in the notification shade -->
     <dimen name="notification_shade_content_margin_horizontal">16dp</dimen>
@@ -1014,6 +1043,8 @@
 
     <!-- Padding between signal cluster and battery icon -->
     <dimen name="signal_cluster_battery_padding">4dp</dimen>
+    <!-- Padding between signal cluster and battery icon when NewStatusBarIcons is on -->
+    <dimen name="signal_cluster_battery_padding_new">3sp</dimen>
 
     <!-- end padding for battery icon in status bar -->
     <dimen name="status_bar_battery_end_padding">0dp</dimen>
@@ -1168,10 +1199,11 @@
 
     <!-- Animated Action params. -->
     <!-- Corner radius = half of min_height to create rounded sides. -->
-    <dimen name="animated_action_button_corner_radius">16dp</dimen>
+    <dimen name="animated_action_button_corner_radius">24dp</dimen>
     <dimen name="animated_action_button_icon_size">20dp</dimen>
     <dimen name="animated_action_button_outline_stroke_width">1dp</dimen>
     <dimen name="animated_action_button_padding_horizontal">12dp</dimen>
+    <dimen name="animated_action_button_padding_vertical">14dp</dimen>
     <dimen name="animated_action_button_inset_vertical">8dp</dimen>
     <dimen name="animated_action_button_drawable_padding">8dp</dimen>
     <dimen name="animated_action_button_touch_target_height">48dp</dimen>
@@ -1540,6 +1572,7 @@
     <dimen name="screenrecord_spinner_text_padding_end">20dp</dimen>
     <dimen name="screenrecord_spinner_arrow_size">24dp</dimen>
     <dimen name="screenrecord_spinner_background_radius">28dp</dimen>
+    <dimen name="screenrecord_show_taps_margin_end">24dp</dimen>
 
     <dimen name="screenrecord_title_margin_top">20dp</dimen>
     <dimen name="screenrecord_warning_line_height">20dp</dimen>
@@ -1574,14 +1607,13 @@
     <dimen name="media_output_dialog_icon_right_radius">0dp</dimen>
     <dimen name="media_output_dialog_corner_radius">20dp</dimen>
     <dimen name="media_output_dialog_button_gap">8dp</dimen>
-    <dimen name="media_output_item_content_vertical_margin">8dp</dimen>
-    <dimen name="media_output_item_content_vertical_margin_active">4dp</dimen>
-    <dimen name="media_output_item_horizontal_gap">12dp</dimen>
-    <dimen name="media_output_item_icon_size">40dp</dimen>
-    <dimen name="media_output_item_icon_padding">8dp</dimen>
+    <dimen name="media_output_item_content_vertical_margin">4dp</dimen>
+    <dimen name="media_output_item_content_vertical_margin_active">0dp</dimen>
+    <dimen name="media_output_item_horizontal_gap">4dp</dimen>
+    <dimen name="media_output_item_icon_size">48dp</dimen>
+    <dimen name="media_output_item_icon_padding">12dp</dimen>
     <dimen name="media_output_item_expand_icon_width">28dp</dimen>
     <dimen name="media_output_item_expand_icon_height">20dp</dimen>
-    <item name="media_output_item_subtitle_alpha" format="float" type="dimen">0.8</item>
 
     <!-- Distance that the full shade transition takes in order to complete by tapping on a button
          like "expand". -->
@@ -1974,9 +2006,7 @@
     <dimen name="dream_overlay_status_icon_margin">8dp</dimen>
     <dimen name="dream_overlay_status_bar_icon_size">
         @*android:dimen/status_bar_system_icon_size</dimen>
-    <dimen name="dream_overlay_camera_mic_off_indicator_size">8dp</dimen>
     <dimen name="dream_overlay_notification_indicator_size">6dp</dimen>
-    <dimen name="dream_overlay_grey_chip_width">56dp</dimen>
     <dimen name="dream_overlay_status_bar_extra_margin">8dp</dimen>
 
     <!-- Dream overlay complications related dimensions -->
@@ -2056,6 +2086,9 @@
 
     <!-- The margin applied between complications -->
     <dimen name="dream_overlay_complication_margin">0dp</dimen>
+    <dimen name="dream_overlay_complication_small_margin">1dp</dimen>
+    <dimen name="dream_overlay_complication_medium_margin">9dp</dimen>
+    <dimen name="dream_overlay_complication_large_margin">24dp</dimen>
 
     <dimen name="dream_overlay_y_offset">80dp</dimen>
     <dimen name="dream_overlay_entry_y_offset">40dp</dimen>
@@ -2179,17 +2212,18 @@
     <dimen name="volume_dialog_background_corner_radius">30dp</dimen>
     <!-- top margin covers half the ringer button + components spacing -->
     <dimen name="volume_dialog_background_top_margin">-28dp</dimen>
-    <dimen name="volume_dialog_background_margin">10dp</dimen>
-    <dimen name="volume_dialog_background_margin_negative">-10dp</dimen>
+    <dimen name="volume_dialog_background_margin">6dp</dimen>
+    <dimen name="volume_dialog_background_margin_negative">-6dp</dimen>
 
     <dimen name="volume_dialog_window_margin">12dp</dimen>
-    <dimen name="volume_dialog_components_spacing">10dp</dimen>
+    <dimen name="volume_dialog_components_spacing">4dp</dimen>
     <dimen name="volume_dialog_floating_sliders_spacing">8dp</dimen>
     <dimen name="volume_dialog_floating_sliders_vertical_padding_negative">
         @dimen/volume_dialog_background_margin_negative
     </dimen>
-    <dimen name="volume_dialog_floating_sliders_padding">4dp</dimen>
-    <dimen name="volume_dialog_button_size">40dp</dimen>
+    <dimen name="volume_dialog_floating_sliders_horizontal_padding">4dp</dimen>
+    <dimen name="volume_dialog_floating_sliders_vertical_padding">10dp</dimen>
+    <dimen name="volume_dialog_button_size">48dp</dimen>
     <dimen name="volume_dialog_slider_width">52dp</dimen>
     <dimen name="volume_dialog_slider_height">254dp</dimen>
     <!--
@@ -2203,9 +2237,6 @@
     <dimen name="volume_dialog_background_square_corner_radius">12dp</dimen>
 
     <dimen name="volume_dialog_ringer_drawer_button_size">@dimen/volume_dialog_button_size</dimen>
-    <dimen name="volume_dialog_ringer_drawer_buttons_spacing">
-        @dimen/volume_dialog_components_spacing
-    </dimen>
     <dimen name="volume_dialog_ringer_drawer_button_icon_radius">10dp</dimen>
     <dimen name="volume_dialog_ringer_selected_button_background_radius">20dp</dimen>
 
@@ -2229,5 +2260,19 @@
     <!-- Spacing attributes to overwrite -->
     <dimen name="aux_spacing_overlay_panel_shape_radius">46dp</dimen>
     <!-- Spacing attributes to overwrite end -->
+
+    <!-- Tile Details start-->
+    <dimen name="internet_details_toggle_row_height">48dp</dimen>
+    <dimen name="bluetooth_details_toggle_row_margin_start">32dp</dimen>
+    <dimen name="bluetooth_details_toggle_row_margin_end">26dp</dimen>
+    <dimen name="tile_details_switch_container_width">52dp</dimen>
+    <dimen name="tile_details_switch_track_height">24dp</dimen>
+    <dimen name="tile_details_button_row_height">40dp</dimen>
+    <dimen name="tile_details_button_size">20dp</dimen>
+    <dimen name="tile_details_entry_gap">2dp</dimen>
+    <dimen name="tile_details_bottom_padding">14dp</dimen>
+    <dimen name="tile_details_horizontal_padding">14dp</dimen>
+    <dimen name="tile_details_vertical_padding">8dp</dimen>
+    <!-- Tile Details end -->
 
 </resources>

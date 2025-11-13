@@ -71,6 +71,16 @@ flag {
 }
 
 flag {
+  name: "dpe_based_on_async_apis_enabled"
+  namespace: "supervision"
+  description: "Whether DPE's synchronous APIs use async APIs."
+  bug: "374123015"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
   name: "coexistence_migration_for_supervision_enabled"
   is_exported: true
   namespace: "enterprise"
@@ -353,16 +363,6 @@ flag {
 }
 
 flag {
-    name: "user_provisioning_same_state"
-    namespace: "enterprise"
-    description: "Handle exceptions while setting same provisioning state."
-    bug: "326441417"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "remove_managed_profile_enabled"
     namespace: "enterprise"
     description: "API that removes a given managed profile."
@@ -421,4 +421,21 @@ flag {
   metadata {
     purpose: PURPOSE_BUGFIX
   }
+}
+
+flag {
+  name: "associate_disallow_grant_admin_with_permission"
+  namespace: "supervision"
+  description: "DISALLOW_GRANT_ADMIN restriction is currently not associated with any permission, causing null pointer exceptions when client try to add it."
+  bug: "407776766"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "enterprise_esim_using_carrier_privileges"
+  namespace: "enterprise"
+  description: "Check for enterprise management indicator in carrier privileges of an eSIM profile"
+  bug: "373466339"
 }

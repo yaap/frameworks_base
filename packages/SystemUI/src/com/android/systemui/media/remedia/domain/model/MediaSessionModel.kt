@@ -35,7 +35,7 @@ interface MediaSessionModel {
 
     val background: ImageBitmap?
 
-    val colorScheme: MediaColorScheme
+    val colorScheme: MediaColorScheme?
 
     val title: String
 
@@ -67,6 +67,8 @@ interface MediaSessionModel {
     val durationMs: Long
 
     val outputDevice: MediaOutputDeviceModel
+
+    val suggestedOutputDevice: MediaOutputDeviceModel?
 
     /** How to lay out the action buttons. */
     val actionButtonLayout: MediaCardActionButtonLayout

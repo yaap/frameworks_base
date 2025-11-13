@@ -27,6 +27,7 @@ import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Process;
 import android.os.UserHandle;
+import android.permission.flags.Flags;
 
 import com.android.internal.infra.AndroidFuture;
 
@@ -63,8 +64,12 @@ class CallerValidatorImpl implements CallerValidator {
         int callingUid = Binder.getCallingUid();
         final long callingIdentityToken = Binder.clearCallingIdentity();
         try {
-            return handleIncomingUser(
-                    claimedCallingPackage, targetUserHandle, callingPid, callingUid);
+            if (Flags.appFunctionAccessServiceEnabled()) {
+                return handleIncomingUserCrossUserNotAllowed(targetUserHandle, callingUid);
+            } else {
+                return handleIncomingUser(
+                        claimedCallingPackage, targetUserHandle, callingPid, callingUid);
+            }
         } finally {
             Binder.restoreCallingIdentity(callingIdentityToken);
         }
@@ -82,7 +87,7 @@ class CallerValidatorImpl implements CallerValidator {
             @NonNull String functionId) {
         boolean hasExecutionPermission =
                 mContext.checkPermission(
-                        Manifest.permission.EXECUTE_APP_FUNCTIONS, callingPid, callingUid)
+                                Manifest.permission.EXECUTE_APP_FUNCTIONS, callingPid, callingUid)
                         == PackageManager.PERMISSION_GRANTED;
         if (hasExecutionPermission) {
             return AndroidFuture.completedFuture(CAN_EXECUTE_APP_FUNCTIONS_ALLOWED_HAS_PERMISSION);
@@ -163,12 +168,42 @@ class CallerValidatorImpl implements CallerValidator {
     }
 
     /**
+     * Helper for dealing with incoming user arguments to system service calls.
+     *
+     * <p>Takes care of if interaction is cross user, this method will simply throw.
+     *
+     * @param targetUserHandle The user which the caller is requesting to execute as.
+     * @param callingUid The actual uid of the caller as determined by Binder.
+     * @return the user handle that the call should run as. Will always be a concrete user.
+     * @throws SecurityException if caller trying to interact across user.
+     */
+    @NonNull
+    private UserHandle handleIncomingUserCrossUserNotAllowed(
+            @NonNull UserHandle targetUserHandle, int callingUid) {
+        UserHandle callingUserHandle = UserHandle.getUserHandleForUid(callingUid);
+        if (callingUserHandle.equals(targetUserHandle)) {
+            return targetUserHandle;
+        }
+
+        throw new SecurityException(
+                "Permission denied while calling from uid "
+                        + callingUid
+                        + " with "
+                        + targetUserHandle
+                        + "; Cross user interaction is not allowed");
+    }
+
+    /**
      * Checks that the caller's supposed package name matches the uid making the call.
      *
      * @throws SecurityException if the package name and uid don't match.
      */
     private void validateCallingPackageInternal(
             int actualCallingUid, @NonNull String claimedCallingPackage) {
+        if (actualCallingUid == Process.ROOT_UID) {
+            // root does not have a package name
+            return;
+        }
         UserHandle callingUserHandle = UserHandle.getUserHandleForUid(actualCallingUid);
         Context actualCallingUserContext =
                 mContext.createContextAsUser(callingUserHandle, /* flags= */ 0);

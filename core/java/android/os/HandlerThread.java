@@ -22,10 +22,25 @@ import android.annotation.Nullable;
 import java.util.concurrent.Executor;
 
 /**
- * A {@link Thread} that has a {@link Looper}.
- * The {@link Looper} can then be used to create {@link Handler}s.
- * <p>
- * Note that just like with a regular {@link Thread}, {@link #start()} must still be called.
+ * A {@link Thread} that has a {@link Looper}. The {@link Looper} can then be used to create {@link
+ * Handler}s.
+ *
+ * <p>Note that just like with a regular {@link Thread}, {@link #start()} must still be called.
+ *
+ * <p>Use this class if you must work with the {@link Handler} API and need a {@link Thread} to do
+ * the handling on. Otherwise, consider using a {@link java.util.concurrent.Executor} or {@link
+ * java.util.concurrent.ExecutorService} instead. <br>
+ * Executors offer more flexibility with regards to threading. Work submitted to an Executor can be
+ * set to run on another thread, on one of several threads from a static or dynamic pool, or on the
+ * caller's thread, depending on your needs. <br>
+ * {link @link java.util.concurrent.Executor} offers a simpler API that is easier to use.
+ * {link @link java.util.concurrent.ExecutorService} offers the richer {@link
+ * java.util.concurrent.Future} API, which you can use to monitor task status, cancel tasks,
+ * propagate exceptions, and chain multiple pending tasks. <br>
+ * {link @link java.util.concurrent.Executors} is a convenient factory class that makes it easy to
+ * create {@link java.util.concurrent.Executor}s to meet different needs. It creates {@link
+ * java.util.concurrent.Executor}s with concurrent work queues that ensure that multiple threads may
+ * enqueue and perform work at the same time without encountering lock contention.
  */
 @android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class HandlerThread extends Thread {
@@ -40,11 +55,11 @@ public class HandlerThread extends Thread {
         mPriority = Process.THREAD_PRIORITY_DEFAULT;
         onCreated();
     }
-    
+
     /**
      * Constructs a HandlerThread.
      * @param name
-     * @param priority The priority to run the thread at. The value supplied must be from 
+     * @param priority The priority to run the thread at. The value supplied must be from
      * {@link android.os.Process} and not from java.lang.Thread.
      */
     public HandlerThread(String name, int priority) {
@@ -85,7 +100,7 @@ public class HandlerThread extends Thread {
         Looper.loop();
         mTid = -1;
     }
-    
+
     /**
      * This method returns the Looper associated with this thread. If this thread not been started
      * or for any reason isAlive() returns false, this method will return null. If this thread
@@ -153,6 +168,9 @@ public class HandlerThread extends Thread {
      * </p><p>
      * Any attempt to post messages to the queue after the looper is asked to quit will fail.
      * For example, the {@link Handler#sendMessage(Message)} method will return false.
+     * </p><p>
+     * If {@link #quit} or {@link #quitSafely} is called multiple times, the first call
+     * will have an effect and the subsequent calls will be no-ops.
      * </p><p class="note">
      * Using this method may be unsafe because some messages may not be delivered
      * before the looper terminates.  Consider using {@link #quitSafely} instead to ensure
@@ -186,6 +204,9 @@ public class HandlerThread extends Thread {
      * If the thread has not been started or has finished (that is if
      * {@link #getLooper} returns null), then false is returned.
      * Otherwise the looper is asked to quit and true is returned.
+     * </p><p>
+     * If {@link #quit} or {@link #quitSafely} is called multiple times, the first call
+     * will have an effect and the subsequent calls will be no-ops.
      * </p>
      *
      * @return True if the looper looper has been asked to quit or false if the

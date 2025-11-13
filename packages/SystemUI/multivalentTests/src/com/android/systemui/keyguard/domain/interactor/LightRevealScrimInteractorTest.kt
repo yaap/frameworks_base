@@ -34,6 +34,10 @@ import com.android.systemui.kosmos.testScope
 import com.android.systemui.power.data.repository.fakePowerRepository
 import com.android.systemui.power.shared.model.WakeSleepReason
 import com.android.systemui.power.shared.model.WakefulnessState
+import com.android.systemui.scene.data.repository.Transition
+import com.android.systemui.scene.data.repository.setSceneTransition
+import com.android.systemui.scene.shared.flag.SceneContainerFlag
+import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.statusbar.LightRevealEffect
 import com.android.systemui.statusbar.LightRevealScrim
 import com.android.systemui.testKosmos
@@ -150,15 +154,79 @@ class LightRevealScrimInteractorTest : SysuiTestCase() {
         }
 
     @Test
-    fun supportsAmbientMode() =
+    fun maxAlpha_doesNotSupportAmbientMode() =
+        kosmos.testScope.runTest {
+            val maxAlpha by collectLastValue(underTest.maxAlpha)
+            underTest.setWallpaperSupportsAmbientMode(false)
+
+            assertThat(maxAlpha).isEqualTo(1f)
+        }
+
+    @Test
+    fun maxAlpha_supportsAmbientModeWithDarkScrim() =
         kosmos.testScope.runTest {
             val maxAlpha by collectLastValue(underTest.maxAlpha)
             assertThat(maxAlpha).isEqualTo(1f)
 
             underTest.setWallpaperSupportsAmbientMode(true)
-            assertThat(maxAlpha).isLessThan(1f)
+            fakeLightRevealScrimRepository.useDarkWallpaperScrim.value = true
 
-            underTest.setWallpaperSupportsAmbientMode(false)
+            assertThat(maxAlpha).isEqualTo(0.64f)
+        }
+
+    @Test
+    fun maxAlpha_supportsAmbientModeWithLightScrim() =
+        kosmos.testScope.runTest {
+            val maxAlpha by collectLastValue(underTest.maxAlpha)
+            assertThat(maxAlpha).isEqualTo(1f)
+
+            underTest.setWallpaperSupportsAmbientMode(true)
+            fakeLightRevealScrimRepository.useDarkWallpaperScrim.value = false
+
+            assertThat(maxAlpha).isEqualTo(0.4f)
+        }
+
+    @Test
+    fun maxAlpha_supportsAmbientModeDuringTransitionIsOpaque() =
+        kosmos.testScope.runTest {
+            val maxAlpha by collectLastValue(underTest.maxAlpha)
+
+            underTest.setWallpaperSupportsAmbientMode(true)
+            fakeLightRevealScrimRepository.useDarkWallpaperScrim.value = true
+
+            if (SceneContainerFlag.isEnabled) {
+                kosmos.setSceneTransition(
+                   Transition(
+                       from= Scenes.Gone,
+                       to=Scenes.Lockscreen,
+                   )
+                )
+            }
+
+            val from = if (SceneContainerFlag.isEnabled) {
+                KeyguardState.UNDEFINED
+            } else {
+                KeyguardState.GONE
+            }
+
+            fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(
+                    TransitionStep(
+                        from = from,
+                        to = KeyguardState.AOD,
+                        value = 0f,
+                        transitionState = TransitionState.STARTED,
+                    ),
+                    TransitionStep(
+                        from = from,
+                        to = KeyguardState.AOD,
+                        value = 0.4f,
+                        transitionState = TransitionState.RUNNING,
+                    ),
+                ),
+                kosmos.testScope,
+            )
+
             assertThat(maxAlpha).isEqualTo(1f)
         }
 

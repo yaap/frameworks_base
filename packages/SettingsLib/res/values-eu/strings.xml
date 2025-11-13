@@ -411,7 +411,7 @@
     <string name="usb_audio_disable_routing" msgid="3367656923544254975">"Desgaitu USB bidez audioa bideratzeko aukera"</string>
     <string name="usb_audio_disable_routing_summary" msgid="8768242894849534699">"Desgaitu USB bidezko audio-gailuetara automatikoki bideratzeko aukera"</string>
     <string name="debug_layout" msgid="1659216803043339741">"Erakutsi diseinu-mugak"</string>
-    <string name="debug_layout_summary" msgid="8825829038287321978">"Erakutsi kliparen mugak, marjinak, etab."</string>
+    <string name="debug_layout_summary" msgid="8825829038287321978">"Erakutsi ebakiaren mugak, marjinak, etab."</string>
     <string name="force_rtl_layout_all_locales" msgid="8690762598501599796">"Eskuinetik ezkerrerako norabidea"</string>
     <string name="force_rtl_layout_all_locales_summary" msgid="6663016859517239880">"Behartu pantaila-diseinuaren norabidea eskuin-ezker izatera lurraldeko ezarpen guztiekin"</string>
     <string name="transparent_navigation_bar" msgid="1933192171384678484">"Nabigazio-barra gardena"</string>
@@ -419,7 +419,7 @@
     <string name="window_blurs" msgid="6831008984828425106">"Gaitu leiho-lausotzeak"</string>
     <string name="force_msaa" msgid="4081288296137775550">"Behartu 4x MSAA"</string>
     <string name="force_msaa_summary" msgid="9070437493586769500">"Gaitu 4x MSAA, OpenGL ES 2.0 aplikazioetan"</string>
-    <string name="show_non_rect_clip" msgid="7499758654867881817">"Araztu angeluzuzenak ez diren klip-eragiketak"</string>
+    <string name="show_non_rect_clip" msgid="7499758654867881817">"Araztu angeluzuzenak ez diren ebaketa-eragiketak"</string>
     <string name="track_frame_time" msgid="522674651937771106">"Profilaren HWUI errendatzea"</string>
     <string name="enable_gpu_debug_layers" msgid="4986675516188740397">"Gaitu GPUaren arazketa-geruzak"</string>
     <string name="enable_gpu_debug_layers_summary" msgid="4921521407377170481">"Eman GPUaren arazketa-geruzak kargatzeko baimena arazketa-aplikazioei"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"Duela <xliff:g id="ID_1">%1$s</xliff:g>"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> geratzen dira"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Txikiena"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Txikiagoa"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Txikia"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"Lehenetsia"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Handia"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Oso handia"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Handiena"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Oso handia"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Oso handia"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Estra handia"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Handiena"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Pertsonalizatua (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Menua"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Idatzi pasahitza jatorrizko datuak demo moduan berrezartzeko"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{1 gailu konektatuta}other{# gailu konektatuta}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Denbora gehiago."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Denbora gutxiago."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Lupa"</string>
     <string name="cancel" msgid="5665114069455378395">"Utzi"</string>
     <string name="next" msgid="2699398661093607009">"Hurrengoa"</string>
     <string name="back" msgid="5554327870352703710">"Atzera"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"<xliff:g id="SWITCHAPP">%1$s</xliff:g> aplikazioaren audioa igortzen edo audio-irteera aldatzen baduzu, une hartako igorpena etengo da"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"Igorri <xliff:g id="SWITCHAPP">%1$s</xliff:g> aplikazioaren audioa"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Aldatu audio-irteera"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"Atzera egiteko keinuaren animazio-igarleak"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"Gaitu atzera egiteko keinuaren sistemaren animazio-igarleak."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"Atzera egiteko keinuaren sistemaren animazio-igarleak gaitzen ditu ezarpenak. enableOnBackInvokedCallback-ek egiazko gisa ezarrita egon behar du aplikazio bakoitzaren manifestu-fitxategian."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"%% <xliff:g id="PERCENTAGE">%1$d</xliff:g>"</string>
     <string name="not_specified" msgid="5423502443185110328">"Zehaztugabea"</string>
     <string name="neuter" msgid="2075249330106127310">"Neutroa"</string>

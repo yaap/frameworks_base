@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 
@@ -62,11 +61,11 @@ constructor(
         listOf(
                 *bouncerBlurRadiusFlows.toTypedArray(),
                 *glanceableHubBlurRadiusFlows.toTypedArray(),
-                blurInteractor.blurRadiusRequestedByShade
-                    .map { it.toFloat() }
-                    .logIfPossible("ShadeBlur"),
+                blurInteractor.blurRadiusRequestedByShade.logIfPossible("ShadeBlur"),
             )
             .merge()
+
+    private val _blurScale = blurInteractor.blurScaleRequestedByShade
 
     val blurRadius: Flow<Float> =
         blurInteractor.isBlurCurrentlySupported.flatMapLatest { blurSupported ->
@@ -77,16 +76,30 @@ constructor(
             }
         }
 
+    val blurScale: Flow<Float> =
+        if (Flags.spatialModelPushbackInShader()) {
+            blurInteractor.isBlurCurrentlySupported.flatMapLatest { blurSupported ->
+                if (blurSupported) {
+                    _blurScale
+                } else {
+                    flowOf(1f)
+                }
+            }
+        } else {
+            flowOf(1f)
+        }
+
     val isPersistentEarlyWakeupRequired =
         blurInteractor.isBlurCurrentlySupported
             .flatMapLatest { blurSupported ->
                 if (blurSupported) {
                     combine(
                         keyguardInteractor.isKeyguardShowing,
+                        blurInteractor.isTrackingShadeMotion,
                         shadeInteractor.isUserInteracting,
                         shadeInteractor.isAnyExpanded,
-                    ) { keyguardShowing, userDraggingShade, anyExpanded ->
-                        keyguardShowing || userDraggingShade || anyExpanded
+                    ) { keyguardShowing, isTrackingShadeMotion, userDraggingShade, anyExpanded ->
+                        keyguardShowing || isTrackingShadeMotion || userDraggingShade || anyExpanded
                     }
                 } else {
                     flowOf(false)
@@ -95,18 +108,19 @@ constructor(
             .distinctUntilChanged()
             .logIfPossible("isPersistentEarlyWakeupRequired")
 
-    val isBlurOpaque =
-        blurInteractor.isBlurCurrentlySupported.flatMapLatest { blurSupported ->
-            if (blurSupported) {
-                blurInteractor.isBlurOpaque.distinctUntilChanged().logIfPossible("isBlurOpaque")
-            } else {
-                flowOf(false)
-            }
-        }
+    /**
+     * Whether this surface is opaque or transparent. This controls whether the alpha channel is
+     * composited with the alpha channels from the surfaces below while rendering.
+     */
+    val isSurfaceOpaque =
+        if (Flags.notificationShadeBlur()) flowOf(false) else shadeInteractor.isAnyFullyExpanded
 
-    fun onBlurApplied(blurRadius: Int) {
+    fun onBlurApplied(blurRadius: Int, isOpaque: Boolean) {
         if (isLoggable) {
-            Log.d(TAG, "blur applied for radius $blurRadius")
+            Log.d(
+                TAG,
+                "blur applied for radius blurRadius: $blurRadius, isSurfaceOpaque: $isOpaque",
+            )
         }
         blurInteractor.onBlurApplied(blurRadius)
     }
@@ -118,7 +132,7 @@ constructor(
 
     private companion object {
         const val TAG = "WindowRootViewModel"
-        val isLoggable = Log.isLoggable(TAG, Log.VERBOSE) || Build.isDebuggable()
+        val isLoggable = Log.isLoggable(TAG, Log.VERBOSE) || Build.IS_ENG
 
         fun <T> Flow<T>.logIfPossible(loggingInfo: String): Flow<T> {
             return onEach { if (isLoggable) Log.v(TAG, "$loggingInfo $it") }

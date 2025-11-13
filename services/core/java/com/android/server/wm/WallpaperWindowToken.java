@@ -30,6 +30,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.SparseArray;
+import android.view.SurfaceControl;
 
 import com.android.internal.protolog.ProtoLog;
 
@@ -81,17 +82,23 @@ class WallpaperWindowToken extends WindowToken {
     }
 
     @Override
+    void updateSurfaceVisibility(SurfaceControl.Transaction t) {
+        t.setVisibility(mSurfaceControl, isVisible());
+    }
+
+    @Override
     public void prepareSurfaces() {
         super.prepareSurfaces();
 
-        if (mWmService.mFlags.mEnsureWallpaperInTransitions) {
-            // Similar to Task.prepareSurfaces, outside of transitions we need to apply visibility
-            // changes directly. In transitions the transition player will take care of applying the
-            // visibility change.
-            if (!mTransitionController.isCollecting(this)
-                    && !mTransitionController.isPlayingTarget(this)) {
-                getPendingTransaction().setVisibility(mSurfaceControl, isVisible());
-            }
+        if (mWmService.mFlags.mEnsureSurfaceVisibility) {
+            return;
+        }
+        // Similar to Task.prepareSurfaces, outside of transitions we need to apply visibility
+        // changes directly. In transitions the transition player will take care of applying the
+        // visibility change.
+        if (!mTransitionController.isCollecting(this)
+                && !mTransitionController.isPlayingTarget(this)) {
+            getPendingTransaction().setVisibility(mSurfaceControl, isVisible());
         }
     }
 
@@ -117,6 +124,15 @@ class WallpaperWindowToken extends WindowToken {
 
     boolean canShowWhenLocked() {
         return mShowWhenLocked;
+    }
+
+    @Override
+    void setInitialSurfaceControlProperties(SurfaceControl.Builder b) {
+        // Replace the name from toString because surface cannot rename and mShowWhenLocked is set
+        // after surface creation.
+        b.setName("WallpaperWindowToken{"
+                + Integer.toHexString(System.identityHashCode(this)) + '}');
+        super.setInitialSurfaceControlProperties(b);
     }
 
     void setCropHints(SparseArray<Rect> cropHints) {
@@ -190,6 +206,9 @@ class WallpaperWindowToken extends WindowToken {
                 final WindowState wallpaper = mChildren.get(i);
                 wallpaper.requestUpdateWallpaperIfNeeded();
             }
+        }
+        if (visible != wasClientVisible) {
+            mWmService.mAnimator.addSurfaceVisibilityUpdate(this);
         }
     }
 

@@ -17,9 +17,12 @@
 package com.android.systemui.notifications.ui.viewmodel
 
 import android.app.StatusBarManager.DISABLE2_QUICK_SETTINGS
+import android.platform.test.annotations.DisableFlags
+import android.platform.test.annotations.EnableFlags
 import android.testing.TestableLooper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
+import com.android.systemui.Flags.FLAG_NOTIFICATION_SHADE_BLUR
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.authentication.data.repository.FakeAuthenticationRepository
 import com.android.systemui.authentication.domain.interactor.AuthenticationResult
@@ -43,6 +46,7 @@ import com.android.systemui.shade.domain.interactor.shadeInteractor
 import com.android.systemui.shade.ui.viewmodel.notificationsShadeOverlayContentViewModel
 import com.android.systemui.statusbar.disableflags.data.repository.fakeDisableFlagsRepository
 import com.android.systemui.testKosmos
+import com.android.systemui.window.data.repository.fakeWindowRootViewBlurRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.update
@@ -115,7 +119,7 @@ class NotificationsShadeOverlayContentViewModelTest : SysuiTestCase() {
     @Test
     fun showMedia_activeMedia_true() =
         testScope.runTest {
-            kosmos.mediaFilterRepository.addSelectedUserMediaEntry(MediaData(active = true))
+            kosmos.mediaFilterRepository.addCurrentUserMediaEntry(MediaData(active = true))
             runCurrent()
 
             assertThat(underTest.showMedia).isTrue()
@@ -124,7 +128,7 @@ class NotificationsShadeOverlayContentViewModelTest : SysuiTestCase() {
     @Test
     fun showMedia_InactiveMedia_false() =
         testScope.runTest {
-            kosmos.mediaFilterRepository.addSelectedUserMediaEntry(MediaData(active = false))
+            kosmos.mediaFilterRepository.addCurrentUserMediaEntry(MediaData(active = false))
             runCurrent()
 
             assertThat(underTest.showMedia).isFalse()
@@ -133,8 +137,8 @@ class NotificationsShadeOverlayContentViewModelTest : SysuiTestCase() {
     @Test
     fun showMedia_noMedia_false() =
         testScope.runTest {
-            kosmos.mediaFilterRepository.addSelectedUserMediaEntry(MediaData(active = true))
-            kosmos.mediaFilterRepository.clearSelectedUserMedia()
+            kosmos.mediaFilterRepository.addCurrentUserMediaEntry(MediaData(active = true))
+            kosmos.mediaFilterRepository.clearCurrentUserMedia()
             runCurrent()
 
             assertThat(underTest.showMedia).isFalse()
@@ -143,13 +147,43 @@ class NotificationsShadeOverlayContentViewModelTest : SysuiTestCase() {
     @Test
     fun showMedia_qsDisabled_false() =
         testScope.runTest {
-            kosmos.mediaFilterRepository.addSelectedUserMediaEntry(MediaData(active = true))
+            kosmos.mediaFilterRepository.addCurrentUserMediaEntry(MediaData(active = true))
             kosmos.fakeDisableFlagsRepository.disableFlags.update {
                 it.copy(disable2 = DISABLE2_QUICK_SETTINGS)
             }
             runCurrent()
 
             assertThat(underTest.showMedia).isFalse()
+        }
+
+    @Test
+    @DisableFlags(FLAG_NOTIFICATION_SHADE_BLUR)
+    fun transparencyEnabled_shadeBlurFlagOff_isDisabled() =
+        testScope.runTest {
+            kosmos.fakeWindowRootViewBlurRepository.isBlurSupported.value = true
+            runCurrent()
+
+            assertThat(underTest.isTransparencyEnabled).isFalse()
+        }
+
+    @Test
+    @EnableFlags(FLAG_NOTIFICATION_SHADE_BLUR)
+    fun transparencyEnabled_shadeBlurFlagOn_blurSupported_isEnabled() =
+        testScope.runTest {
+            kosmos.fakeWindowRootViewBlurRepository.isBlurSupported.value = true
+            runCurrent()
+
+            assertThat(underTest.isTransparencyEnabled).isTrue()
+        }
+
+    @Test
+    @EnableFlags(FLAG_NOTIFICATION_SHADE_BLUR)
+    fun transparencyEnabled_shadeBlurFlagOn_blurUnsupported_isDisabled() =
+        testScope.runTest {
+            kosmos.fakeWindowRootViewBlurRepository.isBlurSupported.value = false
+            runCurrent()
+
+            assertThat(underTest.isTransparencyEnabled).isFalse()
         }
 
     private fun TestScope.lockDevice() {

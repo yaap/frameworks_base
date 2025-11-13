@@ -35,6 +35,7 @@ import static android.app.admin.DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD;
 import static android.app.admin.DevicePolicyManager.LOCK_TASK_FEATURE_NONE;
 import static android.app.admin.DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS;
 import static android.app.admin.DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW;
+import static android.app.admin.DevicePolicyManager.LOCK_TASK_FEATURE_QUICK_SETTINGS;
 import static android.app.admin.DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO;
 import static android.app.admin.DevicePolicyManager.PASSWORD_COMPLEXITY_HIGH;
 import static android.app.admin.DevicePolicyManager.PASSWORD_COMPLEXITY_LOW;
@@ -58,7 +59,6 @@ import static android.net.NetworkCapabilities.NET_ENTERPRISE_ID_1;
 
 import static com.android.internal.widget.LockPatternUtils.CREDENTIAL_TYPE_NONE;
 import static com.android.internal.widget.LockPatternUtils.CREDENTIAL_TYPE_PASSWORD;
-import static com.android.internal.widget.LockPatternUtils.EscrowTokenStateChangeCallback;
 import static com.android.server.SystemTimeZone.TIME_ZONE_CONFIDENCE_HIGH;
 import static com.android.server.devicepolicy.DevicePolicyManagerService.ACTION_PROFILE_OFF_DEADLINE;
 import static com.android.server.devicepolicy.DevicePolicyManagerService.ACTION_TURN_PROFILE_ON_NOTIFICATION;
@@ -90,7 +90,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.hamcrest.MockitoHamcrest.argThat;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertThrows;
+import static org.testng.Assert.assertTrue;
 
 import static java.util.Collections.emptyList;
 
@@ -144,6 +147,7 @@ import android.security.KeyChain;
 import android.security.keystore.AttestationUtils;
 import android.telephony.SubscriptionInfo;
 import android.telephony.TelephonyManager;
+import android.telephony.UiccAccessRule;
 import android.telephony.data.ApnSetting;
 import android.test.MoreAsserts;
 import android.util.ArraySet;
@@ -160,6 +164,7 @@ import com.android.internal.widget.LockscreenCredential;
 import com.android.server.LocalServices;
 import com.android.server.SystemService;
 import com.android.server.devicepolicy.DevicePolicyManagerService.RestrictionsListener;
+import com.android.server.locksettings.EscrowTokenStateChangeCallback;
 import com.android.server.pm.RestrictionsSet;
 import com.android.server.pm.UserManagerInternal;
 import com.android.server.pm.UserRestrictionsUtils;
@@ -284,8 +289,9 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         mServiceContext = mContext;
         mServiceContext.binder.callingUid = DpmMockContext.CALLER_UID;
         when(getServices().userManagerInternal.getUserIds()).thenReturn(new int[]{0});
-        when(getServices().packageManager.hasSystemFeature(eq(PackageManager.FEATURE_DEVICE_ADMIN)))
-                .thenReturn(true);
+        doReturn(true)
+                .when(getServices().packageManager)
+                .hasSystemFeature(eq(PackageManager.FEATURE_DEVICE_ADMIN));
         doReturn(Collections.singletonList(new ResolveInfo()))
                 .when(getServices().packageManager).queryBroadcastReceiversAsUser(
                         any(Intent.class),
@@ -317,6 +323,7 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         setUpUserManager();
 
         when(getServices().lockPatternUtils.hasSecureLockScreen()).thenReturn(true);
+        when(getServices().storageManager.isFileBasedEncryptionEnabled()).thenReturn(true);
 
         mIsAutomotive = mContext.getPackageManager()
                 .hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE);
@@ -427,8 +434,9 @@ public class DevicePolicyManagerTest extends DpmTestBase {
 
     @Test
     public void testHasNoFeature() throws Exception {
-        when(getServices().packageManager.hasSystemFeature(eq(PackageManager.FEATURE_DEVICE_ADMIN)))
-                .thenReturn(false);
+        doReturn(false)
+                .when(getServices().packageManager)
+                .hasSystemFeature(eq(PackageManager.FEATURE_DEVICE_ADMIN));
 
         new DevicePolicyManagerServiceTestable(getServices(), mContext);
 
@@ -1544,13 +1552,13 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         // Add reset password token
         final long handle = 12000;
         final byte[] token = new byte[32];
-        when(getServices().lockPatternUtils.addEscrowToken(eq(token), eq(UserHandle.USER_SYSTEM),
-                nullable(EscrowTokenStateChangeCallback.class)))
+        when(getServices().lockSettingsInternal.addEscrowToken(eq(token),
+                eq(UserHandle.USER_SYSTEM), nullable(EscrowTokenStateChangeCallback.class)))
                 .thenReturn(handle);
         assertThat(dpm.setResetPasswordToken(admin1, token)).isTrue();
 
         // Assert reset password token is active
-        when(getServices().lockPatternUtils.isEscrowTokenActive(eq(handle),
+        when(getServices().lockSettingsInternal.isEscrowTokenActive(eq(handle),
                 eq(UserHandle.USER_SYSTEM)))
                 .thenReturn(true);
         assertThat(dpm.isResetPasswordTokenActive(admin1)).isTrue();
@@ -1559,7 +1567,7 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         dpm.clearDeviceOwnerApp(admin1.getPackageName());
 
         // Verify password reset password token was removed
-        verify(getServices().lockPatternUtils).removeEscrowToken(eq(handle),
+        verify(getServices().lockSettingsInternal).removeEscrowToken(eq(handle),
                 eq(UserHandle.USER_SYSTEM));
     }
 
@@ -3600,8 +3608,9 @@ public class DevicePolicyManagerTest extends DpmTestBase {
     }
 
     private void setup_DeviceAdminFeatureOff() throws Exception {
-        when(getServices().packageManager.hasSystemFeature(PackageManager.FEATURE_DEVICE_ADMIN))
-                .thenReturn(false);
+        doReturn(false)
+                .when(getServices().packageManager)
+                .hasSystemFeature(eq(PackageManager.FEATURE_DEVICE_ADMIN));
         when(getServices().ipackageManager
                 .hasSystemFeature(PackageManager.FEATURE_MANAGED_USERS, 0)).thenReturn(false);
         initializeDpms();
@@ -4839,7 +4848,7 @@ public class DevicePolicyManagerTest extends DpmTestBase {
             int flags) throws Exception {
         mContext.binder.callingUid = uid;
         dpm.setLockTaskPackages(who, packages);
-        MoreAsserts.assertEquals(packages, dpm.getLockTaskPackages(who));
+        assertEquals(packages, dpm.getLockTaskPackages(who));
         for (String p : packages) {
             assertThat(dpm.isLockTaskPermitted(p)).isTrue();
         }
@@ -5056,6 +5065,57 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         dpm.setSecondaryLockscreenEnabled(enabled, new PersistableBundle());
         verify(getServices().supervisionManagerInternal).setSupervisionLockscreenEnabledForUser(
                 eq(CALLER_USER_HANDLE), eq(enabled), any(PersistableBundle.class));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(
+            android.app.supervision.flags.Flags.FLAG_ENABLE_LOCK_TASK_FEATURE_QUICK_SETTINGS)
+    public void testSetLockTaskFeatures_invalidFeatureSetForQuickSettings_throwsException()
+            throws Exception {
+        int flags = LOCK_TASK_FEATURE_HOME | LOCK_TASK_FEATURE_QUICK_SETTINGS;
+        setDeviceOwner();
+        setAsProfileOwner(admin1);
+
+        assertExpectException(IllegalArgumentException.class,
+                "Cannot use LOCK_TASK_FEATURE_QUICK_SETTINGS without "
+                        + "LOCK_TASK_FEATURE_NOTIFICATIONS", () ->
+                        dpm.setLockTaskFeatures(admin1, flags));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(
+            android.app.supervision.flags.Flags.FLAG_ENABLE_LOCK_TASK_FEATURE_QUICK_SETTINGS)
+    public void testSetLockTaskFeatures_enableQuickSettingsFeatureAsNonSupervisionApp_fails()
+            throws Exception {
+        int flags = LOCK_TASK_FEATURE_OVERVIEW | LOCK_TASK_FEATURE_HOME
+                | LOCK_TASK_FEATURE_NOTIFICATIONS | LOCK_TASK_FEATURE_QUICK_SETTINGS;
+        setDeviceOwner();
+        setAsProfileOwner(admin1);
+
+        assertExpectException(SecurityException.class, "Caller \\(CallerIdentity[^\\)]+\\) needs to"
+                + " hold SYSTEM_SUPERVISION role to enable Quick Settings on LockTask mode", () ->
+                        dpm.setLockTaskFeatures(admin1, flags));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(
+            android.app.supervision.flags.Flags.FLAG_ENABLE_LOCK_TASK_FEATURE_QUICK_SETTINGS)
+    public void testSetLockTaskFeatures_enableQuickSettingsFeatureAsSupervisionApp_success()
+            throws Exception {
+        setDeviceOwner();
+        setAsProfileOwner(admin1);
+        doReturn(DpmMockContext.CALLER_SYSTEM_USER_UID).when(getServices().packageManagerInternal)
+                .getPackageUid(any(), anyLong(), anyInt());
+        when(getServices().roleManagerForMock.getRoleHoldersAsUser(
+                RoleManager.ROLE_SYSTEM_SUPERVISION,
+                UserHandle.of(DpmMockContext.CALLER_SYSTEM_USER_UID)))
+                .thenReturn(new ArrayList<>(List.of(admin1.getPackageName())));
+        final int flags = DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
+                | DevicePolicyManager.LOCK_TASK_FEATURE_HOME | LOCK_TASK_FEATURE_QUICK_SETTINGS;
+
+        dpm.setLockTaskFeatures(admin1, flags);
+
+        assertThat(dpm.getLockTaskFeatures(admin1)).isEqualTo(flags);
     }
 
     @Test
@@ -5473,15 +5533,14 @@ public class DevicePolicyManagerTest extends DpmTestBase {
                 .thenReturn(PackageManager.PERMISSION_GRANTED);
         doReturn(PackageManager.FLAG_PERMISSION_POLICY_FIXED).when(getServices().packageManager)
                 .getPermissionFlags(permission, app1, UserHandle.SYSTEM);
-        when(getServices().packageManager.getPermissionFlags(permission, app1,
-                UserHandle.of(CALLER_USER_HANDLE)))
-                .thenReturn(PackageManager.FLAG_PERMISSION_POLICY_FIXED);
+        doReturn(PackageManager.FLAG_PERMISSION_POLICY_FIXED).when(getServices().packageManager)
+                .getPermissionFlags(permission, app1, UserHandle.of(CALLER_USER_HANDLE));
         when(getServices().ipackageManager.checkPermission(eq(permission), eq(app2), anyInt()))
                 .thenReturn(PackageManager.PERMISSION_DENIED);
         doReturn(0).when(getServices().packageManager).getPermissionFlags(permission, app2,
                 UserHandle.SYSTEM);
-        when(getServices().packageManager.getPermissionFlags(permission, app2,
-                UserHandle.of(CALLER_USER_HANDLE))).thenReturn(0);
+        doReturn(0).when(getServices().packageManager)
+                .getPermissionFlags(permission, app2, UserHandle.of(CALLER_USER_HANDLE));
 
         // System can retrieve permission grant state.
         mContext.binder.callingUid = DpmMockContext.SYSTEM_UID;
@@ -5520,24 +5579,24 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         final byte[] token = new byte[32];
         final long handle = 123456;
         final String password = "password";
-        when(getServices().lockPatternUtils.addEscrowToken(eq(token), eq(UserHandle.USER_SYSTEM),
-                nullable(EscrowTokenStateChangeCallback.class)))
+        when(getServices().lockSettingsInternal.addEscrowToken(eq(token),
+                eq(UserHandle.USER_SYSTEM), nullable(EscrowTokenStateChangeCallback.class)))
                 .thenReturn(handle);
         assertThat(dpm.setResetPasswordToken(admin1, token)).isTrue();
 
         // test password activation
-        when(getServices().lockPatternUtils.isEscrowTokenActive(handle, UserHandle.USER_SYSTEM))
+        when(getServices().lockSettingsInternal.isEscrowTokenActive(handle, UserHandle.USER_SYSTEM))
                 .thenReturn(true);
         assertThat(dpm.isResetPasswordTokenActive(admin1)).isTrue();
 
         // test reset password with token
-        when(getServices().lockPatternUtils.setLockCredentialWithToken(
+        when(getServices().lockSettingsInternal.setLockCredentialWithToken(
                 LockscreenCredential.createPassword(password), handle, token,
                 UserHandle.USER_SYSTEM)).thenReturn(true);
         assertThat(dpm.resetPasswordWithToken(admin1, password, token, 0)).isTrue();
 
         // test removing a token
-        when(getServices().lockPatternUtils.removeEscrowToken(handle, UserHandle.USER_SYSTEM))
+        when(getServices().lockSettingsInternal.removeEscrowToken(handle, UserHandle.USER_SYSTEM))
                 .thenReturn(true);
         assertThat(dpm.clearResetPasswordToken(admin1)).isTrue();
     }
@@ -5550,14 +5609,14 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         // adding a token
         final byte[] token = new byte[32];
         final long handle = 123456;
-        when(getServices().lockPatternUtils.addEscrowToken(eq(token), eq(UserHandle.USER_SYSTEM),
-                nullable(EscrowTokenStateChangeCallback.class)))
+        when(getServices().lockSettingsInternal.addEscrowToken(eq(token),
+                eq(UserHandle.USER_SYSTEM), nullable(EscrowTokenStateChangeCallback.class)))
                 .thenReturn(handle);
         assertThat(dpm.setResetPasswordToken(admin1, token)).isTrue();
 
         // Test resetting with a numeric pin
         final String pin = "123456";
-        when(getServices().lockPatternUtils.setLockCredentialWithToken(
+        when(getServices().lockSettingsInternal.setLockCredentialWithToken(
                 LockscreenCredential.createPin(pin), handle, token,
                 UserHandle.USER_SYSTEM)).thenReturn(true);
         assertThat(dpm.resetPasswordWithToken(admin1, pin, token, 0)).isTrue();
@@ -5571,14 +5630,14 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         // adding a token
         final byte[] token = new byte[32];
         final long handle = 123456;
-        when(getServices().lockPatternUtils.addEscrowToken(eq(token), eq(UserHandle.USER_SYSTEM),
-                nullable(EscrowTokenStateChangeCallback.class)))
+        when(getServices().lockSettingsInternal.addEscrowToken(eq(token),
+                eq(UserHandle.USER_SYSTEM), nullable(EscrowTokenStateChangeCallback.class)))
                 .thenReturn(handle);
         assertThat(dpm.setResetPasswordToken(admin1, token)).isTrue();
 
         // Test resetting with an empty password
         final String password = "";
-        when(getServices().lockPatternUtils.setLockCredentialWithToken(
+        when(getServices().lockSettingsInternal.setLockCredentialWithToken(
                 LockscreenCredential.createNone(), handle, token,
                 UserHandle.USER_SYSTEM)).thenReturn(true);
         assertThat(dpm.resetPasswordWithToken(admin1, password, token, 0)).isTrue();
@@ -6538,8 +6597,9 @@ public class DevicePolicyManagerTest extends DpmTestBase {
 
     @Test
     public void testOverrideApnAPIsFailWithPO() throws Exception {
-        when(getServices().packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY))
-                .thenReturn(true);
+        doReturn(true)
+                .when(getServices().packageManager)
+                .hasSystemFeature(PackageManager.FEATURE_TELEPHONY);
         // FEATURE_TELEPHONY is set in DPMS's constructor and therefore a new DPMS instance
         // is created after turning on the feature.
         initializeDpms();
@@ -7365,7 +7425,6 @@ public class DevicePolicyManagerTest extends DpmTestBase {
     @Test
     public void testCanProfileOwnerResetPasswordWhenLocked_nonDirectBootAwarePo()
             throws Exception {
-        setDeviceEncryptionPerUser();
         setupProfileOwner();
         setupPasswordResetToken();
 
@@ -7376,7 +7435,6 @@ public class DevicePolicyManagerTest extends DpmTestBase {
 
     @Test
     public void testCanProfileOwnerResetPasswordWhenLocked_noActiveToken() throws Exception {
-        setDeviceEncryptionPerUser();
         setupProfileOwner();
         makeAdmin1DirectBootAware();
 
@@ -7386,20 +7444,8 @@ public class DevicePolicyManagerTest extends DpmTestBase {
     }
 
     @Test
-    public void testCanProfileOwnerResetPasswordWhenLocked_nonFbeDevice() throws Exception {
-        setupProfileOwner();
-        makeAdmin1DirectBootAware();
-        setupPasswordResetToken();
-
-        mContext.binder.callingUid = DpmMockContext.SYSTEM_UID;
-        assertWithMessage("device is not FBE")
-                .that(dpm.canProfileOwnerResetPasswordWhenLocked(CALLER_USER_HANDLE)).isFalse();
-    }
-
-    @Test
     @Ignore("b/277916462")
     public void testCanProfileOwnerResetPasswordWhenLocked() throws Exception {
-        setDeviceEncryptionPerUser();
         setupProfileOwner();
         makeAdmin1DirectBootAware();
         setupPasswordResetToken();
@@ -7413,14 +7459,14 @@ public class DevicePolicyManagerTest extends DpmTestBase {
         final byte[] token = new byte[32];
         final long handle = 123456;
 
-        when(getServices().lockPatternUtils
+        when(getServices().lockSettingsInternal
                 .addEscrowToken(eq(token), eq(CALLER_USER_HANDLE),
                         nullable(EscrowTokenStateChangeCallback.class)))
                 .thenReturn(handle);
 
         dpm.setResetPasswordToken(admin1, token);
 
-        when(getServices().lockPatternUtils
+        when(getServices().lockSettingsInternal
                 .isEscrowTokenActive(eq(handle), eq(CALLER_USER_HANDLE)))
                 .thenReturn(true);
 
@@ -7442,10 +7488,6 @@ public class DevicePolicyManagerTest extends DpmTestBase {
                 eq(admin1.getPackageName()),
                 anyLong(),
                 eq(CALLER_USER_HANDLE));
-    }
-
-    private void setDeviceEncryptionPerUser() {
-        when(getServices().storageManager.isFileBasedEncryptionEnabled()).thenReturn(true);
     }
 
     private void setCrossProfileAppsList(String... packages) {
@@ -8754,6 +8796,54 @@ public class DevicePolicyManagerTest extends DpmTestBase {
 
         // Verify that EuiccManager was not called to delete the subscription.
         verifyNoMoreInteractions(getServices().euiccManager);
+    }
+
+    @Test
+    public void isSubscriptionEnterpriseManaged_packageNameIsGroupOwner_returnsTrue() {
+        SubscriptionInfo subscription = new SubscriptionInfo.Builder().setCardId(1).setId(
+                42).setGroupOwner("package-name").build();
+
+        assertTrue(dpm.isSubscriptionEnterpriseManaged(subscription, "package-name"));
+    }
+
+    @Test
+    public void isSubscriptionEnterpriseManaged_packageNameIsNotGroupOwner_returnsFalse() {
+        SubscriptionInfo subscription = new SubscriptionInfo.Builder().setCardId(1).setId(
+                42).setGroupOwner("another-package-name").build();
+
+        assertFalse(dpm.isSubscriptionEnterpriseManaged(subscription, "package-name"));
+    }
+
+    @RequiresFlagsEnabled(Flags.FLAG_ENTERPRISE_ESIM_USING_CARRIER_PRIVILEGES)
+    @Test
+    public void isSubscriptionEnterpriseManaged_hasEnterpriseMarkerInAccessRules_returnsTrue() {
+        String enterpriseCarrierConfig =
+                "5715E84E9FEFDD8CEB019F3CE2DC5B73A24D155363D3731D40CA1852F41A5059:com.android"
+                        + ".notanapp.enterprise_sim";
+
+        SubscriptionInfo subscription = new SubscriptionInfo.Builder().setCardId(
+                1).setCarrierConfigAccessRules(
+                UiccAccessRule.decodeRulesFromCarrierConfig(
+                        new String[]{enterpriseCarrierConfig})).setId(
+                42).build();
+
+        assertTrue(dpm.isSubscriptionEnterpriseManaged(subscription, "does-not-matter"));
+    }
+
+    @RequiresFlagsDisabled(Flags.FLAG_ENTERPRISE_ESIM_USING_CARRIER_PRIVILEGES)
+    @Test
+    public void isSubscriptionEnterpriseManaged_hasEnterpriseMarkerInAccessRules_returnsFalse() {
+        String enterpriseCarrierConfig =
+                "5715E84E9FEFDD8CEB019F3CE2DC5B73A24D155363D3731D40CA1852F41A5059:com.android"
+                        + ".notanapp.enterprise_sim";
+
+        SubscriptionInfo subscription = new SubscriptionInfo.Builder().setCardId(
+                1).setCarrierConfigAccessRules(
+                UiccAccessRule.decodeRulesFromCarrierConfig(
+                        new String[]{enterpriseCarrierConfig})).setId(
+                42).build();
+
+        assertFalse(dpm.isSubscriptionEnterpriseManaged(subscription, "does-not-matter"));
     }
 
     private void setupVpnAuthorization(String userVpnPackage, int userVpnUid) {

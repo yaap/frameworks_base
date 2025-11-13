@@ -23,7 +23,7 @@ import static com.android.internal.util.Preconditions.checkArgument;
 import static com.android.server.am.ActivityManagerDebugConfig.TAG_AM;
 import static com.android.server.am.ActivityManagerDebugConfig.TAG_WITH_CLASS_NAME;
 import static com.android.server.am.ActivityManagerService.MY_PID;
-import static com.android.server.am.OomAdjusterModernImpl.ProcessRecordNode.NUM_NODE_TYPE;
+import static com.android.server.am.OomAdjusterImpl.ProcessRecordNode.NUM_NODE_TYPE;
 
 import static java.util.Objects.requireNonNull;
 
@@ -65,7 +65,7 @@ import com.android.internal.app.procstats.ProcessState;
 import com.android.internal.app.procstats.ProcessStats;
 import com.android.internal.os.Zygote;
 import com.android.server.FgThread;
-import com.android.server.am.OomAdjusterModernImpl.ProcessRecordNode;
+import com.android.server.am.OomAdjusterImpl.ProcessRecordNode;
 import com.android.server.wm.WindowProcessController;
 import com.android.server.wm.WindowProcessListener;
 
@@ -266,6 +266,12 @@ class ProcessRecord implements WindowProcessListener {
      */
     @GuardedBy("mService")
     private long[] mLoggableCompatChanges;
+
+    /**
+     * Whether to log compat change checks to statsd.
+     */
+    @GuardedBy("mService")
+    private boolean mLogChangeChecksToStatsD;
 
     /**
      * Who is watching for the death.
@@ -638,10 +644,8 @@ class ProcessRecord implements WindowProcessListener {
      */
     @VisibleForTesting
     static void updateProcessRecordNodes(@NonNull ProcessRecord app) {
-        if (app.mService.mConstants.ENABLE_NEW_OOMADJ) {
-            for (int i = 0; i < app.mLinkedNodes.length; i++) {
-                app.mLinkedNodes[i] = new ProcessRecordNode(app);
-            }
+        for (int i = 0; i < app.mLinkedNodes.length; i++) {
+            app.mLinkedNodes[i] = new ProcessRecordNode(app);
         }
     }
 
@@ -963,6 +967,11 @@ class ProcessRecord implements WindowProcessListener {
     }
 
     @GuardedBy("mService")
+    boolean isLogChangeChecksToStatsD() {
+        return mLogChangeChecksToStatsD;
+    }
+
+    @GuardedBy("mService")
     void setDisabledCompatChanges(long[] disabledCompatChanges) {
         mDisabledCompatChanges = disabledCompatChanges;
     }
@@ -970,6 +979,11 @@ class ProcessRecord implements WindowProcessListener {
     @GuardedBy("mService")
     void setLoggableCompatChanges(long[] loggableCompatChanges) {
         mLoggableCompatChanges = loggableCompatChanges;
+    }
+
+    @GuardedBy("mService")
+    void setLogChangeChecksToStatsD(boolean logChangeChecksToStatsD) {
+        mLogChangeChecksToStatsD = logChangeChecksToStatsD;
     }
 
     @GuardedBy("mService")
@@ -1727,10 +1741,7 @@ class ProcessRecord implements WindowProcessListener {
     }
 
     boolean isFreezable() {
-        return mService.mOomAdjuster.mCachedAppOptimizer.useFreezer()
-                && !mOptRecord.isFreezeExempt()
-                && !mOptRecord.shouldNotFreeze()
-                && mState.getCurAdj() >= mService.mConstants.FREEZER_CUTOFF_ADJ;
+        return OomAdjuster.getFreezePolicy(this);
     }
 
     public void forEachConnectionHost(Consumer<ProcessRecord> consumer) {

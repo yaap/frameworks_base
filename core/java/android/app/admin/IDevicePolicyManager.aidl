@@ -52,6 +52,7 @@ import android.os.RemoteCallback;
 import android.os.UserHandle;
 import android.security.keymaster.KeymasterCertificateChain;
 import android.security.keystore.ParcelableKeyGenParameterSpec;
+import android.telephony.SubscriptionInfo;
 import android.telephony.data.ApnSetting;
 import com.android.internal.infra.AndroidFuture;
 import android.app.admin.DevicePolicyState;
@@ -281,7 +282,6 @@ interface IDevicePolicyManager {
     Intent createAdminSupportIntent(in String restriction);
     Bundle getEnforcingAdminAndUserDetails(int userId, String restriction);
     EnforcingAdmin getEnforcingAdmin(int userId, String identifier);
-    List<EnforcingAdmin> getEnforcingAdminsForRestriction(int userId, String restriction);
     boolean setApplicationHidden(in ComponentName admin, in String callerPackage, in String packageName, boolean hidden, boolean parent);
     boolean isApplicationHidden(in ComponentName admin, in String callerPackage, in String packageName, boolean parent);
 
@@ -623,6 +623,8 @@ interface IDevicePolicyManager {
 
     void setManagedSubscriptionsPolicy(in ManagedSubscriptionsPolicy policy);
     ManagedSubscriptionsPolicy getManagedSubscriptionsPolicy();
+
+    boolean isSubscriptionEnterpriseManaged(in SubscriptionInfo info, String packageName);
 
     DevicePolicyState getDevicePolicyState();
 

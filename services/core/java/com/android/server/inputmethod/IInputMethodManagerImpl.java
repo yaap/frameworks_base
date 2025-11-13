@@ -29,11 +29,9 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.os.ResultReceiver;
 import android.os.ShellCallback;
-import android.view.MotionEvent;
 import android.view.WindowManager;
 import android.view.inputmethod.CursorAnchorInfo;
 import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.ImeTracker;
 import android.view.inputmethod.InputMethodInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.InputMethodSubtype;
@@ -48,7 +46,6 @@ import com.android.internal.inputmethod.IRemoteAccessibilityInputConnection;
 import com.android.internal.inputmethod.IRemoteInputConnection;
 import com.android.internal.inputmethod.InputBindResult;
 import com.android.internal.inputmethod.InputMethodInfoSafeList;
-import com.android.internal.inputmethod.SoftInputShowHideReason;
 import com.android.internal.inputmethod.StartInputFlags;
 import com.android.internal.inputmethod.StartInputReason;
 import com.android.internal.view.IInputMethodManager;
@@ -113,23 +110,15 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
 
         InputMethodSubtype getLastInputMethodSubtype(@UserIdInt int userId);
 
-        boolean showSoftInput(IInputMethodClient client, IBinder windowToken,
-                @Nullable ImeTracker.Token statsToken, @InputMethodManager.ShowFlags int flags,
-                @MotionEvent.ToolType int lastClickToolType, ResultReceiver resultReceiver,
-                @SoftInputShowHideReason int reason, boolean async);
-
-        boolean hideSoftInput(IInputMethodClient client, IBinder windowToken,
-                @Nullable ImeTracker.Token statsToken, @InputMethodManager.HideFlags int flags,
-                ResultReceiver resultReceiver, @SoftInputShowHideReason int reason, boolean async);
-
         @PermissionVerified(Manifest.permission.TEST_INPUT_METHOD)
         void hideSoftInputFromServerForTest();
 
         void startInputOrWindowGainedFocusAsync(
                 @StartInputReason int startInputReason, IInputMethodClient client,
                 IBinder windowToken, @StartInputFlags int startInputFlags,
-                @WindowManager.LayoutParams.SoftInputModeFlags int softInputMode, int windowFlags,
-                @Nullable EditorInfo editorInfo, IRemoteInputConnection inputConnection,
+                @WindowManager.LayoutParams.SoftInputModeFlags int softInputMode,
+                @WindowManager.LayoutParams.Flags int windowFlags, @Nullable EditorInfo editorInfo,
+                IRemoteInputConnection inputConnection,
                 IRemoteAccessibilityInputConnection remoteAccessibilityInputConnection,
                 int unverifiedTargetSdkVersion, @UserIdInt int userId,
                 @NonNull ImeOnBackInvokedDispatcher imeDispatcher, boolean imeRequestedVisible,
@@ -138,8 +127,9 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
         InputBindResult startInputOrWindowGainedFocus(
                 @StartInputReason int startInputReason, IInputMethodClient client,
                 IBinder windowToken, @StartInputFlags int startInputFlags,
-                @WindowManager.LayoutParams.SoftInputModeFlags int softInputMode, int windowFlags,
-                @Nullable EditorInfo editorInfo, IRemoteInputConnection inputConnection,
+                @WindowManager.LayoutParams.SoftInputModeFlags int softInputMode,
+                @WindowManager.LayoutParams.Flags int windowFlags, @Nullable EditorInfo editorInfo,
+                IRemoteInputConnection inputConnection,
                 IRemoteAccessibilityInputConnection remoteAccessibilityInputConnection,
                 int unverifiedTargetSdkVersion, @UserIdInt int userId,
                 @NonNull ImeOnBackInvokedDispatcher imeDispatcher, boolean imeRequestedVisible);
@@ -290,23 +280,6 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
         return mCallback.getLastInputMethodSubtype(userId);
     }
 
-    @Override
-    public boolean showSoftInput(IInputMethodClient client, IBinder windowToken,
-            @NonNull ImeTracker.Token statsToken, @InputMethodManager.ShowFlags int flags,
-            @MotionEvent.ToolType int lastClickToolType, ResultReceiver resultReceiver,
-            @SoftInputShowHideReason int reason, boolean async) {
-        return mCallback.showSoftInput(client, windowToken, statsToken, flags, lastClickToolType,
-                resultReceiver, reason, async);
-    }
-
-    @Override
-    public boolean hideSoftInput(IInputMethodClient client, IBinder windowToken,
-            @NonNull ImeTracker.Token statsToken, @InputMethodManager.HideFlags int flags,
-            ResultReceiver resultReceiver, @SoftInputShowHideReason int reason, boolean async) {
-        return mCallback.hideSoftInput(client, windowToken, statsToken, flags, resultReceiver,
-                reason, async);
-    }
-
     @EnforcePermission(Manifest.permission.TEST_INPUT_METHOD)
     @Override
     public void hideSoftInputFromServerForTest() {
@@ -320,7 +293,7 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
             @StartInputReason int startInputReason, IInputMethodClient client, IBinder windowToken,
             @StartInputFlags int startInputFlags,
             @WindowManager.LayoutParams.SoftInputModeFlags int softInputMode,
-            int windowFlags, @Nullable EditorInfo editorInfo,
+            @WindowManager.LayoutParams.Flags int windowFlags, @Nullable EditorInfo editorInfo,
             IRemoteInputConnection inputConnection,
             IRemoteAccessibilityInputConnection remoteAccessibilityInputConnection,
             int unverifiedTargetSdkVersion, @UserIdInt int userId,
@@ -336,7 +309,7 @@ final class IInputMethodManagerImpl extends IInputMethodManager.Stub {
             IInputMethodClient client, IBinder windowToken,
             @StartInputFlags int startInputFlags,
             @WindowManager.LayoutParams.SoftInputModeFlags int softInputMode,
-            int windowFlags, @Nullable EditorInfo editorInfo,
+            @WindowManager.LayoutParams.Flags int windowFlags, @Nullable EditorInfo editorInfo,
             IRemoteInputConnection inputConnection,
             IRemoteAccessibilityInputConnection remoteAccessibilityInputConnection,
             int unverifiedTargetSdkVersion, @UserIdInt int userId,

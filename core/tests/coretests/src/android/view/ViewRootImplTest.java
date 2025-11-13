@@ -24,8 +24,8 @@ import static android.view.Surface.FRAME_RATE_CATEGORY_HIGH;
 import static android.view.Surface.FRAME_RATE_CATEGORY_HIGH_HINT;
 import static android.view.Surface.FRAME_RATE_CATEGORY_LOW;
 import static android.view.Surface.FRAME_RATE_CATEGORY_NORMAL;
-import static android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE;
 import static android.view.Surface.FRAME_RATE_COMPATIBILITY_AT_LEAST;
+import static android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE;
 import static android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
 import static android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
 import static android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
@@ -43,13 +43,9 @@ import static android.view.WindowManager.LayoutParams.TYPE_TOAST;
 import static android.view.accessibility.Flags.FLAG_FORCE_INVERT_COLOR;
 import static android.view.flags.Flags.FLAG_ADD_SCHANDLE_TO_VRI_SURFACE;
 import static android.view.flags.Flags.FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY;
-import static android.view.flags.Flags.FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY;
-import static android.view.flags.Flags.FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY;
 import static android.view.flags.Flags.FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY;
 import static android.view.flags.Flags.FLAG_VIEW_VELOCITY_API;
 import static android.view.flags.Flags.toolkitFrameRateBySizeReadOnly;
-import static android.view.flags.Flags.toolkitFrameRateDefaultNormalReadOnly;
-import static android.view.flags.Flags.toolkitFrameRateVelocityMappingReadOnly;
 
 import static com.android.cts.input.inputeventmatchers.InputEventMatchersKt.withKeyCode;
 
@@ -62,18 +58,16 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
 
 import android.annotation.NonNull;
 import android.app.Instrumentation;
 import android.app.UiModeManager;
 import android.content.Context;
-import android.graphics.Color;
 import android.graphics.ForceDarkType;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManagerGlobal;
 import android.os.Binder;
-import android.os.SystemProperties;
+import android.os.VibrationAttributes;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.annotations.RequiresFlagsEnabled;
@@ -96,6 +90,7 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.compatibility.common.util.ShellIdentityUtils;
 import com.android.compatibility.common.util.TestUtils;
 import com.android.cts.input.BlockingQueueEventVerifier;
+import com.android.frameworks.coretests.R;
 import com.android.window.flags.Flags;
 
 import org.hamcrest.Matcher;
@@ -111,6 +106,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Tests for {@link ViewRootImpl}
@@ -173,8 +169,6 @@ public class ViewRootImplTest {
 
             var uiModeManager = sContext.getSystemService(UiModeManager.class);
             uiModeManager.setNightMode(UiModeManager.MODE_NIGHT_NO);
-
-            setForceDarkSysProp(false);
         });
         if (mView != null) {
             sInstrumentation.runOnMainSync(() -> {
@@ -505,7 +499,7 @@ public class ViewRootImplTest {
         ViewRootImpl viewRootImpl = new ViewRootImpl(sContext, display);
 
         boolean result = viewRootImpl.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK,
-                FLAG_IGNORE_GLOBAL_SETTING, 0 /* privFlags */);
+                VibrationAttributes.USAGE_UNKNOWN, FLAG_IGNORE_GLOBAL_SETTING, 0 /* privFlags */);
 
         assertThat(result).isFalse();
     }
@@ -529,8 +523,7 @@ public class ViewRootImplTest {
      */
     @UiThreadTest
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_getDefaultValues() {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -550,8 +543,7 @@ public class ViewRootImplTest {
      */
     @Test
     @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+            FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY})
     public void votePreferredFrameRate_voteFrameRateCategory_visibility_bySize() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -590,8 +582,7 @@ public class ViewRootImplTest {
      */
     @Test
     @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+            FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY})
     public void votePreferredFrameRate_voteFrameRateCategory_smallSize_bySize() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -625,8 +616,7 @@ public class ViewRootImplTest {
      */
     @Test
     @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+            FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY})
     public void votePreferredFrameRate_voteFrameRateCategory_normalSize_bySize() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -663,9 +653,7 @@ public class ViewRootImplTest {
      * Also, mIsFrameRateBoosting should be true when the visibility becomes visible
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRateCategory_visibility_defaultHigh()
             throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
@@ -713,8 +701,7 @@ public class ViewRootImplTest {
         sInstrumentation.runOnMainSync(() -> {
             mView.setVisibility(View.VISIBLE);
             mView.invalidate();
-            int expected = toolkitFrameRateDefaultNormalReadOnly()
-                    ? FRAME_RATE_CATEGORY_NORMAL : FRAME_RATE_CATEGORY_HIGH;
+            int expected = FRAME_RATE_CATEGORY_NORMAL;
             runAfterDraw(() -> assertEquals(expected,
                     mViewRootImpl.getLastPreferredFrameRateCategory()));
         });
@@ -727,9 +714,7 @@ public class ViewRootImplTest {
      * <7%: FRAME_RATE_CATEGORY_NORMAL
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRateCategory_smallSize_defaultHigh()
             throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
@@ -765,9 +750,7 @@ public class ViewRootImplTest {
      * >=7% : FRAME_RATE_CATEGORY_HIGH
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRateCategory_normalSize_defaultHigh()
             throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
@@ -792,8 +775,7 @@ public class ViewRootImplTest {
         waitForFrameRateCategoryToSettle(mView);
         sInstrumentation.runOnMainSync(() -> {
             mView.invalidate();
-            int expected = toolkitFrameRateDefaultNormalReadOnly()
-                    ? FRAME_RATE_CATEGORY_NORMAL : FRAME_RATE_CATEGORY_HIGH;
+            int expected = FRAME_RATE_CATEGORY_NORMAL;
             runAfterDraw(() -> assertEquals(expected,
                     mViewRootImpl.getLastPreferredFrameRateCategory()));
         });
@@ -805,8 +787,7 @@ public class ViewRootImplTest {
      * It should take the max value among all of the voted categories per frame.
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRateCategory_aggregate() {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -854,8 +835,7 @@ public class ViewRootImplTest {
      * prioritize 60Hz..
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRate_aggregate() {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -869,25 +849,20 @@ public class ViewRootImplTest {
                     FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
             assertFalse(mViewRootImpl.isFrameRateConflicted());
             mViewRootImpl.votePreferredFrameRate(24, FRAME_RATE_COMPATIBILITY_AT_LEAST);
-            if (toolkitFrameRateVelocityMappingReadOnly()) {
-                assertEquals(24, mViewRootImpl.getPreferredFrameRate(), 0.1);
-                assertEquals(FRAME_RATE_COMPATIBILITY_AT_LEAST,
-                        mViewRootImpl.getFrameRateCompatibility());
-                assertFalse(mViewRootImpl.isFrameRateConflicted());
-            } else {
-                assertEquals(FRAME_RATE_CATEGORY_HIGH,
-                        mViewRootImpl.getPreferredFrameRateCategory());
-            }
+            assertEquals(24, mViewRootImpl.getPreferredFrameRate(), 0.1);
+            assertEquals(FRAME_RATE_COMPATIBILITY_AT_LEAST,
+                    mViewRootImpl.getFrameRateCompatibility());
+            assertFalse(mViewRootImpl.isFrameRateConflicted());
+
             mViewRootImpl.votePreferredFrameRate(30, FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
             assertEquals(30, mViewRootImpl.getPreferredFrameRate(), 0.1);
             // If there is a conflict, then set compatibility to
             // FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
             assertEquals(FRAME_RATE_COMPATIBILITY_FIXED_SOURCE,
                     mViewRootImpl.getFrameRateCompatibility());
-            if (toolkitFrameRateVelocityMappingReadOnly()) {
-                // Should be true since there is a conflict between 24 and 30.
-                assertTrue(mViewRootImpl.isFrameRateConflicted());
-            }
+
+            // Should be true since there is a conflict between 24 and 30.
+            assertTrue(mViewRootImpl.isFrameRateConflicted());
 
             mView.invalidate();
         });
@@ -896,14 +871,10 @@ public class ViewRootImplTest {
         sInstrumentation.runOnMainSync(() -> {
             assertFalse(mViewRootImpl.isFrameRateConflicted());
             mViewRootImpl.votePreferredFrameRate(60, FRAME_RATE_COMPATIBILITY_AT_LEAST);
-            if (toolkitFrameRateVelocityMappingReadOnly()) {
-                assertEquals(60, mViewRootImpl.getPreferredFrameRate(), 0.1);
-                assertEquals(FRAME_RATE_COMPATIBILITY_AT_LEAST,
-                        mViewRootImpl.getFrameRateCompatibility());
-            } else {
-                assertEquals(FRAME_RATE_CATEGORY_HIGH,
-                        mViewRootImpl.getPreferredFrameRateCategory());
-            }
+            assertEquals(60, mViewRootImpl.getPreferredFrameRate(), 0.1);
+            assertEquals(FRAME_RATE_COMPATIBILITY_AT_LEAST,
+                    mViewRootImpl.getFrameRateCompatibility());
+
             assertFalse(mViewRootImpl.isFrameRateConflicted());
             mViewRootImpl.votePreferredFrameRate(120, FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
             assertEquals(120, mViewRootImpl.getPreferredFrameRate(), 0.1);
@@ -928,9 +899,7 @@ public class ViewRootImplTest {
      * submit your preferred choice to the ViewRootImpl.
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRate_category() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -985,9 +954,7 @@ public class ViewRootImplTest {
      */
     @Test
     @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_VIEW_VELOCITY_API,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+            FLAG_VIEW_VELOCITY_API})
     public void votePreferredFrameRate_voteFrameRateCategory_velocityToHigh() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1012,16 +979,10 @@ public class ViewRootImplTest {
             mView.setFrameContentVelocity(100);
             mView.invalidate();
             runAfterDraw(() -> {
-                if (toolkitFrameRateVelocityMappingReadOnly()) {
-                    int expected = toolkitFrameRateBySizeReadOnly()
-                            ? FRAME_RATE_CATEGORY_LOW : FRAME_RATE_CATEGORY_NORMAL;
-                    assertEquals(expected, mViewRootImpl.getLastPreferredFrameRateCategory());
-                    assertTrue(mViewRootImpl.getLastPreferredFrameRate() >= 60f);
-                } else {
-                    assertEquals(FRAME_RATE_CATEGORY_HIGH,
-                            mViewRootImpl.getLastPreferredFrameRateCategory());
-                    assertEquals(0, mViewRootImpl.getLastPreferredFrameRate(), 0.1);
-                }
+                int expected = toolkitFrameRateBySizeReadOnly()
+                        ? FRAME_RATE_CATEGORY_LOW : FRAME_RATE_CATEGORY_NORMAL;
+                assertEquals(expected, mViewRootImpl.getLastPreferredFrameRateCategory());
+                assertTrue(mViewRootImpl.getLastPreferredFrameRate() >= 60f);
             });
         });
         waitForAfterDraw();
@@ -1032,8 +993,7 @@ public class ViewRootImplTest {
      * We should boost the frame rate if the value of mInsetsAnimationRunning is true.
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_insetsAnimation() {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1072,8 +1032,7 @@ public class ViewRootImplTest {
      * Test FrameRateBoostOnTouchEnabled API
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_frameRateBoostOnTouch() {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1108,8 +1067,7 @@ public class ViewRootImplTest {
      * mPreferredFrameRate should be set to 0.
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRateTimeOut() throws InterruptedException {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1149,9 +1107,7 @@ public class ViewRootImplTest {
      * A View should either vote a frame rate or a frame rate category instead of both.
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_voteFrameRateOnly() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1170,8 +1126,7 @@ public class ViewRootImplTest {
             mView.setRequestedFrameRate(frameRate);
             mView.invalidate();
             runAfterDraw(() -> {
-                int expected = toolkitFrameRateDefaultNormalReadOnly()
-                        ? FRAME_RATE_CATEGORY_NORMAL : FRAME_RATE_CATEGORY_HIGH;
+                int expected = FRAME_RATE_CATEGORY_NORMAL;
                 assertEquals(expected, mViewRootImpl.getLastPreferredFrameRateCategory());
                 assertEquals(frameRate, mViewRootImpl.getLastPreferredFrameRate(), 0.1);
             });
@@ -1203,9 +1158,7 @@ public class ViewRootImplTest {
      * - otherwise, use the previous category value.
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_infrequentLayer_defaultHigh() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1215,8 +1168,7 @@ public class ViewRootImplTest {
         mView = new View(sContext);
         WindowManager.LayoutParams wmlp = new WindowManager.LayoutParams(TYPE_APPLICATION_OVERLAY);
         wmlp.token = new Binder(); // Set a fake token to bypass 'is your activity running' check
-        int expected = toolkitFrameRateDefaultNormalReadOnly()
-                    ? FRAME_RATE_CATEGORY_NORMAL : FRAME_RATE_CATEGORY_HIGH;
+        int expected = FRAME_RATE_CATEGORY_NORMAL;
 
         sInstrumentation.runOnMainSync(() -> {
             WindowManager wm = sContext.getSystemService(WindowManager.class);
@@ -1280,8 +1232,6 @@ public class ViewRootImplTest {
 
     @Test
     @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY,
             FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY})
     public void votePreferredFrameRate_infrequentLayer_smallView_voteForLow() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
@@ -1357,8 +1307,7 @@ public class ViewRootImplTest {
      * Test the IsFrameRatePowerSavingsBalanced values are properly set
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_isFrameRatePowerSavingsBalanced() {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1393,9 +1342,7 @@ public class ViewRootImplTest {
      * 2. If FT2-FT1 > 15ms && FT3-FT2 > 15ms -> vote for NORMAL category
      */
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_applyTextureViewHeuristic() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1442,9 +1389,7 @@ public class ViewRootImplTest {
     }
 
     @Test
-    @RequiresFlagsEnabled({FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_FUNCTION_ENABLING_READ_ONLY,
-            FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY})
+    @RequiresFlagsEnabled(FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY)
     public void votePreferredFrameRate_resetWhenDestroyingSurface()
             throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
@@ -1481,7 +1426,6 @@ public class ViewRootImplTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_TOOLKIT_FRAME_RATE_VIEW_ENABLING_READ_ONLY)
     public void votePreferredFrameRate_reset() throws Throwable {
         if (!ViewProperties.vrr_enabled().orElse(true)) {
             return;
@@ -1532,14 +1476,12 @@ public class ViewRootImplTest {
 
     @Test
     @EnableFlags(FLAG_FORCE_INVERT_COLOR)
-    public void
-            determineForceDarkType_isLightThemeAndIsLightBackground_returnsForceInvertColorDark()
-            throws Exception {
+    public void determineForceDarkType_isLightTheme_returnsForceInvertColorDark() throws Exception {
         // Set up configurations for force invert color
         waitForSystemNightModeActivated(true);
         enableForceInvertColor(true);
 
-        setUpViewAttributes(/* isLightTheme= */ true, /* isLightBackground = */ true);
+        setUpViewAttributes(/* isLightTheme= */ true, /* isForceDarkAllowed= */ false);
 
         TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
                 () -> (mViewRootImpl.determineForceDarkType()
@@ -1548,41 +1490,12 @@ public class ViewRootImplTest {
 
     @Test
     @EnableFlags(FLAG_FORCE_INVERT_COLOR)
-    public void determineForceDarkType_isLightThemeAndNotLightBackground_returnsNone()
-            throws Exception {
+    public void determineForceDarkType_notLightTheme_returnsNone() throws Exception {
         // Set up configurations for force invert color
         waitForSystemNightModeActivated(true);
         enableForceInvertColor(true);
 
-        setUpViewAttributes(/* isLightTheme= */ true, /* isLightBackground = */ false);
-
-        TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
-                () -> (mViewRootImpl.determineForceDarkType() == ForceDarkType.NONE));
-    }
-
-    @Test
-    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
-    public void determineForceDarkType_notLightThemeAndIsLightBackground_returnsNone()
-            throws Exception {
-        // Set up configurations for force invert color
-        waitForSystemNightModeActivated(true);
-        enableForceInvertColor(true);
-
-        setUpViewAttributes(/* isLightTheme= */ false, /* isLightBackground = */ true);
-
-        TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
-                () -> (mViewRootImpl.determineForceDarkType() == ForceDarkType.NONE));
-    }
-
-    @Test
-    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
-    public void determineForceDarkType_notLightThemeAndNotLightBackground_returnsNone()
-            throws Exception {
-        // Set up configurations for force invert color
-        waitForSystemNightModeActivated(true);
-        enableForceInvertColor(true);
-
-        setUpViewAttributes(/* isLightTheme= */ false, /* isLightBackground = */ false);
+        setUpViewAttributes(/* isLightTheme= */ false, /* isForceDarkAllowed= */ false);
 
         TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
                 () -> (mViewRootImpl.determineForceDarkType() == ForceDarkType.NONE));
@@ -1591,19 +1504,14 @@ public class ViewRootImplTest {
     @Test
     @EnableFlags(FLAG_FORCE_INVERT_COLOR)
     public void forceInvertOffForceDarkOff_forceDarkModeDisabled() {
-        ShellIdentityUtils.invokeWithShellPermissions(() -> {
-            Settings.Secure.putInt(
-                    sContext.getContentResolver(),
-                    Settings.Secure.ACCESSIBILITY_FORCE_INVERT_COLOR_ENABLED,
-                    /* value= */ 0
-            );
+        // Set up configurations for force invert color
+        waitForSystemNightModeActivated(true);
+        enableForceInvertColor(false);
 
-            // TODO(b/297556388): figure out how to set this without getting blocked by SELinux
-            assumeTrue(setForceDarkSysProp(true));
-        });
-
-        sInstrumentation.runOnMainSync(() ->
-                mViewRootImpl.updateConfiguration(sContext.getDisplayNoVerify().getDisplayId()));
+        // Set up view attributes
+        setUpViewAttributes(
+                /* isLightTheme= */ false,
+                /* isForceDarkAllowed= */ false);
 
         assertThat(mViewRootImpl.determineForceDarkType()).isEqualTo(ForceDarkType.NONE);
     }
@@ -1611,18 +1519,29 @@ public class ViewRootImplTest {
     @Test
     @EnableFlags(FLAG_FORCE_INVERT_COLOR)
     public void forceInvertOffForceDarkOn_forceDarkModeEnabled() {
-        ShellIdentityUtils.invokeWithShellPermissions(() -> {
-            Settings.Secure.putInt(
-                    sContext.getContentResolver(),
-                    Settings.Secure.ACCESSIBILITY_FORCE_INVERT_COLOR_ENABLED,
-                    /* value= */ 0
-            );
+        // Set up configurations for force invert color
+        waitForSystemNightModeActivated(true);
+        enableForceInvertColor(false);
 
-            assumeTrue(setForceDarkSysProp(true));
-        });
+        // Set up view attributes
+        setUpViewAttributes(
+                /* isLightTheme= */ true,
+                /* isForceDarkAllowed= */ true);
 
-        sInstrumentation.runOnMainSync(() ->
-                mViewRootImpl.updateConfiguration(sContext.getDisplayNoVerify().getDisplayId()));
+        assertThat(mViewRootImpl.determineForceDarkType()).isEqualTo(ForceDarkType.FORCE_DARK);
+    }
+
+    @Test
+    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
+    public void forceInvertOnForceDarkOn_forceDarkModeEnabled() {
+        // Set up configurations for force invert color
+        waitForSystemNightModeActivated(true);
+        enableForceInvertColor(true);
+
+        // Setup view attributes
+        setUpViewAttributes(
+                /* isLightTheme= */ true,
+                /* isForceDarkAllowed= */ true);
 
         assertThat(mViewRootImpl.determineForceDarkType()).isEqualTo(ForceDarkType.FORCE_DARK);
     }
@@ -1710,16 +1629,37 @@ public class ViewRootImplTest {
         assertThat(bounds.height()).isAtLeast(strokeWidth * 2);
     }
 
-    private boolean setForceDarkSysProp(boolean isForceDarkEnabled) {
+    @Test
+    public void testOffThreadRendererViewsAccess() throws Throwable {
+        mView = new View(sContext);
+        attachViewToWindow(mView);
+        AtomicInteger threadRunning = new AtomicInteger(1);
+        View[] views = new View[10];
+        for (int i = 0; i < 10; i++) {
+            views[i] = new View(sContext);
+        }
+        Thread offThread = new Thread(() -> {
+            while (threadRunning.get() > 0) {
+                for (int i = 0; i < 10; i++) {
+                    mViewRootImpl.addThreadedRendererView(views[i]);
+                }
+                for (int i = 0; i < 10; i++) {
+                    mViewRootImpl.removeThreadedRendererView(views[i]);
+                }
+            }
+        });
+        offThread.start();
         try {
-            SystemProperties.set(
-                    ThreadedRenderer.DEBUG_FORCE_DARK,
-                    Boolean.toString(isForceDarkEnabled)
-            );
-            return true;
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to set force_dark sysprop", e);
-            return false;
+            for (int i = 0; i < 1000; i++) {
+                sInstrumentation.runOnMainSync(() -> {
+                    mView.invalidate();
+                    runAfterDraw(() -> {
+                    });
+                });
+                waitForAfterDraw();
+            }
+        } finally {
+            threadRunning.set(0);
         }
     }
 
@@ -1849,10 +1789,23 @@ public class ViewRootImplTest {
         });
     }
 
-    private void setUpViewAttributes(boolean isLightTheme, boolean isLightBackground) {
+    private void setUpViewAttributes(boolean isLightTheme, boolean isForceDarkAllowed) {
         ShellIdentityUtils.invokeWithShellPermissions(() -> {
-            sContext.setTheme(isLightTheme ? android.R.style.Theme_DeviceDefault_Light
-                    : android.R.style.Theme_DeviceDefault);
+            int themeId;
+            if (isForceDarkAllowed) {
+                if (isLightTheme) {
+                    themeId = R.style.ForceDarkAllowed_Light;
+                } else {
+                    themeId = R.style.ForceDarkAllowed_Dark;
+                }
+            } else {
+                if (isLightTheme) {
+                    themeId = R.style.ForceDarkAllowedFalse_Light;
+                } else {
+                    themeId = R.style.ForceDarkAllowedFalse_Dark;
+                }
+            }
+            sContext.setTheme(themeId);
         });
 
         sInstrumentation.runOnMainSync(() -> {
@@ -1861,11 +1814,6 @@ public class ViewRootImplTest {
                     TYPE_APPLICATION_OVERLAY);
             layoutParams.token = new Binder();
             view.setLayoutParams(layoutParams);
-            if (isLightBackground) {
-                view.setBackgroundColor(Color.WHITE);
-            } else {
-                view.setBackgroundColor(Color.BLACK);
-            }
             mViewRootImpl.setView(view, layoutParams, /* panelParentView= */ null);
             mViewRootImpl.updateConfiguration(sContext.getDisplayNoVerify().getDisplayId());
         });

@@ -154,6 +154,13 @@ interface IActivityManager {
 
     /** Logs API state change to associate with an FGS, used for FGS Type Metrics */
     oneway void logFgsApiStateChanged(int apiType, int state, int appUid, int appPid);
+
+    @UnsupportedAppUsage
+    void registerProcessObserver(in IProcessObserver observer);
+    @UnsupportedAppUsage
+    void unregisterProcessObserver(in IProcessObserver observer);
+    @UnsupportedAppUsage
+    List<ActivityManager.RunningAppProcessInfo> getRunningAppProcesses();
     // =============== End of transactions used on native side as well ============================
 
     // Special low-level communication with activity manager.
@@ -228,7 +235,7 @@ interface IActivityManager {
     void updateServiceGroup(in IServiceConnection connection, int group, int importance);
     @UnsupportedAppUsage
     boolean unbindService(in IServiceConnection connection);
-    void publishService(in IBinder token, in Intent intent, in IBinder service);
+    void publishService(in IBinder token, in IBinder bindToken, in IBinder service);
     @UnsupportedAppUsage(maxTargetSdk = 30, trackingBug = 170729553)
     void setDebugApp(in String packageName, boolean waitForDebugger, boolean persistent);
     void setAgentApp(in String packageName, @nullable String agent);
@@ -294,8 +301,7 @@ interface IActivityManager {
     @UnsupportedAppUsage
     ParceledListSlice getRecentTasks(int maxNum, int flags, int userId);
     @UnsupportedAppUsage
-    oneway void serviceDoneExecuting(in IBinder token, int type, int startId, int res,
-            in Intent intent);
+    oneway void serviceDoneExecuting(in IBinder token, int type, int startId, int res);
     /** @deprecated  Use {@link #getIntentSenderWithFeature} instead */
     @UnsupportedAppUsage(maxTargetSdk=29, publicAlternatives="Use {@link PendingIntent#getIntentSender()} instead")
     IIntentSender getIntentSender(int type, in String packageName, in IBinder token,
@@ -321,7 +327,7 @@ interface IActivityManager {
     oneway void removeContentProvider(in IBinder connection, boolean stable);
     @UnsupportedAppUsage
     void setRequestedOrientation(in IBinder token, int requestedOrientation);
-    void unbindFinished(in IBinder token, in Intent service);
+    void unbindFinished(in IBinder token, in IBinder bindToken);
     @UnsupportedAppUsage
     void setProcessImportant(in IBinder token, int pid, boolean isForeground, String reason);
     void setServiceForeground(in ComponentName className, in IBinder token,
@@ -344,8 +350,6 @@ interface IActivityManager {
     @UnsupportedAppUsage
     List<ActivityManager.RunningServiceInfo> getServices(int maxNum, int flags);
     // Retrieve running application processes in the system
-    @UnsupportedAppUsage
-    List<ActivityManager.RunningAppProcessInfo> getRunningAppProcesses();
     IBinder peekService(in Intent service, in String resolvedType, in String callingPackage);
     // Turn on/off profiling in a particular process.
     @UnsupportedAppUsage(maxTargetSdk = 30, trackingBug = 170729553)
@@ -397,6 +401,8 @@ interface IActivityManager {
     boolean dumpHeap(in String process, int userId, boolean managed, boolean mallocInfo,
             boolean runGc, in String dumpBitmaps, in String path, in ParcelFileDescriptor fd,
             in RemoteCallback finishCallback);
+    void dumpBitmapsProto(in ParcelFileDescriptor fd, in String[] processes,
+            int userId, boolean allPkgs, in String dumpFormat);
     @UnsupportedAppUsage
     boolean isUserRunning(int userid, int flags);
     @UnsupportedAppUsage(maxTargetSdk = 30, trackingBug = 170729553)
@@ -405,13 +411,11 @@ interface IActivityManager {
     boolean switchUser(int userid);
     String getSwitchingFromUserMessage(int userId);
     String getSwitchingToUserMessage(int userId);
+    @EnforcePermission("INTERACT_ACROSS_USERS_FULL")
+    boolean logoutUser(int userId);
     @UnsupportedAppUsage
     void setStopUserOnSwitch(int value);
     boolean removeTask(int taskId);
-    @UnsupportedAppUsage
-    void registerProcessObserver(in IProcessObserver observer);
-    @UnsupportedAppUsage
-    void unregisterProcessObserver(in IProcessObserver observer);
     boolean isIntentSenderTargetedToPackage(in IIntentSender sender);
     @UnsupportedAppUsage
     void updatePersistentConfiguration(in Configuration values);

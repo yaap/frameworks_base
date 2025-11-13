@@ -16,10 +16,12 @@
 
 package com.android.systemui.doze;
 
+import static com.android.systemui.Flags.removeAodCarMode;
 import static com.android.systemui.keyguard.WakefulnessLifecycle.WAKEFULNESS_AWAKE;
 import static com.android.systemui.keyguard.WakefulnessLifecycle.WAKEFULNESS_WAKING;
 
 import android.annotation.MainThread;
+import android.annotation.Nullable;
 import android.content.res.Configuration;
 import android.hardware.display.AmbientDisplayConfiguration;
 import android.util.Log;
@@ -32,6 +34,8 @@ import com.android.systemui.doze.dagger.DozeScope;
 import com.android.systemui.doze.dagger.WrappedService;
 import com.android.systemui.keyguard.WakefulnessLifecycle;
 import com.android.systemui.keyguard.WakefulnessLifecycle.Wakefulness;
+import com.android.systemui.minmode.MinModeManager;
+import com.android.systemui.minmode.MinModeManagerUtilsKt;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.util.Assert;
@@ -39,6 +43,7 @@ import com.android.systemui.util.wakelock.WakeLock;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Optional;
 
 import javax.inject.Inject;
 
@@ -84,8 +89,16 @@ public class DozeMachine {
         DOZE_AOD_PAUSED,
         /** AOD, prox is near, transitions to DOZE_AOD_PAUSED after a timeout. */
         DOZE_AOD_PAUSING,
-        /** Always-on doze. Device is awake, showing docking UI and listening for pulse triggers. */
-        DOZE_AOD_DOCKED;
+        /**
+         * Always-on doze. Device is awake, showing docking UI and listening
+         * for pulse triggers.
+        */
+        DOZE_AOD_DOCKED,
+        /**
+         * Always-on doze. Device is awake, showing min-mode UI and listening
+         * for pulse triggers.
+        */
+        DOZE_AOD_MINMODE;
 
         boolean canPulse() {
             switch (this) {
@@ -94,6 +107,7 @@ public class DozeMachine {
                 case DOZE_AOD_PAUSED:
                 case DOZE_AOD_PAUSING:
                 case DOZE_AOD_DOCKED:
+                case DOZE_AOD_MINMODE:
                     return true;
                 default:
                     return false;
@@ -106,6 +120,7 @@ public class DozeMachine {
                 case DOZE_PULSING:
                 case DOZE_PULSING_BRIGHT:
                 case DOZE_AOD_DOCKED:
+                case DOZE_AOD_MINMODE:
                     return true;
                 default:
                     return false;
@@ -113,7 +128,7 @@ public class DozeMachine {
         }
 
         boolean isAlwaysOn() {
-            return this == DOZE_AOD || this == DOZE_AOD_DOCKED;
+            return this == DOZE_AOD || this == DOZE_AOD_DOCKED || this == DOZE_AOD_MINMODE;
         }
 
         int screenState(DozeParameters parameters) {
@@ -132,6 +147,7 @@ public class DozeMachine {
                 case DOZE_PULSING:
                 case DOZE_PULSING_BRIGHT:
                 case DOZE_AOD_DOCKED:
+                case DOZE_AOD_MINMODE:
                     return Display.STATE_ON;
                 case DOZE_AOD:
                 case DOZE_AOD_PAUSING:
@@ -148,6 +164,7 @@ public class DozeMachine {
     private final WakefulnessLifecycle mWakefulnessLifecycle;
     private final DozeHost mDozeHost;
     private final DockManager mDockManager;
+    private final Optional<MinModeManager> mMinModeManager;
     private final Part[] mParts;
     private final UserTracker mUserTracker;
     private final ArrayList<State> mQueuedRequests = new ArrayList<>();
@@ -160,7 +177,7 @@ public class DozeMachine {
     public DozeMachine(@WrappedService Service service,
             AmbientDisplayConfiguration ambientDisplayConfig,
             WakeLock wakeLock, WakefulnessLifecycle wakefulnessLifecycle,
-            DozeLog dozeLog, DockManager dockManager,
+            DozeLog dozeLog, DockManager dockManager, Optional<MinModeManager> minModeManager,
             DozeHost dozeHost, Part[] parts, UserTracker userTracker) {
         mDozeService = service;
         mAmbientDisplayConfig = ambientDisplayConfig;
@@ -168,6 +185,7 @@ public class DozeMachine {
         mWakeLock = wakeLock;
         mDozeLog = dozeLog;
         mDockManager = dockManager;
+        mMinModeManager = minModeManager;
         mDozeHost = dozeHost;
         mParts = parts;
         mUserTracker = userTracker;
@@ -258,16 +276,16 @@ public class DozeMachine {
     }
 
     /**
-     * @return the current state.
-     *
-     * This must not be called during a transition.
+     * @return the current state. Returns null if the DozeMachine is currently executing a
+     * transition.
      */
     @MainThread
-    public State getState() {
+    public @Nullable State getState() {
         Assert.isMainThread();
         if (isExecutingTransition()) {
-            throw new IllegalStateException("Cannot get state because there were pending "
-                    + "transitions: " + mQueuedRequests);
+            Log.w(TAG, "Returning null for DozeMachine.getState because there were pending"
+                    + " transitions: " + mQueuedRequests);
+            return null;
         }
         return mState;
     }
@@ -380,9 +398,13 @@ public class DozeMachine {
         }
         if (mUiModeType == Configuration.UI_MODE_TYPE_CAR
                 && (requestedState.canPulse() || requestedState.staysAwake())) {
-            Log.i(TAG, "Doze is suppressed with all triggers disabled as car mode is active");
-            mDozeLog.traceCarModeStarted();
-            return State.DOZE_SUSPEND_TRIGGERS;
+            if (removeAodCarMode()) {
+                Log.d(TAG, "skip applying car mode");
+            } else {
+                Log.i(TAG, "Doze is suppressed with all triggers disabled as car mode is active");
+                mDozeLog.traceCarModeStarted();
+                return State.DOZE_SUSPEND_TRIGGERS;
+            }
         }
         if (mDozeHost.isAlwaysOnSuppressed() && requestedState.isAlwaysOn()) {
             Log.i(TAG, "Doze is suppressed by an app. Suppressing state: " + requestedState);
@@ -396,6 +418,7 @@ public class DozeMachine {
         }
         if ((mState == State.DOZE_AOD_PAUSED || mState == State.DOZE_AOD_PAUSING
                 || mState == State.DOZE_AOD || mState == State.DOZE
+                || mState == State.DOZE_AOD_MINMODE
                 || mState == State.DOZE_AOD_DOCKED || mState == State.DOZE_SUSPEND_TRIGGERS)
                 && requestedState == State.DOZE_PULSE_DONE) {
             Log.i(TAG, "Dropping pulse done because current state is already done: " + mState);
@@ -425,7 +448,11 @@ public class DozeMachine {
             case DOZE_PULSE_DONE:
                 final State nextState;
                 @Wakefulness int wakefulness = mWakefulnessLifecycle.getWakefulness();
-                if (state != State.INITIALIZED && (wakefulness == WAKEFULNESS_AWAKE
+                if (state == State.INITIALIZED &&
+                        mMinModeManager.isPresent() &&
+                        MinModeManagerUtilsKt.isMinModeAvailable(mMinModeManager.get())) {
+                    nextState = State.DOZE_AOD_MINMODE;
+                } else if (state != State.INITIALIZED && (wakefulness == WAKEFULNESS_AWAKE
                         || wakefulness == WAKEFULNESS_WAKING)) {
                     nextState = State.FINISH;
                 } else if (mDockManager.isDocked()) {

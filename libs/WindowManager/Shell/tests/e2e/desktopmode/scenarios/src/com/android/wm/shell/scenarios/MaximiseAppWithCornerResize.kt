@@ -18,6 +18,7 @@ package com.android.wm.shell.scenarios
 
 import android.app.Instrumentation
 import android.tools.NavBar
+import android.tools.PlatformConsts.DEFAULT_DISPLAY
 import android.tools.Rotation
 import android.tools.flicker.rules.ChangeDisplayOrientationRule
 import android.tools.traces.parsers.WindowManagerStateHelper
@@ -28,8 +29,8 @@ import com.android.server.wm.flicker.helpers.DesktopModeAppHelper
 import com.android.server.wm.flicker.helpers.DesktopModeAppHelper.AppProperty
 import com.android.server.wm.flicker.helpers.NonResizeableAppHelper
 import com.android.server.wm.flicker.helpers.SimpleAppHelper
-import com.android.window.flags.Flags
 import com.android.wm.shell.Utils
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import org.junit.After
 import org.junit.Assume
 import org.junit.Before
@@ -41,14 +42,14 @@ import org.junit.Test
 abstract class MaximiseAppWithCornerResize(
     val rotation: Rotation = Rotation.ROTATION_0,
     val appProperty: AppProperty = AppProperty.STANDARD
-) {
+) : TestScenarioBase() {
 
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
     private val tapl = LauncherInstrumentation()
     private val wmHelper = WindowManagerStateHelper(instrumentation)
     private val device = UiDevice.getInstance(instrumentation)
     private val maxResizeChange = 3000
-    private val testApp =
+    val testApp =
         DesktopModeAppHelper(
             when (appProperty) {
                 AppProperty.STANDARD -> SimpleAppHelper(instrumentation)
@@ -62,7 +63,10 @@ abstract class MaximiseAppWithCornerResize(
 
     @Before
     fun setup() {
-        Assume.assumeTrue(Flags.enableDesktopWindowingMode() && tapl.isTablet)
+        Assume.assumeTrue(
+            DesktopState.fromContext(instrumentation.context)
+                .isDesktopModeSupportedOnDisplay(DEFAULT_DISPLAY)
+        )
         tapl.setEnableRotation(true)
         tapl.setExpectedRotation(rotation.value)
         ChangeDisplayOrientationRule.setRotation(rotation)

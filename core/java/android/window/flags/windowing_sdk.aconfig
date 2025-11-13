@@ -7,13 +7,6 @@ container: "system"
 
 flag {
     namespace: "windowing_sdk"
-    name: "task_fragment_system_organizer_flag"
-    description: "Whether the TaskFragment system organizer feature is enabled"
-    bug: "284050041"
-}
-
-flag {
-    namespace: "windowing_sdk"
     name: "activity_embedding_interactive_divider_flag"
     description: "Whether the interactive divider feature is enabled"
     bug: "293654166"
@@ -44,13 +37,6 @@ flag {
     description: "Properties to allow apps and activities to opt-in to cover display rendering"
     bug: "312530526"
     is_fixed_read_only: true
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "activity_embedding_animation_customization_flag"
-    description: "Whether the animation customization feature for AE is enabled"
-    bug: "293658614"
 }
 
 flag {
@@ -104,64 +90,10 @@ flag {
 }
 
 flag {
-    namespace: "windowing_sdk"
-    name: "track_system_ui_context_before_wms"
-    description: "Keep track of SystemUiContext before WMS is initialized"
-    bug: "384428048"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "condense_configuration_change_for_simple_mode"
-    description: "Condense configuration change for simple mode"
-    bug: "356738240"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "car_framework"
+    namespace: "aaos_core_contrib"
     name: "safe_region_letterboxing"
     description: "Enables letterboxing for a safe region"
     bug: "380132497"
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "fix_layout_existing_task"
-    description: "Layout the existing task to ensure the bounds are updated."
-    bug: "390291971"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "cleanup_dispatch_pending_transactions_remote_exception"
-    description: "Refactor to cleanup for RemoteException from dispatchPendingTransactions"
-    bug: "323801078"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "support_widget_intents_on_connected_display"
-    description: "Launch widget intents on originating display"
-    bug: "358368849"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -177,9 +109,16 @@ flag {
 
 flag {
     namespace: "windowing_sdk"
-    name: "fix_view_root_call_trace"
-    description: "Do not set mAdded=true unless #setView finished successfully"
-    bug: "385705687"
+    name: "activity_embedding_metrics"
+    description: "Metrics for Activity Embedding usage in WM Extensions"
+    bug: "399465821"
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "enable_window_context_override_type"
+    description: "Enable WindowContext to attach parent window and override window type"
+    bug: "398759994"
     is_fixed_read_only: true
     metadata {
         purpose: PURPOSE_BUGFIX
@@ -188,7 +127,110 @@ flag {
 
 flag {
     namespace: "windowing_sdk"
-    name: "activity_embedding_metrics"
-    description: "Metrics for Activity Embedding usage in WM Extensions"
-    bug: "399465821"
+    name: "enable_experimental_bubbles_controller"
+    description: "Experiment to allow apps to request Bubbles actions in WM Shell"
+    bug: "407149510"
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "force_show_system_bar_for_bubble"
+    description: "Ensure system bar are shown for Bubble"
+    bug: "329124127"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "reparent_to_default_with_display_removal"
+    description: "Enable WindowContext to reparent to the default display with display detached"
+    bug: "404532651"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "respect_leaf_task_bounds"
+    description: "Respect the override bounds of the leaf tasks that are organized by root tasks"
+    bug: "410745462"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "root_task_for_bubble"
+    description: "Using a root task to manage Bubble tasks"
+    bug: "407669465"
+    is_fixed_read_only: true
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fix_fullscreen_in_multi_window"
+    description: "Let leaf task inherits the windowing mode from the root task."
+    bug: "408087047"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fix_layout_restored_task"
+    description: "Layout the restored-from-recent task to ensure the bounds are updated."
+    bug: "416441150"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fix_moving_unfocused_task"
+    description: "Avoid moving the visible and unfocused multi-window mode Task to front"
+    bug: "399860102"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fix_set_adjacent_task_fragments_with_params"
+    description: "Fix the params set through setAdjacentTaskFragments"
+    bug: "418159069"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "update_task_min_dimensions_with_root_activity"
+    description: "Update minWidth/Height when the root activity is changed."
+    bug: "416987720"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fallback_to_focused_display"
+    description: "Use the focused display as the fallback"
+    bug: "406967985"
+    is_fixed_read_only: true
 }

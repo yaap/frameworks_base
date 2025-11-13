@@ -48,6 +48,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 @SmallTest
+@android.platform.test.annotations.EnabledOnRavenwood
 class EditTilesListInteractorTest : SysuiTestCase() {
     private val kosmos = testKosmos()
 
@@ -129,6 +130,7 @@ class EditTilesListInteractorTest : SysuiTestCase() {
                         label = Text.Loaded(tileName),
                         appName = Text.Loaded(appName),
                         category = TileCategory.PROVIDED_BY_APP,
+                        appIcon = null,
                     )
 
                 assertThat(editTiles.customTiles).hasSize(1)
@@ -180,6 +182,7 @@ class EditTilesListInteractorTest : SysuiTestCase() {
                 label = Text.Loaded(spec),
                 appName = null,
                 category = TileCategory.UNKNOWN,
+                appIcon = null,
             )
         }
 
@@ -191,6 +194,7 @@ class EditTilesListInteractorTest : SysuiTestCase() {
                 label = Text.Resource(uiConfig.labelRes),
                 appName = null,
                 category = category,
+                appIcon = null,
             )
         }
     }

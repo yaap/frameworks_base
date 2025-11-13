@@ -95,9 +95,9 @@ import android.graphics.Rect;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.RemoteException;
-import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
+import android.platform.test.annotations.RequiresFlagsDisabled;
 import android.provider.DeviceConfig;
 import android.service.voice.IVoiceInteractionSession;
 import android.util.Pair;
@@ -115,7 +115,6 @@ import com.android.server.pm.pkg.AndroidPackage;
 import com.android.server.wm.BackgroundActivityStartController.BalVerdict;
 import com.android.server.wm.LaunchParamsController.LaunchParamsModifier;
 import com.android.server.wm.utils.MockTracker;
-import com.android.wm.shell.Flags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -986,13 +985,13 @@ public class ActivityStarterTests extends WindowTestsBase {
     }
 
     /**
-     * This test ensures that activity launch on a secondary display is disallowed if the activity
-     * opted out from showing on remote devices.
+     * This test ensures that activity launch on an insecure secondary display is disallowed if the
+     * activity opted out from showing on remote devices.
      */
     @EnableFlags(android.companion.virtualdevice.flags.Flags
             .FLAG_ENFORCE_REMOTE_DEVICE_OPT_OUT_ON_ALL_VIRTUAL_DISPLAYS)
     @Test
-    public void testStartOptedOutActivityOnVirtualDisplay() {
+    public void testStartOptedOutActivityOnInsecureVirtualDisplay() {
         final ActivityStarter starter = prepareStarter(FLAG_ACTIVITY_NEW_TASK,
                 false /* mockGetRootTask */);
         starter.mRequest.activityInfo.flags &= ~ActivityInfo.FLAG_CAN_DISPLAY_ON_REMOTE_DEVICES;
@@ -1001,6 +1000,7 @@ public class ActivityStarterTests extends WindowTestsBase {
         final TestDisplayContent secondaryDisplay =
                 new TestDisplayContent.Builder(mAtm, 1000, 1500)
                         .setType(Display.TYPE_VIRTUAL)
+                        .removeFlags(Display.FLAG_SECURE)
                         .setPosition(POSITION_BOTTOM).build();
         final TaskDisplayArea secondaryTaskContainer = secondaryDisplay.getDefaultTaskDisplayArea();
         final Task stack = secondaryTaskContainer.createRootTask(
@@ -1016,7 +1016,7 @@ public class ActivityStarterTests extends WindowTestsBase {
         // on secondary display.
         final ActivityOptions options = ActivityOptions.makeBasic()
                 .setLaunchDisplayId(secondaryDisplay.mDisplayId);
-        final int result = starter.setReason("testStartOptedOutActivityOnVirtualDisplay")
+        final int result = starter.setReason("testStartOptedOutActivityOnInsecureVirtualDisplay")
                 .setIntent(topActivityOnSecondaryDisplay.intent)
                 .setActivityOptions(options.toBundle(),
                         Binder.getCallingPid(), Binder.getCallingUid())
@@ -1024,6 +1024,51 @@ public class ActivityStarterTests extends WindowTestsBase {
 
         // Ensure result is canceled.
         assertEquals(START_CANCELED, result);
+
+        // Ensure secondary display only creates one stack.
+        verify(secondaryTaskContainer, times(1)).createRootTask(anyInt(), anyInt(), anyBoolean());
+    }
+
+    /**
+     * This test ensures that activity launch on a secure secondary display is allowed event if the
+     * activity opted out from showing on remote devices.
+     */
+    @EnableFlags(android.companion.virtualdevice.flags.Flags
+            .FLAG_ENFORCE_REMOTE_DEVICE_OPT_OUT_ON_ALL_VIRTUAL_DISPLAYS)
+    @Test
+    public void testStartOptedOutActivityOnSecureVirtualDisplay() {
+        final ActivityStarter starter = prepareStarter(FLAG_ACTIVITY_NEW_TASK,
+                false /* mockGetRootTask */);
+        starter.mRequest.activityInfo.flags &= ~ActivityInfo.FLAG_CAN_DISPLAY_ON_REMOTE_DEVICES;
+
+        // Create a virtual display at bottom.
+        final TestDisplayContent secondaryDisplay =
+                new TestDisplayContent.Builder(mAtm, 1000, 1500)
+                        .setType(Display.TYPE_VIRTUAL)
+                        .addFlags(Display.FLAG_SECURE)
+                        .setPosition(POSITION_BOTTOM).build();
+        final TaskDisplayArea secondaryTaskContainer = secondaryDisplay.getDefaultTaskDisplayArea();
+        final Task stack = secondaryTaskContainer.createRootTask(
+                WINDOWING_MODE_FULLSCREEN, ACTIVITY_TYPE_STANDARD, true /* onTop */);
+
+        // Create an activity record on the top of secondary display.
+        final ActivityRecord topActivityOnSecondaryDisplay = createSingleTaskActivityOn(stack);
+
+        // Put an activity on default display as the top focused activity.
+        new ActivityBuilder(mAtm).setCreateTask(true).build();
+
+        // Start activity with the same intent as {@code topActivityOnSecondaryDisplay}
+        // on secondary display.
+        final ActivityOptions options = ActivityOptions.makeBasic()
+                .setLaunchDisplayId(secondaryDisplay.mDisplayId);
+        final int result = starter.setReason("testStartOptedOutActivityOnSecureVirtualDisplay")
+                .setIntent(topActivityOnSecondaryDisplay.intent)
+                .setActivityOptions(options.toBundle(),
+                        Binder.getCallingPid(), Binder.getCallingUid())
+                .execute();
+
+        // Ensure result is delivering intent to top.
+        assertEquals(START_DELIVERED_TO_TOP, result);
 
         // Ensure secondary display only creates one stack.
         verify(secondaryTaskContainer, times(1)).createRootTask(anyInt(), anyInt(), anyBoolean());
@@ -1531,7 +1576,8 @@ public class ActivityStarterTests extends WindowTestsBase {
     }
 
     @Test
-    public void testStartLaunchIntoPipActivity() {
+    @RequiresFlagsDisabled(com.android.wm.shell.Flags.FLAG_ENABLE_PIP2)
+    public void testStartLaunchIntoPipActivity_setLaunchIntoPipHostActivity() {
         final ActivityStarter starter = prepareStarter(0, false);
 
         // Create an activity from ActivityOptions#makeLaunchIntoPip
@@ -1780,7 +1826,22 @@ public class ActivityStarterTests extends WindowTestsBase {
         assertNotEquals(inTask, target.getTask());
     }
 
-    @EnableFlags(Flags.FLAG_ONLY_REUSE_BUBBLED_TASK_WHEN_LAUNCHED_FROM_BUBBLE)
+    @Test
+    public void testLaunchActivitySourceRemain() {
+        final ActivityStarter starter = prepareStarter(0, false);
+        final ActivityRecord baseActivity = new ActivityBuilder(mAtm)
+                .setCreateTask(true)
+                .build();
+        baseActivity.mLaunchSourceType = ActivityRecord.LAUNCH_SOURCE_TYPE_HOME;
+        final ActivityRecord targetRecord = new ActivityBuilder(mAtm).build();
+        targetRecord.mLaunchSourceType = ActivityRecord.LAUNCH_SOURCE_TYPE_APPLICATION;
+        starter.mLastStartActivityRecord = targetRecord;
+        startActivityInner(starter, targetRecord, baseActivity, null /* options */,
+                null /* inTask */, null /* inTaskFragment */);
+        assertEquals(baseActivity.getTask(), targetRecord.getTask());
+        assertEquals(ActivityRecord.LAUNCH_SOURCE_TYPE_HOME, baseActivity.mLaunchSourceType);
+    }
+
     @Test
     public void launchActivity_reusesBubbledTask() {
         final ActivityStarter starter = prepareStarter(0, false);
@@ -1797,7 +1858,6 @@ public class ActivityStarterTests extends WindowTestsBase {
         assertEquals(bubbledActivity.getTask(), targetRecord.getTask());
     }
 
-    @EnableFlags(Flags.FLAG_ONLY_REUSE_BUBBLED_TASK_WHEN_LAUNCHED_FROM_BUBBLE)
     @Test
     public void launchActivity_nullSourceRecord_doesNotReuseBubbledTask() {
         final ActivityStarter starter = prepareStarter(0, false);
@@ -1817,7 +1877,6 @@ public class ActivityStarterTests extends WindowTestsBase {
         assertNotEquals(bubbledActivity.getTask(), targetRecord.getTask());
     }
 
-    @EnableFlags(Flags.FLAG_ONLY_REUSE_BUBBLED_TASK_WHEN_LAUNCHED_FROM_BUBBLE)
     @Test
     public void launchActivity_nonBubbledSourceRecord_doesNotReuseBubbledTask() {
         final ActivityStarter starter = prepareStarter(0, false);
@@ -1842,44 +1901,6 @@ public class ActivityStarterTests extends WindowTestsBase {
                 null /* inTask */, null /* inTaskFragment*/);
 
         assertNotEquals(bubbledActivity.getTask(), targetRecord.getTask());
-    }
-
-    @DisableFlags(Flags.FLAG_ONLY_REUSE_BUBBLED_TASK_WHEN_LAUNCHED_FROM_BUBBLE)
-    @Test
-    public void launchActivity_nullSourceRecord_flagDisabled_reusesBubbledTask() {
-        final ActivityStarter starter = prepareStarter(0, false);
-        final ActivityRecord bubbledActivity = createBubbledActivity();
-
-        // create the target activity to be launched
-        final ActivityRecord targetRecord =
-                new ActivityBuilder(mAtm)
-                        .setLaunchMode(LAUNCH_SINGLE_TASK)
-                        .setComponent(ActivityBuilder.getDefaultComponent()).build();
-        starter.getIntent().setComponent(bubbledActivity.mActivityComponent);
-
-        // pass null as the source record
-        startActivityInner(starter, targetRecord, null, null /* options */,
-                null /* inTask */, null /* inTaskFragment */);
-
-        assertEquals(bubbledActivity.getTask(), targetRecord.getTask());
-    }
-
-    @DisableFlags(Flags.FLAG_ONLY_REUSE_BUBBLED_TASK_WHEN_LAUNCHED_FROM_BUBBLE)
-    @Test
-    public void launchActivity_fromBubble_flagDisabled_reusesBubbledTask() {
-        final ActivityStarter starter = prepareStarter(0, false);
-        final ActivityRecord bubbledActivity = createBubbledActivity();
-
-        // create the target activity to be launched with the same component as the bubbled activity
-        final ActivityRecord targetRecord =
-                new ActivityBuilder(mAtm)
-                        .setLaunchMode(LAUNCH_SINGLE_TASK)
-                        .setComponent(ActivityBuilder.getDefaultComponent()).build();
-        starter.getIntent().setComponent(bubbledActivity.mActivityComponent);
-        startActivityInner(starter, targetRecord, bubbledActivity, null /* options */,
-                null /* inTask */, null /* inTaskFragment */);
-
-        assertEquals(bubbledActivity.getTask(), targetRecord.getTask());
     }
 
     private ActivityRecord createBubbledActivity() {

@@ -104,6 +104,16 @@ flag {
 }
 
 flag {
+    name: "itemized_vdm_permissions"
+    namespace: "virtual_devices"
+    description: "Itemized permissions in CDM dialog for VDM roles"
+    bug: "419169396"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     namespace: "virtual_devices"
     name: "notifications_for_device_streaming"
     description: "Add notifications permissions to device streaming role"
@@ -124,6 +134,16 @@ flag {
     namespace: "virtual_devices"
     description: "Fix the virtual display power state"
     bug: "371125136"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "virtual_power_group_sleep_no_doze"
+    namespace: "virtual_devices"
+    description: "Sleep non-default power groups directly, skipping doze"
+    bug: "416220040"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -172,4 +192,54 @@ flag {
     namespace: "virtual_devices"
     description: "Allow external virtual cameras visible only in the Context of the virtual device"
     bug: "375609768"
+}
+
+flag {
+    name: "virtual_camera_no_frame_duplication"
+    namespace: "virtual_devices"
+    description: "Do not duplicate frames if no input is received and the capture request is not PREVIEW"
+    bug: "383779587"
+}
+
+flag {
+    name: "computer_control_access"
+    namespace: "virtual_devices"
+    description: "Enable VDM access for computer control"
+    bug: "410570802"
+}
+
+flag {
+    name: "virtual_camera_on_open"
+    namespace: "virtual_devices"
+    description: "Callback called when the virtual camera device is requested to be opened"
+    bug: "409241122"
+    is_exported: true
+}
+
+flag {
+    name: "gwpc_aware_windowing_mode"
+    namespace: "virtual_devices"
+    description: "Fallback to FULLSCREEN when the windowing mode is unsupported"
+    bug: "378663612"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "fix_vdm_opt_out_on_mirror_displays"
+    namespace: "virtual_devices"
+    description: "Do not show content from opted out activities on mirror displays"
+    bug: "394573488"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "virtual_camera_metadata"
+    namespace: "virtual_devices"
+    description: "API for enabling metadata support for virtual cameras"
+    bug: "371167033"
+    is_exported: true
 }

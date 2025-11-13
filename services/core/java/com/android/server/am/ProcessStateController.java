@@ -15,6 +15,9 @@
  */
 package com.android.server.am;
 
+import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_SERVICE_BINDER_CALL;
+import static android.app.ProcessMemoryState.HOSTING_COMPONENT_TYPE_BROADCAST_RECEIVER;
+
 import static com.android.server.am.ActivityManagerDebugConfig.DEBUG_OOM_ADJ;
 
 import android.annotation.NonNull;
@@ -22,6 +25,7 @@ import android.annotation.Nullable;
 import android.annotation.UserIdInt;
 import android.app.ActivityManager;
 import android.app.ActivityManagerInternal;
+import android.content.Context;
 import android.content.pm.ServiceInfo;
 import android.os.IBinder;
 import android.os.PowerManagerInternal;
@@ -32,6 +36,9 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.ServiceThread;
 
+import java.lang.ref.WeakReference;
+import java.util.function.BiConsumer;
+
 /**
  * ProcessStateController is responsible for maintaining state that can affect the OomAdjuster
  * computations of a process. Any state that can affect a process's importance must be set by
@@ -41,18 +48,22 @@ public class ProcessStateController {
     public static String TAG = "ProcessStateController";
 
     private final OomAdjuster mOomAdjuster;
+    private final BiConsumer<ConnectionRecord, Boolean> mServiceBinderCallUpdater;
 
     private final GlobalState mGlobalState = new GlobalState();
 
     private ProcessStateController(ActivityManagerService ams, ProcessList processList,
             ActiveUids activeUids, ServiceThread handlerThread,
-            CachedAppOptimizer cachedAppOptimizer, OomAdjuster.Injector oomAdjInjector,
-            boolean useOomAdjusterModernImpl) {
-        mOomAdjuster = useOomAdjusterModernImpl
-                ? new OomAdjusterModernImpl(ams, processList, activeUids, handlerThread,
-                mGlobalState, cachedAppOptimizer, oomAdjInjector)
-                : new OomAdjuster(ams, processList, activeUids, handlerThread, mGlobalState,
-                        cachedAppOptimizer, oomAdjInjector);
+            CachedAppOptimizer cachedAppOptimizer, OomAdjuster.Injector oomAdjInjector) {
+        mOomAdjuster = new OomAdjusterImpl(ams, processList, activeUids, handlerThread,
+                mGlobalState, cachedAppOptimizer, oomAdjInjector);
+        mServiceBinderCallUpdater = (cr, hasOngoingCalls) -> {
+            synchronized (ams) {
+                if (cr.setOngoingCalls(hasOngoingCalls)) {
+                    runUpdate(cr.binding.client, OOM_ADJ_REASON_SERVICE_BINDER_CALL);
+                }
+            }
+        };
     }
 
     /**
@@ -106,6 +117,25 @@ public class ProcessStateController {
      */
     public void runFollowUpUpdate() {
         mOomAdjuster.updateOomAdjFollowUpTargetsLocked();
+    }
+
+    /**
+     * Returns a {@link BoundServiceSession} for the given {@link ConnectionRecord}. Creates and
+     * associates a new one if required.
+     */
+    public BoundServiceSession getBoundServiceSessionFor(ConnectionRecord connectionRecord) {
+        if (connectionRecord.notHasFlag(Context.BIND_ALLOW_FREEZE) && connectionRecord.notHasFlag(
+                Context.BIND_SIMULATE_ALLOW_FREEZE)) {
+            // Don't incur the memory and compute overhead for process state adjustments for all
+            // bindings by default. This should be opted into as needed.
+            return null;
+        }
+        if (connectionRecord.mBoundServiceSession != null) {
+            return connectionRecord.mBoundServiceSession;
+        }
+        connectionRecord.mBoundServiceSession = new BoundServiceSession(mServiceBinderCallUpdater,
+                new WeakReference<>(connectionRecord), connectionRecord.toShortString());
+        return connectionRecord.mBoundServiceSession;
     }
 
     private static class GlobalState implements OomAdjuster.GlobalState {
@@ -496,6 +526,13 @@ public class ProcessStateController {
     }
 
     /**
+     * Update the ongoing binder calls state for a given Connection record.
+     */
+    public boolean updateBinderServiceCalls(ConnectionRecord cr, boolean ongoing) {
+        return cr.setOngoingCalls(ongoing);
+    }
+
+    /**
      * Note whether a process has bound to a service with
      * {@link android.content.Context.BIND_ABOVE_CLIENT} or not.
      */
@@ -588,30 +625,28 @@ public class ProcessStateController {
 
     /************************ Broadcast Receiver State Events **************************/
     /**
-     * Set what sched group to grant a process due to running a broadcast.
-     * {@link ProcessList.SCHED_GROUP_UNDEFINED} means the process is not running a broadcast.
+     * Note that Broadcast delivery to a process has started and what scheduling group should be
+     * used.
      */
-    public void setBroadcastSchedGroup(@NonNull ProcessRecord proc, int schedGroup) {
-        // TODO(b/302575389): Migrate state pulled from BroadcastQueue to a pushed model
-        throw new UnsupportedOperationException("Not implemented yet");
+    public void noteBroadcastDeliveryStarted(@NonNull ProcessRecord proc, int schedGroup) {
+        proc.mReceivers.setIsReceivingBroadcast(true);
+        proc.mReceivers.setBroadcastReceiverSchedGroup(schedGroup);
+
+        if (Flags.pushBroadcastStateToOomadjuster()) {
+            proc.mProfile.addHostingComponentType(HOSTING_COMPONENT_TYPE_BROADCAST_RECEIVER);
+        }
     }
 
     /**
-     * Note that the process has started processing a broadcast receiver.
+     * Note that Broadcast delivery to a process has ended.
      */
-    public boolean incrementCurReceivers(@NonNull ProcessRecord app) {
-        // TODO(b/302575389): Migrate state pulled from ATMS to a pushed model
-        // maybe used ActivityStateFlags instead.
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
+    public void noteBroadcastDeliveryEnded(@NonNull ProcessRecord proc) {
+        proc.mReceivers.setIsReceivingBroadcast(false);
+        proc.mReceivers.setBroadcastReceiverSchedGroup(ProcessList.SCHED_GROUP_UNDEFINED);
 
-    /**
-     * Note that the process has finished processing a broadcast receiver.
-     */
-    public boolean decrementCurReceivers(@NonNull ProcessRecord app) {
-        // TODO(b/302575389): Migrate state pulled from ATMS to a pushed model
-        // maybe used ActivityStateFlags instead.
-        throw new UnsupportedOperationException("Not implemented yet");
+        if (Flags.pushBroadcastStateToOomadjuster()) {
+            proc.mProfile.clearHostingComponentType(HOSTING_COMPONENT_TYPE_BROADCAST_RECEIVER);
+        }
     }
 
     /**
@@ -625,7 +660,6 @@ public class ProcessStateController {
         private ServiceThread mHandlerThread = null;
         private CachedAppOptimizer mCachedAppOptimizer = null;
         private OomAdjuster.Injector mOomAdjInjector = null;
-        private boolean mUseOomAdjusterModernImpl = false;
 
         public Builder(ActivityManagerService ams, ProcessList processList, ActiveUids activeUids) {
             mAms = ams;
@@ -647,7 +681,7 @@ public class ProcessStateController {
                 mOomAdjInjector = new OomAdjuster.Injector();
             }
             return new ProcessStateController(mAms, mProcessList, mActiveUids, mHandlerThread,
-                    mCachedAppOptimizer, mOomAdjInjector, mUseOomAdjusterModernImpl);
+                    mCachedAppOptimizer, mOomAdjInjector);
         }
 
         /**
@@ -674,14 +708,6 @@ public class ProcessStateController {
         @VisibleForTesting
         public Builder setOomAdjusterInjector(OomAdjuster.Injector injector) {
             mOomAdjInjector = injector;
-            return this;
-        }
-
-        /**
-         * Set which implementation of OomAdjuster to use.
-         */
-        public Builder useModernOomAdjuster(boolean use) {
-            mUseOomAdjusterModernImpl = use;
             return this;
         }
     }

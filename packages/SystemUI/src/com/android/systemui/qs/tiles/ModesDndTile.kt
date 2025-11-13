@@ -25,11 +25,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.coroutineScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.android.app.tracing.coroutines.launchTraced as launch
+import com.android.app.tracing.coroutines.runBlockingTraced as runBlocking
 import com.android.internal.logging.MetricsLogger
 import com.android.systemui.animation.Expandable
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.dagger.qualifiers.Main
-import com.android.systemui.modes.shared.ModesUi
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.plugins.qs.QSTile.BooleanState
@@ -48,12 +48,10 @@ import com.android.systemui.qs.tiles.impl.modes.domain.model.ModesDndTileModel
 import com.android.systemui.qs.tiles.impl.modes.ui.ModesDndTileMapper
 import com.android.systemui.res.R
 import javax.inject.Inject
-import kotlinx.coroutines.runBlocking
 
 /**
  * Standalone tile used to control the DND Mode. Contrast to [ModesTile] (the tile that opens a
- * dialog showing the list of all modes) and [DndTile] (the tile used to toggle interruption
- * filtering in the pre-MODES_UI world).
+ * dialog showing the list of all modes).
  */
 class ModesDndTile
 @Inject
@@ -99,7 +97,7 @@ constructor(
         }
     }
 
-    override fun isAvailable(): Boolean = ModesUi.isEnabled && android.app.Flags.modesUiDndTile()
+    override fun isAvailable(): Boolean = android.app.Flags.modesUiDndTile()
 
     override fun getTileLabel(): CharSequence =
         mContext.getString(R.string.quick_settings_dnd_label)

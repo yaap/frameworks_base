@@ -17,33 +17,32 @@
 package com.android.systemui.qs.tiles.dialog
 
 import android.view.LayoutInflater
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.systemui.res.R
-import com.android.systemui.screenrecord.ScreenRecordPermissionViewBinder
+import com.android.systemui.screenrecord.ScreenRecordPermissionContentManager
 
 @Composable
 fun ScreenRecordDetailsContent(viewModel: ScreenRecordDetailsViewModel) {
-    val viewBinder: ScreenRecordPermissionViewBinder = remember {
-        viewModel.recordingController.createScreenRecordPermissionViewBinder(
+    val contentManager: ScreenRecordPermissionContentManager = remember {
+        viewModel.screenRecordUxController.createScreenRecordPermissionContentManager(
             viewModel.onStartRecordingClicked
         )
     }
 
     AndroidView(
-        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+        modifier = Modifier.fillMaxWidth(),
         factory = { context ->
             // Inflate with the existing dialog xml layout
             val view = LayoutInflater.from(context).inflate(R.layout.screen_share_dialog, null)
-            viewBinder.bind(view)
+            contentManager.bind(view)
 
             view
             // TODO(b/378514473): Revamp the details view according to the spec.
         },
-        onRelease = { viewBinder.unbind() },
+        onRelease = { contentManager.unbind() },
     )
 }

@@ -11,6 +11,16 @@ flag {
 }
 
 flag {
+    name: "clean_up_dead_router_records_after_unbinding"
+    namespace: "media_better_together"
+    description: "Fixes a bug of notifying unbound router records that causes DeadObjectException."
+    bug: "414836668"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "disable_set_bluetooth_ad2p_on_calls"
     namespace: "media_better_together"
     description: "Prevents calls to AudioService.setBluetoothA2dpOn(), known to cause incorrect audio routing to the built-in speakers."
@@ -38,6 +48,13 @@ flag {
 }
 
 flag {
+    name: "enable_device_address_as_identifier_in_media_router_2"
+    namespace: "media_better_together"
+    description: "Allows audio devices to retain address in identifier and selection in MR2."
+    bug: "384408833"
+}
+
+flag {
     name: "enable_audio_policies_device_and_bluetooth_controller"
     is_exported: true
     namespace: "media_solutions"
@@ -62,10 +79,10 @@ flag {
 }
 
 flag {
-    name: "enable_fix_for_empty_system_routes_crash"
+    name: "enable_fix_for_route_visibility"
     namespace: "media_better_together"
-    description: "Fixes a bug causing SystemUI to crash due to an empty system routes list in the routing framework."
-    bug: "357468728"
+    description: "Fixes a bug causing private routes to appear on the output switcher of an app that shouldn't see them."
+    bug: "416436531"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -146,13 +163,6 @@ flag {
 }
 
 flag {
-    name: "enable_null_session_in_media_browser_service"
-    namespace: "media_solutions"
-    description: "Enables apps owning a MediaBrowserService to disconnect all connected browsers."
-    bug: "185136506"
-}
-
-flag {
     name: "enable_output_switcher_session_grouping"
     namespace: "media_better_together"
     description: "Enables selected items in Output Switcher to be grouped together."
@@ -180,20 +190,20 @@ flag {
 }
 
 flag {
+    name: "enable_per_app_mirroring_in_media_router_2"
+    namespace: "media_better_together"
+    description: "Enables MediaRouter2 app-specific mirroring. Requires enable_mirroring_in_media_router_2."
+    bug: "413313659"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "enable_prevention_of_keep_alive_route_providers"
     namespace: "media_solutions"
     description: "Enables mechanisms to prevent route providers from keeping malicious apps alive."
     bug: "263520343"
-}
-
-flag {
-    name: "enable_prevention_of_manager_scans_when_no_apps_scan"
-    namespace: "media_solutions"
-    description: "Prevents waking up route providers when no apps are scanning, even if SysUI or Settings are scanning."
-    bug: "319604673"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -261,10 +271,20 @@ flag {
 }
 
 flag {
-    name: "fix_output_media_item_list_index_out_of_bounds_exception"
+    name: "avoid_binder_calls_during_render"
     namespace: "media_better_together"
-    description: "Fixes a bug of causing IndexOutOfBoundsException when building media item list."
-    bug: "398246089"
+    description: "Reduces number of expensive binder calls during rendering."
+    bug: "414668703"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "avoid_binder_calls_for_muting_expected_device"
+    namespace: "media_better_together"
+    description: "Sets isMutingExpectedDevice attribute during construction of MediaDevice."
+    bug: "414668703"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -274,5 +294,22 @@ flag {
     name: "enable_output_switcher_personal_audio_sharing"
     namespace: "cross_device_experiences"
     description: "Enables personal audio sharing in the output switcher."
-    bug: "385672684"
+    bug: "338479898"
+}
+
+flag {
+    name: "hide_bt_address_from_apps_without_bt_permission"
+    namespace: "media_better_together"
+    description: "Hides the BT address of media routes to apps without BT permission."
+    bug: "410871506"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_device_suggestions_preference"
+    namespace: "media_better_together"
+    description: "Add a preference for device suggestions in the media settings page"
+    bug: "415096359"
 }

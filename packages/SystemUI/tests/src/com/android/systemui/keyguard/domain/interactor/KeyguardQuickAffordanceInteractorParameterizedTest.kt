@@ -24,6 +24,7 @@ import androidx.test.filters.SmallTest
 import com.android.internal.widget.LockPatternUtils
 import com.android.keyguard.logging.KeyguardQuickAffordancesLogger
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.accessibility.domain.interactor.accessibilityInteractor
 import com.android.systemui.animation.ActivityTransitionAnimator
 import com.android.systemui.animation.DialogTransitionAnimator
 import com.android.systemui.animation.Expandable
@@ -32,6 +33,7 @@ import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.dock.DockManagerFake
 import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.flags.FakeFeatureFlags
+import com.android.systemui.haptics.msdl.msdlPlayer
 import com.android.systemui.keyguard.data.quickaffordance.BuiltInKeyguardQuickAffordanceKeys
 import com.android.systemui.keyguard.data.quickaffordance.FakeKeyguardQuickAffordanceConfig
 import com.android.systemui.keyguard.data.quickaffordance.FakeKeyguardQuickAffordanceProviderClientFactory
@@ -316,8 +318,9 @@ class KeyguardQuickAffordanceInteractorParameterizedTest : SysuiTestCase() {
                 biometricSettingsRepository = biometricSettingsRepository,
                 backgroundDispatcher = testDispatcher,
                 appContext = mContext,
-                accessibilityManager = mock(),
+                accessibilityInteractor = kosmos.accessibilityInteractor,
                 sceneInteractor = { kosmos.sceneInteractor },
+                msdlPlayer = kosmos.msdlPlayer,
             )
     }
 

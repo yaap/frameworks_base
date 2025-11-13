@@ -26,11 +26,14 @@ import android.content.Context
 import android.graphics.drawable.Icon
 import android.service.notification.StatusBarNotification
 import android.util.ArrayMap
+import androidx.annotation.DrawableRes
 import com.android.app.tracing.traceSection
 import com.android.internal.logging.InstanceId
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.statusbar.StatusBarIconView
+import com.android.systemui.statusbar.notification.collection.BundleEntry
 import com.android.systemui.statusbar.notification.collection.GroupEntry
+import com.android.systemui.statusbar.notification.collection.ListEntry
 import com.android.systemui.statusbar.notification.collection.NotificationEntry
 import com.android.systemui.statusbar.notification.collection.PipelineEntry
 import com.android.systemui.statusbar.notification.collection.provider.SectionStyleProvider
@@ -38,6 +41,7 @@ import com.android.systemui.statusbar.notification.data.repository.ActiveNotific
 import com.android.systemui.statusbar.notification.data.repository.ActiveNotificationsStore
 import com.android.systemui.statusbar.notification.promoted.shared.model.PromotedNotificationContentModel
 import com.android.systemui.statusbar.notification.promoted.shared.model.PromotedNotificationContentModels
+import com.android.systemui.statusbar.notification.shared.ActiveBundleModel
 import com.android.systemui.statusbar.notification.shared.ActiveNotificationEntryModel
 import com.android.systemui.statusbar.notification.shared.ActiveNotificationGroupModel
 import com.android.systemui.statusbar.notification.shared.ActiveNotificationModel
@@ -98,47 +102,90 @@ private class ActiveNotificationsStoreBuilder(
      */
     fun addPipelineEntry(entry: PipelineEntry) {
         when (entry) {
-            is GroupEntry -> {
-                entry.summary?.let { summary ->
-                    val summaryModel = summary.toModel()
-                    val childModels = entry.children.map { it.toModel() }
-                    builder.addNotifGroup(
-                        existingModels.createOrReuse(
-                            key = entry.key,
-                            summary = summaryModel,
-                            children = childModels,
-                        )
-                    )
-                }
-            }
-            else -> {
-                entry.representativeEntry?.let { notifEntry ->
-                    builder.addIndividualNotif(notifEntry.toModel())
-                }
-            }
+            is BundleEntry -> addBundleEntry(entry)
+            is ListEntry -> addListEntry(entry)
         }
+    }
+
+    private fun addListEntry(entry: ListEntry) {
+        when (entry) {
+            is GroupEntry -> addGroupEntry(entry)
+            is NotificationEntry -> addNotificationEntry(entry)
+        }
+    }
+
+    private fun addBundleEntry(entry: BundleEntry) {
+        val childModels = entry.children.mapNotNull { it.toModel() }
+        builder.addBundle(
+            existingModels.createOrReuseBundle(
+                key = entry.key,
+                iconResId = entry.bundleRepository.bundleIcon,
+                children = childModels,
+            )
+        )
+    }
+
+    private fun addGroupEntry(entry: GroupEntry) {
+        entry.toModel()?.let { builder.addNotifGroup(it) }
+    }
+
+    private fun addNotificationEntry(entry: NotificationEntry) {
+        builder.addIndividualNotif(entry.toModel())
     }
 
     fun setRankingsMap(entries: List<PipelineEntry>) {
         builder.setRankingsMap(flatMapToRankingsMap(entries))
     }
 
-    fun flatMapToRankingsMap(entries: List<PipelineEntry>): Map<String, Int> {
+    private fun flatMapToRankingsMap(entries: List<PipelineEntry>): Map<String, Int> {
         val result = ArrayMap<String, Int>()
         for (entry in entries) {
-            if (entry is NotificationEntry) {
-                entry.representativeEntry?.let { representativeEntry ->
-                    result[representativeEntry.key] = representativeEntry.ranking.rank
-                }
-            } else if (entry is GroupEntry) {
+            when (entry) {
+                is BundleEntry -> flatMapToRankingsMap(entry, result)
+                is ListEntry -> flatMapToRankingsMap(entry, result)
+            }
+        }
+        return result
+    }
+
+    private fun flatMapToRankingsMap(entry: BundleEntry, result: ArrayMap<String, Int>) {
+        for (child in entry.children) {
+            flatMapToRankingsMap(child, result)
+        }
+    }
+
+    private fun flatMapToRankingsMap(entry: ListEntry, result: ArrayMap<String, Int>) {
+        when (entry) {
+            is NotificationEntry -> {
+                result[entry.key] = entry.ranking.rank
+            }
+
+            is GroupEntry -> {
                 entry.summary?.let { summary -> result[summary.key] = summary.ranking.rank }
                 for (child in entry.children) {
                     result[child.key] = child.ranking.rank
                 }
             }
         }
-        return result
     }
+
+    private fun ListEntry.toModel(): ActiveNotificationEntryModel? =
+        when (this) {
+            is GroupEntry -> toModel()
+            is NotificationEntry -> toModel()
+            else -> null
+        }
+
+    private fun GroupEntry.toModel(): ActiveNotificationGroupModel? =
+        summary?.let { summary ->
+            val summaryModel = summary.toModel()
+            val childModels = children.map { it.toModel() }
+            existingModels.createOrReuseGroup(
+                key = key,
+                summary = summaryModel,
+                children = childModels,
+            )
+        }
 
     private fun NotificationEntry.toModel(): ActiveNotificationModel {
         val promotedContent =
@@ -148,7 +195,7 @@ private class ActiveNotificationsStoreBuilder(
                 null
             }
 
-        return existingModels.createOrReuse(
+        return existingModels.createOrReuseNotif(
             key = key,
             groupKey = sbn.groupKey,
             whenTime = sbn.notification.`when`,
@@ -173,11 +220,12 @@ private class ActiveNotificationsStoreBuilder(
             bucket = bucket,
             callType = sbn.toCallType(),
             promotedContent = promotedContent,
+            requestedPromotion = sbn.notification.isRequestPromotedOngoing(),
         )
     }
 }
 
-private fun ActiveNotificationsStore.createOrReuse(
+private fun ActiveNotificationsStore.createOrReuseNotif(
     key: String,
     groupKey: String?,
     whenTime: Long,
@@ -202,6 +250,7 @@ private fun ActiveNotificationsStore.createOrReuse(
     bucket: Int,
     callType: CallType,
     promotedContent: PromotedNotificationContentModels?,
+    requestedPromotion: Boolean,
 ): ActiveNotificationModel {
     return individuals[key]?.takeIf {
         it.isCurrent(
@@ -229,6 +278,7 @@ private fun ActiveNotificationsStore.createOrReuse(
             bucket = bucket,
             callType = callType,
             promotedContent = promotedContent,
+            requestedPromotion = requestedPromotion,
         )
     }
         ?: ActiveNotificationModel(
@@ -256,6 +306,7 @@ private fun ActiveNotificationsStore.createOrReuse(
             bucket = bucket,
             callType = callType,
             promotedContent = promotedContent,
+            requestedPromotion = requestedPromotion,
         )
 }
 
@@ -284,6 +335,7 @@ private fun ActiveNotificationModel.isCurrent(
     bucket: Int,
     callType: CallType,
     promotedContent: PromotedNotificationContentModels?,
+    requestedPromotion: Boolean,
 ): Boolean {
     return when {
         key != this.key -> false
@@ -312,11 +364,12 @@ private fun ActiveNotificationModel.isCurrent(
         // QQQ: Do we need to do the same `isCurrent` thing within the content model to avoid
         // recreating the active notification model constantly?
         promotedContent != this.promotedContent -> false
+        requestedPromotion != this.requestedPromotion -> false
         else -> true
     }
 }
 
-private fun ActiveNotificationsStore.createOrReuse(
+private fun ActiveNotificationsStore.createOrReuseGroup(
     key: String,
     summary: ActiveNotificationModel,
     children: List<ActiveNotificationModel>,
@@ -347,3 +400,37 @@ private fun StatusBarNotification.toCallType(): CallType =
         CALL_TYPE_UNKNOWN -> CallType.Unknown
         else -> CallType.Unknown
     }
+
+private fun ActiveNotificationsStore.createOrReuseBundle(
+    key: String,
+    @DrawableRes iconResId: Int,
+    children: List<ActiveNotificationEntryModel>,
+): ActiveBundleModel {
+    return bundles[key]?.takeIf { it.isCurrent(key, iconResId, children) }
+        ?: ActiveBundleModel(key, iconResId, children)
+}
+
+private fun ActiveBundleModel.isCurrent(
+    key: String,
+    @DrawableRes iconResId: Int,
+    children: List<ActiveNotificationEntryModel>,
+): Boolean {
+    return when {
+        key != this.key -> false
+        iconResId != this.iconResId -> false
+        !hasSameInstances(children, this.children) -> false
+        else -> true
+    }
+}
+
+private fun hasSameInstances(list1: List<*>, list2: List<*>): Boolean {
+    if (list1.size != list2.size) {
+        return false
+    }
+    for (i in list1.indices) {
+        if (list1[i] !== list2[i]) {
+            return false
+        }
+    }
+    return true
+}

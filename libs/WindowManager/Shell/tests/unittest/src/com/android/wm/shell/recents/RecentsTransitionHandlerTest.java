@@ -22,20 +22,25 @@ import static android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM;
 import static android.view.WindowManager.TRANSIT_CLOSE;
 import static android.view.WindowManager.TRANSIT_OPEN;
 import static android.view.WindowManager.TRANSIT_SLEEP;
+import static android.view.WindowManager.TRANSIT_TO_BACK;
 import static android.view.WindowManager.TRANSIT_TO_FRONT;
 
-import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.window.flags.Flags.FLAG_ENABLE_DESKTOP_RECENTS_TRANSITIONS_CORNERS_BUGFIX;
+import static com.android.window.flags.Flags.FLAG_ENABLE_MULTIPLE_DESKTOPS_BACKEND;
+import static com.android.wm.shell.Flags.FLAG_ENABLE_PIP2;
 import static com.android.wm.shell.Flags.FLAG_ENABLE_RECENTS_BOOKEND_TRANSITION;
 import static com.android.wm.shell.recents.RecentsTransitionStateListener.TRANSITION_STATE_ANIMATING;
 import static com.android.wm.shell.recents.RecentsTransitionStateListener.TRANSITION_STATE_NOT_RUNNING;
 import static com.android.wm.shell.recents.RecentsTransitionStateListener.TRANSITION_STATE_REQUESTED;
 import static com.android.wm.shell.transition.Transitions.TRANSIT_END_RECENTS_TRANSITION;
+import static com.android.wm.shell.transition.Transitions.TRANSIT_REMOVE_PIP;
 import static com.android.wm.shell.transition.Transitions.TRANSIT_START_RECENTS_TRANSITION;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -57,27 +62,29 @@ import android.content.res.Resources;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.UserManager;
 import android.platform.test.annotations.EnableFlags;
 import android.view.SurfaceControl;
 import android.window.TransitionInfo;
+import android.window.WindowContainerTransaction;
 
 import androidx.annotation.NonNull;
 import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.dx.mockito.inline.extended.ExtendedMockito;
-import com.android.dx.mockito.inline.extended.StaticMockitoSession;
 import com.android.internal.os.IResultReceiver;
 import com.android.wm.shell.ShellTaskOrganizer;
 import com.android.wm.shell.ShellTestCase;
 import com.android.wm.shell.TestRunningTaskInfoBuilder;
 import com.android.wm.shell.TestShellExecutor;
+import com.android.wm.shell.common.DisplayController;
 import com.android.wm.shell.common.DisplayInsetsController;
 import com.android.wm.shell.common.TaskStackListenerImpl;
 import com.android.wm.shell.desktopmode.DesktopRepository;
 import com.android.wm.shell.desktopmode.DesktopUserRepositories;
+import com.android.wm.shell.desktopmode.multidesks.DesksOrganizer;
 import com.android.wm.shell.shared.R;
-import com.android.wm.shell.shared.desktopmode.DesktopModeStatus;
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState;
 import com.android.wm.shell.sysui.ShellCommandHandler;
 import com.android.wm.shell.sysui.ShellController;
 import com.android.wm.shell.sysui.ShellInit;
@@ -90,9 +97,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.quality.Strictness;
+import org.mockito.MockitoAnnotations;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Optional;
 
 /**
@@ -105,6 +115,8 @@ import java.util.Optional;
 public class RecentsTransitionHandlerTest extends ShellTestCase {
 
     private static final int FREEFORM_TASK_CORNER_RADIUS = 32;
+    private static final int FREEFORM_TASK_CORNER_RADIUS_ON_CD = 24;
+    private static final int CONNECTED_DISPLAY_ID = 1;
 
     @Mock
     private Context mContext;
@@ -121,13 +133,18 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
     @Mock
     private DisplayInsetsController mDisplayInsetsController;
     @Mock
-    private IRecentTasksListener mRecentTasksListener;
-    @Mock
     private TaskStackTransitionObserver mTaskStackTransitionObserver;
     @Mock
     private Transitions mTransitions;
+    @Mock
+    private UserManager mUserManager;
+    @Mock
+    private DesksOrganizer mDesksOrganizer;
 
     @Mock private DesktopRepository mDesktopRepository;
+    @Mock private DisplayController mDisplayController;
+    @Mock private Context mConnectedDisplayContext;
+    @Mock private Resources mConnectedDisplayResources;
 
     private ShellTaskOrganizer mShellTaskOrganizer;
     private RecentTasksController mRecentTasksController;
@@ -136,14 +153,14 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
     private ShellInit mShellInit;
     private ShellController mShellController;
     private TestShellExecutor mMainExecutor;
-    private static StaticMockitoSession sMockitoSession;
+    private AutoCloseable mMocksInit = null;
 
     @Before
     public void setUp() {
-        sMockitoSession = mockitoSession().initMocks(this).strictness(Strictness.LENIENT)
-                .mockStatic(DesktopModeStatus.class).startMocking();
-        ExtendedMockito.doReturn(true)
-                .when(() -> DesktopModeStatus.canEnterDesktopMode(any()));
+        var desktopState = new FakeDesktopState();
+        desktopState.setCanEnterDesktopMode(true);
+
+        mMocksInit = MockitoAnnotations.openMocks(this);
 
         when(mDesktopUserRepositories.getCurrent()).thenReturn(mDesktopRepository);
         mMainExecutor = new TestShellExecutor();
@@ -154,13 +171,19 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
         when(mResources.getDimensionPixelSize(
                 R.dimen.desktop_windowing_freeform_rounded_corner_radius)
         ).thenReturn(FREEFORM_TASK_CORNER_RADIUS);
+        when(mDisplayController.getDisplayContext(CONNECTED_DISPLAY_ID)).thenReturn(
+                mConnectedDisplayContext);
+        when(mConnectedDisplayContext.getResources()).thenReturn(mConnectedDisplayResources);
+        when(mConnectedDisplayResources.getDimensionPixelSize(
+                R.dimen.desktop_windowing_freeform_rounded_corner_radius)
+        ).thenReturn(FREEFORM_TASK_CORNER_RADIUS_ON_CD);
         mShellInit = spy(new ShellInit(mMainExecutor));
         mShellController = spy(new ShellController(mContext, mShellInit, mShellCommandHandler,
-                mDisplayInsetsController, mMainExecutor));
+                mDisplayInsetsController, mUserManager, mMainExecutor));
         mRecentTasksControllerReal = new RecentTasksController(mContext, mShellInit,
                 mShellController, mShellCommandHandler, mTaskStackListener, mActivityTaskManager,
                 Optional.of(mDesktopUserRepositories), mTaskStackTransitionObserver,
-                mMainExecutor);
+                mMainExecutor, desktopState);
         mRecentTasksController = spy(mRecentTasksControllerReal);
         mShellTaskOrganizer = new ShellTaskOrganizer(mShellInit, mShellCommandHandler,
                 null /* sizeCompatUI */, Optional.empty(), Optional.of(mRecentTasksController),
@@ -168,14 +191,22 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
 
         doReturn(mMainExecutor).when(mTransitions).getMainExecutor();
         mRecentsTransitionHandler = new RecentsTransitionHandler(mShellInit, mShellTaskOrganizer,
-                mTransitions, mRecentTasksController, mock(HomeTransitionObserver.class));
+                mTransitions, mRecentTasksController, mock(HomeTransitionObserver.class),
+                mDisplayController, mDesksOrganizer);
+        // By default use a mock finish transaction since we are sending transitions that don't have
+        // real surface controls
+        mRecentsTransitionHandler.setFinishTransactionSupplier(
+                () -> mock(SurfaceControl.Transaction.class));
 
         mShellInit.init();
     }
 
     @After
-    public void tearDown() {
-        sMockitoSession.finishMocking();
+    public void tearDown() throws Exception {
+        if (mMocksInit != null) {
+            mMocksInit.close();
+            mMocksInit = null;
+        }
     }
 
     @Test
@@ -304,7 +335,6 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
                 .addChange(TRANSIT_OPEN, new TestRunningTaskInfoBuilder().build())
                 .build();
         final IBinder transition = startRecentsTransition(/* synthetic= */ false, animationRunner);
-        SurfaceControl.Transaction finishT = mock(SurfaceControl.Transaction.class);
         mRecentsTransitionHandler.startAnimation(
                 transition, createTransitionInfo(), new StubTransaction(), new StubTransaction(),
                 mock(Transitions.TransitionFinishCallback.class));
@@ -394,6 +424,7 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
         SurfaceControl leash = mergeTransitionInfo.getChanges().get(0).getLeash();
         final IBinder transition = startRecentsTransition(/* synthetic= */ false);
         SurfaceControl.Transaction finishT = mock(SurfaceControl.Transaction.class);
+        mRecentsTransitionHandler.setFinishTransactionSupplier(() -> finishT);
         mRecentsTransitionHandler.startAnimation(
                 transition, createTransitionInfo(), new StubTransaction(), new StubTransaction(),
                 mock(Transitions.TransitionFinishCallback.class));
@@ -421,8 +452,10 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
         SurfaceControl leash = transitionInfo.getChanges().get(0).getLeash();
         final IBinder transition = startRecentsTransition(/* synthetic= */ false);
         SurfaceControl.Transaction finishT = mock(SurfaceControl.Transaction.class);
+        mRecentsTransitionHandler.setFinishTransactionSupplier(() -> finishT);
         mRecentsTransitionHandler.startAnimation(
-                transition, transitionInfo, new StubTransaction(), finishT,
+                transition, transitionInfo, new StubTransaction(),
+                new StubTransaction(),
                 mock(Transitions.TransitionFinishCallback.class));
 
         mRecentsTransitionHandler.findController(transition).finish(/* toHome= */ false,
@@ -431,6 +464,163 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
 
 
         verify(finishT).setCornerRadius(leash, FREEFORM_TASK_CORNER_RADIUS);
+    }
+
+    @Test
+    @EnableFlags(FLAG_ENABLE_DESKTOP_RECENTS_TRANSITIONS_CORNERS_BUGFIX)
+    public void testFinish_returningToFreeformTasks_setsCornerRadiusOnConnectedDisplay() {
+        ActivityManager.RunningTaskInfo freeformTask =
+                new TestRunningTaskInfoBuilder().setWindowingMode(
+                        WINDOWING_MODE_FREEFORM).setDisplayId(CONNECTED_DISPLAY_ID).build();
+        TransitionInfo transitionInfo = new TransitionInfoBuilder(TRANSIT_CLOSE)
+                .addChange(TRANSIT_CLOSE, freeformTask)
+                .build();
+        SurfaceControl leash = transitionInfo.getChanges().get(0).getLeash();
+        final IBinder transition = startRecentsTransition(/* synthetic= */ false);
+        SurfaceControl.Transaction finishT = mock(SurfaceControl.Transaction.class);
+        mRecentsTransitionHandler.setFinishTransactionSupplier(() -> finishT);
+        mRecentsTransitionHandler.startAnimation(
+                transition, transitionInfo, new StubTransaction(),
+                new StubTransaction(),
+                mock(Transitions.TransitionFinishCallback.class));
+
+        mRecentsTransitionHandler.findController(transition).finish(/* toHome= */ false,
+                false /* sendUserLeaveHint */, mock(IResultReceiver.class));
+        mMainExecutor.flushAll();
+
+
+        verify(finishT).setCornerRadius(leash, FREEFORM_TASK_CORNER_RADIUS_ON_CD);
+    }
+
+    @Test
+    @EnableFlags(FLAG_ENABLE_RECENTS_BOOKEND_TRANSITION)
+    public void testMerge_cancelToHome_onTransitSleep() throws Exception {
+        TransitionInfo mergeTransitionInfo = new TransitionInfoBuilder(TRANSIT_SLEEP)
+                .build();
+        startTransitionAndMergeThenVerifyCanceled(mergeTransitionInfo);
+    }
+
+    @Test
+    @EnableFlags({FLAG_ENABLE_RECENTS_BOOKEND_TRANSITION, FLAG_ENABLE_PIP2})
+    public void testMerge_cancelToHome_onTransitRemovePip() throws Exception {
+        TransitionInfo mergeTransitionInfo = new TransitionInfoBuilder(TRANSIT_REMOVE_PIP)
+                .build();
+        startTransitionAndMergeThenVerifyCanceled(mergeTransitionInfo);
+    }
+
+    @Test
+    @EnableFlags(FLAG_ENABLE_MULTIPLE_DESKTOPS_BACKEND)
+    public void testMergeAndFinish_openingTaskInDesk_setsPositionOfChild() {
+        ActivityManager.RunningTaskInfo deskRootTask =
+                new TestRunningTaskInfoBuilder()
+                        .setWindowingMode(WINDOWING_MODE_FREEFORM)
+                        .build();
+        ActivityManager.RunningTaskInfo deskChildTask =
+                new TestRunningTaskInfoBuilder()
+                        .setWindowingMode(WINDOWING_MODE_FREEFORM)
+                        .setParentTaskId(deskRootTask.taskId)
+                        .build();
+        TransitionInfo mergeTransitionInfo = new TransitionInfoBuilder(TRANSIT_OPEN)
+                .addChange(TRANSIT_OPEN, deskChildTask)
+                .addChange(TRANSIT_OPEN, deskRootTask)
+                .build();
+        SurfaceControl deskChildLeash = mergeTransitionInfo.getChanges().get(0).getLeash();
+        final IBinder transition = startRecentsTransition(/* synthetic= */ false);
+        SurfaceControl.Transaction startT = mock(SurfaceControl.Transaction.class);
+        SurfaceControl.Transaction finishT = mock(SurfaceControl.Transaction.class);
+        mRecentsTransitionHandler.setFinishTransactionSupplier(() -> finishT);
+        mRecentsTransitionHandler.startAnimation(
+                transition, createTransitionInfo(), new StubTransaction(), new StubTransaction(),
+                mock(Transitions.TransitionFinishCallback.class));
+
+        mRecentsTransitionHandler.findController(transition).merge(
+                mergeTransitionInfo,
+                startT,
+                finishT,
+                mock(Transitions.TransitionFinishCallback.class));
+        mRecentsTransitionHandler.findController(transition).finish(/* toHome= */ false,
+                false /* sendUserLeaveHint */, mock(IResultReceiver.class));
+        mMainExecutor.flushAll();
+
+        verify(startT).setPosition(deskChildLeash, /* x= */ 0, /* y= */0);
+    }
+
+    @Test
+    @EnableFlags(FLAG_ENABLE_MULTIPLE_DESKTOPS_BACKEND)
+    public void testMergeAndFinish_openingTaskInDeskWithSiblings_reordersAllToTop() {
+        ActivityManager.RunningTaskInfo deskRootTask =
+                new TestRunningTaskInfoBuilder()
+                        .setWindowingMode(WINDOWING_MODE_FREEFORM)
+                        .build();
+        ActivityManager.RunningTaskInfo deskChildTask1 =
+                new TestRunningTaskInfoBuilder()
+                        .setWindowingMode(WINDOWING_MODE_FREEFORM)
+                        .setParentTaskId(deskRootTask.taskId)
+                        .build();
+        ActivityManager.RunningTaskInfo deskChildTask2 =
+                new TestRunningTaskInfoBuilder()
+                        .setWindowingMode(WINDOWING_MODE_FREEFORM)
+                        .setParentTaskId(deskRootTask.taskId)
+                        .build();
+        TransitionInfo startTransitionInfo = new TransitionInfoBuilder(TRANSIT_OPEN)
+                .addChange(TRANSIT_TO_BACK, deskChildTask1)
+                .addChange(TRANSIT_TO_BACK, deskChildTask2)
+                .addChange(TRANSIT_TO_BACK, deskRootTask)
+                .build();
+        TransitionInfo mergeTransitionInfo = new TransitionInfoBuilder(TRANSIT_OPEN)
+                .addChange(TRANSIT_OPEN, deskChildTask2)
+                .addChange(TRANSIT_OPEN, deskRootTask)
+                .build();
+        final IBinder transition = startRecentsTransition(/* synthetic= */ false);
+        SurfaceControl.Transaction finishT = mock(SurfaceControl.Transaction.class);
+        mRecentsTransitionHandler.setFinishTransactionSupplier(() -> finishT);
+        mRecentsTransitionHandler.startAnimation(
+                transition, startTransitionInfo, new StubTransaction(), new StubTransaction(),
+                mock(Transitions.TransitionFinishCallback.class));
+
+        mRecentsTransitionHandler.findController(transition).merge(
+                mergeTransitionInfo,
+                new StubTransaction(),
+                finishT,
+                mock(Transitions.TransitionFinishCallback.class));
+        mRecentsTransitionHandler.findController(transition).finish(/* toHome= */ false,
+                false /* sendUserLeaveHint */, mock(IResultReceiver.class));
+        mMainExecutor.flushAll();
+
+        final ArgumentCaptor<WindowContainerTransaction> wctCaptor =
+                ArgumentCaptor.forClass(WindowContainerTransaction.class);
+        verify(mTransitions)
+                .startTransition(eq(TRANSIT_END_RECENTS_TRANSITION), wctCaptor.capture(), any());
+        final WindowContainerTransaction wct = wctCaptor.getValue();
+        assertNotNull(wct);
+        // Task 2 was opened, so it should be on top.
+        assertReorderInOrder(wct, new ArrayList<>(Arrays.asList(deskChildTask1, deskChildTask2)));
+        // Both should be shown.
+        SurfaceControl deskChild1Leash = startTransitionInfo.getChanges().get(0).getLeash();
+        SurfaceControl deskChild2Leash = startTransitionInfo.getChanges().get(1).getLeash();
+        verify(finishT).show(deskChild1Leash);
+        verify(finishT).show(deskChild2Leash);
+    }
+
+    private void startTransitionAndMergeThenVerifyCanceled(TransitionInfo mergeTransition)
+            throws Exception {
+        final IRecentsAnimationRunner animationRunner = mock(IRecentsAnimationRunner.class);
+        final IBinder transition = startRecentsTransition(/* synthetic= */ false, animationRunner);
+        mRecentsTransitionHandler.startAnimation(
+                transition, createTransitionInfo(), new StubTransaction(), new StubTransaction(),
+                mock(Transitions.TransitionFinishCallback.class));
+
+        mRecentsTransitionHandler.findController(transition).merge(
+                mergeTransition,
+                new StubTransaction(),
+                new StubTransaction(),
+                mock(Transitions.TransitionFinishCallback.class));
+        mMainExecutor.flushAll();
+
+        // Verify that the runner was notified and that the cancel immediately took effect (and the
+        // transition is finished)
+        verify(animationRunner).onAnimationCanceled(any(), any());
+        assertThat(mRecentsTransitionHandler.findController(transition)).isNull();
     }
 
     private IBinder startRecentsTransition(boolean synthetic) {
@@ -445,8 +635,8 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
         final IBinder transition = new Binder();
         when(mTransitions.startTransition(anyInt(), any(), any())).thenReturn(transition);
         return mRecentsTransitionHandler.startRecentsTransition(
-                mock(PendingIntent.class), new Intent(), options, mock(IApplicationThread.class),
-                runner);
+                mock(PendingIntent.class), new Intent(), options, null /* wct */,
+                mock(IApplicationThread.class), runner);
     }
 
     private TransitionInfo createTransitionInfo() {
@@ -468,6 +658,18 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
                 .addChange(homeChange)
                 .addChange(appChange)
                 .build();
+    }
+
+    private void assertReorderInOrder(@NonNull WindowContainerTransaction wct,
+            ArrayList<ActivityManager.RunningTaskInfo> tasks) {
+        for (WindowContainerTransaction.HierarchyOp op : wct.getHierarchyOps()) {
+            if (tasks.isEmpty()) break;
+            if (op.getType() == WindowContainerTransaction.HierarchyOp.HIERARCHY_OP_TYPE_REORDER
+                    && op.getToTop() && op.getContainer().equals(tasks.get(0).token.asBinder())) {
+                tasks.removeFirst();
+            }
+        }
+        assertTrue("Not all tasks were reordered to front in order", tasks.isEmpty());
     }
 
     private static class TestTransitionStateListener implements RecentsTransitionStateListener {

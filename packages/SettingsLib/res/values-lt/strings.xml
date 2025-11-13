@@ -246,7 +246,7 @@
     <item msgid="6946761421234586000">"400 proc."</item>
   </string-array>
     <string name="choose_profile" msgid="343803890897657450">"Profilio pasirinkimas"</string>
-    <string name="category_personal" msgid="6236798763159385225">"Asmeninės"</string>
+    <string name="category_personal" msgid="6236798763159385225">"Asmeninis"</string>
     <string name="category_work" msgid="4014193632325996115">"Darbo"</string>
     <string name="category_private" msgid="4244892185452788977">"Privatus"</string>
     <string name="category_clone" msgid="1554511758987195974">"Identiška kopija"</string>
@@ -290,7 +290,7 @@
     <string name="keywords_adb_wireless" msgid="6507505581882171240">"ADB, derinti, kūrėjas"</string>
     <string name="bugreport_in_power" msgid="8664089072534638709">"Pranešimo apie riktą spartusis klavišas"</string>
     <string name="bugreport_in_power_summary" msgid="1885529649381831775">"Rodyti pranešimo apie riktą mygtuką maitinimo meniu"</string>
-    <string name="keep_screen_on" msgid="1187161672348797558">"Veikti"</string>
+    <string name="keep_screen_on" msgid="1187161672348797558">"Ekrano neišjungti"</string>
     <string name="keep_screen_on_summary" msgid="1510731514101925829">"Kraunant ekranas niekada neveiks miego režimu"</string>
     <string name="bt_hci_snoop_log" msgid="7291287955649081448">"Įgalinti „Bluetooth“ HCI šnipinėjimo žurnalą"</string>
     <string name="bt_hci_snoop_log_summary" msgid="6808538971394092284">"Fiksuoti „Bluetooth“ paketus. (Perjungti „Bluetooth“ pakeitus šį nustatymą)"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"Prieš <xliff:g id="ID_1">%1$s</xliff:g>"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"Liko <xliff:g id="ID_1">%1$s</xliff:g>"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Mažiausias"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Mažesnis"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Mažas"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"Numatytasis"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Didelis"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Didesnis"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Didžiausias"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Didesnis"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Labai didelis"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Itin didelis"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Didžiausias"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Tinkintas (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Meniu"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Įv. slapt. ir atk. gam. nust. dem. rež."</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{Prijungtas vienas įrenginys}one{Prijungtas # įrenginys}few{Prijungti # įrenginiai}many{Prijungta # įrenginio}other{Prijungta # įrenginių}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Daugiau laiko."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Mažiau laiko."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Didinimas"</string>
     <string name="cancel" msgid="5665114069455378395">"Atšaukti"</string>
     <string name="next" msgid="2699398661093607009">"Kitas"</string>
     <string name="back" msgid="5554327870352703710">"Atgal"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"Jei transliuosite „<xliff:g id="SWITCHAPP">%1$s</xliff:g>“ arba pakeisite išvestį, dabartinė transliacija bus sustabdyta"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"Transliuoti „<xliff:g id="SWITCHAPP">%1$s</xliff:g>“"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Keisti išvestį"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"Numatomos grįžimo atgal gestų animacijos"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"Įgalinkite sistemos animacijas, kad būtų galima naudoti numatomus grįžimo atgal gestus."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"Šis nustatymas įgalina numatomų grįžimo atgal gestų sistemos animacijas. Aprašo faile programos lauką „enableOnBackInvokedCallback“ reikia nustatyti į vertę „true“."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="not_specified" msgid="5423502443185110328">"Nenurodyta"</string>
     <string name="neuter" msgid="2075249330106127310">"Bevardė giminė"</string>

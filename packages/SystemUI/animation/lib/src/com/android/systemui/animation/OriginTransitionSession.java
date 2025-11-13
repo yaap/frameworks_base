@@ -25,6 +25,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.os.RemoteException;
 import android.util.Log;
@@ -64,7 +65,6 @@ public class OriginTransitionSession {
     @Nullable private final IRemoteTransition mEntryTransition;
     @Nullable private final IRemoteTransition mExitTransition;
     private final AtomicInteger mState = new AtomicInteger(NOT_STARTED);
-
     @Nullable private RemoteTransition mOriginTransition;
 
     private OriginTransitionSession(
@@ -105,24 +105,42 @@ public class OriginTransitionSession {
                                 mOriginTransitions.makeOriginTransition(
                                         new RemoteTransition(mEntryTransition, mName + "-entry"),
                                         new RemoteTransition(mExitTransition, mName + "-exit"));
-            } catch (RemoteException e) {
+            } catch (Exception e) {
                 logE("Unable to create origin transition!", e);
             }
-        } else if (hasEntryTransition()) {
+        }
+        if (remoteTransition == null && hasEntryTransition()) {
+            // If we failed to create a full origin transition (entry + exit), fallback to use the
+            // entry transition only.
             logD("start: starting with entry transition.");
             remoteTransition = new RemoteTransition(mEntryTransition, mName + "-entry");
+        }
 
-        } else {
+        if (remoteTransition == null) {
+            // If both entry and exit transitions are not provided, we will fallback to start the
+            // activity without transition.
             logD("start: starting without transition.");
         }
-        if (mIntentStarter.test(remoteTransition)) {
-            return true;
-        } else {
-            // Animation is cancelled by intent starter.
-            logD("start: cancelled by intent starter!");
-            cancel();
-            return false;
+
+        try {
+            if (mIntentStarter.test(remoteTransition)) {
+                logD("start: intent launched!");
+                if (remoteTransition != null) {
+                    // If the intent is successfully launched with a remote transition, setup the
+                    // transaction queues for the entry and exit transitions.
+                    setupTransactionQueues();
+                }
+                return true;
+            } else {
+                // Animation is cancelled by intent starter.
+                logD("start: cancelled by intent starter!");
+            }
+        } catch (Exception e) {
+            logE("Unable to launch intent!", e);
         }
+        // Cancel the session since the intent was not launched.
+        cancel();
+        return false;
     }
 
     /**
@@ -158,6 +176,22 @@ public class OriginTransitionSession {
 
     private boolean hasExitTransition() {
         return mOriginTransitions != null && mExitTransition != null;
+    }
+
+    private void setupTransactionQueues() {
+        final IBinder shellApplyToken;
+        try {
+            shellApplyToken = mOriginTransitions.getDefaultTransactionApplyToken();
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting server side (shell) apply token", e);
+            return;
+        }
+        if (mEntryTransition != null && mEntryTransition instanceof OriginRemoteTransition) {
+            ((OriginRemoteTransition) mEntryTransition).setShellTransactionToken(shellApplyToken);
+        }
+        if (mExitTransition != null && mExitTransition instanceof OriginRemoteTransition) {
+            ((OriginRemoteTransition) mExitTransition).setShellTransactionToken(shellApplyToken);
+        }
     }
 
     private void logD(String msg) {
@@ -277,7 +311,7 @@ public class OriginTransitionSession {
 
         /** Add an origin entry transition to the builder. */
         public Builder withEntryTransition(
-                UIComponent entryOrigin, TransitionPlayer entryPlayer, long entryDuration) {
+                UIComponent entryOrigin, TransitionPlayer entryPlayer) {
             mEntryTransitionSupplier =
                     () ->
                             new OriginRemoteTransition(
@@ -285,7 +319,6 @@ public class OriginTransitionSession {
                                     /* isEntry= */ true,
                                     entryOrigin,
                                     entryPlayer,
-                                    entryDuration,
                                     mHandler);
             return this;
         }
@@ -298,7 +331,7 @@ public class OriginTransitionSession {
 
         /** Add an origin exit transition to the builder. */
         public Builder withExitTransition(
-                UIComponent exitTarget, TransitionPlayer exitPlayer, long exitDuration) {
+                UIComponent exitTarget, TransitionPlayer exitPlayer) {
             mExitTransitionSupplier =
                     () ->
                             new OriginRemoteTransition(
@@ -306,7 +339,6 @@ public class OriginTransitionSession {
                                     /* isEntry= */ false,
                                     exitTarget,
                                     exitPlayer,
-                                    exitDuration,
                                     mHandler);
             return this;
         }

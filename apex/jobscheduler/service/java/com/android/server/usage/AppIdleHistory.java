@@ -702,8 +702,7 @@ public class AppIdleHistory {
         AppUsageHistory appUsageHistory = getPackageHistory(userHistory, packageName,
                 elapsedRealtime, false);
         // If we don't have any state for the app, assume never used
-        if (appUsageHistory == null || appUsageHistory.lastUsedElapsedTime < 0
-                || (!Flags.screenTimeBypass() && appUsageHistory.lastUsedScreenTime < 0)) {
+        if (appUsageHistory == null || appUsageHistory.lastUsedElapsedTime < 0) {
             return -1;
         }
 
@@ -716,8 +715,7 @@ public class AppIdleHistory {
         if (DEBUG) Slog.d(TAG, packageName + " screenOn=" + screenOnDelta
                 + ", elapsed=" + elapsedDelta);
         for (int i = screenTimeThresholds.length - 1; i >= 0; i--) {
-            if ((Flags.screenTimeBypass() || screenOnDelta >= screenTimeThresholds[i])
-                && elapsedDelta >= elapsedTimeThresholds[i]) {
+            if (elapsedDelta >= elapsedTimeThresholds[i]) {
                 return i;
             }
         }
@@ -848,13 +846,9 @@ public class AppIdleHistory {
                         }
                         appUsageHistory.nextEstimatedLaunchTime = getLongValue(parser,
                                 ATTR_NEXT_ESTIMATED_APP_LAUNCH_TIME, 0);
-                        if (Flags.avoidIdleCheck()) {
-                            // Set lastInformedBucket to the same value with the currentBucket
-                            // it should have already been informed.
-                            appUsageHistory.lastInformedBucket = appUsageHistory.currentBucket;
-                        } else {
-                            appUsageHistory.lastInformedBucket = -1;
-                        }
+                        // Set lastInformedBucket to the same value with the currentBucket
+                        // it should have already been informed.
+                        appUsageHistory.lastInformedBucket = appUsageHistory.currentBucket;
                         userHistory.put(packageName, appUsageHistory);
 
                         if (version >= XML_VERSION_ADD_BUCKET_EXPIRY_TIMES) {

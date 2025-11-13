@@ -36,7 +36,6 @@ import android.window.ScreenCapture.ScreenshotHardwareBuffer;
 import android.window.ScreenCapture.SynchronousScreenCaptureListener;
 
 import androidx.annotation.IntDef;
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.android.wm.shell.shared.annotations.ExternalThread;
@@ -106,9 +105,6 @@ public interface Bubbles {
      * notification entry and the stack is currently expanded.
      */
     boolean isBubbleExpanded(String key);
-
-    /** Tell the stack of bubbles to collapse. */
-    void collapseStack();
 
     /**
      * Request the stack expand if needed, then select the specified Bubble as current.
@@ -316,6 +312,33 @@ public interface Bubbles {
     boolean canShowBubbleNotification();
 
     /**
+     * Returns the string representation of the given dismiss reason.
+     */
+    public static String dismissReasonToString(@DismissReason int dismissReason) {
+        switch (dismissReason) {
+            case DISMISS_USER_GESTURE: return "USER_GESTURE";
+            case DISMISS_AGED: return "AGED";
+            case DISMISS_TASK_FINISHED: return "TASK_FINISHED";
+            case DISMISS_BLOCKED: return "BLOCKED";
+            case DISMISS_NOTIF_CANCEL: return "NOTIF_CANCEL";
+            case DISMISS_ACCESSIBILITY_ACTION: return "ACCESSIBILITY_ACTION";
+            case DISMISS_NO_LONGER_BUBBLE: return "NO_LONGER_BUBBLE";
+            case DISMISS_USER_CHANGED: return "USER_CHANGED";
+            case DISMISS_GROUP_CANCELLED: return "GROUP_CANCELLED";
+            case DISMISS_INVALID_INTENT: return "INVALID_INTENT";
+            case DISMISS_OVERFLOW_MAX_REACHED: return "OVERFLOW_MAX_REACHED";
+            case DISMISS_SHORTCUT_REMOVED: return "SHORTCUT_REMOVED";
+            case DISMISS_PACKAGE_REMOVED: return "PACKAGE_REMOVED";
+            case DISMISS_NO_BUBBLE_UP: return "NO_BUBBLE_UP";
+            case DISMISS_RELOAD_FROM_DISK: return "RELOAD_FROM_DISK";
+            case DISMISS_USER_ACCOUNT_REMOVED: return "USER_ACCOUNT_REMOVED";
+            case DISMISS_SWITCH_TO_STACK: return "SWITCH_TO_STACK";
+            case DISMISS_USER_GESTURE_FROM_LAUNCHER: return "USER_GESTURE_FROM_LAUNCHER";
+            default: return "UNKNOWN";
+        }
+    }
+
+    /**
      * A listener to be notified of bubble state changes, used by launcher to render bubbles in
      * its process.
      */
@@ -332,16 +355,12 @@ public interface Bubbles {
         void animateBubbleBarLocation(BubbleBarLocation location);
 
         /**
-         * Called when an application icon is being dragged over the Bubble Bar drop zone.
-         * The location of the Bubble Bar is provided as an argument.
+         * Show the bubble bar pillow view at the provided location.
+         * If the location is null, the pillow view is should be hidden.
+         *
+         * @param location The location to show the pillow view, or null to hide it.
          */
-        void onDragItemOverBubbleBarDragZone(@NonNull BubbleBarLocation location);
-
-        /**
-         * Called when an application icon is being dragged outside the Bubble Bar drop zone.
-         * Always called after {@link #onDragItemOverBubbleBarDragZone(BubbleBarLocation)}
-         */
-        void onItemDraggedOutsideBubbleBarDropZone();
+        void showBubbleBarPillowAt(@Nullable BubbleBarLocation location);
     }
 
     /** Listener to find out about stack expansion / collapse events. */

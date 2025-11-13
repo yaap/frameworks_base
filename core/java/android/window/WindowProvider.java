@@ -15,6 +15,9 @@
  */
 package android.window;
 
+import static android.view.WindowManager.LayoutParams.INVALID_WINDOW_TYPE;
+import static android.view.WindowManager.LayoutParams.isSubWindowType;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Bundle;
@@ -29,7 +32,22 @@ import android.view.WindowManager.LayoutParams.WindowType;
  */
 public interface WindowProvider {
     /** @hide */
-    String KEY_IS_WINDOW_PROVIDER_SERVICE = "android.windowContext.isWindowProviderService";
+    String KEY_IS_WINDOW_PROVIDER_SERVICE = "android.window.WindowProvider.isWindowProviderService";
+
+    /**
+     * The key to indicate whether the WindowContext should be reparented to the default display
+     * when the currently attached display is removed.
+     * <p>
+     * By default, the value is {@code false}, which means the WindowContext is removed with
+     * the display removal. If the value is {@code true}, the WindowContext will be reparented to
+     * the default display instead.
+     * <p>
+     * Type: Boolean
+     *
+     * @hide
+     */
+    String KEY_REPARENT_TO_DEFAULT_DISPLAY_WITH_DISPLAY_REMOVAL =
+            "android.window.WindowProvider.reparentToDefaultDisplayWithDisplayRemoval";
 
     /** Gets the window type of this provider */
     @WindowType
@@ -45,4 +63,28 @@ public interface WindowProvider {
      */
     @NonNull
     IBinder getWindowContextToken();
+
+    /**
+     * Gets the window type to be overridden when {@link android.view.WindowManager#addView}
+     */
+    @WindowType
+    default int getWindowTypeOverride() {
+        return INVALID_WINDOW_TYPE;
+    }
+
+    /**
+     * Returns {@code true} if the given type is a valid window type for this
+     * {@link WindowProvider}.
+     *
+     * @param type the requested window type
+     */
+    default boolean isValidWindowType(@WindowType int type) {
+        if (type == getWindowType()) {
+            // Valid. The requested window type is the type of WindowContext.
+            return true;
+        }
+        // Don't need to check sub-window type because sub window should be allowed to be attached
+        // to the parent window.
+        return isSubWindowType(type);
+    }
 }

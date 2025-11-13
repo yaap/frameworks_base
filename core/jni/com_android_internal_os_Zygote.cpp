@@ -1102,7 +1102,7 @@ static std::string getAppDataDirName(std::string_view parent_path, std::string_v
   } else {
     if (errno != ENOENT) {
       fail_fn(CREATE_ERROR("Unexpected error in getAppDataDirName: %s", strerror(errno)));
-      return nullptr;
+      return "";
     }
     {
       // Directory doesn't exist, try to search the name from inode
@@ -2151,6 +2151,7 @@ static void SpecializeCommon(JNIEnv* env, uid_t uid, gid_t gid, jintArray gids, 
     // Make it easier to debug audit logs by setting the main thread's name to the
     // nice name rather than "app_process".
     if (nice_name.has_value()) {
+        ALOGI("Process %d crated for %s", getpid(), nice_name.value().c_str());
         SetThreadName(nice_name.value());
     } else if (is_system_server) {
         SetThreadName("system_server");

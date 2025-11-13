@@ -53,6 +53,7 @@ import com.android.internal.util.ArrayUtils;
 
 import dalvik.annotation.optimization.CriticalNative;
 import dalvik.annotation.optimization.FastNative;
+import dalvik.annotation.optimization.NeverInline;
 
 import java.nio.BufferOverflowException;
 import java.nio.ReadOnlyBufferException;
@@ -618,7 +619,6 @@ public final class Parcel {
         // able to print a stack when a Parcel is recycled twice, that
         // is cleared in obtain instead.
 
-        mClassCookies = null;
         freeBuffer();
 
         if (mOwnsNativeParcelObject) {
@@ -639,6 +639,21 @@ public final class Parcel {
                 }
             }
         }
+    }
+
+    @NeverInline
+    private void errorUsedWhileRecycling() {
+        String error = "Parcel used while recycled. "
+                + Log.getStackTraceString(new Throwable())
+                + " Original recycle call (if DEBUG_RECYCLE): ", mStack;
+        Log.wtf(TAG, error);
+        throw new BadParcelableException(error);
+    }
+
+    // TODO: call in more places, it costs a _lot_ to use this in many
+    // places, see b/390748425 for instance. Used as canary for now.
+    private void assertNotRecycled() {
+        if (mRecycled) errorUsedWhileRecycling();
     }
 
     /**
@@ -1725,7 +1740,7 @@ public final class Parcel {
                 totalObjects = Math.multiplyExact(totalObjects, dimension);
             }
         } catch (ArithmeticException e) {
-            Log.e(TAG, "ArithmeticException occurred while multiplying dimensions " + e);
+            Log.e(TAG, "ArithmeticException occurred while multiplying dimensions", e);
             BadParcelableException badParcelableException = new BadParcelableException("Estimated "
                     + "array length is too large. Array Dimensions:" + Arrays.toString(dimensions));
             SneakyThrow.sneakyThrow(badParcelableException);
@@ -1739,7 +1754,7 @@ public final class Parcel {
             estimatedAllocationSize = Math.multiplyExact(typeSize, length);
         } catch (ArithmeticException e) {
             Log.e(TAG, "ArithmeticException occurred while multiplying values " + typeSize
-                    + " and "  + length + " Exception: " + e);
+                    + " and " + length, e);
             BadParcelableException badParcelableException = new BadParcelableException("Estimated "
                     + "allocation size is too large. typeSize: " + typeSize + " length: " + length);
             SneakyThrow.sneakyThrow(badParcelableException);
@@ -5203,6 +5218,7 @@ public final class Parcel {
     @SuppressWarnings("unchecked")
     @Nullable
     private <T> T readParcelableInternal(@Nullable ClassLoader loader, @Nullable Class<T> clazz) {
+        assertNotRecycled();
         Parcelable.Creator<?> creator = readParcelableCreatorInternal(loader, clazz);
         if (creator == null) {
             return null;
@@ -5595,9 +5611,11 @@ public final class Parcel {
             nativeFreeBuffer(mNativePtr);
         }
         mReadWriteHelper = ReadWriteHelper.DEFAULT;
+        mClassCookies = null;
     }
 
-    private void destroy() {
+    /** @hide */
+    public void destroy() {
         resetSqaushingState();
         if (mNativePtr != 0) {
             if (mOwnsNativeParcelObject) {

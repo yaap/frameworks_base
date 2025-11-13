@@ -18,7 +18,9 @@ package com.android.wm.shell.scenarios
 
 import android.app.Instrumentation
 import android.tools.NavBar
+import android.tools.PlatformConsts.DEFAULT_DISPLAY
 import android.tools.Rotation
+import android.tools.flicker.rules.RemoveAllTasksButHomeRule
 import android.tools.traces.parsers.WindowManagerStateHelper
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -26,6 +28,7 @@ import com.android.launcher3.tapl.LauncherInstrumentation
 import com.android.server.wm.flicker.helpers.MailAppHelper
 import com.android.window.flags.Flags
 import com.android.wm.shell.Utils
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import org.junit.After
 import org.junit.Assume
 import org.junit.Before
@@ -34,7 +37,7 @@ import org.junit.Rule
 import org.junit.Test
 
 @Ignore("Base Test Class")
-abstract class EnterDesktopViaMenuOfStaticOverviewTask constructor() {
+abstract class EnterDesktopViaMenuOfStaticOverviewTask : TestScenarioBase() {
 
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
     private val tapl = LauncherInstrumentation()
@@ -48,12 +51,12 @@ abstract class EnterDesktopViaMenuOfStaticOverviewTask constructor() {
 
     @Before
     fun setup() {
-        Assume.assumeTrue(Flags.enableDesktopWindowingMode() && tapl.isTablet)
+        Assume.assumeTrue(
+            DesktopState.fromContext(instrumentation.context)
+                .isDesktopModeSupportedOnDisplay(DEFAULT_DISPLAY)
+        )
         // Clear all tasks
-        val overview = tapl.goHome().switchToOverview()
-        if (overview.hasTasks()) {
-            overview.dismissAllTasks()
-        }
+        RemoveAllTasksButHomeRule.removeAllTasksButHome()
         mailApp.open()
         tapl.goHome().switchToOverview()
     }

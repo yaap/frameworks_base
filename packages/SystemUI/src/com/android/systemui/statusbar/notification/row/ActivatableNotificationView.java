@@ -28,6 +28,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Point;
 import android.util.AttributeSet;
 import android.util.IndentingPrintWriter;
@@ -121,6 +122,12 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
     protected Point mTargetPoint;
     private boolean mDismissed;
     private boolean mRefocusOnDismiss;
+    /**
+     * Whether the notification is on the keyguard. This is used to disable the transparent
+     * background, and the {@link ExpandableNotificationRow} additionally uses this to disable
+     * expansion.
+     */
+    protected boolean mOnKeyguard;
     protected boolean mIsBlurSupported;
 
     public ActivatableNotificationView(Context context, AttributeSet attrs) {
@@ -338,12 +345,12 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
         boolean usedTransparentBackground = usesTransparentBackground();
         mIsBlurSupported = isBlurSupported;
         if (usedTransparentBackground != usesTransparentBackground()) {
-            updateBackgroundColors();
+            updateBackgroundTint();
         }
     }
 
     protected boolean usesTransparentBackground() {
-        return mIsBlurSupported && notificationRowTransparency();
+        return mIsBlurSupported && notificationRowTransparency() && !mOnKeyguard;
     }
 
     @Override
@@ -369,6 +376,26 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
     public void setClipBottomAmount(int clipBottomAmount) {
         super.setClipBottomAmount(clipBottomAmount);
         mBackgroundNormal.setClipBottomAmount(clipBottomAmount);
+    }
+
+    @Override
+    public void setBottomOverlap(int bottomOverlap) {
+        super.setBottomOverlap(bottomOverlap);
+        mBackgroundNormal.setBottomOverlap(bottomOverlap);
+    }
+
+    @Override
+    public void setTopOverlap(int topOverlap) {
+        super.setTopOverlap(topOverlap);
+        mBackgroundNormal.setTopOverlap(topOverlap);
+    }
+
+    @Override
+    public boolean isBackgroundOpaque() {
+        if (Color.alpha(mCurrentBackgroundTint) == 255) {
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -519,6 +546,15 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
                 }, delay);
     }
 
+    @Override
+    public int getBackgroundBottom() {
+        int backgroundBottom = super.getBackgroundBottom();
+        if (mDrawingAppearAnimation) {
+            backgroundBottom += (int) mAppearAnimationTranslation;
+        }
+        return backgroundBottom;
+    }
+
     private int getCujType(boolean isAppearing) {
         if (mIsHeadsUpAnimation) {
             return isAppearing
@@ -585,8 +621,7 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
                         /* bottom= */ fullHeight
                 );
             } else if (clipSide == BOTTOM) {
-                setOutlineRect(0, mAppearAnimationTranslation, getWidth(),
-                        height + mAppearAnimationTranslation);
+                setOutlineRect(0, 0, getWidth(), height);
             }
         }
     }
@@ -803,6 +838,30 @@ public abstract class ActivatableNotificationView extends ExpandableOutlineView 
 
     public void setTouchHandler(Gefingerpoken touchHandler) {
         mTouchHandler = touchHandler;
+    }
+
+    /**
+     * Sets whether this view is on the keyguard.
+     * Subclass implementations must set {@link #mOnKeyguard} to the given value.
+     * @see #isOnKeyguard()
+     */
+    public void setOnKeyguard(boolean onKeyguard) {
+        if (mOnKeyguard == onKeyguard) {
+            return;
+        }
+
+        mOnKeyguard = onKeyguard;
+        if (notificationRowTransparency()) {
+            updateBackgroundTint();
+        }
+    }
+
+    /**
+     * Whether this row is displayed over the unoccluded lockscreen. Returns false on the
+     * locked shade.
+     */
+    public boolean isOnKeyguard() {
+        return mOnKeyguard;
     }
 
     @Override

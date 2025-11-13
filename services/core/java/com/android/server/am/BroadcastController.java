@@ -52,6 +52,9 @@ import static com.android.server.am.BroadcastRecord.intentToString;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SpecialUsers.CanBeALL;
+import android.annotation.SpecialUsers.CanBeCURRENT;
+import android.annotation.UserIdInt;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AppGlobals;
@@ -248,7 +251,8 @@ class BroadcastController {
 
     Intent registerReceiverWithFeature(IApplicationThread caller, String callerPackage,
             String callerFeatureId, String receiverId, IIntentReceiver receiver,
-            IntentFilter filter, String permission, int userId, int flags) {
+            IntentFilter filter, String permission,  @CanBeALL @CanBeCURRENT @UserIdInt int userId,
+            int flags) {
         traceRegistrationBegin(receiverId, receiver, filter, userId);
         try {
             return registerReceiverWithFeatureTraced(caller, callerPackage, callerFeatureId,
@@ -260,9 +264,6 @@ class BroadcastController {
 
     private static void traceRegistrationBegin(String receiverId, IIntentReceiver receiver,
             IntentFilter filter, int userId) {
-        if (!Flags.traceReceiverRegistration()) {
-            return;
-        }
         if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
             final StringBuilder sb = new StringBuilder("registerReceiver: ");
             sb.append(Binder.getCallingUid()); sb.append('/');
@@ -285,9 +286,6 @@ class BroadcastController {
     }
 
     private static void traceRegistrationEnd() {
-        if (!Flags.traceReceiverRegistration()) {
-            return;
-        }
         if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
             Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
         }
@@ -296,7 +294,7 @@ class BroadcastController {
     private Intent registerReceiverWithFeatureTraced(IApplicationThread caller,
             String callerPackage, String callerFeatureId, String receiverId,
             IIntentReceiver receiver, IntentFilter filter, String permission,
-            int userId, int flags) {
+            @CanBeALL @CanBeCURRENT @UserIdInt int userId, int flags) {
         mService.enforceNotIsolatedCaller("registerReceiver");
 
         if (!mAreStickyCachesInvalidated) {
@@ -487,15 +485,10 @@ class BroadcastController {
                 // provider that needs to lock mProviderMap in ActivityThread
                 // and also it may need to wait application response, so we
                 // cannot lock ActivityManagerService here.
-                final int match;
-                if (Flags.avoidResolvingType()) {
-                    match = filter.match(intent.getAction(), broadcast.resolvedDataType,
-                            intent.getScheme(), intent.getData(), intent.getCategories(),
-                            TAG, false /* supportsWildcards */, null /* ignoreActions */,
-                            intent.getExtras());
-                } else {
-                    match = filter.match(resolver, intent, true, TAG);
-                }
+                final int match = filter.match(intent.getAction(), broadcast.resolvedDataType,
+                        intent.getScheme(), intent.getData(), intent.getCategories(),
+                        TAG, false /* supportsWildcards */, null /* ignoreActions */,
+                        intent.getExtras());
                 if (match >= 0) {
                     if (allSticky == null) {
                         allSticky = new ArrayList<>();
@@ -625,9 +618,6 @@ class BroadcastController {
     }
 
     private static void traceUnregistrationBegin(IIntentReceiver receiver) {
-        if (!Flags.traceReceiverRegistration()) {
-            return;
-        }
         if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
             Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER,
                     TextUtils.formatSimple("unregisterReceiver: %d/%s", Binder.getCallingUid(),
@@ -636,9 +626,6 @@ class BroadcastController {
     }
 
     private static void traceUnregistrationEnd() {
-        if (!Flags.traceReceiverRegistration()) {
-            return;
-        }
         if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
             Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
         }
@@ -712,7 +699,7 @@ class BroadcastController {
             int resultCode, String resultData, Bundle resultExtras,
             String[] requiredPermissions, String[] excludedPermissions,
             String[] excludedPackages, int appOp, Bundle bOptions,
-            boolean serialized, boolean sticky, int userId) {
+            boolean serialized, boolean sticky, @CanBeALL @CanBeCURRENT @UserIdInt int userId) {
         mService.enforceNotIsolatedCaller("broadcastIntent");
         final int result;
 
@@ -729,12 +716,6 @@ class BroadcastController {
             // Permission regimes around sender-supplied broadcast options.
             enforceBroadcastOptionPermissionsInternal(bOptions, callingUid);
 
-            final ComponentName cn = intent.getComponent();
-
-            Trace.traceBegin(
-                    Trace.TRACE_TAG_ACTIVITY_MANAGER,
-                    "broadcastIntent:" + (cn != null ? cn.toString() : intent.getAction()));
-
             final long origId = Binder.clearCallingIdentity();
             try {
                 result = broadcastIntentLocked(callerApp,
@@ -745,7 +726,6 @@ class BroadcastController {
                         callingPid, userId, BackgroundStartPrivileges.NONE, null, null);
             } finally {
                 Binder.restoreCallingIdentity(origId);
-                Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
             }
         }
 
@@ -795,7 +775,7 @@ class BroadcastController {
             Bundle resultExtras, String[] requiredPermissions,
             String[] excludedPermissions, String[] excludedPackages, int appOp, Bundle bOptions,
             boolean ordered, boolean sticky, int callingPid, int callingUid,
-            int realCallingUid, int realCallingPid, int userId,
+            int realCallingUid, int realCallingPid, @CanBeALL @CanBeCURRENT @UserIdInt int userId,
             BackgroundStartPrivileges backgroundStartPrivileges,
             @Nullable int[] broadcastAllowList,
             @Nullable BiFunction<Integer, Bundle, Bundle> filterExtrasForReceiver) {
@@ -821,9 +801,6 @@ class BroadcastController {
 
     private static int traceBroadcastIntentBegin(Intent intent, IIntentReceiver resultTo,
             boolean ordered, boolean sticky, int callingUid, int realCallingUid, int userId) {
-        if (!Flags.traceReceiverRegistration()) {
-            return BroadcastQueue.traceBegin("broadcastIntentLockedTraced");
-        }
         if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
             final StringBuilder sb = new StringBuilder("broadcastIntent: ");
             sb.append(callingUid); sb.append('/');
@@ -839,6 +816,10 @@ class BroadcastController {
                 sb.append('/');
                 sb.append("sender="); sb.append(realCallingUid);
             }
+            final String target = intent.getComponent() != null
+                    ? intent.getComponent().flattenToShortString()
+                    : intent.getPackage();
+            Trace.instant(Trace.TRACE_TAG_ACTIVITY_MANAGER, "broadcastIntentTarget:" + target);
             return BroadcastQueue.traceBegin(sb.toString());
         }
         return 0;
@@ -857,7 +838,8 @@ class BroadcastController {
             Bundle resultExtras, String[] requiredPermissions,
             String[] excludedPermissions, String[] excludedPackages, int appOp,
             BroadcastOptions brOptions, boolean ordered, boolean sticky, int callingPid,
-            int callingUid, int realCallingUid, int realCallingPid, int userId,
+            int callingUid, int realCallingUid, int realCallingPid,
+            @CanBeALL @CanBeCURRENT @UserIdInt int userId,
             BackgroundStartPrivileges backgroundStartPrivileges,
             @Nullable int[] broadcastAllowList,
             @Nullable BiFunction<Integer, Bundle, Bundle> filterExtrasForReceiver,

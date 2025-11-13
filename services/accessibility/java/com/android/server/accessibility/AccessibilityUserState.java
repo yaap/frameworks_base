@@ -47,6 +47,7 @@ import android.content.pm.ResolveInfo;
 import android.os.Binder;
 import android.os.RemoteCallbackList;
 import android.provider.Settings;
+import android.provider.Settings.Secure.AccessibilityMagnificationCursorFollowingMode;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
@@ -60,6 +61,7 @@ import com.android.internal.R;
 import com.android.internal.accessibility.AccessibilityShortcutController;
 import com.android.internal.accessibility.common.ShortcutConstants;
 import com.android.internal.accessibility.util.ShortcutUtils;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -79,7 +81,8 @@ import java.util.stream.Collectors;
  * Class that hold states and settings per user and share between
  * {@link AccessibilityManagerService} and {@link AccessibilityServiceConnection}.
  */
-class AccessibilityUserState {
+@VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+public class AccessibilityUserState {
     private static final String LOG_TAG = AccessibilityUserState.class.getSimpleName();
 
     final int mUserId;
@@ -155,8 +158,14 @@ class AccessibilityUserState {
     private final SparseIntArray mMagnificationModes = new SparseIntArray();
     // The magnification capabilities used to know magnification mode could be switched.
     private int mMagnificationCapabilities = ACCESSIBILITY_MAGNIFICATION_MODE_FULLSCREEN;
+    // The magnification cursor following mode.
+    @AccessibilityMagnificationCursorFollowingMode
+    private int mMagnificationCursorFollowingMode =
+            Settings.Secure.ACCESSIBILITY_MAGNIFICATION_CURSOR_FOLLOWING_MODE_CONTINUOUS;
     // Whether the following typing focus feature for magnification is enabled.
     private boolean mMagnificationFollowTypingEnabled = true;
+    // Whether the following keyboard focus feature for magnification is enabled.
+    private boolean mMagnificationFollowKeyboardEnabled = false;
     // Whether the always on magnification feature is enabled.
     private boolean mAlwaysOnMagnificationEnabled = false;
 
@@ -252,7 +261,10 @@ class AccessibilityUserState {
         mMagnificationModes.clear();
         mFocusStrokeWidth = mFocusStrokeWidthDefaultValue;
         mFocusColor = mFocusColorDefaultValue;
+        mMagnificationCursorFollowingMode =
+                Settings.Secure.ACCESSIBILITY_MAGNIFICATION_CURSOR_FOLLOWING_MODE_CONTINUOUS;
         mMagnificationFollowTypingEnabled = true;
+        mMagnificationFollowKeyboardEnabled = false;
         mAlwaysOnMagnificationEnabled = false;
     }
 
@@ -575,8 +587,12 @@ class AccessibilityUserState {
                 .append(String.valueOf(mMagnificationCapabilities));
         pw.append(", audioDescriptionByDefaultEnabled=")
                 .append(String.valueOf(mIsAudioDescriptionByDefaultRequested));
+        pw.append(", magnificationCursorFollowingMode=").append(
+                String.valueOf(mMagnificationCursorFollowingMode));
         pw.append(", magnificationFollowTypingEnabled=")
                 .append(String.valueOf(mMagnificationFollowTypingEnabled));
+        pw.append(", magnificationFollowKeyboardEnabled=")
+                .append(String.valueOf(mMagnificationFollowKeyboardEnabled));
         pw.append(", alwaysOnMagnificationEnabled=")
                 .append(String.valueOf(mAlwaysOnMagnificationEnabled));
         pw.append("}");
@@ -761,12 +777,43 @@ class AccessibilityUserState {
         mMagnificationCapabilities = capabilities;
     }
 
+    /**
+     * Gets the magnification cursor following mode.
+     * @return magnification cursor following mode
+     *
+     * @see Settings.Secure#ACCESSIBILITY_MAGNIFICATION_CURSOR_FOLLOWING_MODE_CONTINUOUS
+     * @see Settings.Secure#ACCESSIBILITY_MAGNIFICATION_CURSOR_FOLLOWING_MODE_CENTER
+     * @see Settings.Secure#ACCESSIBILITY_MAGNIFICATION_CURSOR_FOLLOWING_MODE_EDGE
+     */
+    @AccessibilityMagnificationCursorFollowingMode
+    public int getMagnificationCursorFollowingMode() {
+        return mMagnificationCursorFollowingMode;
+    }
+
+    /**
+     * Sets the magnification cursor following mode.
+     *
+     * @param mode The magnification cursor following mode.
+     */
+    public void setMagnificationCursorFollowingMode(
+            @AccessibilityMagnificationCursorFollowingMode int mode) {
+        mMagnificationCursorFollowingMode = mode;
+    }
+
     public void setMagnificationFollowTypingEnabled(boolean enabled) {
         mMagnificationFollowTypingEnabled = enabled;
     }
 
     public boolean isMagnificationFollowTypingEnabled() {
         return mMagnificationFollowTypingEnabled;
+    }
+
+    public void setMagnificationFollowKeyboardEnabled(boolean enabled) {
+        mMagnificationFollowKeyboardEnabled = enabled;
+    }
+
+    public boolean isMagnificationFollowKeyboardEnabled() {
+        return mMagnificationFollowKeyboardEnabled;
     }
 
     public void setAlwaysOnMagnificationEnabled(boolean enabled) {
@@ -833,6 +880,8 @@ class AccessibilityUserState {
             mShortcutTargets.put(shortcutType, new ArraySet<>());
         }
         ArraySet<String> currentTargets = mShortcutTargets.get(shortcutType);
+        Slog.v(LOG_TAG, TextUtils.formatSimple("updateShortcutTargets: type:%s, current:%s, new:%s",
+                ShortcutUtils.convertToKey(shortcutType), currentTargets, newTargets));
         if (newTargets.equals(currentTargets)) {
             return false;
         }

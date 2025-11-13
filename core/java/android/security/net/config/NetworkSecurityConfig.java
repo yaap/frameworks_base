@@ -16,6 +16,14 @@
 
 package android.security.net.config;
 
+import static android.sdk.Flags.majorMinorVersioningScheme;
+
+import static com.android.org.conscrypt.net.flags.Flags.certificateTransparencyDefaultEnabled;
+
+import android.annotation.FlaggedApi;
+import android.app.compat.CompatChanges;
+import android.compat.annotation.ChangeId;
+import android.compat.annotation.EnabledAfter;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
 import android.util.ArrayMap;
@@ -29,6 +37,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @hide
@@ -38,8 +47,18 @@ public final class NetworkSecurityConfig {
     public static final boolean DEFAULT_CLEARTEXT_TRAFFIC_PERMITTED = true;
     /** @hide */
     public static final boolean DEFAULT_HSTS_ENFORCED = false;
-    /** @hide */
-    public static final boolean DEFAULT_CERTIFICATE_TRANSPARENCY_VERIFICATION_REQUIRED = false;
+
+    /**
+     * Enable Certificate Transparency verification checks by default on all TLS connections. Apps
+     * can still opt-out via their Network Security Config.
+     */
+    @ChangeId
+    @FlaggedApi(android.sdk.Flags.FLAG_MAJOR_MINOR_VERSIONING_SCHEME)
+    @EnabledAfter(targetSdkVersion = Build.VERSION_CODES.BAKLAVA)
+    static final long DEFAULT_ENABLE_CERTIFICATE_TRANSPARENCY = 407952621L;
+
+    private static final AtomicReference<Boolean>
+            sCertificateTransparencyVerificationRequiredDefault = new AtomicReference<>();
 
     private final boolean mCleartextTrafficPermitted;
     private final boolean mHstsEnforced;
@@ -171,6 +190,23 @@ public final class NetworkSecurityConfig {
     }
 
     /**
+     * Returns the default value for SCT verification. The value depends on the platform version and
+     * on the app target sdk level.
+     *
+     * @hide
+     */
+    public static boolean certificateTransparencyVerificationRequiredDefault() {
+        return sCertificateTransparencyVerificationRequiredDefault.updateAndGet(
+                defaultEnabled ->
+                        defaultEnabled != null
+                                ? defaultEnabled
+                                : certificateTransparencyDefaultEnabled()
+                                        && majorMinorVersioningScheme()
+                                        && CompatChanges.isChangeEnabled(
+                                                DEFAULT_ENABLE_CERTIFICATE_TRANSPARENCY));
+    }
+
+    /**
      * Return a {@link Builder} for the default {@code NetworkSecurityConfig}.
      *
      * <p>
@@ -222,7 +258,7 @@ public final class NetworkSecurityConfig {
         private boolean mCleartextTrafficPermittedSet = false;
         private boolean mHstsEnforcedSet = false;
         private boolean mCertificateTransparencyVerificationRequired =
-                DEFAULT_CERTIFICATE_TRANSPARENCY_VERIFICATION_REQUIRED;
+                certificateTransparencyVerificationRequiredDefault();
         private boolean mCertificateTransparencyVerificationRequiredSet = false;
         private Builder mParentBuilder;
 
@@ -352,7 +388,7 @@ public final class NetworkSecurityConfig {
             if (mParentBuilder != null) {
                 return mParentBuilder.getCertificateTransparencyVerificationRequired();
             }
-            return DEFAULT_CERTIFICATE_TRANSPARENCY_VERIFICATION_REQUIRED;
+            return certificateTransparencyVerificationRequiredDefault();
         }
 
         public NetworkSecurityConfig build() {

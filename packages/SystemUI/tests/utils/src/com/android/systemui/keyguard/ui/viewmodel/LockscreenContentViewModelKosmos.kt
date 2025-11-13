@@ -17,7 +17,7 @@
 package com.android.systemui.keyguard.ui.viewmodel
 
 import com.android.systemui.biometrics.authController
-import com.android.systemui.deviceentry.domain.interactor.deviceEntryInteractor
+import com.android.systemui.deviceentry.domain.interactor.deviceEntryBypassInteractor
 import com.android.systemui.keyguard.domain.interactor.keyguardBlueprintInteractor
 import com.android.systemui.keyguard.domain.interactor.keyguardClockInteractor
 import com.android.systemui.keyguard.domain.interactor.keyguardTransitionInteractor
@@ -26,6 +26,7 @@ import com.android.systemui.keyguard.shared.transition.keyguardTransitionAnimati
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.Kosmos.Fixture
 import com.android.systemui.shade.domain.interactor.shadeModeInteractor
+import com.android.systemui.statusbar.notification.domain.interactor.activeNotificationsInteractor
 import com.android.systemui.unfold.domain.interactor.unfoldTransitionInteractor
 
 val Kosmos.lockscreenContentViewModelFactory by Fixture {
@@ -37,14 +38,17 @@ val Kosmos.lockscreenContentViewModelFactory by Fixture {
                 clockInteractor = keyguardClockInteractor,
                 interactor = keyguardBlueprintInteractor,
                 authController = authController,
-                touchHandling = keyguardTouchHandlingViewModel,
+                touchHandlingFactory = keyguardTouchHandlingViewModelFactory,
                 shadeModeInteractor = shadeModeInteractor,
                 unfoldTransitionInteractor = unfoldTransitionInteractor,
-                deviceEntryInteractor = deviceEntryInteractor,
+                deviceEntryBypassInteractor = deviceEntryBypassInteractor,
                 transitionInteractor = keyguardTransitionInteractor,
                 keyguardTransitionAnimationCallbackDelegator =
                     keyguardTransitionAnimationCallbackDelegator,
                 keyguardTransitionAnimationCallback = keyguardTransitionAnimationCallback,
+                keyguardMediaViewModelFactory = keyguardMediaViewModelFactory,
+                keyguardSmartspaceViewModel = keyguardSmartspaceViewModel,
+                activeNotificationsInteractor = activeNotificationsInteractor,
             )
         }
     }

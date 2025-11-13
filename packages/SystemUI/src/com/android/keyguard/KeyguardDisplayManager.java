@@ -69,7 +69,7 @@ public class KeyguardDisplayManager {
     private final DisplayTracker mDisplayTracker;
     private final Lazy<NavigationBarController> mNavigationBarControllerLazy;
     private final Provider<ShadeDisplaysRepository> mShadePositionRepositoryProvider;
-    private final ConnectedDisplayKeyguardPresentation.Factory
+    private final ConnectedDisplayKeyguardPresentationFactory
             mConnectedDisplayKeyguardPresentationFactory;
     private final Context mContext;
 
@@ -113,7 +113,7 @@ public class KeyguardDisplayManager {
             @UiBackground Executor uiBgExecutor,
             DeviceStateHelper deviceStateHelper,
             KeyguardStateController keyguardStateController,
-            ConnectedDisplayKeyguardPresentation.Factory
+            ConnectedDisplayKeyguardPresentationFactory
                     connectedDisplayKeyguardPresentationFactory,
             Provider<ShadeDisplaysRepository> shadePositionRepositoryProvider,
             @Application CoroutineScope appScope) {
@@ -148,7 +148,12 @@ public class KeyguardDisplayManager {
         if (ShadeWindowGoesAround.isEnabled()) {
             int shadeDisplayId = mShadePositionRepositoryProvider.get().getDisplayId().getValue();
             if (display.getDisplayId() == shadeDisplayId) {
-                Log.i(TAG, "Do not show KeyguardPresentation on the shade window display");
+                Log.i(
+                    TAG,
+                    "Secondary Keyguard presentation not shown on display "
+                            + display.getDisplayId()
+                            + " because shade window is on it (with the primary keyguard)");
+
                 return false;
             }
         } else {

@@ -81,9 +81,10 @@ constructor(
 
     val currentClockId: Flow<ClockId> = keyguardClockRepository.currentClockId
 
-    val currentClock: StateFlow<ClockController?> = keyguardClockRepository.currentClock
+    val currentClockFontAxesWidth: Float?
+        get() = keyguardClockRepository.currentClockFontAxesWidth
 
-    val previewClock: Flow<ClockController> = keyguardClockRepository.previewClock
+    val currentClock: StateFlow<ClockController?> = keyguardClockRepository.currentClock
 
     val clockEventController: ClockEventController = keyguardClockRepository.clockEventController
 
@@ -113,7 +114,7 @@ constructor(
             combine(
                 shadeModeInteractor.isShadeLayoutWide,
                 areAnyNotificationsPresent,
-                mediaCarouselInteractor.hasActiveMediaOrRecommendation,
+                mediaCarouselInteractor.hasActiveMedia,
                 keyguardInteractor.isDozing,
                 isOnAod,
             ) { isShadeLayoutWide, hasNotifs, hasMedia, isDozing, isOnAod ->

@@ -90,6 +90,7 @@ import android.telephony.emergency.EmergencyNumber;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.AtomicFile;
+import android.util.Log;
 import android.util.MutableLong;
 import android.util.Pair;
 import android.util.Slog;
@@ -315,7 +316,7 @@ public class DeviceIdleController extends SystemService
     private static final String USER_ALLOWLIST_REMOVAL_METRIC_ID =
             "battery.value_app_removed_from_power_allowlist";
 
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
     private static final boolean COMPRESS_TIME = false;
 
@@ -1627,7 +1628,6 @@ public class DeviceIdleController extends SystemService
         }
 
         private void updateConstantsLocked() {
-            if (mSmallBatteryDevice) return;
             FLEX_TIME_SHORT = mUserSettingDeviceConfigMediator.getLong(
                     KEY_FLEX_TIME_SHORT, mDefaultFlexTimeShort);
 
@@ -3527,11 +3527,14 @@ public class DeviceIdleController extends SystemService
     @VisibleForTesting
     @GuardedBy("this")
     void updateQuickDozeFlagLocked(boolean enabled) {
-        if (DEBUG) Slog.i(TAG, "updateQuickDozeFlagLocked: enabled=" + enabled);
+        if (DEBUG) {
+            Slog.i(TAG, "updateQuickDozeFlagLocked: enabled=" + enabled
+                    + ", mForceIdle=" + mForceIdle);
+        }
         mQuickDozeActivated = enabled;
         mQuickDozeActivatedWhileIdling =
                 mQuickDozeActivated && (mState == STATE_IDLE || mState == STATE_IDLE_MAINTENANCE);
-        if (enabled) {
+        if (!mForceIdle && enabled) {
             // If Quick Doze is enabled, see if we should go straight into it.
             becomeInactiveIfAppropriateLocked();
         }
@@ -3614,6 +3617,14 @@ public class DeviceIdleController extends SystemService
     void setLightEnabledForTest(boolean enabled) {
         synchronized (this) {
             mLightEnabled = enabled;
+        }
+    }
+
+    /** Must only be used in tests. */
+    @VisibleForTesting
+    void setForceIdleEnabledForTest(boolean enabled) {
+        synchronized (this) {
+            mForceIdle = enabled;
         }
     }
 

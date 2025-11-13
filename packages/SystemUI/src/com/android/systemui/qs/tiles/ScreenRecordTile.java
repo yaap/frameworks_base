@@ -51,11 +51,12 @@ import com.android.systemui.qs.pipeline.domain.interactor.PanelInteractor;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
 import com.android.systemui.qs.tiles.dialog.ScreenRecordDetailsViewModel;
 import com.android.systemui.res.R;
-import com.android.systemui.screenrecord.RecordingController;
+import com.android.systemui.screenrecord.ScreenRecordUxController;
 import com.android.systemui.screenrecord.data.model.ScreenRecordModel;
 import com.android.systemui.settings.UserContextProvider;
 import com.android.systemui.statusbar.phone.KeyguardDismissUtil;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
+import com.android.systemui.util.Utils;
 
 import java.util.function.Consumer;
 
@@ -65,14 +66,14 @@ import javax.inject.Inject;
  * Quick settings tile for screen recording
  */
 public class ScreenRecordTile extends QSTileImpl<QSTile.BooleanState>
-        implements RecordingController.RecordingStateChangeCallback {
+        implements ScreenRecordUxController.StateChangeCallback {
 
     public static final String TILE_SPEC = "screenrecord";
 
     private static final String TAG = "ScreenRecordTile";
     private static final String INTERACTION_JANK_TAG = "screen_record";
 
-    private final RecordingController mController;
+    private final ScreenRecordUxController mController;
     private final KeyguardDismissUtil mKeyguardDismissUtil;
     private final KeyguardStateController mKeyguardStateController;
     private final Callback mCallback = new Callback();
@@ -96,7 +97,7 @@ public class ScreenRecordTile extends QSTileImpl<QSTile.BooleanState>
             StatusBarStateController statusBarStateController,
             ActivityStarter activityStarter,
             QSLogger qsLogger,
-            RecordingController controller,
+            ScreenRecordUxController controller,
             KeyguardDismissUtil keyguardDismissUtil,
             KeyguardStateController keyguardStateController,
             DialogTransitionAnimator dialogTransitionAnimator,
@@ -127,7 +128,12 @@ public class ScreenRecordTile extends QSTileImpl<QSTile.BooleanState>
 
     @Override
     protected void handleClick(@Nullable Expandable expandable) {
-        handleClick(() -> showDialog(expandable));
+        if (Utils.isDesktopScreenCaptureEnabled(mContext)) {
+            // TODO(b/412723197): open screen capture toolbar when it becomes available.
+        } else {
+            // TODO(b/409330121): call mController.onScreenRecordQsTileClick() instead.
+            handleClick(() -> showDialog(expandable));
+        }
     }
 
     private void showDialog(@Nullable Expandable expandable) {
@@ -271,7 +277,7 @@ public class ScreenRecordTile extends QSTileImpl<QSTile.BooleanState>
         mController.stopRecording(StopReason.STOP_QS_TILE);
     }
 
-    private final class Callback implements RecordingController.RecordingStateChangeCallback {
+    private final class Callback implements ScreenRecordUxController.StateChangeCallback {
         @Override
         public void onCountdown(long millisUntilFinished) {
             mMillisUntilFinished = millisUntilFinished;

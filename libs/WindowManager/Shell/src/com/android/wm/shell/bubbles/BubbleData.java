@@ -18,6 +18,7 @@ package com.android.wm.shell.bubbles;
 import static com.android.internal.annotations.VisibleForTesting.Visibility.PRIVATE;
 import static com.android.wm.shell.bubbles.BubbleDebugConfig.TAG_BUBBLES;
 import static com.android.wm.shell.bubbles.BubbleDebugConfig.TAG_WITH_CLASS_NAME;
+import static com.android.wm.shell.bubbles.Bubbles.dismissReasonToString;
 import static com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_BUBBLES;
 
 import android.annotation.NonNull;
@@ -46,6 +47,7 @@ import com.android.wm.shell.shared.annotations.ShellMainThread;
 import com.android.wm.shell.shared.bubbles.BubbleBarLocation;
 import com.android.wm.shell.shared.bubbles.BubbleBarUpdate;
 import com.android.wm.shell.shared.bubbles.RemovedBubble;
+import com.android.wm.shell.taskview.TaskViewTaskController;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -308,6 +310,11 @@ public class BubbleData {
         return !mBubbles.isEmpty();
     }
 
+    boolean hasBubbleInStackWithTaskView(@NonNull TaskViewTaskController taskView) {
+        return getBubbleWithPredicate(mBubbles,
+                b -> b.getTaskView().getController() == taskView) != null;
+    }
+
     public boolean hasOverflowBubbles() {
         return !mOverflowBubbles.isEmpty();
     }
@@ -363,6 +370,11 @@ public class BubbleData {
     public void setExpanded(boolean expanded) {
         setExpandedInternal(expanded);
         dispatchPendingChanges();
+    }
+
+    /** Sets the expanded state to false without dispatching changes. */
+    public void collapseNoUpdate() {
+        mExpanded = false;
     }
 
     /**
@@ -808,7 +820,8 @@ public class BubbleData {
             if (hasOverflowBubbleWithKey(key)
                     && shouldRemoveHiddenBubble) {
                 Bubble b = getOverflowBubbleWithKey(key);
-                ProtoLog.d(WM_SHELL_BUBBLES, "doRemove - cancel overflow bubble=%s", key);
+                ProtoLog.d(WM_SHELL_BUBBLES, "doRemove - cancel overflow bubble=%s reason=%s",
+                        key, dismissReasonToString(reason));
                 if (b != null) {
                     b.stopInflation();
                 }
@@ -822,7 +835,8 @@ public class BubbleData {
             }
             if (hasSuppressedBubbleWithKey(key) && shouldRemoveHiddenBubble) {
                 Bubble b = getSuppressedBubbleWithKey(key);
-                ProtoLog.d(WM_SHELL_BUBBLES, "doRemove - cancel suppressed bubble=%s", key);
+                ProtoLog.d(WM_SHELL_BUBBLES, "doRemove - cancel suppressed bubble=%s reason=%s",
+                        key, dismissReasonToString(reason));
                 if (b != null) {
                     mSuppressedBubbles.remove(b.getLocusId());
                     b.stopInflation();
@@ -832,7 +846,8 @@ public class BubbleData {
             return;
         }
         Bubble bubbleToRemove = mBubbles.get(indexToRemove);
-        ProtoLog.d(WM_SHELL_BUBBLES, "doRemove=%s", bubbleToRemove.getKey());
+        ProtoLog.d(WM_SHELL_BUBBLES, "doRemove=%s reason=%s", bubbleToRemove.getKey(),
+                dismissReasonToString(reason));
         bubbleToRemove.stopInflation();
         overflowBubble(reason, bubbleToRemove);
 
@@ -882,7 +897,8 @@ public class BubbleData {
 
     private void setNewSelectedIndex(int indexOfSelected) {
         if (mBubbles.isEmpty()) {
-            Log.w(TAG, "Bubbles list empty when attempting to select index: " + indexOfSelected);
+            Log.w(TAG, "Bubbles list empty when attempting to select index: "
+                    + indexOfSelected);
             return;
         }
         // Move selection to the new bubble at the same position.
@@ -937,7 +953,8 @@ public class BubbleData {
                 || reason == Bubbles.DISMISS_RELOAD_FROM_DISK)) {
             return;
         }
-        ProtoLog.d(WM_SHELL_BUBBLES, "overflowBubble=%s", bubble.getKey());
+        ProtoLog.d(WM_SHELL_BUBBLES, "overflowBubble=%s reason=%s", bubble.getKey(),
+                dismissReasonToString(reason));
         mLogger.logOverflowAdd(bubble, mPositioner.isShowingInBubbleBar(), reason);
         if (mOverflowBubbles.isEmpty()) {
             mStateChange.showOverflowChanged = true;
@@ -961,7 +978,7 @@ public class BubbleData {
     }
 
     public void dismissAll(@DismissReason int reason) {
-        ProtoLog.d(WM_SHELL_BUBBLES, "dismissAll reason=%d", reason);
+        ProtoLog.d(WM_SHELL_BUBBLES, "dismissAll reason=%s", dismissReasonToString(reason));
         if (mBubbles.isEmpty() && mSuppressedBubbles.isEmpty()) {
             return;
         }
@@ -1254,12 +1271,6 @@ public class BubbleData {
     Bubble getBubbleInStackWithView(View view) {
         return getBubbleWithPredicate(mBubbles, b ->
                 b.getIconView() != null && b.getIconView().equals(view));
-    }
-
-    /** @return the overflow bubble that matches the provided taskId. */
-    @Nullable
-    Bubble getOverflowBubbleWithTaskId(int taskId) {
-        return getBubbleWithPredicate(mOverflowBubbles, b -> b.getTaskId() == taskId);
     }
 
     /** @return the overflow bubble that matches the provided key. */

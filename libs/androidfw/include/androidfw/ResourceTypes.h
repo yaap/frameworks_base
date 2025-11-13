@@ -715,6 +715,29 @@ struct ResXMLTree_attrExt
     uint16_t styleIndex;
 };
 
+enum  ResXMLTreeExtDescriptor : uint8_t {
+    PADDING = 0x00,
+    FLAG_INFO = 0x01,
+};
+
+struct ResXMLTreeFlagExt {
+
+    // defines the type of the extended element structure
+    ResXMLTreeExtDescriptor descriptor;
+
+    // if the flag condition is negated
+    bool flag_negated;
+
+    // a hole for 4-byte alignment
+    uint16_t reserved;
+
+    // The reference into the string pool that the flag name is stored at
+    ResStringPool_ref flag_name;
+};
+
+static_assert(sizeof(ResXMLTreeFlagExt) == 8);
+
+
 struct ResXMLTree_attribute
 {
     // Namespace of this attribute.
@@ -758,6 +781,12 @@ public:
         const void*                 curExt;
     };
 
+    struct ResXMLFlagInfo
+    {
+      uint32_t flagNameIndex;
+      bool flagNegated;
+    };
+
     void restart();
 
     const ResStringPool& getStrings() const;
@@ -793,7 +822,9 @@ public:
     // associated with a START_TAG:
     
     size_t getAttributeCount() const;
-    
+
+    std::optional<ResXMLFlagInfo> getFlagInfo() const;
+
     // Returns -1 if no namespace, -2 if idx out of range.
     int32_t getAttributeNamespaceID(size_t idx) const;
     const char16_t* getAttributeNamespace(size_t idx, size_t* outLen) const;
@@ -1143,8 +1174,9 @@ struct ResTable_config
     union {
         struct {
             uint16_t sdkVersion;
-            // For now minorVersion must always be 0!!!  Its meaning
-            // is currently undefined.
+
+            // Until Baklava, this was always set to and assumed to be 0.
+            // After Baklava, this started to be used with minor SDK releases.
             uint16_t minorVersion;
         };
         uint32_t version;

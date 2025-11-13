@@ -46,6 +46,7 @@ import com.android.systemui.Dumpable;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.demomode.DemoMode;
 import com.android.systemui.demomode.DemoModeController;
+import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent.DisplayAware;
 import com.android.systemui.dump.DumpManager;
 import com.android.systemui.plugins.DarkIconDispatcher;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
@@ -57,7 +58,6 @@ import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.OperatorNameView;
 import com.android.systemui.statusbar.OperatorNameViewController;
 import com.android.systemui.statusbar.StatusBarState;
-import com.android.systemui.statusbar.chips.notification.shared.StatusBarNotifChips;
 import com.android.systemui.statusbar.core.StatusBarConnectedDisplays;
 import com.android.systemui.statusbar.core.StatusBarRootModernization;
 import com.android.systemui.statusbar.data.repository.DarkIconDispatcherStore;
@@ -68,6 +68,7 @@ import com.android.systemui.statusbar.events.SystemStatusAnimationCallback;
 import com.android.systemui.statusbar.events.SystemStatusAnimationScheduler;
 import com.android.systemui.statusbar.headsup.shared.StatusBarNoHunBehavior;
 import com.android.systemui.statusbar.notification.icon.ui.viewbinder.NotificationIconContainerStatusBarViewBinder;
+import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi;
 import com.android.systemui.statusbar.phone.ClockController;
 import com.android.systemui.statusbar.phone.NotificationIconContainer;
 import com.android.systemui.statusbar.phone.PhoneStatusBarView;
@@ -265,8 +266,8 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
             ShadeExpansionStateManager shadeExpansionStateManager,
             StatusBarIconController statusBarIconController,
             DarkIconManager.Factory darkIconManagerFactory,
-            HomeStatusBarViewModelFactory homeStatusBarViewModelFactory,
-            HomeStatusBarViewBinder homeStatusBarViewBinder,
+            @DisplayAware HomeStatusBarViewModelFactory homeStatusBarViewModelFactory,
+            @DisplayAware HomeStatusBarViewBinder homeStatusBarViewBinder,
             StatusBarHideIconsForBouncerManager statusBarHideIconsForBouncerManager,
             KeyguardStateController keyguardStateController,
             PanelExpansionInteractor panelExpansionInteractor,
@@ -420,7 +421,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         mCarrierConfigTracker.addCallback(mCarrierConfigCallback);
         mCarrierConfigTracker.addDefaultDataSubscriptionChangedListener(mDefaultDataListener);
 
-        mHomeStatusBarViewModel = mHomeStatusBarViewModelFactory.create(displayId);
+        mHomeStatusBarViewModel = mHomeStatusBarViewModelFactory.create();
         mHomeStatusBarViewBinder.bind(
                 view.getContext().getDisplayId(),
                 mStatusBar,
@@ -724,7 +725,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
 
         boolean showPrimaryOngoingActivityChip = mHasPrimaryOngoingActivity;
         boolean showSecondaryOngoingActivityChip =
-                StatusBarNotifChips.isEnabled() && mHasSecondaryOngoingActivity;
+                PromotedNotificationUi.isEnabled() && mHasSecondaryOngoingActivity;
 
         return new StatusBarVisibilityModel(
                 showClock,
@@ -765,7 +766,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
 
         boolean showSecondaryOngoingActivityChip =
                 // Secondary chips are only supported when RONs are enabled.
-                StatusBarNotifChips.isEnabled()
+                PromotedNotificationUi.isEnabled()
                         && visibilityModel.getShowSecondaryOngoingActivityChip()
                         && !disableNotifications;
         if (showSecondaryOngoingActivityChip) {
@@ -894,7 +895,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
     }
 
     private void showSecondaryOngoingActivityChip(boolean animate) {
-        StatusBarNotifChips.unsafeAssertInNewMode();
+        PromotedNotificationUi.unsafeAssertInNewMode();
         StatusBarRootModernization.assertInLegacyMode();
         animateShow(mSecondaryOngoingActivityChip, animate);
     }

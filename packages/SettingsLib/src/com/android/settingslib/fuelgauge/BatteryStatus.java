@@ -16,11 +16,14 @@
 
 package com.android.settingslib.fuelgauge;
 
+import static android.os.BatteryManager.BATTERY_HEALTH_DEAD;
+import static android.os.BatteryManager.BATTERY_HEALTH_UNKNOWN;
 import static android.os.BatteryManager.BATTERY_STATUS_FULL;
 import static android.os.BatteryManager.BATTERY_STATUS_UNKNOWN;
 import static android.os.BatteryManager.CHARGING_POLICY_ADAPTIVE_LONGLIFE;
 import static android.os.BatteryManager.CHARGING_POLICY_DEFAULT;
 import static android.os.BatteryManager.EXTRA_CHARGING_STATUS;
+import static android.os.BatteryManager.EXTRA_HEALTH;
 import static android.os.BatteryManager.EXTRA_MAX_CHARGING_CURRENT;
 import static android.os.BatteryManager.EXTRA_MAX_CHARGING_VOLTAGE;
 import static android.os.BatteryManager.EXTRA_TEMPERATURE;
@@ -56,6 +59,7 @@ public class BatteryStatus {
     public final int status;
     public final int level;
     public final int plugged;
+    public final int health;
     public final int chargingStatus;
     public final int maxChargingCurrent;
     public final int maxChargingVoltage;
@@ -83,6 +87,7 @@ public class BatteryStatus {
         this.present = present;
         this.temperature = temperature;
         this.incompatibleCharger = Optional.empty();
+        this.health = BATTERY_HEALTH_UNKNOWN;
     }
 
 
@@ -98,6 +103,7 @@ public class BatteryStatus {
         status = batteryChangedIntent.getIntExtra(EXTRA_STATUS, BATTERY_STATUS_UNKNOWN);
         plugged = batteryChangedIntent.getIntExtra(EXTRA_PLUGGED, 0);
         level = getBatteryLevel(batteryChangedIntent);
+        health = batteryChangedIntent.getIntExtra(EXTRA_HEALTH, BATTERY_HEALTH_UNKNOWN);
         chargingStatus = batteryChangedIntent.getIntExtra(EXTRA_CHARGING_STATUS,
                 CHARGING_POLICY_DEFAULT);
         present = batteryChangedIntent.getBooleanExtra(EXTRA_PRESENT, true);
@@ -164,6 +170,15 @@ public class BatteryStatus {
     /** Whether battery defender is enabled. */
     public boolean isBatteryDefender() {
         return isBatteryDefender(chargingStatus);
+    }
+
+    /**
+     * Whether battery is dead.
+     *
+     * @return true if battery is dead
+     */
+    public boolean isDead() {
+        return health == BATTERY_HEALTH_DEAD;
     }
 
     /** Return current charging speed is fast, slow or normal. */

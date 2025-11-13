@@ -33,13 +33,24 @@ import com.android.systemui.statusbar.chips.uievents.statusBarChipsUiEventLogger
 import com.android.systemui.statusbar.events.domain.interactor.systemStatusEventAnimationInteractor
 import com.android.systemui.statusbar.featurepods.popups.ui.viewmodel.statusBarPopupChipsViewModelFactory
 import com.android.systemui.statusbar.layout.ui.viewmodel.multiDisplayStatusBarContentInsetsViewModelStore
+import com.android.systemui.statusbar.layout.ui.viewmodel.statusBarBoundsViewModelFactory
 import com.android.systemui.statusbar.notification.domain.interactor.activeNotificationsInteractor
+import com.android.systemui.statusbar.notification.icon.ui.viewbinder.connectedDisplaysStatusBarNotificationIconViewStoreFactory
 import com.android.systemui.statusbar.notification.stack.domain.interactor.headsUpNotificationInteractor
 import com.android.systemui.statusbar.phone.domain.interactor.darkIconInteractor
 import com.android.systemui.statusbar.phone.domain.interactor.lightsOutInteractor
-import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.batteryViewModelFactory
+import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.batteryViewModelBasedOnSettingFactory
+import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.batteryWithPercentViewModelFactory
 import com.android.systemui.statusbar.pipeline.shared.domain.interactor.homeStatusBarIconBlockListInteractor
 import com.android.systemui.statusbar.pipeline.shared.domain.interactor.homeStatusBarInteractor
+import com.android.systemui.statusbar.pipeline.shared.ui.binder.HomeStatusBarViewBinder
+import com.android.systemui.statusbar.pipeline.shared.ui.binder.HomeStatusBarViewBinderImpl
+import com.android.systemui.statusbar.systemstatusicons.ui.viewmodel.systemStatusIconsViewModelFactory
+
+var Kosmos.homeStatusBarViewBinder: HomeStatusBarViewBinder by
+    Kosmos.Fixture {
+        HomeStatusBarViewBinderImpl(connectedDisplaysStatusBarNotificationIconViewStoreFactory)
+    }
 
 var Kosmos.homeStatusBarViewModel: HomeStatusBarViewModel by
     Kosmos.Fixture { homeStatusBarViewModelFactory.invoke(testableContext.displayId) }
@@ -48,7 +59,10 @@ var Kosmos.homeStatusBarViewModelFactory: (Int) -> HomeStatusBarViewModel by
         { displayId ->
             HomeStatusBarViewModelImpl(
                 displayId,
-                batteryViewModelFactory,
+                batteryWithPercentViewModelFactory,
+                batteryViewModelBasedOnSettingFactory,
+                systemStatusIconsViewModelFactory,
+                statusBarBoundsViewModelFactory,
                 tableLogBufferFactory,
                 homeStatusBarInteractor,
                 homeStatusBarIconBlockListInteractor,

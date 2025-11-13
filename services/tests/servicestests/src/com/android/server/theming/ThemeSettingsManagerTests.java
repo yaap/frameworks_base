@@ -21,10 +21,15 @@ import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentat
 import static com.google.common.truth.Truth.assertThat;
 
 import android.content.ContentResolver;
+import android.content.theming.FieldColorSource;
 import android.content.theming.ThemeSettings;
+import android.content.theming.ThemeSettingsField;
+import android.content.theming.ThemeSettingsUpdater;
 import android.content.theming.ThemeStyle;
 import android.provider.Settings;
 import android.testing.TestableContext;
+
+import androidx.test.runner.AndroidJUnit4;
 
 import org.json.JSONObject;
 import org.junit.Before;
@@ -32,16 +37,15 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
-@RunWith(JUnit4.class)
+@RunWith(AndroidJUnit4.class)
 public class ThemeSettingsManagerTests {
     private final int mUserId = 0;
     public static final ThemeSettings DEFAULTS = new ThemeSettings(
             /* colorIndex= */ 1,
             /* systemPalette= */ 0xFF123456,
             /* accentColor= */ 0xFF654321,
-            /* colorSource= */ "home_wallpaper",
+            /* colorSource= */ FieldColorSource.VALUE_HOME_WALLPAPER,
             /* themeStyle= */ ThemeStyle.VIBRANT,
             /* colorBoth= */ true);
 
@@ -80,35 +84,46 @@ public class ThemeSettingsManagerTests {
 
         ThemeSettingsManager manager = new ThemeSettingsManager(DEFAULTS);
 
-        ThemeSettings newSettings = new ThemeSettings(3, 0xFF112233, 0xFF332211, "preset",
-                ThemeStyle.MONOCHROMATIC, false);
+        ThemeSettingsUpdater newSettings = ThemeSettings.updater()
+                .colorIndex(3)
+                .systemPalette(0xFF112233)
+                .accentColor(0xFF332211)
+                .colorSource(FieldColorSource.VALUE_PRESET)
+                .themeStyle(ThemeStyle.MONOCHROMATIC)
+                .colorBoth(false);
+
         manager.replaceSettings(mUserId, mContentResolver, newSettings);
 
         String settingsString = Settings.Secure.getStringForUser(mContentResolver,
                 Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES, mUserId);
         JSONObject settingsJson = new JSONObject(settingsString);
-        assertThat(settingsJson.getString("android.theme.customization.color_index")).isEqualTo(
+        assertThat(settingsJson.getString(ThemeSettingsField.OVERLAY_COLOR_INDEX)).isEqualTo(
                 "3");
-        assertThat(settingsJson.getString("android.theme.customization.system_palette"))
+        assertThat(settingsJson.getString(ThemeSettingsField.OVERLAY_CATEGORY_SYSTEM_PALETTE))
                 .isEqualTo("ff112233");
-        assertThat(settingsJson.getString("android.theme.customization.accent_color"))
+        assertThat(settingsJson.getString(ThemeSettingsField.OVERLAY_CATEGORY_ACCENT_COLOR))
                 .isEqualTo("ff332211");
-        assertThat(settingsJson.getString("android.theme.customization.color_source"))
-                .isEqualTo("preset");
-        assertThat(settingsJson.getString("android.theme.customization.theme_style"))
-                .isEqualTo("MONOCHROMATIC");
-        assertThat(settingsJson.getString("android.theme.customization.color_both")).isEqualTo("0");
+        assertThat(settingsJson.getString(ThemeSettingsField.OVERLAY_COLOR_SOURCE))
+                .isEqualTo(FieldColorSource.VALUE_PRESET);
+        assertThat(settingsJson.getString(ThemeSettingsField.OVERLAY_CATEGORY_THEME_STYLE))
+                .isEqualTo(ThemeStyle.name(ThemeStyle.MONOCHROMATIC));
+        assertThat(settingsJson.getString(ThemeSettingsField.OVERLAY_COLOR_BOTH)).isEqualTo("0");
     }
 
     @Test
     public void updatesSettings_writesSettingsToProvider() throws Exception {
         ThemeSettingsManager manager = new ThemeSettingsManager(DEFAULTS);
+        ThemeSettingsUpdater newSettings = ThemeSettings.updater()
+                .colorIndex(3)
+                .systemPalette(0xFF112233)
+                .accentColor(0xFF332211)
+                .colorSource(FieldColorSource.VALUE_PRESET)
+                .themeStyle(ThemeStyle.MONOCHROMATIC)
+                .colorBoth(false);
 
-        ThemeSettings newSettings = new ThemeSettings(3, 0xFF112233, 0xFF332211, "preset",
-                ThemeStyle.MONOCHROMATIC, false);
         manager.updateSettings(mUserId, mContentResolver, newSettings);
 
         ThemeSettings loadedSettings = manager.loadSettings(mUserId, mContentResolver);
-        assertThat(loadedSettings.equals(newSettings)).isTrue();
+        assertThat(loadedSettings.equals(newSettings.toThemeSettings(DEFAULTS))).isTrue();
     }
 }

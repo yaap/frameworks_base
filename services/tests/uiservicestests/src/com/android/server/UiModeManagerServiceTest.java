@@ -17,6 +17,8 @@
 package com.android.server;
 
 import static android.Manifest.permission.MODIFY_DAY_NIGHT_MODE;
+import static android.app.UiModeManager.FORCE_INVERT_TYPE_DARK;
+import static android.app.UiModeManager.FORCE_INVERT_TYPE_OFF;
 import static android.app.UiModeManager.MODE_ATTENTION_THEME_OVERLAY_DAY;
 import static android.app.UiModeManager.MODE_ATTENTION_THEME_OVERLAY_NIGHT;
 import static android.app.UiModeManager.MODE_ATTENTION_THEME_OVERLAY_OFF;
@@ -89,6 +91,7 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.os.UserHandle;
 import android.os.test.FakePermissionEnforcer;
+import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.provider.Settings;
 import android.service.dreams.DreamManagerInternal;
@@ -911,6 +914,62 @@ public class UiModeManagerServiceTest extends UiServiceTestCase {
     }
 
     @Test
+    public void customTime_clearsOverrides_whenOverrideOnIsSet() throws RemoteException {
+        when(mPowerManager.isInteractive()).thenReturn(false);
+
+        mService.setNightMode(MODE_NIGHT_CUSTOM);
+        LocalTime scheduleStart = LocalTime.now().plusHours(2);
+        LocalTime scheduleEnd = LocalTime.now().plusHours(3);
+        mService.setCustomNightModeStart(scheduleStart.toNanoOfDay() / 1000);
+        mService.setCustomNightModeEnd(scheduleEnd.toNanoOfDay() / 1000);
+        assertThat(isNightModeActivated()).isFalse();
+
+        mService.setNightModeActivated(true);
+
+        //Verify override is set and night mode is ON due to override
+        Boolean[] overrides = mUiManagerService.getNightModeOverrides();
+        assertThat(overrides[0]).isTrue();  // mOverrideNightModeOn
+        assertThat(overrides[1]).isFalse(); // mOverrideNightModeOff
+        assertThat(isNightModeActivated()).isTrue(); // Night mode is ON due to override
+
+        LocalTime newStartTime = LocalTime.now().plusHours(1);
+        mService.setCustomNightModeStart(newStartTime.toNanoOfDay() / 1000);
+
+        // Verify overrides are cleared
+        overrides = mUiManagerService.getNightModeOverrides();
+        assertThat(overrides[0]).isFalse(); // mOverrideNightModeOn should be cleared
+        assertThat(overrides[1]).isFalse(); // mOverrideNightModeOff should be cleared
+    }
+
+    @Test
+    public void customTime_clearsOverrides_whenOverrideOffIsSet() throws RemoteException {
+        when(mPowerManager.isInteractive()).thenReturn(false);
+
+        mService.setNightMode(MODE_NIGHT_CUSTOM);
+        LocalTime scheduleStart = LocalTime.now().minusHours(2);
+        LocalTime scheduleEnd = LocalTime.now().plusHours(3);
+        mService.setCustomNightModeStart(scheduleStart.toNanoOfDay() / 1000);
+        mService.setCustomNightModeEnd(scheduleEnd.toNanoOfDay() / 1000);
+        assertThat(isNightModeActivated()).isTrue();
+
+        mService.setNightModeActivated(false);
+
+        //Verify override is set and night mode is OFF due to override
+        Boolean[] overrides = mUiManagerService.getNightModeOverrides();
+        assertThat(overrides[0]).isFalse();  // mOverrideNightModeOn
+        assertThat(overrides[1]).isTrue(); // mOverrideNightModeOff
+        assertThat(isNightModeActivated()).isFalse(); // Night mode is ON due to override
+
+        LocalTime newEndTime = LocalTime.now().plusHours(1);
+        mService.setCustomNightModeStart(newEndTime.toNanoOfDay() / 1000);
+
+        // Verify overrides are cleared
+        overrides = mUiManagerService.getNightModeOverrides();
+        assertThat(overrides[0]).isFalse(); // mOverrideNightModeOn should be cleared
+        assertThat(overrides[1]).isFalse(); // mOverrideNightModeOff should be cleared
+    }
+
+    @Test
     public void customTime_alarmSetInTheFutureWhenOn() throws RemoteException {
         LocalDateTime now = LocalDateTime.now();
         when(mPowerManager.isInteractive()).thenReturn(false);
@@ -1512,6 +1571,44 @@ public class UiModeManagerServiceTest extends UiServiceTestCase {
     @Test
     public void testAttentionModeThemeOverlay_nightModeEnabled() throws RemoteException {
         testAttentionModeThemeOverlay(true);
+    }
+
+    @Test
+    @EnableFlags(android.view.accessibility.Flags.FLAG_FORCE_INVERT_COLOR)
+    public void getForceInvertState_nightModeFalse_returnsOff() throws RemoteException {
+        mService.setNightModeActivated(false);
+
+        assertThat(mUiManagerService.getForceInvertStateInternal())
+                .isEqualTo(FORCE_INVERT_TYPE_OFF);
+    }
+
+    @Test
+    @EnableFlags(android.view.accessibility.Flags.FLAG_FORCE_INVERT_COLOR)
+    public void getForceInvertState_nightModeTrueAndForceInvertOff_returnsOff()
+            throws RemoteException {
+        mService.setNightModeActivated(true);
+
+        Settings.Secure.putInt(
+                mContentResolver,
+                Settings.Secure.ACCESSIBILITY_FORCE_INVERT_COLOR_ENABLED,
+                /* value= */ 0);
+
+        assertThat(mUiManagerService.getForceInvertStateInternal())
+                .isEqualTo(FORCE_INVERT_TYPE_OFF);
+    }
+
+    @Test
+    @EnableFlags(android.view.accessibility.Flags.FLAG_FORCE_INVERT_COLOR)
+    public void getForceInvertState_nightModeTrueAndForceInvertOn_returnsDark() throws Exception {
+        mService.setNightModeActivated(true);
+
+        Settings.Secure.putInt(
+                mContentResolver,
+                Settings.Secure.ACCESSIBILITY_FORCE_INVERT_COLOR_ENABLED,
+                /* value= */ 1);
+
+        assertThat(mUiManagerService.getForceInvertStateInternal())
+                .isEqualTo(FORCE_INVERT_TYPE_DARK);
     }
 
     private void triggerDockIntent() {

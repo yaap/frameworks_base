@@ -99,6 +99,27 @@ fun LegacyFlickerTest.splitScreenDividerIsInvisibleAtStart() {
     assertLayersStart { this.isInvisible(SPLIT_SCREEN_DIVIDER_COMPONENT) }
 }
 
+fun LegacyFlickerTest.tilingDividerIsVisibleAtStart() {
+    assertLayersStart { this.isVisible(TILING_SPLIT_DIVIDER) }
+}
+
+fun LegacyFlickerTest.tilingDividerIsVisibleAtEnd() {
+    assertLayersEnd { this.isVisible(TILING_SPLIT_DIVIDER) }
+}
+
+fun LegacyFlickerTest.tilingDividerIsInvisibleAtEnd() {
+    assertLayersEnd { this.isInvisible(TILING_SPLIT_DIVIDER) }
+}
+
+fun LegacyFlickerTest.tilingDividerIsInvisibleAtStart() {
+    assertLayersStart { this.isInvisible(TILING_SPLIT_DIVIDER) }
+}
+
+
+fun LegacyFlickerTest.tilingScreenDividerIsInvisibleAtEnd() {
+    assertLayersEnd { this.isInvisible(TILING_SPLIT_DIVIDER) }
+}
+
 fun LegacyFlickerTest.splitScreenDividerIsInvisibleAtEnd() {
     assertLayersEnd { this.isInvisible(SPLIT_SCREEN_DIVIDER_COMPONENT) }
 }
@@ -347,6 +368,21 @@ fun LegacyFlickerTest.appWindowIsInvisibleAtStart(component: IComponentMatcher) 
 
 fun LegacyFlickerTest.appWindowIsInvisibleAtEnd(component: IComponentMatcher) {
     assertWmEnd { this.isAppWindowInvisible(component) }
+}
+
+fun LegacyFlickerTest.appWindowOnTopAtStart(component: IComponentMatcher) {
+    assertWmStart { this.isAppWindowOnTop(component) }
+}
+
+fun LegacyFlickerTest.appWindowOnTopAtEnd(component: IComponentMatcher) {
+    assertWmEnd { this.isAppWindowOnTop(component) }
+}
+
+fun LegacyFlickerTest.appWindowInsideDisplayBoundsAtEnd(component: IComponentMatcher) {
+    assertWmEnd {
+        val displayBounds = WindowUtils.getDisplayBounds(scenario.endRotation)
+        visibleRegion(component).coversAtMost(displayBounds)
+    }
 }
 
 fun LegacyFlickerTest.appWindowIsNotContainAtStart(component: IComponentMatcher) {

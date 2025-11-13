@@ -90,6 +90,13 @@ system_optimized_java_defaults {
         FULL_SYSTEM_OPTIMIZE_JAVA: {
             optimize: {
                 optimize: true,
+                // TODO(b/212737576): Apply this property for the SYSTEM_OPTIMIZE_JAVA case after
+                // resolving all downstream cyclic dependencies. For now, full optimization is
+                // more sensitive to downstream lib references, so it stands the most to benefit.
+                trace_references_from: select(soong_config_variable("ANDROID", "system_server_trace_refs"), {
+                    any @ trace_refs: trace_refs,
+                    default: [],
+                }),
             },
         },
     },
@@ -135,6 +142,8 @@ filegroup {
         ":services.profcollect-sources",
         ":services.restrictions-sources",
         ":services.searchui-sources",
+        ":services.selectiontoolbar-sources",
+        ":services.serial-sources",
         ":services.smartspace-sources",
         ":services.soundtrigger-sources",
         ":services.supervision-sources",
@@ -154,6 +163,9 @@ filegroup {
 java_library {
     name: "Slogf",
     srcs: ["core/java/com/android/server/utils/Slogf.java"],
+    libs: [
+        "error_prone_annotations",
+    ],
 }
 
 soong_config_module_type {
@@ -313,6 +325,8 @@ java_library {
         "services.profcollect",
         "services.restrictions",
         "services.searchui",
+        "services.selectiontoolbar",
+        "services.serial",
         "services.smartspace",
         "services.soundtrigger",
         "services.supervision",
@@ -360,6 +374,9 @@ system_java_library {
         "art_profile_java_defaults",
     ],
     installable: true,
+    optimize: {
+        d8_on_eng: true,
+    },
 
     exclude_kotlinc_generated_files: true,
 
@@ -392,7 +409,6 @@ system_java_library {
 
     required: [
         "libukey2_jni_shared",
-        "protolog.conf.json.gz",
         "core.protolog.pb",
     ],
     lint: {

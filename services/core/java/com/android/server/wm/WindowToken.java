@@ -17,18 +17,18 @@
 package com.android.server.wm;
 
 import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowContainerChildProto.WINDOW_TOKEN;
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowTokenProto.HASH_CODE;
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowTokenProto.PAUSED;
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowTokenProto.WINDOW_CONTAINER;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_ADD_REMOVE;
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_APP_TRANSITIONS;
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_FOCUS;
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_WINDOW_MOVEMENT;
-import static com.android.server.wm.WindowContainerChildProto.WINDOW_TOKEN;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WITH_CLASS_NAME;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
 import static com.android.server.wm.WindowManagerService.UPDATE_FOCUS_NORMAL;
-import static com.android.server.wm.WindowTokenProto.HASH_CODE;
-import static com.android.server.wm.WindowTokenProto.PAUSED;
-import static com.android.server.wm.WindowTokenProto.WINDOW_CONTAINER;
 
 import android.annotation.CallSuper;
 import android.annotation.NonNull;
@@ -252,6 +252,11 @@ class WindowToken extends WindowContainer<WindowState> {
             removeIfPossible();
         }
         return super.handleCompleteDeferredRemoval();
+    }
+
+    @Override
+    boolean hasFillingContent() {
+        return true;
     }
 
     /**
@@ -497,7 +502,7 @@ class WindowToken extends WindowContainer<WindowState> {
             final ActivityRecord r =
                     mFixedRotationTransformState.mAssociatedTokens.get(i).asActivityRecord();
             // Only care about the transition at Activity/Task level.
-            if (r != null && r.inTransitionSelfOrParent() && !r.mDisplayContent.inTransition()) {
+            if (r != null && r.inTransition() && !r.mDisplayContent.inTransition()) {
                 return true;
             }
         }
@@ -546,15 +551,19 @@ class WindowToken extends WindowContainer<WindowState> {
         if (mTransitionController.isShellTransitionsEnabled()
                 && asActivityRecord() != null && isVisible()) {
             // Trigger an activity level rotation transition.
-            Transition transition = mTransitionController.getCollectingTransition();
-            if (transition == null) {
-                transition = mTransitionController.requestStartTransition(
-                        mTransitionController.createTransition(WindowManager.TRANSIT_CHANGE),
+            final ActionChain chain =
+                    mWmService.mAtmService.mChainTracker.startTransit("cancelFixedRot");
+            if (!chain.isCollecting()) {
+                chain.attachTransition(
+                        mTransitionController.createTransition(WindowManager.TRANSIT_CHANGE));
+                mTransitionController.requestStartTransition(chain.getTransition(),
                         null /* trigger */, null /* remote */, null /* disp */);
             }
-            transition.collect(this);
+            final Transition transition = chain.getTransition();
+            chain.collect(this);
             transition.collectVisibleChange(this);
             transition.setReady(mDisplayContent, true);
+            mWmService.mAtmService.mChainTracker.endPartial();
         }
         final int originalRotation = getWindowConfiguration().getRotation();
         onConfigurationChanged(parent.getConfiguration());
@@ -682,6 +691,11 @@ class WindowToken extends WindowContainer<WindowState> {
             return false;
         }
         return super.prepareSync();
+    }
+
+    @Override
+    void updateSurfaceVisibility(SurfaceControl.Transaction t) {
+        // Regular window token doesn't change surface visibility.
     }
 
     @CallSuper

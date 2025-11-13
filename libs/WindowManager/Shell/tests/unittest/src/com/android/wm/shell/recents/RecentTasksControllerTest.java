@@ -22,7 +22,6 @@ import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.app.WindowConfiguration.WINDOWING_MODE_MULTI_WINDOW;
 import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
 
-import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.window.flags.Flags.FLAG_ENABLE_DESKTOP_WINDOWING_PERSISTENCE;
 import static com.android.wm.shell.shared.GroupedTaskInfo.TYPE_DESK;
 import static com.android.wm.shell.shared.GroupedTaskInfo.TYPE_FULLSCREEN;
@@ -61,6 +60,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.os.Bundle;
+import android.os.UserManager;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.view.SurfaceControl;
@@ -68,8 +68,6 @@ import android.view.SurfaceControl;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
-import com.android.dx.mockito.inline.extended.ExtendedMockito;
-import com.android.dx.mockito.inline.extended.StaticMockitoSession;
 import com.android.window.flags.Flags;
 import com.android.wm.shell.ShellTaskOrganizer;
 import com.android.wm.shell.ShellTestCase;
@@ -80,7 +78,7 @@ import com.android.wm.shell.desktopmode.DesktopRepository;
 import com.android.wm.shell.desktopmode.DesktopUserRepositories;
 import com.android.wm.shell.desktopmode.DesktopWallpaperActivity;
 import com.android.wm.shell.shared.GroupedTaskInfo;
-import com.android.wm.shell.shared.desktopmode.DesktopModeStatus;
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState;
 import com.android.wm.shell.shared.split.SplitBounds;
 import com.android.wm.shell.sysui.ShellCommandHandler;
 import com.android.wm.shell.sysui.ShellController;
@@ -91,7 +89,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.quality.Strictness;
+import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -127,6 +125,9 @@ public class RecentTasksControllerTest extends ShellTestCase {
     private DesktopUserRepositories mDesktopUserRepositories;
     @Mock
     private DesktopRepository mDesktopRepository;
+    @Mock
+    private UserManager mUserManager;
+    private FakeDesktopState mDesktopState;
 
     private ShellTaskOrganizer mShellTaskOrganizer;
     private RecentTasksController mRecentTasksController;
@@ -134,14 +135,14 @@ public class RecentTasksControllerTest extends ShellTestCase {
     private ShellInit mShellInit;
     private ShellController mShellController;
     private TestShellExecutor mMainExecutor;
-    private static StaticMockitoSession sMockitoSession;
+    private AutoCloseable mMocksInit = null;
 
     @Before
     public void setUp() {
-        sMockitoSession = mockitoSession().initMocks(this).strictness(Strictness.LENIENT)
-                .mockStatic(DesktopModeStatus.class).startMocking();
-        ExtendedMockito.doReturn(true)
-                .when(() -> DesktopModeStatus.canEnterDesktopMode(any()));
+        mDesktopState = new FakeDesktopState();
+        mDesktopState.setCanEnterDesktopMode(true);
+
+        mMocksInit = MockitoAnnotations.openMocks(this);
 
         mMainExecutor = new TestShellExecutor();
         when(mDesktopUserRepositories.getCurrent()).thenReturn(mDesktopRepository);
@@ -151,11 +152,11 @@ public class RecentTasksControllerTest extends ShellTestCase {
                 .thenReturn(mock(KeyguardManager.class));
         mShellInit = spy(new ShellInit(mMainExecutor));
         mShellController = spy(new ShellController(mContext, mShellInit, mShellCommandHandler,
-                mDisplayInsetsController, mMainExecutor));
+                mDisplayInsetsController, mUserManager, mMainExecutor));
         mRecentTasksControllerReal = new RecentTasksController(mContext, mShellInit,
                 mShellController, mShellCommandHandler, mTaskStackListener, mActivityTaskManager,
                 Optional.of(mDesktopUserRepositories), mTaskStackTransitionObserver,
-                mMainExecutor);
+                mMainExecutor, mDesktopState);
         mRecentTasksController = spy(mRecentTasksControllerReal);
         mShellTaskOrganizer = new ShellTaskOrganizer(mShellInit, mShellCommandHandler,
                 null /* sizeCompatUI */, Optional.empty(), Optional.of(mRecentTasksController),
@@ -164,8 +165,11 @@ public class RecentTasksControllerTest extends ShellTestCase {
     }
 
     @After
-    public void tearDown() {
-        sMockitoSession.finishMocking();
+    public void tearDown() throws Exception {
+        if (mMocksInit != null) {
+            mMocksInit.close();
+            mMocksInit = null;
+        }
     }
 
     @Test
@@ -406,8 +410,7 @@ public class RecentTasksControllerTest extends ShellTestCase {
 
     @Test
     public void testGetRecentTasks_hasActiveDesktopTasks_proto2Disabled_doNotGroupFreeformTasks() {
-        ExtendedMockito.doReturn(false)
-                .when(() -> DesktopModeStatus.canEnterDesktopMode(any()));
+        mDesktopState.setCanEnterDesktopMode(false);
 
         RecentTaskInfo t1 = makeTaskInfo(1);
         RecentTaskInfo t2 = makeTaskInfo(2);
@@ -509,6 +512,16 @@ public class RecentTasksControllerTest extends ShellTestCase {
                 freeformGroup.getTaskInfoList().get(1).positionInParent);
     }
 
+    @Test
+    @EnableFlags(FLAG_ENABLE_DESKTOP_WINDOWING_PERSISTENCE)
+    public void testGetRecentTasks_lastNonFullscreenBoundsNull_doesNotThrow() {
+        RecentTaskInfo t1 = makeTaskInfo(1);
+        t1.lastNonFullscreenBounds = null;
+        setRawList(t1);
+        when(mDesktopUserRepositories.getCurrent().isActiveTask(1)).thenReturn(true);
+
+        mRecentTasksController.getRecentTasks(MAX_VALUE, RECENT_IGNORE_UNAVAILABLE, 0);
+    }
     @Test
     public void testRemovedTaskRemovesSplit() {
         RecentTaskInfo t1 = makeTaskInfo(1);

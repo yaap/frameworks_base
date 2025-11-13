@@ -20,6 +20,7 @@ import android.animation.Animator
 import android.animation.AnimatorSet
 import android.graphics.Outline
 import android.graphics.Rect
+import android.hardware.biometrics.Flags
 import android.transition.AutoTransition
 import android.transition.TransitionManager
 import android.util.TypedValue
@@ -36,6 +37,7 @@ import androidx.constraintlayout.widget.Guideline
 import androidx.core.animation.addListener
 import androidx.core.view.doOnLayout
 import androidx.lifecycle.lifecycleScope
+import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.systemui.biometrics.Utils
 import com.android.systemui.biometrics.ui.viewmodel.PromptPosition
 import com.android.systemui.biometrics.ui.viewmodel.PromptSize
@@ -47,10 +49,10 @@ import com.android.systemui.biometrics.ui.viewmodel.isSmall
 import com.android.systemui.biometrics.ui.viewmodel.isTop
 import com.android.systemui.lifecycle.repeatWhenAttached
 import com.android.systemui.res.R
+import com.android.systemui.util.kotlin.Quad
 import com.android.systemui.utils.windowmanager.WindowManagerUtils
 import kotlin.math.abs
 import kotlinx.coroutines.flow.combine
-import com.android.app.tracing.coroutines.launchTraced as launch
 
 /** Helper for [BiometricViewBinder] to handle resize transitions. */
 object BiometricViewSizeBinder {
@@ -100,6 +102,7 @@ object BiometricViewSizeBinder {
 
         var currentSize: PromptSize? = null
         var currentPosition: PromptPosition = PromptPosition.Bottom
+        var fallbackCurrentlyShowing: Boolean = false
         panelView.outlineProvider =
             object : ViewOutlineProvider() {
                 override fun getOutline(view: View, outline: Outline) {
@@ -156,8 +159,8 @@ object BiometricViewSizeBinder {
             fun setVisibilities(hideSensorIcon: Boolean, size: PromptSize) {
                 viewsToHideWhenSmall.forEach { it.showContentOrHide(forceHide = size.isSmall) }
                 largeConstraintSet.setVisibility(iconHolderView.id, View.GONE)
-                largeConstraintSet.setVisibility(R.id.indicator, View.GONE)
-                largeConstraintSet.setVisibility(R.id.scrollView, View.GONE)
+                largeConstraintSet.setVisibility(R.id.auth_screen, View.GONE)
+                largeConstraintSet.setVisibility(R.id.fallback_view, View.GONE)
 
                 if (hideSensorIcon) {
                     smallConstraintSet.setVisibility(iconHolderView.id, View.GONE)
@@ -333,116 +336,159 @@ object BiometricViewSizeBinder {
                     }
                 }
 
-                lifecycleScope.launch {
-                    combine(viewModel.hideSensorIcon, viewModel.size, ::Pair).collect {
-                        (hideSensorIcon, size) ->
-                        setVisibilities(hideSensorIcon, size)
+                if (!Flags.bpFallbackOptions()) {
+                    lifecycleScope.launch {
+                        combine(viewModel.hideSensorIcon, viewModel.size, ::Pair).collect {
+                            (hideSensorIcon, size) ->
+                            setVisibilities(hideSensorIcon, size)
+                        }
                     }
                 }
 
                 lifecycleScope.launch {
-                    combine(viewModel.position, viewModel.size, ::Pair).collect { (position, size)
-                        ->
-                        if (position.isLeft) {
-                            if (size.isSmall) {
-                                flipConstraintSet.clone(smallConstraintSet)
-                            } else {
-                                flipConstraintSet.clone(mediumConstraintSet)
-                            }
-
-                            // Move all content to other panel
-                            flipConstraintSet.connect(
-                                R.id.scrollView,
-                                ConstraintSet.LEFT,
-                                R.id.midGuideline,
-                                ConstraintSet.LEFT,
-                            )
-                            flipConstraintSet.connect(
-                                R.id.scrollView,
-                                ConstraintSet.RIGHT,
-                                R.id.rightGuideline,
-                                ConstraintSet.RIGHT,
-                            )
-                        } else if (position.isTop) {
-                            // Top position is only used for 180 rotation Udfps
-                            // Requires repositioning due to sensor location at top of screen
-                            mediumConstraintSet.connect(
-                                R.id.scrollView,
-                                ConstraintSet.TOP,
-                                R.id.indicator,
-                                ConstraintSet.BOTTOM,
-                            )
-                            mediumConstraintSet.connect(
-                                R.id.scrollView,
-                                ConstraintSet.BOTTOM,
-                                R.id.button_bar,
-                                ConstraintSet.TOP,
-                            )
-                            mediumConstraintSet.connect(
-                                R.id.panel,
-                                ConstraintSet.TOP,
-                                R.id.biometric_icon,
-                                ConstraintSet.TOP,
-                            )
-                            mediumConstraintSet.setMargin(
-                                R.id.panel,
-                                ConstraintSet.TOP,
-                                (-24 * pxToDp).toInt(),
-                            )
-                            mediumConstraintSet.setVerticalBias(R.id.scrollView, 0f)
-                        }
-
-                        when {
-                            size.isSmall -> {
-                                if (position.isLeft) {
-                                    flipConstraintSet.applyTo(view)
+                    combine(
+                            viewModel.position,
+                            viewModel.size,
+                            viewModel.fallbackShowing,
+                            viewModel.hideSensorIcon,
+                            ::Quad,
+                        )
+                        .collect { (position, size, fallbackShowing, hideSensor) ->
+                            if (Flags.bpFallbackOptions()) {
+                                setVisibilities(hideSensor, size)
+                                if (fallbackShowing) {
+                                    mediumConstraintSet.setVisibility(R.id.auth_screen, View.GONE)
+                                    mediumConstraintSet.setVisibility(iconHolderView.id, View.GONE)
+                                    mediumConstraintSet.setVisibility(
+                                        R.id.fallback_view,
+                                        View.VISIBLE,
+                                    )
                                 } else {
-                                    smallConstraintSet.applyTo(view)
+                                    mediumConstraintSet.setVisibility(
+                                        R.id.auth_screen,
+                                        View.VISIBLE,
+                                    )
+                                    mediumConstraintSet.setVisibility(
+                                        iconHolderView.id,
+                                        if (hideSensor) View.GONE else View.VISIBLE,
+                                    )
+                                    mediumConstraintSet.setVisibility(R.id.fallback_view, View.GONE)
                                 }
                             }
-                            size.isMedium && currentSize.isSmall -> {
-                                val autoTransition = AutoTransition()
-                                autoTransition.setDuration(
-                                    ANIMATE_SMALL_TO_MEDIUM_DURATION_MS.toLong()
+
+                            if (position.isLeft) {
+                                if (size.isSmall) {
+                                    flipConstraintSet.clone(smallConstraintSet)
+                                } else {
+                                    flipConstraintSet.clone(mediumConstraintSet)
+                                }
+
+                                // Move all content to other panel
+                                flipConstraintSet.connect(
+                                    R.id.scrollView,
+                                    ConstraintSet.LEFT,
+                                    R.id.midGuideline,
+                                    ConstraintSet.LEFT,
                                 )
+                                flipConstraintSet.connect(
+                                    R.id.scrollView,
+                                    ConstraintSet.RIGHT,
+                                    R.id.rightGuideline,
+                                    ConstraintSet.RIGHT,
+                                )
+                            } else if (position.isTop) {
+                                // Top position is only used for 180 rotation Udfps
+                                // Requires repositioning due to sensor location at top of screen
+                                mediumConstraintSet.connect(
+                                    R.id.scrollView,
+                                    ConstraintSet.TOP,
+                                    R.id.indicator,
+                                    ConstraintSet.BOTTOM,
+                                )
+                                mediumConstraintSet.connect(
+                                    R.id.scrollView,
+                                    ConstraintSet.BOTTOM,
+                                    R.id.button_bar,
+                                    ConstraintSet.TOP,
+                                )
+                                mediumConstraintSet.connect(
+                                    R.id.panel,
+                                    ConstraintSet.TOP,
+                                    R.id.biometric_icon,
+                                    ConstraintSet.TOP,
+                                )
+                                mediumConstraintSet.setMargin(
+                                    R.id.panel,
+                                    ConstraintSet.TOP,
+                                    (-24 * pxToDp).toInt(),
+                                )
+                                mediumConstraintSet.setVerticalBias(R.id.scrollView, 0f)
+                            }
 
-                                if (position.isLeft) {
-                                    flipConstraintSet.applyTo(view)
-                                } else {
-                                    mediumConstraintSet.applyTo(view)
-                                }
-                                TransitionManager.beginDelayedTransition(view, autoTransition)
-                            }
-                            size.isMedium -> {
-                                if (position.isLeft) {
-                                    flipConstraintSet.applyTo(view)
-                                } else {
-                                    mediumConstraintSet.applyTo(view)
-                                }
-                            }
-                            size.isLarge -> {
-                                val autoTransition = AutoTransition()
-                                autoTransition.setDuration(
-                                    if (currentSize.isSmall) {
-                                        ANIMATE_SMALL_TO_MEDIUM_DURATION_MS.toLong()
+                            when {
+                                size.isSmall -> {
+                                    if (position.isLeft) {
+                                        flipConstraintSet.applyTo(view)
                                     } else {
-                                        ANIMATE_MEDIUM_TO_LARGE_DURATION_MS.toLong()
+                                        smallConstraintSet.applyTo(view)
                                     }
-                                )
+                                }
+                                size.isMedium && currentSize.isSmall -> {
+                                    val autoTransition = AutoTransition()
+                                    autoTransition.setDuration(
+                                        ANIMATE_SMALL_TO_MEDIUM_DURATION_MS.toLong()
+                                    )
 
-                                largeConstraintSet.applyTo(view)
-                                TransitionManager.beginDelayedTransition(view, autoTransition)
+                                    if (position.isLeft) {
+                                        flipConstraintSet.applyTo(view)
+                                    } else {
+                                        mediumConstraintSet.applyTo(view)
+                                    }
+                                    TransitionManager.beginDelayedTransition(view, autoTransition)
+                                }
+                                size.isMedium -> {
+                                    if (position.isLeft) {
+                                        flipConstraintSet.applyTo(view)
+                                    } else {
+                                        mediumConstraintSet.applyTo(view)
+                                    }
+
+                                    // Animate between auth and fallback screen if we just changed
+                                    if (fallbackCurrentlyShowing != fallbackShowing) {
+                                        val autoTransition = AutoTransition()
+                                        autoTransition.setDuration(
+                                            ANIMATE_SMALL_TO_MEDIUM_DURATION_MS.toLong()
+                                        )
+                                        TransitionManager.beginDelayedTransition(
+                                            view,
+                                            autoTransition,
+                                        )
+                                    }
+                                }
+                                size.isLarge -> {
+                                    val autoTransition = AutoTransition()
+                                    autoTransition.setDuration(
+                                        if (currentSize.isSmall) {
+                                            ANIMATE_SMALL_TO_MEDIUM_DURATION_MS.toLong()
+                                        } else {
+                                            ANIMATE_MEDIUM_TO_LARGE_DURATION_MS.toLong()
+                                        }
+                                    )
+
+                                    largeConstraintSet.applyTo(view)
+                                    TransitionManager.beginDelayedTransition(view, autoTransition)
+                                }
                             }
+
+                            currentSize = size
+                            currentPosition = position
+                            fallbackCurrentlyShowing = fallbackShowing
+                            notifyAccessibilityChanged()
+
+                            panelView.invalidateOutline()
+                            view.invalidate()
+                            view.requestLayout()
                         }
-
-                        currentSize = size
-                        currentPosition = position
-                        notifyAccessibilityChanged()
-
-                        panelView.invalidateOutline()
-                        view.invalidate()
-                        view.requestLayout()
-                    }
                 }
             }
         }

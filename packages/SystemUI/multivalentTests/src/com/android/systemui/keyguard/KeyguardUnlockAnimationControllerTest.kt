@@ -7,7 +7,6 @@ import android.graphics.Point
 import android.graphics.Rect
 import android.os.PowerManager
 import android.platform.test.annotations.DisableFlags
-import android.platform.test.annotations.EnableFlags
 import android.testing.TestableLooper.RunWithLooper
 import android.view.RemoteAnimationTarget
 import android.view.SurfaceControl
@@ -22,6 +21,7 @@ import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.defaultDeviceState
 import com.android.systemui.deviceStateManager
+import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.flags.FeatureFlags
 import com.android.systemui.shared.system.smartspace.ILauncherUnlockAnimationController
 import com.android.systemui.statusbar.NotificationShadeWindowController
@@ -54,6 +54,7 @@ import org.mockito.kotlin.whenever
 @RunWith(AndroidJUnit4::class)
 @RunWithLooper
 @SmallTest
+@DisableSceneContainer // Class is unused in flexi.
 class KeyguardUnlockAnimationControllerTest : SysuiTestCase() {
     private lateinit var keyguardUnlockAnimationController: KeyguardUnlockAnimationController
 
@@ -417,7 +418,6 @@ class KeyguardUnlockAnimationControllerTest : SysuiTestCase() {
      * and home screen.
      */
     @Test
-    @EnableFlags(Flags.FLAG_FASTER_UNLOCK_TRANSITION)
     fun manualUnlock_multipleWallpapers() {
         var lastFadeInAlpha = -1f
         var lastFadeOutAlpha = -1f

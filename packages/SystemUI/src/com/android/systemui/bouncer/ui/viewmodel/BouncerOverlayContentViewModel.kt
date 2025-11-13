@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.type
 import androidx.core.graphics.drawable.toBitmap
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.app.tracing.coroutines.traceCoroutine
+import com.android.systemui.Flags
 import com.android.systemui.authentication.domain.interactor.AuthenticationInteractor
 import com.android.systemui.authentication.shared.model.AuthenticationMethodModel
 import com.android.systemui.authentication.shared.model.AuthenticationWipeModel
@@ -39,6 +40,7 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.keyguard.domain.interactor.KeyguardDismissActionInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardMediaKeyInteractor
 import com.android.systemui.lifecycle.ExclusiveActivatable
+import com.android.systemui.res.R
 import com.android.systemui.user.ui.viewmodel.UserSwitcherViewModel
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -132,6 +134,14 @@ constructor(
      */
     val isOneHandedModeSupported: StateFlow<Boolean> = _isOneHandedModeSupported.asStateFlow()
 
+    /**
+     * Whether swap of layout columns on double click should be disabled to improve interaction on
+     * large-screen form factor, e.g. desktop, kiosk
+     */
+    private val disableDoubleClickSwap =
+        Flags.disableDoubleClickSwapOnBouncer() &&
+            bouncerInteractor.isImproveLargeScreenInteractionEnabled
+
     private val _isInputPreferredOnLeftSide = MutableStateFlow(false)
     val isInputPreferredOnLeftSide = _isInputPreferredOnLeftSide.asStateFlow()
 
@@ -171,7 +181,13 @@ constructor(
 
             launch {
                 userSwitcher.selectedUser
-                    .map { it.image.toBitmap() }
+                    .map {
+                        val iconSize =
+                            applicationContext.resources.getDimensionPixelSize(
+                                R.dimen.bouncer_user_switcher_icon_size
+                            )
+                        it.image.toBitmap(iconSize, iconSize)
+                    }
                     .collect { _selectedUserImage.value = it }
             }
 
@@ -208,30 +224,34 @@ constructor(
 
             launch { actionButtonInteractor.actionButton.collect { _actionButton.value = it } }
 
-            launch {
-                combine(
-                        bouncerInteractor.isOneHandedModeSupported,
-                        bouncerInteractor.lastRecordedLockscreenTouchPosition,
-                        ::Pair,
-                    )
-                    .collect { (isOneHandedModeSupported, lastRecordedNotificationTouchPosition) ->
-                        _isOneHandedModeSupported.value = isOneHandedModeSupported
-                        if (
-                            isOneHandedModeSupported &&
-                                lastRecordedNotificationTouchPosition != null
-                        ) {
-                            bouncerInteractor.setPreferredBouncerInputSide(
-                                if (
-                                    lastRecordedNotificationTouchPosition <
-                                        applicationContext.resources.displayMetrics.widthPixels / 2
-                                ) {
-                                    BouncerInputSide.LEFT
-                                } else {
-                                    BouncerInputSide.RIGHT
-                                }
-                            )
+            if (!disableDoubleClickSwap) {
+                launch {
+                    combine(
+                            bouncerInteractor.isOneHandedModeSupported,
+                            bouncerInteractor.lastRecordedLockscreenTouchPosition,
+                            ::Pair,
+                        )
+                        .collect { (isOneHandedModeSupported, lastRecordedNotificationTouchPosition)
+                            ->
+                            _isOneHandedModeSupported.value = isOneHandedModeSupported
+                            if (
+                                isOneHandedModeSupported &&
+                                    lastRecordedNotificationTouchPosition != null
+                            ) {
+                                bouncerInteractor.setPreferredBouncerInputSide(
+                                    if (
+                                        lastRecordedNotificationTouchPosition <
+                                            applicationContext.resources.displayMetrics
+                                                .widthPixels / 2
+                                    ) {
+                                        BouncerInputSide.LEFT
+                                    } else {
+                                        BouncerInputSide.RIGHT
+                                    }
+                                )
+                            }
                         }
-                    }
+                }
             }
 
             launch {
@@ -377,6 +397,7 @@ constructor(
      * input UI is not present.
      */
     fun onDoubleTap(wasEventOnNonInputHalfOfScreen: Boolean) {
+        if (disableDoubleClickSwap) return
         if (!wasEventOnNonInputHalfOfScreen) return
         if (_isInputPreferredOnLeftSide.value) {
             bouncerInteractor.setPreferredBouncerInputSide(BouncerInputSide.RIGHT)
@@ -421,6 +442,22 @@ constructor(
         if (actionButtonModel is BouncerActionButtonModel.EmergencyButtonModel) {
             bouncerActionButtonInteractor.onEmergencyButtonLongClicked()
         }
+    }
+
+    /**
+     * Call this method to determine if Bouncer contents should delay showing on initial transition
+     * to the bouncer. We have this delay to give an opportunity for passive authentication methods
+     * (such as face auth and watch unlock) to succeed first before showing the bouncer contents UI
+     * to avoid a flicker of the UI. However, we do not want to delay the entire Bouncer scene (with
+     * the bouncer background) because we still want to give the user a visual indication that their
+     * request for the bouncer is being processed.
+     *
+     * Returns `true` if a passive authentication method (such as face authentication or watch
+     * unlock) may authenticate the device before the user has the opportunity to enter their
+     * pin/pattern/password. Else, `false`.
+     */
+    suspend fun shouldDelayBouncerContent(): Boolean {
+        return bouncerInteractor.passiveAuthMaySucceedBeforeFullyShowingBouncer()
     }
 
     /**

@@ -117,13 +117,11 @@ constructor(
                         }
                     }
 
-                    launch {
-                        viewModel.getLockscreenDisplayConfig(calculateMaxNotifications).collect {
-                            (isOnLockscreen, maxNotifications) ->
-                            if (SceneContainerFlag.isEnabled) {
-                                controller.setOnLockscreen(isOnLockscreen)
+                    if (!SceneContainerFlag.isEnabled) {
+                        launch {
+                            viewModel.getMaxNotifications(calculateMaxNotifications).collect {
+                                controller.setMaxDisplayedNotifications(it)
                             }
-                            controller.setMaxDisplayedNotifications(maxNotifications)
                         }
                     }
 
@@ -147,7 +145,7 @@ constructor(
                         if (extendedWallpaperEffects()) {
                             launch {
                                 combine(
-                                        viewModel.getNotificationStackAbsoluteBottom(
+                                        viewModel.getNotificationStackAbsoluteBottomOnLockscreen(
                                             calculateMaxNotifications = calculateMaxNotifications,
                                             calculateHeight = { maxNotifications ->
                                                 notificationStackSizeCalculator.computeHeight(
@@ -155,9 +153,9 @@ constructor(
                                                     shelfHeight =
                                                         controller.getShelfHeight().toFloat(),
                                                     stack = controller.view,
+                                                    reason = "getStackAbsoluteBottomOnLockscreen",
                                                 )
                                             },
-                                            controller.getShelfHeight().toFloat(),
                                         ),
                                         viewModel.configurationBasedDimensions.map { it.marginTop },
                                         ::Pair,
@@ -206,6 +204,9 @@ constructor(
         }
 
         controller.setOnHeightChangedRunnable { viewModel.notificationStackChanged() }
+        controller.setOnKeyguardTopLevelNotificationRemovedRunnable {
+            viewModel.notificationStackChangedInstant()
+        }
         disposables += DisposableHandle { controller.setOnHeightChangedRunnable(null) }
         disposables += view.onLayoutChanged { viewModel.notificationStackChanged() }
 

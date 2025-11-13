@@ -17,10 +17,20 @@
 package android.content;
 
 import static android.content.ContentProvider.maybeAddUserId;
+import static android.content.flags.Flags.FLAG_STOP_VOICE_COMMAND;
 import static android.os.Flags.FLAG_ALLOW_PRIVATE_PROFILE;
 import static android.security.Flags.FLAG_FRP_ENFORCEMENT;
 import static android.security.Flags.FLAG_PREVENT_INTENT_REDIRECT;
 import static android.security.Flags.preventIntentRedirect;
+
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED;
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED__ACCESS_TYPE__READ;
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED__ACCESS_TYPE__WRITE;
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED__ACTION_TYPE__IMAGE_CAPTURE;
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED__ACTION_TYPE__SEND;
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED__ACTION_TYPE__SEND_MULTIPLE;
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__GRANTED;
+import static com.android.internal.util.FrameworkStatsLog.IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__RESTRICTED;
 
 import android.Manifest;
 import android.accessibilityservice.AccessibilityService;
@@ -33,9 +43,11 @@ import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.annotation.SdkConstant;
 import android.annotation.SdkConstant.SdkConstantType;
+import android.annotation.SpecialUsers.CanBeCURRENT;
 import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.annotation.TestApi;
+import android.annotation.UserIdInt;
 import android.app.Activity;
 import android.app.ActivityThread;
 import android.app.AppGlobals;
@@ -87,8 +99,8 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.util.proto.ProtoOutputStream;
 
+import com.android.internal.util.FrameworkStatsLog;
 import com.android.internal.util.XmlUtils;
-import com.android.modules.expresslog.Counter;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -1566,7 +1578,53 @@ public class Intent implements Parcelable, Cloneable {
 
     /**
      * Activity Action: Start Voice Command.
-     * <p>Input: Nothing.
+     *
+     * <p>
+     * For apps targeting or running on devices with SDK version
+     * {@link android.os.Build.VERSION_CODES#BAKLAVA} or lower, the extras
+     * {@link android.bluetooth.BluetoothDevice#EXTRA_DEVICE} and
+     * {@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE} are not
+     * included as part of the intent.
+     * For apps targeting versions higher than
+     * {@link android.os.Build.VERSION_CODES#BAKLAVA}, the extras
+     * {@link android.bluetooth.BluetoothDevice#EXTRA_DEVICE} and
+     * {@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE} are included as
+     * part of the intent.
+     *
+     * <p>Information about the extras is below.
+     * <ul>
+     *   <li><em>{@link android.bluetooth.BluetoothDevice#EXTRA_DEVICE}</em>
+     *       indicates the {@link android.bluetooth.BluetoothDevice} which
+     *       initiated this request.</li>
+     *   <li><em>{@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE}</em>
+     *       indicates the profile (e.g., {@link android.bluetooth.BluetoothProfile#HEADSET}
+     *       or {@link android.bluetooth.BluetoothProfile#LE_AUDIO}) which triggered this
+     *       request.</li>
+     * </ul>
+     *
+     * <p>
+     * Additionally, if the {@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE}
+     * is {@link android.bluetooth.BluetoothProfile#HEADSET}, the app should call
+     * the following APIs to start voice assistant session.
+     * <ul>
+     *   <li>{@link android.bluetooth.BluetoothHeadset#startVoiceRecognition}</li>
+     *   <li>{@link android.media.AudioRecord#setPreferredDevice()} for the
+     *       {@link android.media.AudioDeviceInfo#TYPE_BLUETOOTH_SCO} device
+     *       whose MAC address matches the address received in
+     *       {@link android.bluetooth.BluetoothDevice#EXTRA_DEVICE}</li>
+     *   <li>{@link android.media.AudioRecord#startRecording()}</li>
+     * </ul>
+     * <p>
+     * If the {@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE} is
+     * {@link android.bluetooth.BluetoothProfile#LE_AUDIO}, the app should call
+     * the following APIs to start voice assistant session.
+     * <ul>
+     *   <li>{@link android.media.AudioRecord#setPreferredDevice()} for the
+     *       {@link android.media.AudioDeviceInfo#TYPE_BLE_HEADSET} device
+     *       whose MAC address matches the address received in
+     *       {@link android.bluetooth.BluetoothDevice#EXTRA_DEVICE}</li>
+     *   <li>{@link android.media.AudioRecord#startRecording()}</li>
+     * </ul>
      * <p>Output: Nothing.
      * <p class="note">
      * In some cases, a matching Activity may not exist, so ensure you
@@ -1574,6 +1632,37 @@ public class Intent implements Parcelable, Cloneable {
      */
     @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_VOICE_COMMAND = "android.intent.action.VOICE_COMMAND";
+
+    /**
+     * Broadcast Action: Stop Voice Command.
+     *
+     * <p>The intent will have the following extra values.
+     * <ul>
+     *   <li><em>{@link android.bluetooth.BluetoothDevice#EXTRA_DEVICE}</em>
+     *       indicates the BluetoothDevice which initiated this request.</li>
+     *   <li><em>{@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE}</em>
+     *       indicates the profile (e.g., {@link android.bluetooth.BluetoothProfile#HEADSET}
+     *       or {@link android.bluetooth.BluetoothProfile#LE_AUDIO}) which
+     *       triggered this request.</li>
+     * </ul>
+     *
+     * <p>
+     * Additionally, if the {@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE}
+     * is {@link android.bluetooth.BluetoothProfile#HEADSET}, the app should call
+     * {@link android.bluetooth.BluetoothHeadset#stopVoiceRecognition} to stop
+     * voice assistant session.
+     * If the {@link android.bluetooth.BluetoothProfile#EXTRA_PROFILE} is
+     * {@link android.bluetooth.BluetoothProfile#LE_AUDIO}, the app should call
+     * {@link android.media.AudioRecord#stop()} to stop voice assistant session.
+     *
+     * <p class="note">This is a protected intent that can only be sent
+     * by the system.
+     */
+    @FlaggedApi(FLAG_STOP_VOICE_COMMAND)
+    @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
+    @BroadcastBehavior(includeBackground = true)
+    public static final String ACTION_STOP_VOICE_COMMAND
+            = "android.intent.action.STOP_VOICE_COMMAND";
 
     /**
      * Activity Action: Start action associated with long pressing on the
@@ -9333,7 +9422,7 @@ public class Intent implements Parcelable, Cloneable {
     }
 
     /** @hide */
-    public int getContentUserHint() {
+    public @CanBeCURRENT @UserIdInt int getContentUserHint() {
         return mContentUserHint;
     }
 
@@ -13357,10 +13446,22 @@ public class Intent implements Parcelable, Cloneable {
                             null, new String[] { getType() },
                             new ClipData.Item(text, htmlText, null, stream));
                     setClipData(clipData);
-                    if (stream != null) {
-                        logCounterIfFlagsMissing(FLAG_GRANT_READ_URI_PERMISSION,
-                                "intents.value_explicit_uri_grant_for_send_action");
-                        addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+                    if (stream != null && isMissingGrantFlag(FLAG_GRANT_READ_URI_PERMISSION)) {
+                        int grantType;
+                        if (android.security.Flags.implicitUriGrantsRestrictedForSendAction()) {
+                            Log.e(TAG, "Skipping implicit URI grants for " + ACTION_SEND
+                                    + " action because it is restricted");
+                            grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__RESTRICTED;
+                        } else {
+                            addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+                            grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__GRANTED;
+                        }
+                        FrameworkStatsLog.write(
+                                IMPLICIT_URI_GRANT_EVENT_REPORTED,
+                                context.getApplicationInfo().uid,
+                                grantType,
+                                IMPLICIT_URI_GRANT_EVENT_REPORTED__ACCESS_TYPE__READ,
+                                IMPLICIT_URI_GRANT_EVENT_REPORTED__ACTION_TYPE__SEND);
                     }
                     return true;
                 }
@@ -13400,10 +13501,23 @@ public class Intent implements Parcelable, Cloneable {
                     }
 
                     setClipData(clipData);
-                    if (streams != null) {
-                        logCounterIfFlagsMissing(FLAG_GRANT_READ_URI_PERMISSION,
-                                "intents.value_explicit_uri_grant_for_send_multiple_action");
-                        addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+                    if (streams != null && isMissingGrantFlag(FLAG_GRANT_READ_URI_PERMISSION)) {
+                        int grantType;
+                        if (android.security.Flags
+                                .implicitUriGrantsRestrictedForSendmultipleImagecaptureActions()) {
+                            Log.e(TAG, "Skipping implicit URI grants for "
+                                    + ACTION_SEND_MULTIPLE + " action because it is restricted");
+                            grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__RESTRICTED;
+                        } else {
+                            addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+                            grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__GRANTED;
+                        }
+                        FrameworkStatsLog.write(
+                                IMPLICIT_URI_GRANT_EVENT_REPORTED,
+                                context.getApplicationInfo().uid,
+                                grantType,
+                                IMPLICIT_URI_GRANT_EVENT_REPORTED__ACCESS_TYPE__READ,
+                                IMPLICIT_URI_GRANT_EVENT_REPORTED__ACTION_TYPE__SEND_MULTIPLE);
                     }
                     return true;
                 }
@@ -13423,10 +13537,42 @@ public class Intent implements Parcelable, Cloneable {
 
                 setClipData(ClipData.newRawUri("", output));
 
-                logCounterIfFlagsMissing(
-                        FLAG_GRANT_WRITE_URI_PERMISSION | FLAG_GRANT_READ_URI_PERMISSION,
-                        "intents.value_explicit_uri_grant_for_image_capture_action");
-                addFlags(FLAG_GRANT_WRITE_URI_PERMISSION|FLAG_GRANT_READ_URI_PERMISSION);
+                if (isMissingGrantFlag(FLAG_GRANT_READ_URI_PERMISSION)) {
+                    int grantType;
+                    if (android.security.Flags
+                            .implicitUriGrantsRestrictedForSendmultipleImagecaptureActions()) {
+                        Log.e(TAG,
+                                "Skipping implicit URI read grants for ImageCapture action "
+                                        + "because it is restricted");
+                        grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__RESTRICTED;
+                    } else {
+                        addFlags(FLAG_GRANT_READ_URI_PERMISSION);
+                        grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__GRANTED;
+                    }
+                    FrameworkStatsLog.write(IMPLICIT_URI_GRANT_EVENT_REPORTED,
+                            context.getApplicationInfo().uid,
+                            grantType,
+                            IMPLICIT_URI_GRANT_EVENT_REPORTED__ACCESS_TYPE__READ,
+                            IMPLICIT_URI_GRANT_EVENT_REPORTED__ACTION_TYPE__IMAGE_CAPTURE);
+                }
+                if (isMissingGrantFlag(FLAG_GRANT_WRITE_URI_PERMISSION)) {
+                    int grantType;
+                    if (android.security.Flags
+                            .implicitUriGrantsRestrictedForSendmultipleImagecaptureActions()) {
+                        Log.e(TAG,
+                                "Skipping implicit URI write grants for ImageCapture action "
+                                        + "because it is restricted");
+                        grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__RESTRICTED;
+                    } else {
+                        addFlags(FLAG_GRANT_WRITE_URI_PERMISSION);
+                        grantType = IMPLICIT_URI_GRANT_EVENT_REPORTED__GRANT_TYPE__GRANTED;
+                    }
+                    FrameworkStatsLog.write(IMPLICIT_URI_GRANT_EVENT_REPORTED,
+                            context.getApplicationInfo().uid,
+                            grantType,
+                            IMPLICIT_URI_GRANT_EVENT_REPORTED__ACCESS_TYPE__WRITE,
+                            IMPLICIT_URI_GRANT_EVENT_REPORTED__ACTION_TYPE__IMAGE_CAPTURE);
+                }
                 return true;
             }
         }
@@ -13434,10 +13580,8 @@ public class Intent implements Parcelable, Cloneable {
         return false;
     }
 
-    private void logCounterIfFlagsMissing(int requiredFlags, String metricId) {
-        if ((getFlags() & requiredFlags) != requiredFlags) {
-            Counter.logIncrement(metricId);
-        }
+    private boolean isMissingGrantFlag(int grantFlagToCheck) {
+        return ((getFlags() & grantFlagToCheck) != grantFlagToCheck);
     }
 
     @android.ravenwood.annotation.RavenwoodThrow

@@ -138,7 +138,7 @@
     <string name="bluetooth_profile_opp" msgid="6692618568149493430">"Файл жіберу"</string>
     <string name="bluetooth_profile_hid" msgid="2969922922664315866">"Енгізу құрылғысы"</string>
     <string name="bluetooth_profile_pan" msgid="1006235139308318188">"Интернетке қосылу"</string>
-    <string name="bluetooth_profile_pbap" msgid="2103406516858653017">"Контакт пен қоңырау тарихына рұқсат беру"</string>
+    <string name="bluetooth_profile_pbap" msgid="2103406516858653017">"Контактілерге және қоңыраулар тарихына рұқсат беру"</string>
     <string name="bluetooth_profile_pbap_summary" msgid="402819589201138227">"Ақпарат қоңырау туралы хабарландыру, т.б. үшін қолданылады."</string>
     <string name="bluetooth_profile_pan_nap" msgid="7871974753822470050">"Интернет байланысын ортақ қолдану"</string>
     <string name="bluetooth_profile_map" msgid="8907204701162107271">"Мәтіндік хабарлар"</string>
@@ -210,8 +210,8 @@
     <string name="tts_settings_title" msgid="7602210956640483039">"Мәтінді дыбыстау"</string>
     <string name="tts_default_rate_title" msgid="3964187817364304022">"Сөйлеу жылдамдығы"</string>
     <string name="tts_default_rate_summary" msgid="3781937042151716987">"Мәтіннің оқылу жылдамдығы"</string>
-    <string name="tts_default_pitch_title" msgid="6988592215554485479">"Дауыс жиілігі"</string>
-    <string name="tts_default_pitch_summary" msgid="9132719475281551884">"Синтезделген сөйлеу үніне әсер етеді"</string>
+    <string name="tts_default_pitch_title" msgid="6988592215554485479">"Тон"</string>
+    <string name="tts_default_pitch_summary" msgid="9132719475281551884">"Синтезделген дауыс тонына әсер етеді."</string>
     <string name="tts_default_lang_title" msgid="4698933575028098940">"Тіл"</string>
     <string name="tts_lang_use_system" msgid="6312945299804012406">"Жүйе тілін пайдалану"</string>
     <string name="tts_lang_not_selected" msgid="7927823081096056147">"Тіл таңдалған жоқ"</string>
@@ -435,7 +435,7 @@
     <string name="transition_animation_scale_title" msgid="1278477690695439337">"Ауысу анимациясының өлшемі"</string>
     <string name="animator_duration_scale_title" msgid="7082913931326085176">"Аниматор ұзақтығы"</string>
     <string name="overlay_display_devices_title" msgid="5411894622334469607">"Қосымша дисплей симуляциясы"</string>
-    <string name="shade_display_awareness_title" msgid="8000009404669495876">"Реңк дисплей позициясы"</string>
+    <string name="shade_display_awareness_title" msgid="8000009404669495876">"Хабарландыру тақтасының орналасуы"</string>
     <string name="debug_applications_category" msgid="5394089406638954196">"Қолданбалар"</string>
     <string name="immediately_destroy_activities" msgid="1826287490705167403">"Әрекеттерді сақтамау"</string>
     <string name="immediately_destroy_activities_summary" msgid="6289590341144557614">"Әр әрекетті пайдаланушы аяқтай салысымен жою"</string>
@@ -443,7 +443,7 @@
     <string name="show_all_anrs" msgid="9160563836616468726">"Фондық ANR-ларды көрсету"</string>
     <string name="show_all_anrs_summary" msgid="8562788834431971392">"Фондық қолданбалар үшін \"Қолданба жауап бермейді\" терезесін шығару"</string>
     <string name="show_notification_channel_warnings" msgid="3448282400127597331">"Хабарландыру арнасының ескертулерін көрсету"</string>
-    <string name="show_notification_channel_warnings_summary" msgid="68031143745094339">"Қолданба жарамсыз арна арқылы хабарландыру жариялағанда, экранға ескерту шығарады."</string>
+    <string name="show_notification_channel_warnings_summary" msgid="68031143745094339">"Қолданба жарамды арнасыз хабарландыру жариялағанда, экранға ескерту шығарады."</string>
     <string name="force_allow_on_external" msgid="9187902444231637880">"Сыртқы жадта сақтауға рұқсат ету"</string>
     <string name="force_allow_on_external_summary" msgid="8525425782530728238">"Манифест мәндеріне қарамастан, кез келген қолданбаны сыртқы жадқа жазуға рұқсат беру"</string>
     <string name="force_resizable_activities" msgid="7143612144399959606">"Әрекеттердің өлшемін өзгертуге рұқсат ету"</string>
@@ -520,7 +520,7 @@
     <string name="power_charging_future_paused" msgid="1809543660923642799">"<xliff:g id="LEVEL">%1$s</xliff:g> – Зарядталып жатыр"</string>
     <string name="power_fast_charging_duration_v2" msgid="3797735998640359490">"<xliff:g id="LEVEL">%1$s</xliff:g> - <xliff:g id="STATUS">%2$s</xliff:g> - Зарядталып болады: <xliff:g id="TIME">%3$s</xliff:g>"</string>
     <string name="power_charging_duration_v2" msgid="2938998284074003248">"<xliff:g id="LEVEL">%1$s</xliff:g> - Толық заряд алуға қалған уақыт: <xliff:g id="TIME">%2$s</xliff:g>"</string>
-    <string name="power_remaining_charging_duration_only_v2" msgid="5358176435722950193">"Толықтай зарядталып болады: <xliff:g id="TIME">%1$s</xliff:g>"</string>
+    <string name="power_remaining_charging_duration_only_v2" msgid="5358176435722950193">"Сағат <xliff:g id="TIME">%1$s</xliff:g> шамасында толықтай зарядталып болады."</string>
     <string name="power_remaining_fast_charging_duration_only_v2" msgid="6270950195810579563">"Заряд толуына қалған уақыт: <xliff:g id="TIME">%1$s</xliff:g>"</string>
     <string name="battery_info_status_unknown" msgid="268625384868401114">"Белгісіз"</string>
     <string name="battery_info_status_charging" msgid="4279958015430387405">"Зарядталуда"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> бұрын"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> қалды"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Ең кішкентай"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Кішірек"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Кішкентай"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"Әдепкі"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Үлкен"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Үлкенірек"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Ең үлкен"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Үлкенірек"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Өте үлкен"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Өте қатты үлкен"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Ең үлкен"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Басқа (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Mәзір"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Демо режимде зауыттық мәндерге қайтару үшін құпия сөзді енгізу"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{1 құрылғы жалғанған.}other{# құрылғы жалғанған.}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Көбірек уақыт."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Азырақ уақыт."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Ұлғайту"</string>
     <string name="cancel" msgid="5665114069455378395">"Бас тарту"</string>
     <string name="next" msgid="2699398661093607009">"Келесі"</string>
     <string name="back" msgid="5554327870352703710">"Артқа"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"<xliff:g id="SWITCHAPP">%1$s</xliff:g> қолданбасын таратсаңыз немесе аудио шығысын өзгертсеңіз, қазіргі тарату сеансы тоқтайды."</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"<xliff:g id="SWITCHAPP">%1$s</xliff:g> қолданбасын тарату"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Аудио шығысын өзгерту"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"\"Артқа\" қимылына арналған тұспал анимациясы"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"\"Артқа\" қимылына арналған жүйелік тұспал анимацияларын іске қосу."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"Бұл параметр қимылға арналған жүйелік тұспал анимацияларын іске қосады. Ол үшін әр қолданбаның манифест файлында enableOnBackInvokedCallback үшін \"True\" мәні қойылуы керек."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g>%%"</string>
     <string name="not_specified" msgid="5423502443185110328">"Көрсетілмеген"</string>
     <string name="neuter" msgid="2075249330106127310">"Орта тек"</string>

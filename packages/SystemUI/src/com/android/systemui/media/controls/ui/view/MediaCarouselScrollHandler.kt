@@ -24,13 +24,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import androidx.annotation.VisibleForTesting
-import androidx.core.view.GestureDetectorCompat
 import androidx.dynamicanimation.animation.FloatPropertyCompat
 import androidx.dynamicanimation.animation.SpringForce
 import com.android.app.tracing.TraceStateLogger
 import com.android.settingslib.Utils
 import com.android.systemui.Gefingerpoken
-import com.android.systemui.classifier.Classifier.NOTIFICATION_DISMISS
+import com.android.systemui.classifier.Classifier.MEDIA_CAROUSEL_SWIPE
 import com.android.systemui.media.controls.util.MediaUiEventLogger
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.qs.PageIndicator
@@ -64,6 +63,7 @@ class MediaCarouselScrollHandler(
     private var seekBarUpdateListener: (visibleToUser: Boolean) -> Unit,
     private val closeGuts: (immediate: Boolean) -> Unit,
     private val falsingManager: FalsingManager,
+    private val onCarouselVisibleToUser: () -> Unit,
     private val logger: MediaUiEventLogger,
 ) {
     /** Trace state logger for media carousel visibility */
@@ -89,7 +89,7 @@ class MediaCarouselScrollHandler(
     private var mediaContent: ViewGroup
 
     /** The gesture detector to detect touch gestures */
-    private val gestureDetector: GestureDetectorCompat
+    private val gestureDetector: GestureDetector
 
     /** The settings button view */
     private lateinit var settingsButton: View
@@ -165,7 +165,8 @@ class MediaCarouselScrollHandler(
         }
 
     /** A listener that is invoked when the scrolling changes to update player visibilities */
-    private val scrollChangedListener =
+    @VisibleForTesting
+    val scrollChangedListener =
         object : View.OnScrollChangeListener {
             override fun onScrollChange(
                 v: View?,
@@ -200,7 +201,7 @@ class MediaCarouselScrollHandler(
     var qsExpanded: Boolean = false
 
     init {
-        gestureDetector = GestureDetectorCompat(scrollView.context, gestureListener)
+        gestureDetector = GestureDetector(scrollView.context, gestureListener)
         scrollView.touchListener = touchListener
         scrollView.setOverScrollMode(View.OVER_SCROLL_NEVER)
         mediaContent = scrollView.contentContainer
@@ -342,7 +343,7 @@ class MediaCarouselScrollHandler(
     }
 
     private fun isFalseTouch() =
-        falsingProtectionNeeded && falsingManager.isFalseTouch(NOTIFICATION_DISMISS)
+        falsingProtectionNeeded && falsingManager.isFalseTouch(MEDIA_CAROUSEL_SWIPE)
 
     private fun getMaxTranslation() =
         if (showsSettingsButton) {
@@ -544,6 +545,7 @@ class MediaCarouselScrollHandler(
             val visible = (i == visibleMediaIndex) || ((i == (visibleMediaIndex + 1)) && scrolledIn)
             view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
         }
+        onCarouselVisibleToUser()
     }
 
     /**

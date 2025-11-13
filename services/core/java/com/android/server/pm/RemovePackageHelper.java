@@ -17,6 +17,7 @@
 package com.android.server.pm;
 
 import static android.content.pm.PackageManager.UNINSTALL_REASON_UNKNOWN;
+import static android.os.Process.SYSTEM_UID;
 import static android.os.Trace.TRACE_TAG_PACKAGE_MANAGER;
 import static android.os.incremental.IncrementalManager.isIncrementalPath;
 import static android.os.storage.StorageManager.FLAG_STORAGE_CE;
@@ -33,6 +34,7 @@ import android.annotation.Nullable;
 import android.annotation.SpecialUsers.CanBeALL;
 import android.annotation.UserIdInt;
 import android.content.pm.PackageManager;
+import android.content.pm.UserInfo;
 import android.content.pm.parsing.ApkLiteParseUtils;
 import android.content.pm.parsing.PackageLite;
 import android.content.pm.parsing.result.ParseResult;
@@ -349,7 +351,10 @@ final class RemovePackageHelper {
                     sharedUserPkgs, userId);
         }
 
-        // Step 6: detroy keystore data.
+        // Step 6: destroy keystore data except for an app that shares SYSTEM_UID.
+        if (ps.getAppId() == SYSTEM_UID) {
+            return;
+        }
         mPm.mInjector.getBackgroundHandler().post(() -> {
             try {
                 Trace.traceBegin(TRACE_TAG_PACKAGE_MANAGER,
@@ -473,11 +478,12 @@ final class RemovePackageHelper {
                 }
             }
         }
+        final List<UserInfo> activeUsers = Settings.getActiveUsers(mPm.mUserManager);
         synchronized (mPm.mLock) {
             // can downgrade to reader
             if (writeSettings) {
                 // Save settings now
-                mPm.writeSettingsLPrTEMP();
+                mPm.writeSettingsLPrTEMP(activeUsers);
             }
             if (installedStateChanged) {
                 mPm.mSettings.writeKernelMappingLPr(deletedPs);

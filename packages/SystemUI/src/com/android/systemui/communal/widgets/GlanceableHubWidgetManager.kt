@@ -29,6 +29,7 @@ import com.android.server.servicewatcher.ServiceWatcher
 import com.android.server.servicewatcher.ServiceWatcher.ServiceListener
 import com.android.systemui.communal.shared.model.CommunalWidgetContentModel
 import com.android.systemui.communal.shared.model.GlanceableHubMultiUserHelper
+import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IAppWidgetEventCallback
 import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IAppWidgetHostListener
 import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IConfigureWidgetCallback
 import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IGlanceableHubWidgetsListener
@@ -103,6 +104,11 @@ constructor(
         runOnService { service ->
             service.setAppWidgetHostListener(appWidgetId, createIAppWidgetHostListener(listener))
         }
+
+    /** Requests the foreground user to remove the listener for a given app widget. */
+    fun removeAppWidgetHostListener(appWidgetId: Int) = runOnService { service ->
+        service.removeAppWidgetHostListener(appWidgetId)
+    }
 
     /** Requests the foreground user to add a widget. */
     fun addWidget(
@@ -206,6 +212,10 @@ constructor(
 
             override fun onViewDataChanged(viewId: Int) {
                 listener.onViewDataChanged(viewId)
+            }
+
+            override fun collectWidgetEvent(callback: IAppWidgetEventCallback) {
+                callback.onResult(listener.collectWidgetEvent())
             }
         }
     }

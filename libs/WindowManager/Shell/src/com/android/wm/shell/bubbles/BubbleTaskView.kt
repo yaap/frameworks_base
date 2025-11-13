@@ -16,10 +16,11 @@
 
 package com.android.wm.shell.bubbles
 
+import android.app.ActivityManager.RunningTaskInfo
 import android.app.ActivityTaskManager.INVALID_TASK_ID
 import android.content.ComponentName
 import androidx.annotation.VisibleForTesting
-import com.android.wm.shell.Flags
+import com.android.wm.shell.bubbles.util.BubbleUtils.isBubbleToFullscreen
 import com.android.wm.shell.taskview.TaskView
 import java.util.concurrent.Executor
 
@@ -62,6 +63,10 @@ class BubbleTaskView(val taskView: TaskView, executor: Executor) {
             delegateListener?.onInitialized()
         }
 
+        override fun onSurfaceAlreadyCreated() {
+            delegateListener?.onSurfaceAlreadyCreated()
+        }
+
         override fun onReleased() {
             delegateListener?.onReleased()
         }
@@ -84,6 +89,10 @@ class BubbleTaskView(val taskView: TaskView, executor: Executor) {
             delegateListener?.onTaskRemovalStarted(taskId)
         }
 
+        override fun onTaskInfoChanged(taskInfo: RunningTaskInfo?) {
+            delegateListener?.onTaskInfoChanged(taskInfo)
+        }
+
         override fun onBackPressedOnTaskRoot(taskId: Int) {
             delegateListener?.onBackPressedOnTaskRoot(taskId)
         }
@@ -99,7 +108,9 @@ class BubbleTaskView(val taskView: TaskView, executor: Executor) {
      * This should be called after all other cleanup animations have finished.
      */
     fun cleanup() {
-        if (Flags.enableTaskViewControllerCleanup() || taskId != INVALID_TASK_ID) {
+        if (isBubbleToFullscreen(taskView.taskInfo)) {
+            taskView.unregisterTask()
+        } else {
             taskView.removeTask()
         }
     }

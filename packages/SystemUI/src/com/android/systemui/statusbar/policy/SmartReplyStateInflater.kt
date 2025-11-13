@@ -34,6 +34,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.service.notification.StatusBarNotification
 import android.text.Annotation
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -46,6 +47,7 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction
 import android.widget.Button
+import androidx.appcompat.content.res.AppCompatResources
 import com.android.systemui.Flags
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
@@ -72,16 +74,19 @@ import kotlin.system.measureTimeMillis
 
 /** Returns whether we should show the smart reply view and its smart suggestions. */
 fun shouldShowSmartReplyView(
-    entry: NotificationEntry,
+    sbn: StatusBarNotification?,
     smartReplyState: InflatedSmartReplyState,
 ): Boolean {
+    if (sbn == null) {
+        return false;
+    }
     if (smartReplyState.smartReplies == null && smartReplyState.smartActions == null) {
         // There are no smart replies and no smart actions.
         return false
     }
     // If we are showing the spinner we don't want to add the buttons.
     val showingSpinner =
-        entry.sbn.notification.extras.getBoolean(
+        sbn.notification.extras.getBoolean(
             Notification.EXTRA_SHOW_REMOTE_INPUT_SPINNER,
             false,
         )
@@ -89,7 +94,7 @@ fun shouldShowSmartReplyView(
         return false
     }
     // If we are keeping the notification around while sending we don't want to add the buttons.
-    return !entry.sbn.notification.extras.getBoolean(Notification.EXTRA_HIDE_SMART_REPLIES, false)
+    return !sbn.notification.extras.getBoolean(Notification.EXTRA_HIDE_SMART_REPLIES, false)
 }
 
 /** Determines if two [InflatedSmartReplyState] are visually similar. */
@@ -133,6 +138,42 @@ constructor(
     override fun inflateSmartReplyState(entry: NotificationEntry): InflatedSmartReplyState =
         chooseSmartRepliesAndActions(entry)
 
+    private fun Button.getButtonType(): SmartButtonType? {
+        return (this.layoutParams as? SmartReplyView.LayoutParams)?.mButtonType
+    }
+
+    private fun getSortedButtons(
+        smartReplyButtons: List<Button>,
+        smartActionButtons: List<Button>
+    ): List<Button> {
+        val finalCombinedButtons: List<Button>
+
+        if (Flags.notificationAnimatedActionsTreatment()) {
+            // Order is Animated Replies -> Animated Actions -> Smart Replies -> Smart Actions
+
+            // Filter buttons based on their type for the animated treatment
+            val animatedReplyButtons = smartReplyButtons.filter {
+                it.getButtonType() == SmartButtonType.ANIMATED_REPLY
+            }
+            val regularReplyButtons = smartReplyButtons.filter {
+                it.getButtonType() == SmartButtonType.REPLY
+            }
+
+            val animatedActionButtons = smartActionButtons.filter {
+                it.getButtonType() == SmartButtonType.ANIMATED_ACTION
+            }
+            val regularActionButtons = smartActionButtons.filter {
+                it.getButtonType() == SmartButtonType.ACTION
+            }
+
+            finalCombinedButtons =
+                animatedReplyButtons + animatedActionButtons + regularReplyButtons + regularActionButtons
+        } else {
+            // Order is Smart Replies -> Smart Actions
+            finalCombinedButtons = smartReplyButtons + smartActionButtons
+        }
+        return finalCombinedButtons
+    }
     override fun inflateSmartReplyViewHolder(
         sysuiContext: Context,
         notifPackageContext: Context,
@@ -140,9 +181,9 @@ constructor(
         existingSmartReplyState: InflatedSmartReplyState?,
         newSmartReplyState: InflatedSmartReplyState,
     ): InflatedSmartReplyViewHolder {
-        if (!shouldShowSmartReplyView(entry, newSmartReplyState)) {
+        if (!shouldShowSmartReplyView(entry.sbn, newSmartReplyState)) {
             return InflatedSmartReplyViewHolder(
-                null /* smartReplyView */,
+                null, /* smartReplyView */
                 null, /* smartSuggestionButtons */
             )
         }
@@ -169,7 +210,7 @@ constructor(
                         delayOnClickListener,
                     )
                 }
-            } ?: emptySequence()
+            } ?.toList() ?: emptyList()
 
         val smartActionButtons =
             newSmartReplyState.smartActions?.let { smartActions ->
@@ -189,14 +230,13 @@ constructor(
                             themedPackageContext,
                         )
                     }
-            } ?: emptySequence()
+            }?.toList() ?: emptyList()
 
         return InflatedSmartReplyViewHolder(
             smartReplyView,
-            (smartReplyButtons + smartActionButtons).toList(),
+            getSortedButtons(smartReplyButtons, smartActionButtons)
         )
     }
-
     /**
      * Chose what smart replies and smart actions to display. App generated suggestions take
      * precedence. So if the app provides any smart replies, we don't show any replies or actions
@@ -253,9 +293,9 @@ constructor(
             val entryActions = entry.smartActions
             if (
                 entryReplies.isNotEmpty() &&
-                    freeformRemoteInputActionPair != null &&
-                    freeformRemoteInputActionPair.second.allowGeneratedReplies &&
-                    freeformRemoteInputActionPair.second.actionIntent != null
+                freeformRemoteInputActionPair != null &&
+                freeformRemoteInputActionPair.second.allowGeneratedReplies &&
+                freeformRemoteInputActionPair.second.actionIntent != null
             ) {
                 smartReplies =
                     SmartReplies(
@@ -280,7 +320,7 @@ constructor(
         val hasPhishingAction =
             smartActions?.actions?.any {
                 it.isContextual &&
-                    it.semanticAction ==
+                        it.semanticAction ==
                         Notification.Action.SEMANTIC_ACTION_CONVERSATION_IS_PHISHING
             } ?: false
         var suppressedActions: SuppressedActions? = null
@@ -362,9 +402,9 @@ private fun loadIconDrawableWithTimeout(
     }
     val bitmap =
         runCatching {
-                iconTaskThreadPool.execute(bitmapTask)
-                bitmapTask.get(ICON_TASK_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            }
+            iconTaskThreadPool.execute(bitmapTask)
+            bitmapTask.get(ICON_TASK_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        }
             .getOrElse { ex ->
                 Log.e(TAG, "Failed to load $icon: $ex")
                 bitmapTask.cancel(true)
@@ -403,8 +443,8 @@ constructor(
     ): Button {
         val isAnimatedAction =
             Flags.notificationAnimatedActionsTreatment() &&
-                smartActions.fromAssistant &&
-                action.extras.getBoolean(Notification.Action.EXTRA_IS_ANIMATED, false)
+                    smartActions.fromAssistant &&
+                    action.extras.getBoolean(Notification.Action.EXTRA_IS_ANIMATED, false)
         val layoutRes =
             if (isAnimatedAction) {
                 R.layout.animated_action_button
@@ -422,8 +462,11 @@ constructor(
                 // We received the Icon from the application - so use the Context of the application
                 // to
                 // reference icon resources.
-                val newIconSize =
+                val newIconSize = if (isAnimatedAction) {
+                    context.resources.getDimensionPixelSize(R.dimen.animated_action_button_icon_size)
+                } else {
                     context.resources.getDimensionPixelSize(R.dimen.smart_action_button_icon_size)
+                }
                 val iconDrawable =
                     loadIconDrawableWithTimeout(action.getIcon(), packageContext, newIconSize)
                         ?: GradientDrawable()
@@ -440,9 +483,14 @@ constructor(
                         DelayedOnClickListener(onClickListener, constants.onClickInitDelay)
                     else onClickListener
                 )
-
-                // Mark this as an Action button
-                (layoutParams as SmartReplyView.LayoutParams).mButtonType = SmartButtonType.ACTION
+                if (isAnimatedAction) {
+                    (layoutParams as SmartReplyView.LayoutParams).mButtonType =
+                        SmartButtonType.ANIMATED_ACTION
+                } else {
+                    // Mark this as an Action button
+                    (layoutParams as SmartReplyView.LayoutParams).mButtonType =
+                        SmartButtonType.ACTION
+                }
             }
     }
 
@@ -454,7 +502,7 @@ constructor(
     ) =
         if (
             smartActions.fromAssistant &&
-                SEMANTIC_ACTION_MARK_CONVERSATION_AS_PRIORITY == action.semanticAction
+            SEMANTIC_ACTION_MARK_CONVERSATION_AS_PRIORITY == action.semanticAction
         ) {
             entry.row.doSmartActionClick(
                 entry.row.x.toInt() / 2,
@@ -527,6 +575,15 @@ constructor(
                     // attributionText with different color to choice text
                     val fullTextWithAttribution = formatChoiceWithAttribution(choice)
                     text = fullTextWithAttribution
+                    // Add the icon to the Animated Reply button
+                    val animatedReplyIconSize =
+                        context.resources.getDimensionPixelSize(R.dimen.animated_action_button_icon_size)
+                    val iconDrawable =
+                        AppCompatResources.getDrawable(context, R.drawable.ic_content_paste_spark)
+                    if (iconDrawable != null) {
+                        iconDrawable.setBounds(0, 0, animatedReplyIconSize, animatedReplyIconSize)
+                        setCompoundDrawablesRelative(iconDrawable, null, null, null)
+                    }
                 } else {
                     choiceToDeliver = choice
                     text = choice
@@ -562,9 +619,13 @@ constructor(
                             info.addAction(action)
                         }
                     }
-                // TODO: probably shouldn't do this here, bad API
-                // Mark this as a Reply button
-                (layoutParams as SmartReplyView.LayoutParams).mButtonType = SmartButtonType.REPLY
+                if (enableAnimatedReply) {
+                    (layoutParams as SmartReplyView.LayoutParams).mButtonType =
+                        SmartButtonType.ANIMATED_REPLY
+                } else {
+                    (layoutParams as SmartReplyView.LayoutParams).mButtonType =
+                        SmartButtonType.REPLY
+                }
             }
     }
 
@@ -593,7 +654,7 @@ constructor(
                 smartReplyController.smartReplySent(
                     entry,
                     replyIndex,
-                    button.text,
+                    if (Flags.notificationAnimatedActionsTreatment()) choice else button.text,
                     NotificationLogger.getNotificationLocation(entry).toMetricsEventEnum(),
                     false, /* modifiedBeforeSending */
                 )

@@ -16,6 +16,10 @@
 
 package com.android.server.wm;
 
+import static android.internal.perfetto.protos.Windowmanagerservice.KeyguardControllerProto.AOD_SHOWING;
+import static android.internal.perfetto.protos.Windowmanagerservice.KeyguardControllerProto.KEYGUARD_GOING_AWAY;
+import static android.internal.perfetto.protos.Windowmanagerservice.KeyguardControllerProto.KEYGUARD_PER_DISPLAY;
+import static android.internal.perfetto.protos.Windowmanagerservice.KeyguardControllerProto.KEYGUARD_SHOWING;
 import static android.os.Trace.TRACE_TAG_WINDOW_MANAGER;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.WindowManager.TRANSIT_FLAG_AOD_APPEARING;
@@ -39,16 +43,12 @@ import static android.view.WindowManagerPolicyConstants.KEYGUARD_GOING_AWAY_FLAG
 import static android.view.WindowManagerPolicyConstants.KEYGUARD_GOING_AWAY_FLAG_TO_SHADE;
 import static android.view.WindowManagerPolicyConstants.KEYGUARD_GOING_AWAY_FLAG_WITH_WALLPAPER;
 
-import static com.android.window.flags.Flags.reduceKeyguardTransitions;
 import static com.android.server.policy.WindowManagerPolicy.FINISH_LAYOUT_REDO_WALLPAPER;
 import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_ATM;
 import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_WITH_CLASS_NAME;
-import static com.android.server.wm.KeyguardControllerProto.AOD_SHOWING;
-import static com.android.server.wm.KeyguardControllerProto.KEYGUARD_GOING_AWAY;
-import static com.android.server.wm.KeyguardControllerProto.KEYGUARD_PER_DISPLAY;
-import static com.android.server.wm.KeyguardControllerProto.KEYGUARD_SHOWING;
 
 import android.annotation.Nullable;
+import android.internal.perfetto.protos.Windowmanagerservice.KeyguardPerDisplayProto;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -206,10 +206,10 @@ class KeyguardController {
             return;
         }
 
+        final ActionChain chain = mService.mChainTracker.startTransit("setKGShown");
+
         if (ENABLE_NEW_KEYGUARD_SHELL_TRANSITIONS) {
-            final TransitionController transitionController =
-                    mWindowManager.mAtmService.getTransitionController();
-            final Transition transition = transitionController.getCollectingTransition();
+            final Transition transition = chain.getTransition();
             if (transition != null && displayId == DEFAULT_DISPLAY) {
                 if (!keyguardShowing && state.mKeyguardShowing) {
                     transition.addFlag(TRANSIT_FLAG_KEYGUARD_GOING_AWAY);
@@ -257,11 +257,11 @@ class KeyguardController {
                 if (!ENABLE_NEW_KEYGUARD_SHELL_TRANSITIONS) {
                     if (keyguardChanged) {
                         dc.requestTransitionAndLegacyPrepare(TRANSIT_TO_FRONT,
-                                TRANSIT_FLAG_KEYGUARD_APPEARING, /* trigger= */ null);
+                                TRANSIT_FLAG_KEYGUARD_APPEARING, /* trigger= */ null, chain);
                     }
                     if (mWindowManager.mFlags.mAodTransition && aodChanged && aodShowing) {
                         dc.requestTransitionAndLegacyPrepare(TRANSIT_TO_FRONT,
-                                TRANSIT_FLAG_AOD_APPEARING, /* trigger= */ null);
+                                TRANSIT_FLAG_AOD_APPEARING, /* trigger= */ null, chain);
                     }
                 }
                 dc.mWallpaperController.adjustWallpaperWindows();
@@ -281,6 +281,7 @@ class KeyguardController {
             // Ensure the new state takes effect.
             mWindowManager.mWindowPlacerLocked.performSurfacePlacement();
         }
+        mService.mChainTracker.endPartial();
     }
 
     private void setWakeTransitionReady() {
@@ -305,15 +306,23 @@ class KeyguardController {
         Trace.traceBegin(TRACE_TAG_WINDOW_MANAGER, "keyguardGoingAway");
         mService.deferWindowLayout();
         state.mKeyguardGoingAway = true;
+        final ActionChain chain = mService.mChainTracker.startTransit("kgGoAway");
         try {
             state.writeEventLog("keyguardGoingAway");
             final int transitFlags = convertTransitFlags(flags);
-            final DisplayContent dc = mRootWindowContainer.getDefaultDisplay();
-            // We are deprecating TRANSIT_KEYGUARD_GOING_AWAY for Shell transition and use
-            // TRANSIT_FLAG_KEYGUARD_GOING_AWAY to indicate that it should animate keyguard going
-            // away.
-            dc.mAtmService.getTransitionController().requestTransitionIfNeeded(
-                    TRANSIT_TO_BACK, transitFlags, null /* trigger */, dc);
+            if (ENABLE_NEW_KEYGUARD_SHELL_TRANSITIONS) {
+                final Transition transition = chain.getTransition();
+                if (transition != null && displayId == DEFAULT_DISPLAY) {
+                    transition.addFlag(TRANSIT_FLAG_KEYGUARD_GOING_AWAY);
+                }
+            } else {
+                final DisplayContent dc = mRootWindowContainer.getDefaultDisplay();
+                // We are deprecating TRANSIT_KEYGUARD_GOING_AWAY for Shell transition and use
+                // TRANSIT_FLAG_KEYGUARD_GOING_AWAY to indicate that it should animate keyguard
+                // going away.
+                dc.mAtmService.getTransitionController().requestTransitionIfNeeded(
+                        TRANSIT_TO_BACK, transitFlags, null /* trigger */, dc, chain);
+            }
             updateKeyguardSleepToken();
 
             // Some stack visibility might change (e.g. docked stack)
@@ -325,6 +334,7 @@ class KeyguardController {
             scheduleGoingAwayTimeout(displayId);
         } finally {
             mService.continueWindowLayout();
+            mService.mChainTracker.endPartial();
             Trace.traceEnd(TRACE_TAG_WINDOW_MANAGER);
         }
     }
@@ -457,8 +467,7 @@ class KeyguardController {
         final DisplayContent dc = mRootWindowContainer.getDisplayContent(displayId);
 
         final boolean locked = isKeyguardLocked(displayId);
-        final boolean executeTransition = !tc.isShellTransitionsEnabled()
-                || (locked && !tc.isCollecting() && !reduceKeyguardTransitions());
+        final boolean executeTransition = !tc.isShellTransitionsEnabled();
 
         final int transitType, transitFlags, notFlags;
         if (state.mOccluded) {
@@ -472,15 +481,16 @@ class KeyguardController {
         }
 
         mWindowManager.mPolicy.onKeyguardOccludedChangedLw(state.mOccluded);
+        final ActionChain chain = mService.mChainTracker.startTransit("kgOccludeChg");
         mService.deferWindowLayout();
         try {
             if (locked) {
                 if (tc.isShellTransitionsEnabled()) {
                     final Task trigger = (state.mOccluded && topActivity != null)
                             ? topActivity.getRootTask() : null;
-                    tc.requestTransitionIfNeeded(transitType, transitFlags, trigger, dc);
-                    final Transition transition = tc.getCollectingTransition();
-                    if ((transition.getFlags() & notFlags) != 0 && reduceKeyguardTransitions()) {
+                    tc.requestTransitionIfNeeded(transitType, transitFlags, trigger, dc, chain);
+                    final Transition transition = chain.getTransition();
+                    if ((transition.getFlags() & notFlags) != 0) {
                         transition.removeFlag(notFlags);
                     } else {
                         transition.addFlag(transitFlags);
@@ -502,6 +512,7 @@ class KeyguardController {
             }
         } finally {
             mService.continueWindowLayout();
+            mService.mChainTracker.endPartial();
         }
     }
 
@@ -509,17 +520,19 @@ class KeyguardController {
      * Called when keyguard going away state changed.
      */
     private void handleDismissInsecureKeyguard(DisplayContent dc) {
+        final ActionChain chain = mService.mChainTracker.startTransit("kgDisInsec");
         mService.deferWindowLayout();
         try {
             // We are deprecating TRANSIT_KEYGUARD_GOING_AWAY for Shell transition and use
             // TRANSIT_FLAG_KEYGUARD_GOING_AWAY to indicate that it should animate keyguard going
             // away.
             dc.mAtmService.getTransitionController().requestTransitionIfNeeded(
-                    TRANSIT_OPEN, TRANSIT_FLAG_KEYGUARD_GOING_AWAY, null /* trigger */, dc);
+                    TRANSIT_OPEN, TRANSIT_FLAG_KEYGUARD_GOING_AWAY, null /* trigger */, dc, chain);
             updateKeyguardSleepToken();
             mWindowManager.executeAppTransition();
         } finally {
             mService.continueWindowLayout();
+            mService.mChainTracker.endPartial();
         }
     }
 
@@ -779,7 +792,7 @@ class KeyguardController {
                 controller.handleDismissInsecureKeyguard(display);
                 controller.scheduleGoingAwayTimeout(mDisplayId);
             }
-            if (occludedChanged && (reduceKeyguardTransitions() || !startedGoingAway)) {
+            if (occludedChanged) {
                 controller.handleOccludedChanged(mDisplayId, mTopOccludesActivity);
             }
 

@@ -42,6 +42,7 @@ import android.annotation.MainThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
+import android.annotation.SpecialUsers.CanBeCURRENT;
 import android.annotation.StyleRes;
 import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
@@ -148,12 +149,15 @@ import android.view.ViewRootImpl;
 import android.view.ViewRootImpl.ActivityConfigCallback;
 import android.view.Window;
 import android.view.Window.WindowControllerCallback;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.WindowManagerGlobal;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.autofill.AutofillClientController;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillManager.AutofillClient;
+import android.view.autofill.AutofillValue;
 import android.view.contentcapture.ContentCaptureContext;
 import android.view.contentcapture.ContentCaptureManager;
 import android.view.contentcapture.ContentCaptureManager.ContentCaptureClient;
@@ -1802,6 +1806,19 @@ public class Activity extends ContextThemeWrapper
         }
     }
 
+    private void dispatchActivityRestarted() {
+        if (android.app.Flags.onRestartActivityLifecycleCallback()) {
+            getApplication().dispatchActivityRestarted(this);
+            Object[] callbacks = collectActivityLifecycleCallbacks();
+            if (callbacks != null) {
+                for (int i = callbacks.length - 1; i >= 0; i--) {
+                    ((Application.ActivityLifecycleCallbacks) callbacks[i])
+                            .onActivityRestarted(this);
+                }
+            }
+        }
+    }
+
     private Object[] collectActivityLifecycleCallbacks() {
         Object[] callbacks = null;
         synchronized (mActivityLifecycleCallbacks) {
@@ -2179,6 +2196,8 @@ public class Activity extends ContextThemeWrapper
     @CallSuper
     protected void onRestart() {
         mCalled = true;
+
+        dispatchActivityRestarted();
     }
 
     /**
@@ -6096,7 +6115,7 @@ public class Activity extends ContextThemeWrapper
     @SystemApi
     @RequiresPermission(anyOf = {INTERACT_ACROSS_USERS, INTERACT_ACROSS_USERS_FULL})
     public void startActivityForResultAsUser(@NonNull Intent intent, int requestCode,
-            @NonNull UserHandle user) {
+            @NonNull @CanBeCURRENT UserHandle user) {
         startActivityForResultAsUser(intent, requestCode, null, user);
     }
 
@@ -6135,7 +6154,7 @@ public class Activity extends ContextThemeWrapper
     @SystemApi
     @RequiresPermission(anyOf = {INTERACT_ACROSS_USERS, INTERACT_ACROSS_USERS_FULL})
     public void startActivityForResultAsUser(@NonNull Intent intent, int requestCode,
-            @Nullable Bundle options, @NonNull UserHandle user) {
+            @Nullable Bundle options, @NonNull @CanBeCURRENT UserHandle user) {
         startActivityForResultAsUser(intent, mEmbeddedID, requestCode, options, user);
     }
 
@@ -6175,7 +6194,7 @@ public class Activity extends ContextThemeWrapper
     @RequiresPermission(anyOf = {INTERACT_ACROSS_USERS, INTERACT_ACROSS_USERS_FULL})
     public void startActivityForResultAsUser(@NonNull Intent intent, @NonNull String resultWho,
             int requestCode,
-            @Nullable Bundle options, @NonNull UserHandle user) {
+            @Nullable Bundle options, @NonNull @CanBeCURRENT UserHandle user) {
         if (mParent != null) {
             throw new RuntimeException("Can't be called from a child");
         }
@@ -6205,7 +6224,7 @@ public class Activity extends ContextThemeWrapper
      * @hide Implement to provide correct calling token.
      */
     @Override
-    public void startActivityAsUser(Intent intent, UserHandle user) {
+    public void startActivityAsUser(Intent intent, @CanBeCURRENT UserHandle user) {
         startActivityAsUser(intent, null, user);
     }
 
@@ -6225,7 +6244,7 @@ public class Activity extends ContextThemeWrapper
      */
     @RequiresPermission(anyOf = {INTERACT_ACROSS_USERS, INTERACT_ACROSS_USERS_FULL})
     public void startActivityAsUser(@NonNull Intent intent,
-            @Nullable Bundle options, @NonNull UserHandle user) {
+            @Nullable Bundle options, @NonNull @CanBeCURRENT UserHandle user) {
         if (mParent != null) {
             throw new RuntimeException("Can't be called from a child");
         }
@@ -6818,7 +6837,7 @@ public class Activity extends ContextThemeWrapper
 
     private void startActivityAsUserFromFragment(@NonNull Fragment fragment,
             @RequiresPermission Intent intent, int requestCode, @Nullable Bundle options,
-            UserHandle user) {
+            @CanBeCURRENT UserHandle user) {
         startActivityForResultAsUser(intent, fragment.mWho, requestCode, options, user);
     }
 
@@ -7371,11 +7390,16 @@ public class Activity extends ContextThemeWrapper
     /**
      * Check to see whether this activity is in the process of finishing,
      * either because you called {@link #finish} on it or someone else
-     * has requested that it finished.  This is often used in
-     * {@link #onPause} to determine whether the activity is simply pausing or
-     * completely finishing.
+     * has requested that it finished.
      *
-     * @return If the activity is finishing, returns true; else returns false.
+     * <p>This is often used in {@link #onPause} to determine whether the activity is simply pausing
+     * or completely finishing. However, if the finish request is made after the activity has
+     * already been paused/stopped, there won't be another {@link #onPause} or {@link #onStop} with
+     * this API returning {@code true}.</p>
+     *
+     * <p>For example, if an activity is first minimized, and then gets killed in background,
+     * it should first receive {@link #onPause} and {@link #onStop} with this API returning
+     * {@code false}, and then receive {@link #onDestroy} with this API returning {@code true}.</p>
      *
      * @see #finish
      */
@@ -7393,9 +7417,18 @@ public class Activity extends ContextThemeWrapper
 
     /**
      * Check to see whether this activity is in the process of being destroyed in order to be
-     * recreated with a new configuration. This is often used in
-     * {@link #onStop} to determine whether the state needs to be cleaned up or will be passed
-     * on to the next instance of the activity via {@link #onRetainNonConfigurationInstance()}.
+     * recreated with a new configuration.
+     *
+     * <p>This is often used in {@link #onStop} to determine whether the state needs to be cleaned
+     * up or will be passed on to the next instance of the activity via
+     * {@link #onRetainNonConfigurationInstance()}. However, if the activity has already been in the
+     * background as stopped, and then gets recreated with different configuration, there won't be
+     * another {@link #onPause} or {@link #onStop} with this API returning {@code true}.</p>
+     *
+     * <p>For example, if an activity that is not handling size configuration change is first
+     * minimized, and then get rotated with the display, it should first receive {@link #onPause}
+     * and {@link #onStop} with this API returning {@code false}, and then receive
+     * {@link #onDestroy} with this API returning {@code true}.</p>
      *
      * @return If the activity is being torn down in order to be recreated with a new configuration,
      * returns true; else returns false.
@@ -7624,6 +7657,62 @@ public class Activity extends ContextThemeWrapper
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data,
             @NonNull ComponentCaller caller) {
         onActivityResult(requestCode, resultCode, data);
+    }
+
+    /**
+     * Returns if Handoff has been enabled for this Activity. See
+     * {@link #setHandoffEnabled} to change if Handoff is enabled on this
+     * Activity.
+     *
+     * When Handoff is enabled, the user may request this Activity to be sent to
+     * other devices that they owe. The system will request data from this
+     * Activity to recreate it on the other device.
+     * TODO (b/412338142): Add link to onHandoffActivityDataRequested once
+     * method is added.
+     *
+     * @return Whether Handoff is enabled for the Activity
+     */
+    @FlaggedApi(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    public final boolean isHandoffEnabled() {
+        return ActivityClient.getInstance().isHandoffEnabled(mToken);
+    }
+
+    /**
+     * Returns {@code true} if handing off this activity should also hand off
+     * all activities in the task of this activity. If this is {@code false} for
+     * any activity in the task, only the topmost activity in the task will be
+     * handed off.
+     *
+     * This method will return {@code false} if {@link #isHandoffEnabled}
+     * is {@code false}.
+     *
+     * @return if full task recreation is allowed
+     */
+    @FlaggedApi(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    public final boolean isHandoffFullTaskRecreationAllowed() {
+        return ActivityClient
+            .getInstance()
+            .isHandoffFullTaskRecreationAllowed(mToken);
+    }
+
+    /**
+     * Sets if Handoff is enabled for this Activity. See
+     * {@link #isHandoffEnabled} to get if Handoff is currently enabled on this
+     * Activity.
+     *
+     * Note: if Handoff is disabled for the topmost Activity in a task, it will
+     * be disabled for all Activities in the task.
+     *
+     * @param handoffEnabled Whether Handoff should be enabled for this Activity.
+     * @param allowFullTaskRecreation Whether activities below this one in the
+     *                                task should be handed off as well.
+     */
+    @FlaggedApi(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    public final void setHandoffEnabled(
+            boolean handoffEnabled,
+            boolean allowFullTaskRecreation) {
+        ActivityClient.getInstance().setHandoffEnabled(
+                mToken, handoffEnabled, allowFullTaskRecreation);
     }
 
     /**
@@ -9820,7 +9909,6 @@ public class Activity extends ContextThemeWrapper
      * @param allowed {@code true} to disable the UID restrictions; {@code false} to revert back to
      *                            the default behaviour
      */
-    @FlaggedApi(android.security.Flags.FLAG_ASM_RESTRICTIONS_ENABLED)
     @SuppressLint("OnNameExpected")
     public void setAllowCrossUidActivitySwitchFromBelow(boolean allowed) {
         ActivityClient.getInstance().setAllowCrossUidActivitySwitchFromBelow(mToken, allowed);
@@ -10010,6 +10098,38 @@ public class Activity extends ContextThemeWrapper
     }
 
     /**
+     * Retrieves {@link HandoffActivityData} representing this activity, allowing it to be recreated
+     * on another device owned by the user.
+     *
+     * The system automatically handles calling #onHandoffActivityDataRequested. This will only be
+     * called if {@link #isHandoffEnabled} is {@code true} for this activity.
+     *
+     * If {@link #isHandoffEnabled} is {@code true}, the activity is expected to return a non-null
+     * value. Returning {@code null} will present an error to the user indicating Handoff
+     * unexpectedly failed.
+     *
+     * If the current activity is in the foreground on the current device, the app's icon
+     * representing this activity will be shown on other nearby devices owned
+     * by the user. If the user selects this icon, the system will call this method
+     * to retrieve the data needed to recreate this activity on another device.
+     *
+     * When this activity is stopped, the system will call this method
+     * to retrieve {@link HandoffActivityData} for caching. This allows the user
+     * to hand this activity off to another device even if it is not currently
+     * running. In these situations, {@link HandoffActivityDataRequestInfo#isActiveRequest}
+     * will be {@code false}.
+     *
+     * @param requestInfo the request info for the activity data.
+     * @return the activity data for handoff.
+     */
+    @FlaggedApi(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    @Nullable
+    public HandoffActivityData onHandoffActivityDataRequested(
+        @NonNull HandoffActivityDataRequestInfo requestInfo) {
+      return null;
+    }
+
+    /**
      * Interface for observing screen captures of an {@link Activity}.
      */
     public interface ScreenCaptureCallback {
@@ -10093,5 +10213,26 @@ public class Activity extends ContextThemeWrapper
         if (mJankTracker != null) {
             mJankTracker.disableAppJankTracking();
         }
+    }
+
+    final void autofillViewIfAvailable(
+            @NonNull AutofillId targetAutofillId, @NonNull AutofillValue autofillValue) {
+        if (false) Log.v(TAG, "autofill view in client app Activity, id: " + targetAutofillId);
+        runOnUiThread(
+                () -> {
+                    View view =
+                            getAutofillClientController()
+                                    .autofillClientFindViewByAutofillIdTraversal(targetAutofillId);
+                    if (view != null) {
+                        // TODO: b/410146465 support virtual views
+                        view.autofill(autofillValue);
+                        view.requestFocus();
+                        WindowInsetsController windowInsetsController =
+                                view.getWindowInsetsController();
+                        if (windowInsetsController != null) {
+                            windowInsetsController.show(WindowInsets.Type.ime());
+                        }
+                    }
+                });
     }
 }

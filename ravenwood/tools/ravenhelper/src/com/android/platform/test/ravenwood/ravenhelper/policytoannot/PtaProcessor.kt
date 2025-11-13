@@ -24,6 +24,7 @@ import com.android.hoststubgen.filters.PolicyFileProcessor
 import com.android.hoststubgen.filters.SpecialClass
 import com.android.hoststubgen.filters.TextFileFilterPolicyParser
 import com.android.hoststubgen.log
+import com.android.hoststubgen.logOptions
 import com.android.hoststubgen.utils.ClassPredicate
 import com.android.platform.test.ravenwood.ravenhelper.SubcommandHandler
 import com.android.platform.test.ravenwood.ravenhelper.psi.createUastEnvironment
@@ -48,7 +49,7 @@ class PtaProcessor : SubcommandHandler {
             options.sourceFilesOrDirectories,
             options.annotationAllowedClassesFile.get,
             Annotations(),
-            options.dumpOperations.get || log.isEnabled(LogLevel.Debug),
+            options.dumpOperations.get || logOptions.isEnabled(LogLevel.Debug),
         )
         converter.process()
 
@@ -284,7 +285,10 @@ private class TextPolicyToAnnotationConverter(
             }
             log.v("Found simple class policy: $className - ${policy.policy}")
 
-            val annot = annotations.get(policy.policy, Annotations.Target.Class)!!
+            val annot = annotations.get(policy.policy, Annotations.Target.Class)
+            if (annot == null) {
+                return // unsupported policy
+            }
             if (addClassAnnotation(className, annot)) {
                 classLineConverted = true
             }

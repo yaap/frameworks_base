@@ -32,7 +32,6 @@ import androidx.test.filters.SmallTest
 import com.android.dx.mockito.inline.extended.ExtendedMockito.doAnswer
 import com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession
 import com.android.dx.mockito.inline.extended.StaticMockitoSession
-import com.android.hardware.input.Flags.FLAG_USE_KEY_GESTURE_EVENT_HANDLER
 import com.android.window.flags.Flags.FLAG_ENABLE_DESKTOP_WINDOWING_MODE
 import com.android.window.flags.Flags.FLAG_ENABLE_DISPLAY_FOCUS_IN_SHELL_TRANSITIONS
 import com.android.window.flags.Flags.FLAG_ENABLE_MOVE_TO_NEXT_DISPLAY_SHORTCUT
@@ -47,6 +46,8 @@ import com.android.wm.shell.common.DisplayLayout
 import com.android.wm.shell.desktopmode.DesktopModeEventLogger.Companion.MinimizeReason
 import com.android.wm.shell.desktopmode.DesktopTestHelpers.createFreeformTask
 import com.android.wm.shell.desktopmode.common.ToggleTaskSizeInteraction
+import com.android.wm.shell.shared.desktopmode.FakeDesktopConfig
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState
 import com.android.wm.shell.sysui.ShellInit
 import com.android.wm.shell.transition.FocusTransitionObserver
 import com.android.wm.shell.windowdecor.DesktopModeWindowDecorViewModel
@@ -97,9 +98,13 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
     private lateinit var mockitoSession: StaticMockitoSession
     private lateinit var testScope: CoroutineScope
     private lateinit var shellInit: ShellInit
+    private lateinit var desktopUserRepositories: DesktopUserRepositories
 
     // Mock running tasks are registered here so we can get the list from mock shell task organizer
     private val runningTasks = mutableListOf<RunningTaskInfo>()
+
+    private val repository: DesktopRepository
+        get() = desktopUserRepositories.current
 
     @Before
     fun setUp() {
@@ -117,6 +122,21 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
         val tda = DisplayAreaInfo(MockToken().token(), DEFAULT_DISPLAY, 0)
         tda.configuration.windowConfiguration.windowingMode = WINDOWING_MODE_FULLSCREEN
         whenever(rootTaskDisplayAreaOrganizer.getDisplayAreaInfo(DEFAULT_DISPLAY)).thenReturn(tda)
+        desktopUserRepositories =
+            DesktopUserRepositories(
+                ShellInit(TestShellExecutor()),
+                /* shellController= */ mock(),
+                /* persistentRepository= */ mock(),
+                /* repositoryInitializer= */ mock(),
+                testScope,
+                /* userManager= */ mock(),
+                FakeDesktopState(),
+                FakeDesktopConfig(),
+            )
+        repository.addDesk(displayId = DEFAULT_DISPLAY, deskId = 10)
+        repository.setActiveDesk(displayId = DEFAULT_DISPLAY, deskId = 10)
+        repository.addDesk(displayId = SECOND_DISPLAY, deskId = 11)
+        repository.setActiveDesk(displayId = SECOND_DISPLAY, deskId = 11)
 
         doAnswer {
                 keyGestureEventHandler = (it.arguments[1] as KeyGestureEventHandler)
@@ -131,6 +151,7 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
                 context,
                 Optional.of(desktopModeWindowDecorViewModel),
                 Optional.of(desktopTasksController),
+                desktopUserRepositories,
                 inputManager,
                 shellTaskOrganizer,
                 focusTransitionObserver,
@@ -152,7 +173,6 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
     @EnableFlags(
         FLAG_ENABLE_DISPLAY_FOCUS_IN_SHELL_TRANSITIONS,
         FLAG_ENABLE_MOVE_TO_NEXT_DISPLAY_SHORTCUT,
-        FLAG_USE_KEY_GESTURE_EVENT_HANDLER,
     )
     fun keyGestureMoveToNextDisplay_shouldMoveToNextDisplay() {
         // Set up two display ids
@@ -163,7 +183,7 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
         whenever(rootTaskDisplayAreaOrganizer.getDisplayAreaInfo(DEFAULT_DISPLAY))
             .thenReturn(defaultDisplayArea)
         // Setup a focused task on secondary display, which is expected to move to default display
-        val task = setUpFreeformTask(displayId = SECOND_DISPLAY)
+        val task = setUpDesktopTask(displayId = SECOND_DISPLAY)
         task.isFocused = true
         whenever(shellTaskOrganizer.getRunningTasks()).thenReturn(arrayListOf(task))
         whenever(focusTransitionObserver.hasGlobalFocus(eq(task))).thenReturn(true)
@@ -178,13 +198,13 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
         keyGestureEventHandler.handleKeyGestureEvent(event, null)
         testExecutor.flushAll()
 
-        verify(desktopTasksController).moveToNextDisplay(task.taskId)
+        verify(desktopTasksController).moveToNextDesktopDisplay(task.taskId)
     }
 
     @Test
-    @EnableFlags(FLAG_USE_KEY_GESTURE_EVENT_HANDLER, FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
+    @EnableFlags(FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
     fun keyGestureSnapLeft_shouldSnapResizeTaskToLeft() {
-        val task = setUpFreeformTask()
+        val task = setUpDesktopTask()
         task.isFocused = true
         whenever(shellTaskOrganizer.getRunningTasks()).thenReturn(arrayListOf(task))
         whenever(focusTransitionObserver.hasGlobalFocus(eq(task))).thenReturn(true)
@@ -208,9 +228,9 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
     }
 
     @Test
-    @EnableFlags(FLAG_USE_KEY_GESTURE_EVENT_HANDLER, FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
+    @EnableFlags(FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
     fun keyGestureSnapRight_shouldSnapResizeTaskToRight() {
-        val task = setUpFreeformTask()
+        val task = setUpDesktopTask()
         task.isFocused = true
         whenever(shellTaskOrganizer.getRunningTasks()).thenReturn(arrayListOf(task))
         whenever(focusTransitionObserver.hasGlobalFocus(eq(task))).thenReturn(true)
@@ -234,9 +254,9 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
     }
 
     @Test
-    @EnableFlags(FLAG_USE_KEY_GESTURE_EVENT_HANDLER, FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
+    @EnableFlags(FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
     fun keyGestureToggleFreeformWindowSize_shouldToggleTaskSize() {
-        val task = setUpFreeformTask()
+        val task = setUpDesktopTask()
         task.isFocused = true
         whenever(shellTaskOrganizer.getRunningTasks()).thenReturn(arrayListOf(task))
         whenever(focusTransitionObserver.hasGlobalFocus(eq(task))).thenReturn(true)
@@ -262,9 +282,9 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
     }
 
     @Test
-    @EnableFlags(FLAG_USE_KEY_GESTURE_EVENT_HANDLER, FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
+    @EnableFlags(FLAG_ENABLE_TASK_RESIZING_KEYBOARD_SHORTCUTS)
     fun keyGestureMinimizeFreeformWindow_shouldMinimizeTask() {
-        val task = setUpFreeformTask()
+        val task = setUpDesktopTask()
         task.isFocused = true
         whenever(shellTaskOrganizer.getRunningTasks()).thenReturn(arrayListOf(task))
         whenever(focusTransitionObserver.hasGlobalFocus(eq(task))).thenReturn(true)
@@ -281,7 +301,37 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
         verify(desktopTasksController).minimizeTask(task, MinimizeReason.KEY_GESTURE)
     }
 
-    private fun setUpFreeformTask(
+    @Test
+    fun keyGestureSwitchToPreviousDesk_activatesDesk() {
+        val displayId = 2
+        whenever(focusTransitionObserver.globallyFocusedDisplayId).thenReturn(displayId)
+        val event =
+            KeyGestureEvent.Builder()
+                .setKeyGestureType(KeyGestureEvent.KEY_GESTURE_TYPE_SWITCH_TO_PREVIOUS_DESK)
+                .build()
+
+        keyGestureEventHandler.handleKeyGestureEvent(event, null)
+        testExecutor.flushAll()
+
+        verify(desktopTasksController).activatePreviousDesk(displayId)
+    }
+
+    @Test
+    fun keyGestureSwitchToNextDesk_activatesDesk() {
+        val displayId = 2
+        whenever(focusTransitionObserver.globallyFocusedDisplayId).thenReturn(displayId)
+        val event =
+            KeyGestureEvent.Builder()
+                .setKeyGestureType(KeyGestureEvent.KEY_GESTURE_TYPE_SWITCH_TO_NEXT_DESK)
+                .build()
+
+        keyGestureEventHandler.handleKeyGestureEvent(event, null)
+        testExecutor.flushAll()
+
+        verify(desktopTasksController).activateNextDesk(displayId)
+    }
+
+    private fun setUpDesktopTask(
         displayId: Int = DEFAULT_DISPLAY,
         bounds: Rect? = null,
     ): RunningTaskInfo {
@@ -290,6 +340,12 @@ class DesktopModeKeyGestureHandlerTest : ShellTestCase() {
         task.topActivityInfo = activityInfo
         whenever(shellTaskOrganizer.getRunningTaskInfo(task.taskId)).thenReturn(task)
         runningTasks.add(task)
+        repository.addTask(
+            displayId = displayId,
+            taskId = task.taskId,
+            isVisible = task.isVisible,
+            taskBounds = task.configuration.windowConfiguration.getBounds(),
+        )
         return task
     }
 

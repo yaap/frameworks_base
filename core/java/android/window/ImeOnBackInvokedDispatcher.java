@@ -29,6 +29,7 @@ import android.os.RemoteException;
 import android.os.ResultReceiver;
 import android.util.Log;
 import android.util.Pair;
+import android.util.Printer;
 import android.view.ViewRootImpl;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -78,6 +79,11 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
 
     /** Set receiving dispatcher to consume queued receiving events. */
     public void updateReceivingDispatcher(@NonNull WindowOnBackInvokedDispatcher dispatcher) {
+        if (!mQueuedReceive.isEmpty()) {
+            //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+            Log.d(TAG, "updateReceivingDispatcher (mQueuedReceive.size=" + mQueuedReceive.size()
+                    + ")");
+        }
         while (!mQueuedReceive.isEmpty()) {
             final Pair<Integer, Bundle> queuedMessage = mQueuedReceive.poll();
             receive(queuedMessage.first, queuedMessage.second, dispatcher);
@@ -117,6 +123,9 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
         bundle.putInt(RESULT_KEY_PRIORITY, priority);
         bundle.putInt(RESULT_KEY_ID, callback.hashCode());
         mResultReceiver.send(RESULT_CODE_REGISTER, bundle);
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG,
+                "Send callback registration id=" + callback.hashCode() + " priority=" + priority);
     }
 
     @Override
@@ -125,6 +134,8 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
         Bundle bundle = new Bundle();
         bundle.putInt(RESULT_KEY_ID, callback.hashCode());
         mResultReceiver.send(RESULT_CODE_UNREGISTER, bundle);
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG, "Send callback unregistration id=" + callback.hashCode());
     }
 
     @Override
@@ -181,12 +192,30 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
         } else {
             imeCallback = new ImeOnBackInvokedCallback(iCallback, callbackId, priority);
         }
+        if (unregisterCallback(callbackId, receivingDispatcher)) {
+            Log.w(TAG, "Received IME callback that's already registered. Unregistering and "
+                    + "reregistering. (callbackId: " + callbackId
+                    + " current callbacks: " + mImeCallbacks.size() + ")");
+        }
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG, "Register received callback id=" + callbackId + " priority=" + priority);
         mImeCallbacks.add(imeCallback);
         receivingDispatcher.registerOnBackInvokedCallbackUnchecked(imeCallback, priority);
     }
 
     private void unregisterReceivedCallback(
-            int callbackId, OnBackInvokedDispatcher receivingDispatcher) {
+            int callbackId, @NonNull OnBackInvokedDispatcher receivingDispatcher) {
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG, "Unregister received callback id=" + callbackId);
+        if (!unregisterCallback(callbackId, receivingDispatcher)) {
+            Log.w(TAG, "Ime callback not found. Ignoring unregisterReceivedCallback. "
+                    + "callbackId: " + callbackId
+                    + " remaining callbacks: " + mImeCallbacks.size());
+        }
+    }
+
+    private boolean unregisterCallback(int callbackId,
+            @NonNull OnBackInvokedDispatcher receivingDispatcher) {
         ImeOnBackInvokedCallback callback = null;
         for (ImeOnBackInvokedCallback imeCallback : mImeCallbacks) {
             if (imeCallback.getId() == callbackId) {
@@ -195,12 +224,11 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
             }
         }
         if (callback == null) {
-            Log.e(TAG, "Ime callback not found. Ignoring unregisterReceivedCallback. "
-                    + "callbackId: " + callbackId);
-            return;
+            return false;
         }
         receivingDispatcher.unregisterOnBackInvokedCallback(callback);
         mImeCallbacks.remove(callback);
+        return true;
     }
 
     /**
@@ -209,6 +237,8 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
      * {@link ImeOnBackInvokedDispatcher#undoPreliminaryClear()}.
      */
     public void preliminaryClear() {
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG, "Preliminary clear (mImeCallbacks.size=" + mImeCallbacks.size() + ")");
         // Unregister previously registered callbacks if there's any.
         if (getReceivingDispatcher() != null) {
             for (ImeOnBackInvokedCallback callback : mImeCallbacks) {
@@ -223,6 +253,8 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
      * animation is interrupted causing the IME to reappear.
      */
     public void undoPreliminaryClear() {
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG, "Undo preliminary clear (mImeCallbacks.size=" + mImeCallbacks.size() + ")");
         if (getReceivingDispatcher() != null) {
             for (ImeOnBackInvokedCallback callback : mImeCallbacks) {
                 getReceivingDispatcher().registerOnBackInvokedCallbackUnchecked(callback,
@@ -233,6 +265,8 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
 
     /** Clears all registered callbacks on the instance. */
     public void clear() {
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG, "Clear (mImeCallbacks.size=" + mImeCallbacks.size() + ")");
         // Unregister previously registered callbacks if there's any.
         if (getReceivingDispatcher() != null) {
             for (ImeOnBackInvokedCallback callback : mImeCallbacks) {
@@ -243,15 +277,32 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
         mQueuedReceive.clear();
     }
 
+    /**
+     * Dumps the registered IME callbacks.
+     *
+     * @param prefix prefix to be prepended to each line
+     * @param p      printer to write the dump to
+     */
+    public void dump(@NonNull Printer p, @NonNull String prefix) {
+        if (mImeCallbacks.isEmpty()) {
+            p.println(prefix + TAG + " mImeCallbacks: []");
+        } else {
+            p.println(prefix + TAG + " mImeCallbacks:");
+            for (ImeOnBackInvokedCallback callback : mImeCallbacks) {
+                p.println(prefix + "  " + callback);
+            }
+        }
+    }
+
     @VisibleForTesting(visibility = PACKAGE)
     public static class ImeOnBackInvokedCallback implements OnBackAnimationCallback {
         @NonNull
-        private final IOnBackInvokedCallback mIOnBackInvokedCallback;
+        protected final IOnBackInvokedCallback mIOnBackInvokedCallback;
         /**
          * The hashcode of the callback instance in the IME process, used as a unique id to
          * identify the callback when it's passed between processes.
          */
-        private final int mId;
+        protected final int mId;
         private final int mPriority;
 
         ImeOnBackInvokedCallback(@NonNull IOnBackInvokedCallback iCallback, int id,
@@ -317,7 +368,7 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
 
         @Override
         public String toString() {
-            return "ImeCallback=ImeOnBackInvokedCallback@" + mId
+            return "ImeOnBackInvokedCallback@" + mId
                     + " Callback=" + mIOnBackInvokedCallback;
         }
     }
@@ -332,6 +383,12 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
                 int priority) {
             super(iCallback, id, priority);
         }
+
+        @Override
+        public String toString() {
+            return "DefaultImeOnBackAnimationCallback@" + mId
+                    + " Callback=" + mIOnBackInvokedCallback;
+        }
     }
 
     /**
@@ -339,9 +396,11 @@ public class ImeOnBackInvokedDispatcher implements OnBackInvokedDispatcher, Parc
      * another {@link ViewRootImpl} on focus change.
      *
      * @param previous the previously focused {@link ViewRootImpl}.
-     * @param current the currently focused {@link ViewRootImpl}.
+     * @param current  the currently focused {@link ViewRootImpl}.
      */
     public void switchRootView(ViewRootImpl previous, ViewRootImpl current) {
+        //TODO(b/407224281): Remove this log again once b/407224281 is resolved
+        Log.d(TAG, "switch root view (mImeCallbacks.size=" + mImeCallbacks.size() + ")");
         for (ImeOnBackInvokedCallback imeCallback : mImeCallbacks) {
             if (previous != null) {
                 previous.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(imeCallback);

@@ -27,6 +27,9 @@ import static android.hardware.display.DisplayManager.DeviceConfig.KEY_REFRESH_R
 import static android.hardware.display.DisplayManager.DeviceConfig.KEY_REFRESH_RATE_IN_HIGH_ZONE;
 import static android.hardware.display.DisplayManager.DeviceConfig.KEY_REFRESH_RATE_IN_LOW_ZONE;
 
+import static com.android.server.display.TestUtilsKt.createSensor;
+import static com.android.server.display.TestUtilsKt.createSensorEvent;
+
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -90,7 +93,6 @@ import com.android.internal.util.test.FakeSettingsProvider;
 import com.android.internal.util.test.FakeSettingsProviderRule;
 import com.android.modules.utils.testing.ExtendedMockitoRule;
 import com.android.server.display.DisplayDeviceConfig;
-import com.android.server.display.TestUtils;
 import com.android.server.display.config.IdleScreenRefreshRateTimeoutLuxThresholdPoint;
 import com.android.server.display.config.RefreshRateData;
 import com.android.server.display.feature.DisplayManagerFlags;
@@ -868,24 +870,6 @@ public class DisplayModeDirectorTest {
     }
 
     @Test
-    public void testBrightnessObserver_LowPowerModeRemovesFlickerVotes() {
-        float[] refreshRates = {60.f, 90.f, 120.f};
-        DisplayModeDirector director =
-                createDirectorFromRefreshRateArray(refreshRates, /*baseModeId=*/0);
-        SparseArray<Vote> votes = new SparseArray<>();
-        SparseArray<SparseArray<Vote>> votesByDisplay = new SparseArray<>();
-        votesByDisplay.put(-1, votes); // Global Vote
-        votes.put(Vote.PRIORITY_FLICKER_REFRESH_RATE, Vote.forPhysicalRefreshRates(0, 60));
-        votes.put(Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH, Vote.forRenderFrameRates(60, 90));
-        director.injectVotesByDisplay(votesByDisplay);
-
-        director.getBrightnessObserver().onLowPowerModeEnabledLocked(true);
-
-        assertNull(director.getVote(-1, Vote.PRIORITY_FLICKER_REFRESH_RATE));
-        assertNull(director.getVote(-1, Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH));
-    }
-
-    @Test
     public void testVotingWithAlwaysRespectAppRequest() {
         Display.Mode[] modes = new Display.Mode[3];
         modes[0] = new Display.Mode(
@@ -1304,6 +1288,7 @@ public class DisplayModeDirectorTest {
     }
 
     @Test
+    @SuppressWarnings("GuardedBy")
     public void testLockFpsForLowZone() throws Exception {
         DisplayModeDirector director =
                 createDirectorFromRefreshRateArray(new float[] {60.f, 90.f}, 0);
@@ -1341,7 +1326,7 @@ public class DisplayModeDirectorTest {
 
         setBrightness(10, 10, displayListener);
         // Sensor reads 20 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 20 /*lux*/));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 20 /*lux*/));
 
         Vote vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertVoteForPhysicalRefreshRate(vote, 90 /*fps*/);
@@ -1351,11 +1336,43 @@ public class DisplayModeDirectorTest {
         DisableRefreshRateSwitchingVote disableVote = (DisableRefreshRateSwitchingVote) vote;
         assertThat(disableVote.mDisableRefreshRateSwitching).isTrue();
 
+        // Disabling Smooth Display should remove the vote
+        setPeakRefreshRate(60);
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE));
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY,
+                Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH));
+
+        // Re-enabling Smooth Display should restore the vote
+        setPeakRefreshRate(90);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
+        assertVoteForPhysicalRefreshRate(vote, 90 /*fps*/);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH);
+        assertThat(vote).isNotNull();
+        assertThat(vote).isInstanceOf(DisableRefreshRateSwitchingVote.class);
+        disableVote = (DisableRefreshRateSwitchingVote) vote;
+        assertThat(disableVote.mDisableRefreshRateSwitching).isTrue();
+
+        // Enabling low power mode should remove the vote
+        director.getBrightnessObserver().onLowPowerModeEnabledLocked(true);
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE));
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY,
+                Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH));
+
+        // Re-disabling low power mode should restore the vote
+        director.getBrightnessObserver().onLowPowerModeEnabledLocked(false);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
+        assertVoteForPhysicalRefreshRate(vote, 90 /*fps*/);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH);
+        assertThat(vote).isNotNull();
+        assertThat(vote).isInstanceOf(DisableRefreshRateSwitchingVote.class);
+        disableVote = (DisableRefreshRateSwitchingVote) vote;
+        assertThat(disableVote.mDisableRefreshRateSwitching).isTrue();
+
         // We expect DisplayModeDirector to act on BrightnessInfo.adjustedBrightness; set only this
         // parameter to the necessary threshold
         setBrightness(10, 125, displayListener);
         // Sensor reads 1000 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 1000 /*lux*/));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 1000 /*lux*/));
 
         vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertThat(vote).isNull();
@@ -1420,7 +1437,7 @@ public class DisplayModeDirectorTest {
 
         setBrightness(10, 10, displayListener);
         // Sensor reads 20 lux
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, /* lux= */ 20));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, /* lux= */ 20));
 
         Vote vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertVoteForPhysicalRefreshRate(vote, /* fps= */ 90);
@@ -1434,7 +1451,7 @@ public class DisplayModeDirectorTest {
         // parameter to the necessary threshold
         setBrightness(10, 125, displayListener);
         // Sensor reads 1000 lux
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, /* lux= */ 1000));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, /* lux= */ 1000));
 
         vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertThat(vote).isNull();
@@ -1443,6 +1460,7 @@ public class DisplayModeDirectorTest {
     }
 
     @Test
+    @SuppressWarnings("GuardedBy")
     public void testLockFpsForHighZone() throws Exception {
         DisplayModeDirector director =
                 createDirectorFromRefreshRateArray(new float[] {60.f, 90.f}, 0);
@@ -1480,7 +1498,7 @@ public class DisplayModeDirectorTest {
 
         setBrightness(100, 100, displayListener);
         // Sensor reads 2000 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 2000));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 2000));
 
         Vote vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertThat(vote).isNull();
@@ -1491,7 +1509,7 @@ public class DisplayModeDirectorTest {
         // parameter to the necessary threshold
         setBrightness(100, 255, displayListener);
         // Sensor reads 9000 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 9000));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 9000));
 
         vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertVoteForPhysicalRefreshRate(vote, 60 /*fps*/);
@@ -1499,6 +1517,38 @@ public class DisplayModeDirectorTest {
         assertThat(vote).isNotNull();
         assertThat(vote).isInstanceOf(DisableRefreshRateSwitchingVote.class);
         DisableRefreshRateSwitchingVote disableVote = (DisableRefreshRateSwitchingVote) vote;
+        assertThat(disableVote.mDisableRefreshRateSwitching).isTrue();
+
+        // Disabling Smooth Display should remove the vote
+        setPeakRefreshRate(60);
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE));
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY,
+                Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH));
+
+        // Re-enabling Smooth Display should restore the vote
+        setPeakRefreshRate(90);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
+        assertVoteForPhysicalRefreshRate(vote, 60 /*fps*/);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH);
+        assertThat(vote).isNotNull();
+        assertThat(vote).isInstanceOf(DisableRefreshRateSwitchingVote.class);
+        disableVote = (DisableRefreshRateSwitchingVote) vote;
+        assertThat(disableVote.mDisableRefreshRateSwitching).isTrue();
+
+        // Enabling low power mode should remove the vote
+        director.getBrightnessObserver().onLowPowerModeEnabledLocked(true);
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE));
+        assertNull(director.getVote(Display.DEFAULT_DISPLAY,
+                Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH));
+
+        // Re-disabling low power mode should restore the vote
+        director.getBrightnessObserver().onLowPowerModeEnabledLocked(false);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
+        assertVoteForPhysicalRefreshRate(vote, 60 /*fps*/);
+        vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE_SWITCH);
+        assertThat(vote).isNotNull();
+        assertThat(vote).isInstanceOf(DisableRefreshRateSwitchingVote.class);
+        disableVote = (DisableRefreshRateSwitchingVote) vote;
         assertThat(disableVote.mDisableRefreshRateSwitching).isTrue();
     }
 
@@ -1536,20 +1586,7 @@ public class DisplayModeDirectorTest {
                         anyInt(),
                         any(Handler.class));
         SensorEventListener sensorListener = listenerCaptor.getValue();
-
-        // Disable the idle screen flag
-        when(mDisplayManagerFlags.isIdleScreenRefreshRateTimeoutEnabled())
-                .thenReturn(false);
-
-        // Sensor reads 5 lux, with idleScreenRefreshRate timeout not configured
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 5));
-        waitForIdleSync();
-        assertEquals(null, director.getBrightnessObserver().getIdleScreenRefreshRateConfig());
-
-        // Enable the idle screen flag
-        when(mDisplayManagerFlags.isIdleScreenRefreshRateTimeoutEnabled())
-                .thenReturn(true);
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 8));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 8));
         waitForIdleSync();
         assertEquals(null, director.getBrightnessObserver().getIdleScreenRefreshRateConfig());
 
@@ -1559,32 +1596,23 @@ public class DisplayModeDirectorTest {
                         getIdleScreenRefreshRateTimeoutLuxThresholdPoint(100, 800)));
         director.defaultDisplayDeviceUpdated(ddcMock); // set the updated ddc
 
-        // idleScreenRefreshRate config is still null because the flag to enable subscription to
-        // light sensor is not enabled
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 4));
-        waitForIdleSync();
-        assertNull(director.getBrightnessObserver().getIdleScreenRefreshRateConfig());
-
-        // Flag to subscribe to light sensor is enabled, and the sensor subscription is attempted
-        // again to load the idle screen refresh rate config
-        when(mDisplayManagerFlags.isIdleScreenConfigInSubscribingLightSensorEnabled())
-                .thenReturn(true);
+        // The sensor subscription is attempted again to load the idle screen refresh rate config
         director.defaultDisplayDeviceUpdated(ddcMock); // set the updated ddc
 
         // Sensor reads 5 lux
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 5));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 5));
         waitForIdleSync();
         assertEquals(new SurfaceControl.IdleScreenRefreshRateConfig(-1),
                 director.getBrightnessObserver().getIdleScreenRefreshRateConfig());
 
         // Sensor reads 50 lux
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 50));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 50));
         waitForIdleSync();
         assertEquals(new IdleScreenRefreshRateConfig(1000),
                 director.getBrightnessObserver().getIdleScreenRefreshRateConfig());
 
         // Sensor reads 200 lux
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 200));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 200));
         waitForIdleSync();
         assertEquals(new SurfaceControl.IdleScreenRefreshRateConfig(800),
                 director.getBrightnessObserver().getIdleScreenRefreshRateConfig());
@@ -1654,7 +1682,7 @@ public class DisplayModeDirectorTest {
 
         setBrightness(100, 100, displayListener);
         // Sensor reads 2000 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 2000));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 2000));
 
         Vote vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertThat(vote).isNull();
@@ -1665,7 +1693,7 @@ public class DisplayModeDirectorTest {
         // parameter to the necessary threshold
         setBrightness(255, 255, displayListener);
         // Sensor reads 9000 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 9000));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 9000));
 
         vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertVoteForPhysicalRefreshRate(vote, 90 /*fps*/);
@@ -1754,7 +1782,7 @@ public class DisplayModeDirectorTest {
 
         setBrightness(100, 100, displayListener);
         // Sensor reads 2000 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 2000));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 2000));
 
         Vote vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertThat(vote).isNull();
@@ -1765,7 +1793,7 @@ public class DisplayModeDirectorTest {
         // parameter to the necessary threshold
         setBrightness(5, 5, displayListener);
         // Sensor reads 9 lux,
-        sensorListener.onSensorChanged(TestUtils.createSensorEvent(lightSensor, 9));
+        sensorListener.onSensorChanged(createSensorEvent(lightSensor, 9));
 
         vote = director.getVote(Display.DEFAULT_DISPLAY, Vote.PRIORITY_FLICKER_REFRESH_RATE);
         assertVoteForPhysicalRefreshRate(vote, 90 /*fps*/);
@@ -3298,8 +3326,6 @@ public class DisplayModeDirectorTest {
 
     @Test
     public void testNotifyDefaultDisplayDeviceUpdated() {
-        when(mDisplayManagerFlags.isIdleScreenConfigInSubscribingLightSensorEnabled())
-                .thenReturn(true);
         when(mResources.getInteger(com.android.internal.R.integer.config_defaultPeakRefreshRate))
             .thenReturn(75);
         when(mResources.getInteger(R.integer.config_defaultRefreshRate))
@@ -3485,8 +3511,8 @@ public class DisplayModeDirectorTest {
         director.getSettingsObserver().setDefaultRefreshRate(90);
         director.getBrightnessObserver().setDefaultDisplayState(Display.STATE_ON);
 
-        Sensor lightSensorOne = TestUtils.createSensor(Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT);
-        Sensor lightSensorTwo = TestUtils.createSensor(Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT);
+        Sensor lightSensorOne = createSensor(Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT);
+        Sensor lightSensorTwo = createSensor(Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT);
         SensorManager sensorManager = createMockSensorManager(lightSensorOne, lightSensorTwo);
         when(sensorManager.getDefaultSensor(5)).thenReturn(lightSensorOne, lightSensorTwo);
         director.start(sensorManager);
@@ -3833,7 +3859,7 @@ public class DisplayModeDirectorTest {
 
     private static Sensor createLightSensor() {
         try {
-            return TestUtils.createSensor(Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT);
+            return createSensor(Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT);
         } catch (Exception e) {
             // There's nothing we can do if this fails, just throw a RuntimeException so that we
             // don't have to mark every function that might call this as throwing Exception

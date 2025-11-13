@@ -60,12 +60,14 @@
     <string name="hdmi_cec_set_menu_language_accept" msgid="2513689457281009578">"Sprache ändern"</string>
     <string name="hdmi_cec_set_menu_language_decline" msgid="7650721096558646011">"Aktuelle Sprache nutzen"</string>
     <string name="share_wifi_button_text" msgid="1285273973812029240">"WLAN teilen"</string>
+    <string name="add_network_button_text" msgid="4046392140897987570">"Netzwerk hinzufügen"</string>
     <string name="wifi_debugging_title" msgid="7300007687492186076">"Debugging über WLAN in diesem Netzwerk zulassen?"</string>
     <string name="wifi_debugging_message" msgid="5461204211731802995">"Netzwerkname (SSID)\n<xliff:g id="SSID_0">%1$s</xliff:g>\n\nWLAN-Adresse (BSSID)\n<xliff:g id="BSSID_1">%2$s</xliff:g>"</string>
     <string name="wifi_debugging_always" msgid="2968383799517975155">"Immer in diesem Netzwerk zulassen"</string>
     <string name="wifi_debugging_allow" msgid="4573224609684957886">"Zulassen"</string>
     <string name="wifi_debugging_secondary_user_title" msgid="2493201475880517725">"\"Debugging über WLAN\" nicht zulässig"</string>
     <string name="wifi_debugging_secondary_user_message" msgid="9085779370142222881">"Der momentan auf diesem Gerät angemeldete Nutzer kann das Debugging über WLAN nicht aktivieren. Um diese Funktion zu verwenden, muss sich ein Administrator anmelden."</string>
+    <string name="change_connected_wifi_text" msgid="6346095920396568246">"Du kannst die Einstellung nach der Anmeldung ändern"</string>
     <string name="usb_contaminant_title" msgid="894052515034594113">"USB-Port deaktiviert"</string>
     <string name="usb_contaminant_message" msgid="7730476585174719805">"Zum Schutz deines Geräts vor Flüssigkeiten oder Fremdkörpern ist der USB-Port zurzeit deaktiviert und erkennt kein Zubehör.\n\nDu wirst benachrichtigt, wenn der USB-Port wieder verwendet werden kann."</string>
     <string name="usb_port_enabled" msgid="531823867664717018">"Erkennung von Ladegeräten und Zubehör am USB-Port aktiviert"</string>
@@ -150,7 +152,7 @@
     <string name="cast_to_other_device_stop_dialog_title" msgid="7836517190930357326">"Streaming beenden?"</string>
     <string name="cast_to_other_device_stop_dialog_message_entire_screen_with_device" msgid="1474703115926205251">"Du streamst momentan deinen gesamten Bildschirm auf das Gerät „<xliff:g id="DEVICE_NAME">%1$s</xliff:g>“"</string>
     <string name="cast_to_other_device_stop_dialog_message_entire_screen" msgid="8419219169553867625">"Du streamst momentan deinen gesamten Bildschirm auf ein Gerät in der Nähe"</string>
-    <string name="cast_to_other_device_stop_dialog_message_specific_app_with_device" msgid="2715934698604085519">"Du streamst momentan die App <xliff:g id="APP_BEING_SHARED_NAME">%1$s</xliff:g> auf das Gerät „<xliff:g id="DEVICE_NAME">%2$s</xliff:g>“"</string>
+    <string name="cast_to_other_device_stop_dialog_message_specific_app_with_device" msgid="2715934698604085519">"Du streamst momentan die <xliff:g id="APP_BEING_SHARED_NAME">%1$s</xliff:g> App auf das Gerät „<xliff:g id="DEVICE_NAME">%2$s</xliff:g>“"</string>
     <string name="cast_to_other_device_stop_dialog_message_specific_app" msgid="8616103075630934513">"Du streamst momentan Inhalte der App <xliff:g id="APP_BEING_SHARED_NAME">%1$s</xliff:g> auf ein Gerät in der Nähe"</string>
     <string name="cast_to_other_device_stop_dialog_message_generic_with_device" msgid="9213582497852420203">"Du streamst momentan Inhalte auf das Gerät „<xliff:g id="DEVICE_NAME">%1$s</xliff:g>“"</string>
     <string name="cast_to_other_device_stop_dialog_message_generic" msgid="4100272100480415076">"Du streamst momentan auf ein Gerät in der Nähe"</string>
@@ -201,9 +203,19 @@
     <string name="biometric_dialog_authenticated" msgid="7337147327545272484">"Authentifiziert"</string>
     <string name="biometric_dialog_cancel_authentication" msgid="981316588773442637">"Authentifizierung abbrechen"</string>
     <string name="biometric_dialog_content_view_more_options_button" msgid="2663810393874865475">"Weitere Optionen"</string>
+    <string name="biometric_dialog_fallback_title" msgid="3643117146844541556">"Weitere Optionen"</string>
+    <string name="biometric_dialog_fallback_button" msgid="7808939083554391449">"Auf andere Weise verifizieren"</string>
+    <string name="biometric_dialog_manage_identity_check" msgid="6283423571297422689">"Identitätsüberprüfung verwalten"</string>
+    <string name="biometric_dialog_identity_check_pin_footer" msgid="2943916725380489626">"Die PIN kann nicht zur Bestätigung verwendet werden, da die Identitätsüberprüfung aktiviert ist und eine biometrische Authentifizierung erforderlich ist. Weitere Informationen zur Identitätsüberprüfung"</string>
     <string name="biometric_dialog_use_pin" msgid="8385294115283000709">"PIN verwenden"</string>
     <string name="biometric_dialog_use_pattern" msgid="2315593393167211194">"Muster verwenden"</string>
     <string name="biometric_dialog_use_password" msgid="3445033859393474779">"Passwort verwenden"</string>
+    <string name="biometric_dialog_enter_pin" msgid="8625265944863623975">"PIN eingeben"</string>
+    <string name="biometric_dialog_enter_password" msgid="200503318983048202">"Passwort eingeben"</string>
+    <string name="biometric_dialog_enter_pattern" msgid="3065746760277739487">"Muster eingeben"</string>
+    <string name="biometric_dialog_recovery_pin" msgid="5798389437594195177">"Nach einer gewissen Anzahl an Fehlversuchen ist die Eingabe der PIN erforderlich, um die Anmeldung mit biometrischen Daten wiederherzustellen"</string>
+    <string name="biometric_dialog_recovery_pattern" msgid="382786088892502550">"Nach einer gewissen Anzahl an Fehlversuchen ist die Eingabe des Musters erforderlich, um die Anmeldung mit biometrischen Daten wiederherzustellen"</string>
+    <string name="biometric_dialog_recovery_password" msgid="8288127966207678230">"Nach einer gewissen Anzahl an Fehlversuchen ist die Eingabe des Passworts erforderlich, um die Anmeldung mit biometrischen Daten wiederherzustellen"</string>
     <string name="biometric_dialog_wrong_pin" msgid="1878539073972762803">"Falsche PIN"</string>
     <string name="biometric_dialog_wrong_pattern" msgid="8954812279840889029">"Falsches Muster"</string>
     <string name="biometric_dialog_wrong_password" msgid="69477929306843790">"Falsches Passwort"</string>
@@ -246,6 +258,8 @@
     <string name="accessibility_bluetooth_device_icon" msgid="9163840051642587982">"Symbol des Bluetooth-Geräts"</string>
     <string name="accessibility_bluetooth_device_settings_gear" msgid="3314916468105272540">"Klicke, um das Gerätedetail zu konfigurieren"</string>
     <string name="accessibility_bluetooth_device_settings_gear_with_name" msgid="114373701123165491">"<xliff:g id="DEVICE_NAME">%s</xliff:g>. Gerätedetail konfigurieren."</string>
+    <string name="accessibility_bluetooth_device_settings_plus_button_with_name" msgid="7437753009977623034">"Audiofreigabe mit <xliff:g id="DEVICE_NAME">%s</xliff:g> starten"</string>
+    <string name="accessibility_bluetooth_device_settings_checkmark_with_name" msgid="3673227296687603429">"Audiofreigabe mit <xliff:g id="DEVICE_NAME">%s</xliff:g> beenden"</string>
     <string name="accessibility_bluetooth_device_settings_see_all" msgid="5260390270128256620">"Alle Geräte anzeigen"</string>
     <string name="accessibility_bluetooth_device_settings_pair_new_device" msgid="7988547106800504256">"Neues Gerät koppeln"</string>
     <string name="accessibility_battery_unknown" msgid="1807789554617976440">"Akkustand unbekannt."</string>
@@ -255,6 +269,8 @@
     <string name="accessibility_collapse_group" msgid="1842704016768329517">"Gruppe minimieren."</string>
     <string name="accessibility_add_device_to_group" msgid="5446422960697860806">"Gerät zu Gruppe hinzufügen."</string>
     <string name="accessibility_remove_device_from_group" msgid="3114694270949142228">"Gerät aus Gruppe entfernen."</string>
+    <string name="accessibility_add_device_to_group_with_name" msgid="1042306202917036858">"<xliff:g id="DEVICE_NAME">%s</xliff:g> zur Gruppe hinzufügen."</string>
+    <string name="accessibility_remove_device_from_group_with_name" msgid="5582015497111561027">"<xliff:g id="DEVICE_NAME">%s</xliff:g> aus der Gruppe entfernen."</string>
     <string name="accessibility_open_application" msgid="1749126077501259712">"Anwendung öffnen."</string>
     <string name="accessibility_not_connected" msgid="4061305616351042142">"Nicht verbunden"</string>
     <string name="data_connection_roaming" msgid="375650836665414797">"Roaming"</string>
@@ -266,6 +282,7 @@
     <string name="accessibility_battery_level_charging" msgid="8892191177774027364">"Akku wird aufgeladen, <xliff:g id="BATTERY_PERCENTAGE">%d</xliff:g> Prozent."</string>
     <string name="accessibility_battery_level_charging_paused" msgid="3560711496775146763">"Akku bei <xliff:g id="PERCENTAGE">%d</xliff:g> Prozent. Zum Schutz des Akkus wurde das Laden pausiert."</string>
     <string name="accessibility_battery_level_charging_paused_with_estimate" msgid="2223541217743647858">"Akku bei <xliff:g id="PERCENTAGE">%1$d</xliff:g>. <xliff:g id="TIME">%2$s</xliff:g>. Zum Schutz des Akkus wurde das Laden pausiert."</string>
+    <string name="accessibility_battery_level_battery_saver_with_percent" msgid="4529897661660196093">"Akku bei <xliff:g id="NUMBER">%d</xliff:g> Prozent. Der Energiesparmodus ist aktiviert."</string>
     <string name="accessibility_overflow_action" msgid="8555835828182509104">"Alle Benachrichtigungen ansehen"</string>
     <string name="accessibility_tty_enabled" msgid="1123180388823381118">"Schreibtelefonie aktiviert"</string>
     <string name="accessibility_ringer_vibrate" msgid="6261841170896561364">"Klingeltonmodus \"Vibration\""</string>
@@ -276,6 +293,7 @@
     <string name="accessibility_desc_quick_settings" msgid="4374766941484719179">"Schnelleinstellungen"</string>
     <string name="accessibility_desc_qs_notification_shade" msgid="8327226953072700376">"Schnelleinstellungen und Benachrichtigungsleiste."</string>
     <string name="accessibility_desc_lock_screen" msgid="409034672704273634">"Sperrbildschirm"</string>
+    <string name="accessibility_desc_customize_lock_screen" msgid="4550916007565771199">"Sperrbildschirm, doppeltippen und gedrückt halten, um den Sperrbildschirm anzupassen."</string>
     <string name="accessibility_desc_work_lock" msgid="4355620395354680575">"Sperrbildschirm für Arbeitsprofil"</string>
     <string name="accessibility_desc_close" msgid="8293708213442107755">"Schließen"</string>
     <string name="accessibility_quick_settings_dnd_none_on" msgid="3235552940146035383">"lautlos"</string>
@@ -288,6 +306,9 @@
     <string name="accessibility_quick_settings_less_time" msgid="9110364286464977870">"Weniger Zeit"</string>
     <string name="accessibility_casting_turned_off" msgid="1387906158563374962">"Die Bildschirmübertragung wurde angehalten."</string>
     <string name="accessibility_brightness" msgid="5391187016177823721">"Helligkeit des Displays"</string>
+    <string name="accessibility_camera_in_use" msgid="1090160655874262911">"Kamera wird verwendet"</string>
+    <string name="accessibility_microphone_in_use" msgid="1921058214238108340">"Mikrofon wird verwendet"</string>
+    <string name="accessibility_camera_and_microphone_in_use" msgid="1250516397875447442">"Kamera und Mikrofon werden verwendet"</string>
     <string name="data_usage_disabled_dialog_mobile_title" msgid="2286843518689837719">"Mobile Datennutzung pausiert"</string>
     <string name="data_usage_disabled_dialog_title" msgid="9131615296036724838">"Daten pausiert"</string>
     <string name="data_usage_disabled_dialog" msgid="7933201635215099780">"Das von dir festgelegte Datenlimit wurde erreicht. Die mobile Datennutzung wurde deaktiviert.\n\nWenn du weiterhin mobile Daten nutzt, können Gebühren anfallen."</string>
@@ -370,6 +391,8 @@
     <string name="quick_settings_hotspot_secondary_label_num_devices" msgid="7536823087501239457">"{count,plural, =1{# Gerät}other{# Geräte}}"</string>
     <string name="quick_settings_flashlight_label" msgid="4904634272006284185">"Taschenlampe"</string>
     <string name="quick_settings_flashlight_camera_in_use" msgid="4820591564526512571">"Kamera wird verwendet"</string>
+    <string name="flashlight_dialog_title" msgid="4232742718579701241">"Taschenlampenhelligkeit"</string>
+    <string name="quick_settings_flashlight_tile_level_percentage" msgid="2071942013174794819">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="quick_settings_cellular_detail_title" msgid="792977203299358893">"Mobile Daten"</string>
     <string name="quick_settings_cellular_detail_data_usage" msgid="6105969068871138427">"Datennutzung"</string>
     <string name="quick_settings_cellular_detail_remaining_data" msgid="1136599216568805644">"Verbleibende Daten"</string>
@@ -467,6 +490,8 @@
     <string name="sensor_privacy_htt_blocked_dialog_content" msgid="3333321592997666441">"Wenn du die Mikrofontaste verwenden möchtest, musst du den Mikrofonzugriff in den Einstellungen aktivieren."</string>
     <string name="sensor_privacy_dialog_open_settings" msgid="5635865896053011859">"Einstellungen öffnen"</string>
     <string name="media_seamless_other_device" msgid="4654849800789196737">"Sonstiges Gerät"</string>
+    <string name="media_suggestion_disconnected_text" msgid="8777932417076437525">"Auf <xliff:g id="DEVICE_NAME">%s</xliff:g> wiedergeben"</string>
+    <string name="media_suggestion_failure_text" msgid="8453022394887613774">"Verbindung nicht möglich. Versuch es noch einmal."</string>
     <string name="quick_step_accessibility_toggle_overview" msgid="7908949976727578403">"Übersicht ein-/ausblenden"</string>
     <string name="zen_modes_dialog_title" msgid="8854640808100096934">"Modi"</string>
     <string name="zen_modes_dialog_done" msgid="6654130880256438950">"Fertig"</string>
@@ -477,6 +502,8 @@
     <string name="zen_mode_set_up" msgid="8231201163894922821">"Nicht festgelegt"</string>
     <string name="zen_mode_no_manual_invocation" msgid="1769975741344633672">"In den Einstellungen verwalten"</string>
     <string name="zen_mode_active_modes" msgid="1625850411578488856">"{count,plural, =0{Kein Modus aktiv}=1{{mode} aktiv}other{# aktiv}}"</string>
+    <string name="zen_modes_multiple_on_title" msgid="4918235362988982304">"<xliff:g id="NUMBER">%s</xliff:g> Modi"</string>
+    <string name="zen_modes_multiple_on_status" msgid="8120633422509269588">"An"</string>
     <string name="zen_priority_introduction" msgid="3159291973383796646">"Klingeltöne und die Vibration werden deaktiviert, außer für Weckrufe, Erinnerungen, Termine sowie Anrufe von zuvor von dir festgelegten Personen. Du hörst jedoch weiterhin Sound, wenn du dir Musik anhörst, Videos ansiehst oder Spiele spielst."</string>
     <string name="zen_alarms_introduction" msgid="3987266042682300470">"Klingeltöne und die Vibration werden deaktiviert, außer für Weckrufe. Du hörst jedoch weiterhin Sound, wenn du dir Musik anhörst, Videos ansiehst oder Spiele spielst."</string>
     <string name="zen_priority_customize_button" msgid="4119213187257195047">"Anpassen"</string>
@@ -582,6 +609,7 @@
     <!-- no translation found for media_projection_entry_app_permission_dialog_option_text_single_app (2308901434964846084) -->
     <skip />
     <string name="screen_share_permission_dialog_option_entire_screen" msgid="4493174362775038997">"Gesamten Bildschirm teilen"</string>
+    <string name="screen_share_permission_dialog_option_text_entire_screen_for_display" msgid="1545850238689169166">"<xliff:g id="DISPLAY_NAME">%s</xliff:g> teilen"</string>
     <!-- no translation found for media_projection_entry_app_permission_dialog_option_text_entire_screen (5100078808078139706) -->
     <skip />
     <string name="media_projection_entry_app_permission_dialog_warning_entire_screen" msgid="5504288438067851086">"Wenn du den gesamten Bildschirm teilst, ist für <xliff:g id="APP_SEEKING_PERMISSION">%s</xliff:g> alles auf dem Bildschirm sichtbar. Sei also vorsichtig mit Informationen wie Passwörtern, Zahlungsdetails, Nachrichten, Fotos sowie Audio- und Videoinhalten."</string>
@@ -593,6 +621,7 @@
     <string name="media_projection_entry_cast_permission_dialog_title" msgid="752756942658159416">"Bildschirm streamen?"</string>
     <string name="media_projection_entry_cast_permission_dialog_option_text_single_app" msgid="6073353940838561981">"Eine App streamen"</string>
     <string name="media_projection_entry_cast_permission_dialog_option_text_entire_screen" msgid="8389508187954155307">"Gesamten Bildschirm streamen"</string>
+    <string name="media_projection_entry_cast_permission_dialog_option_text_entire_screen_for_display" msgid="5524817761472941086">"<xliff:g id="DISPLAY_NAME">%s</xliff:g> übertragen"</string>
     <string name="media_projection_entry_cast_permission_dialog_warning_entire_screen" msgid="4040447861037324017">"Wenn du den gesamten Bildschirm streamst, ist alles auf dem Bildschirm sichtbar. Sei also vorsichtig mit Informationen wie Passwörtern, Zahlungsdetails, Nachrichten, Fotos sowie Audio- und Videoinhalten."</string>
     <string name="media_projection_entry_cast_permission_dialog_warning_single_app" msgid="7487834861348460736">"Wenn du eine App streamst, ist alles sichtbar, was in dieser App angezeigt oder abgespielt wird. Sei also vorsichtig mit Informationen wie Passwörtern, Zahlungsdetails, Nachrichten, Fotos sowie Audio- und Videoinhalten."</string>
     <string name="media_projection_entry_cast_permission_dialog_continue_entire_screen" msgid="3261124185304676483">"Bildschirm streamen"</string>
@@ -629,6 +658,7 @@
     <string name="go_to_adaptive_notification_settings" msgid="2423690125178298479">"Deaktivieren"</string>
     <string name="unlock_to_see_notif_text" msgid="7439033907167561227">"Für ältere Benachrichtigungen entsperren"</string>
     <string name="quick_settings_disclosure_parental_controls" msgid="2114102871438223600">"Dieses Gerät wird von deinen Eltern verwaltet"</string>
+    <string name="quick_settings_disclosure_pin_protection" msgid="9219481515114868267">"Einige Geräteeinstellungen sind durch eine PIN geschützt."</string>
     <string name="quick_settings_disclosure_management_monitoring" msgid="8231336875820702180">"Deine Organisation verwaltet dieses Gerät und kann den Netzwerkverkehr überwachen"</string>
     <string name="quick_settings_disclosure_named_management_monitoring" msgid="2831423806103479812">"<xliff:g id="ORGANIZATION_NAME">%1$s</xliff:g> ist der Eigentümer dieses Geräts und kann den Netzwerkverkehr überwachen"</string>
     <string name="quick_settings_financed_disclosure_named_management" msgid="2307703784594859524">"Dieses Gerät wird von <xliff:g id="ORGANIZATION_NAME">%s</xliff:g> zur Verfügung gestellt"</string>
@@ -669,10 +699,12 @@
     <string name="monitoring_description_vpn_settings_separator" msgid="8292589617720435430">" "</string>
     <string name="monitoring_description_vpn_settings" msgid="5264167033247632071">"VPN-Einstellungen öffnen"</string>
     <string name="monitoring_description_parental_controls" msgid="8184693528917051626">"Dieses Gerät wird von deinen Eltern verwaltet. Sie können unter anderem Informationen über deine genutzten Apps, deinen Standort und deine Bildschirmzeit einsehen und verwalten."</string>
+    <string name="monitoring_description_pin_protection" msgid="1983580207046670355">"Einige Einstellungen auf deinem Gerät, z. B. Tageslimits und Ruhezeit, können nur mit einer PIN geändert werden."</string>
     <string name="legacy_vpn_name" msgid="4174223520162559145">"VPN"</string>
     <string name="keyguard_indication_trust_unlocked" msgid="7395154975733744547">"Durch TrustAgent entsperrt"</string>
     <string name="kg_prompt_after_adaptive_auth_lock" msgid="2587481497846342760">"Das Gerät wurde aufgrund zu vieler Authentifizierungsversuche gesperrt"</string>
     <string name="keyguard_indication_after_adaptive_auth_lock" msgid="2323400645470712787">"Gerät gesperrt\nAuthentifizierung fehlgeschlagen"</string>
+    <string name="keyguard_indication_after_watch_disconnected" msgid="8133476870585660478">"Von deiner Smartwatch gesperrt"</string>
     <string name="zen_mode_and_condition" msgid="5043165189511223718">"<xliff:g id="ZEN_MODE">%1$s</xliff:g>. <xliff:g id="EXIT_CONDITION">%2$s</xliff:g>"</string>
     <string name="accessibility_volume_settings" msgid="1458961116951564784">"Toneinstellungen"</string>
     <string name="volume_odi_captions_tip" msgid="8825655463280990941">"Medien autom. untertiteln"</string>
@@ -703,7 +735,7 @@
     <string name="screen_pinning_negative" msgid="6882816864569211666">"Nein danke"</string>
     <string name="screen_pinning_start" msgid="7483998671383371313">"Bildschirm wurde fixiert"</string>
     <string name="screen_pinning_exit" msgid="4553787518387346893">"App vom Bildschirm losgelöst"</string>
-    <string name="stream_voice_call" msgid="7468348170702375660">"Anrufen"</string>
+    <string name="stream_voice_call" msgid="7468348170702375660">"Anruf"</string>
     <string name="stream_system" msgid="7663148785370565134">"System"</string>
     <string name="stream_ring" msgid="7550670036738697526">"Klingelton"</string>
     <string name="stream_music" msgid="2188224742361847580">"Medien"</string>
@@ -739,6 +771,7 @@
     <string name="volume_ringer_hint_vibrate" msgid="6211609047099337509">"Vibrieren lassen"</string>
     <string name="volume_dialog_title" msgid="6502703403483577940">"Lautstärkeregler von %s"</string>
     <string name="volume_dialog_ringer_guidance_ring" msgid="9143194270463146858">"Gerät klingelt bei Anrufen und Benachrichtigungen (<xliff:g id="VOLUME_LEVEL">%1$s</xliff:g>)"</string>
+    <string name="volume_dialog_guest_device_volume_description" msgid="9147246287155716705">"Lautstärke des Gastgeräts"</string>
     <string name="volume_panel_enter_media_output_settings" msgid="8824244246272552669">"Ausgabeeinstellungen angeben"</string>
     <string name="volume_panel_expanded_sliders" msgid="1885750987768506271">"Lautstärkeregler maximiert"</string>
     <string name="volume_panel_collapsed_sliders" msgid="1413383759434791450">"Lautstärkeregler minimiert"</string>
@@ -770,6 +803,7 @@
     <string name="status_bar_work" msgid="5238641949837091056">"Arbeitsprofil"</string>
     <string name="status_bar_airplane" msgid="4848702508684541009">"Flugmodus"</string>
     <string name="status_bar_supervision" msgid="6735015942701134125">"Jugendschutzeinstellungen"</string>
+    <string name="status_bar_pin_supervision" msgid="4376576498566645782">"PIN-Schutz für einige Geräteeinstellungen"</string>
     <string name="zen_alarm_warning" msgid="7844303238486849503">"Lautloser Weckruf <xliff:g id="WHEN">%1$s</xliff:g>"</string>
     <string name="alarm_template" msgid="2234991538018805736">"um <xliff:g id="WHEN">%1$s</xliff:g>"</string>
     <string name="alarm_template_far" msgid="3561752195856839456">"am <xliff:g id="WHEN">%1$s</xliff:g>"</string>
@@ -780,6 +814,7 @@
     <string name="accessibility_status_bar_satellite_available" msgid="6514855015496916829">"Satellit, Verbindung verfügbar"</string>
     <string name="satellite_connected_carrier_text" msgid="118524195198532589">"Notruf über Satellit"</string>
     <string name="satellite_emergency_only_carrier_text" msgid="9103913890116841786">"Nur Notrufe oder SOS"</string>
+    <string name="satellite_network_title_text" msgid="4825315858295910999">"Satellitennetz"</string>
     <string name="accessibility_phone_string_format" msgid="7798841417881811812">"<xliff:g id="CARRIER_NAME">%1$s</xliff:g>, <xliff:g id="SIGNAL_STRENGTH_DESCRIPTION">%2$s</xliff:g>."</string>
     <string name="accessibility_no_signal" msgid="7052827511409250167">"kein Empfang"</string>
     <string name="accessibility_one_bar" msgid="5342012847647834506">"ein Balken"</string>
@@ -799,6 +834,16 @@
     <string name="enable_bluetooth_message" msgid="6740938333772779717">"Zum Verbinden von Tastatur und Tablet muss Bluetooth aktiviert sein."</string>
     <string name="enable_bluetooth_confirmation_ok" msgid="2866408183324184876">"Aktivieren"</string>
     <string name="rotation_lock_camera_rotation_on" msgid="789434807790534274">"An – gesichtsbasiert"</string>
+    <string name="notification_guts_bundle_title" msgid="5252530007273079591">"Stummschalten und bündeln"</string>
+    <string name="notification_guts_single_bundle_notif_title" msgid="3186784466618443494">"Benachrichtigungsorganisator verwenden"</string>
+    <string name="notification_guts_bundle_summary" msgid="3971530802237393600">"Für <xliff:g id="APP_NAME">%1$s</xliff:g>"</string>
+    <string name="notification_guts_promotions_summary" msgid="1565750619813325885">"Umsätze, neue Funktionen und mehr"</string>
+    <string name="notification_guts_news_summary" msgid="638697931043407835">"Top-Meldungen, Artikel und mehr"</string>
+    <string name="notification_guts_social_summary" msgid="3749147631983977040">"Likes, Beiträge und mehr"</string>
+    <string name="notification_guts_recs_summary" msgid="8391881843238947007">"Newsletter, empfohlene Medien und mehr"</string>
+    <string name="notification_onboarding_summaries_turn_on" msgid="5050003857531272655">"Aktivieren"</string>
+    <string name="notification_onboarding_summaries_message" msgid="6061524903176459064">"Deine längeren Unterhaltungen können jetzt zusammengefasst werden, damit du schnell einen Überblick bekommst"</string>
+    <string name="notification_onboarding_bundles_message" msgid="9038023612294384832">"Benachrichtigungsorganisator gruppiert Benachrichtigungen mit niedrigerer Priorität und schaltet sie stumm"</string>
     <string name="inline_done_button" msgid="6043094985588909584">"Fertig"</string>
     <string name="inline_ok_button" msgid="603075490581280343">"Anwenden"</string>
     <string name="inline_turn_off_notifications" msgid="2653064779176881329">"Deaktivieren"</string>
@@ -822,10 +867,10 @@
     <string name="no_shortcut" msgid="8257177117568230126">"<xliff:g id="APP_NAME">%1$s</xliff:g> unterstützt keine Funktionen für Unterhaltungen"</string>
     <string name="notification_guts_bundle_feedback" msgid="7581587973879656500">"Feedback"</string>
     <string name="notification_inline_dismiss" msgid="88423586921134258">"Schließen"</string>
-    <string name="notification_inline_disable_promotion" msgid="3551682588314376921">"Nicht als angepinnt anzeigen"</string>
+    <string name="notification_inline_disable_promotion" msgid="8434781064426043662">"Deaktivieren"</string>
     <string name="notification_inline_disable_promotion_button" msgid="5115790786254916422">"Livemeldungen der App blockieren"</string>
-    <string name="live_notifications_title" msgid="1586553354601345379">"Livemeldungen werden angezeigt"</string>
-    <string name="live_notifications_desc" msgid="7470787001768372152">"Aktuelle Informationen aus Apps werden als angeheftete Benachrichtigungen angezeigt, die immer in der Statusleiste und auf dem Sperrbildschirm erscheinen"</string>
+    <string name="live_notifications_title" msgid="5926318111951903878">"Livemeldungen"</string>
+    <string name="live_notifications_desc" msgid="2639662830862800119">"Wenn diese Option deaktiviert ist, werden Benachrichtigungen über laufende Aktivitäten von dieser App nicht auf dem Sperrbildschirm und in der Statusleiste angezeigt"</string>
     <string name="notification_unblockable_desc" msgid="2073030886006190804">"Diese Benachrichtigungen können nicht geändert werden."</string>
     <string name="notification_unblockable_call_desc" msgid="5907328164696532169">"Anrufbenachrichtigungen können nicht geändert werden."</string>
     <string name="notification_multichannel_desc" msgid="7414593090056236179">"Die Benachrichtigungsgruppe kann hier nicht konfiguriert werden"</string>
@@ -852,6 +897,7 @@
     <string name="snoozed_for_time" msgid="7586689374860469469">"Erinnerung in <xliff:g id="TIME_AMOUNT">%1$s</xliff:g>"</string>
     <string name="snoozeHourOptions" msgid="2332819756222425558">"{count,plural, =1{# Stunde}=2{# Stunden}other{# Stunden}}"</string>
     <string name="snoozeMinuteOptions" msgid="2222082405822030979">"{count,plural, =1{# Minute}other{# Minuten}}"</string>
+    <string name="notification_promoted_ongoing_long_click" msgid="7199288520206554592">"um das Menü zum Abwerten zu öffnen"</string>
     <string name="battery_detail_switch_title" msgid="6940976502957380405">"Energiesparmodus"</string>
     <string name="keyboard_key_button_template" msgid="8005673627272051429">"Taste <xliff:g id="NAME">%1$s</xliff:g>"</string>
     <string name="keyboard_key_home" msgid="3734400625170020657">"Pos1"</string>
@@ -896,7 +942,7 @@
     <string name="keyboard_shortcut_a11y_filter_input" msgid="4589316004510335529">"Tastenkombinationen für die Eingabe werden angezeigt"</string>
     <string name="keyboard_shortcut_a11y_filter_open_apps" msgid="6175417687221004059">"Tastenkombinationen zum Öffnen von Apps werden angezeigt"</string>
     <string name="keyboard_shortcut_a11y_filter_current_app" msgid="7944592357493737911">"Tastenkombinationen für die aktuelle App werden angezeigt"</string>
-    <string name="group_system_access_notification_shade" msgid="1619028907006553677">"Benach­richti­­gun­gen ansehen"</string>
+    <string name="group_system_access_notification_shade" msgid="1619028907006553677">"Be­nach­­rich­ti­­­gun­­gen ansehen"</string>
     <string name="group_system_full_screenshot" msgid="5742204844232667785">"Screenshot erstellen"</string>
     <string name="group_system_access_system_app_shortcuts" msgid="8562482996626694026">"Tasten­kürzel anzeigen"</string>
     <string name="group_system_go_back" msgid="2730322046244918816">"Zurück"</string>
@@ -939,8 +985,8 @@
     <string name="keyboard_shortcut_group_applications_maps" msgid="7312554713993114342">"Maps"</string>
     <string name="group_accessibility_toggle_bounce_keys" msgid="4183584952493519179">"Bounce-Tasten aktivieren/deaktivieren"</string>
     <string name="group_accessibility_toggle_mouse_keys" msgid="534757719357514361">"Tastaturmaus aktivieren/deaktivieren"</string>
-    <string name="group_accessibility_toggle_sticky_keys" msgid="7722214637652104184">"Einfingerbedienung aktivieren/deaktivieren"</string>
-    <string name="group_accessibility_toggle_slow_keys" msgid="8569881436531795062">"Anschlagverzögerung aktivieren/deaktivieren"</string>
+    <string name="group_accessibility_toggle_sticky_keys" msgid="7722214637652104184">"Ein­fin­ger­be­die­nung aktivieren/deaktivieren"</string>
+    <string name="group_accessibility_toggle_slow_keys" msgid="8569881436531795062">"An­schlag­ver­zö­ge­rung aktivieren/deaktivieren"</string>
     <string name="group_accessibility_toggle_voice_access" msgid="5436708239015479017">"Voice Access aktivieren/deaktivieren"</string>
     <string name="group_accessibility_toggle_talkback" msgid="5017967056006325713">"TalkBack aktivieren/deaktivieren"</string>
     <string name="group_accessibility_toggle_magnification" msgid="3892267763383743128">"„Vergrößerung“ aktivieren/deaktivieren"</string>
@@ -984,11 +1030,13 @@
     <string name="right_icon" msgid="1103955040645237425">"Rechtes Symbol"</string>
     <string name="drag_to_add_tiles" msgid="8933270127508303672">"Zum Hinzufügen Kachel halten und ziehen"</string>
     <string name="drag_to_rearrange_tiles" msgid="2143204300089638620">"Zum Verschieben Kachel halten und ziehen"</string>
+    <string name="select_to_rearrange_tiles" msgid="6166153534235179148">"Kacheln zum Neuanordnen und Anpassen der Größe auswählen"</string>
     <string name="tap_to_position_tile" msgid="6282815817773342757">"Zum Positionieren der Kachel tippen"</string>
     <string name="drag_to_remove_tiles" msgid="4682194717573850385">"Zum Entfernen hierher ziehen"</string>
     <string name="drag_to_remove_disabled" msgid="933046987838658850">"Du brauchst mindestens <xliff:g id="MIN_NUM_TILES">%1$d</xliff:g> Kacheln"</string>
     <string name="qs_edit" msgid="5583565172803472437">"Bearbeiten"</string>
     <string name="qs_edit_tiles" msgid="2105215324060865035">"Kacheln bearbeiten"</string>
+    <string name="qs_edit_mode_tooltip" msgid="4164112885539479781">"Größe der Schnelleinstellungen-Kacheln anpassen"</string>
     <string name="tuner_time" msgid="2450785840990529997">"Uhrzeit"</string>
   <string-array name="clock_options">
     <item msgid="3986445361435142273">"Stunden, Minuten und Sekunden anzeigen"</item>
@@ -1003,10 +1051,12 @@
     <string name="tuner_low_priority" msgid="8412666814123009820">"Symbole für Benachrichtigungen mit einer niedrigen Priorität anzeigen"</string>
     <string name="other" msgid="429768510980739978">"Sonstiges"</string>
     <string name="accessibility_qs_edit_toggle_tile_size_action" msgid="1485194410119733586">"Größe der Kachel umschalten"</string>
-    <string name="accessibility_qs_edit_remove_tile_action" msgid="775511891457193480">"Entfernen der Kachel"</string>
+    <string name="accessibility_qs_edit_remove_tile_action" msgid="4811778796933958616">"Kachel entfernen"</string>
+    <string name="accessibility_qs_edit_place_tile_action" msgid="7073332873378207231">"Kachel platzieren"</string>
     <string name="accessibility_qs_edit_toggle_placement_mode" msgid="3870429389210569610">"Platzierungsmodus ein-/ausschalten"</string>
     <string name="accessibility_qs_edit_toggle_selection" msgid="2201248304072372239">"Auswahl wechseln"</string>
-    <string name="accessibility_qs_edit_tile_add_action" msgid="8311378984458545661">"Kachel an letzter Position hinzufügen"</string>
+    <string name="accessibility_qs_edit_tile_add_action" msgid="7188303979684400620">"Kachel an letzter Position hinzufügen"</string>
+    <string name="accessibility_qs_edit_named_tile_add_action" msgid="7929752125913967625">"„<xliff:g id="NAME">%1$s</xliff:g>“ an letzter Position hinzufügen"</string>
     <string name="accessibility_qs_edit_tile_start_move" msgid="2009373939914517817">"Kachel verschieben"</string>
     <string name="accessibility_qs_edit_tile_start_add" msgid="8141710006899065161">"Kachel an gewünschter Position hinzufügen"</string>
     <string name="accessibility_qs_edit_tile_move_to_position" msgid="5198161544045930556">"Auf Position <xliff:g id="POSITION">%1$d</xliff:g> verschieben"</string>
@@ -1093,7 +1143,7 @@
     <string name="auto_saver_text" msgid="3214960308353838764">"Aktivieren, wenn der Akku wahrscheinlich nicht mehr lange hält"</string>
     <string name="no_auto_saver_action" msgid="7467924389609773835">"Nein danke"</string>
     <string name="ongoing_privacy_dialog_a11y_title" msgid="2205794093673327974">"In Verwendung"</string>
-    <string name="ongoing_privacy_chip_content_multiple_apps" msgid="8341216022442383954">"Apps verwenden gerade Folgendes: <xliff:g id="TYPES_LIST">%s</xliff:g>."</string>
+    <string name="ongoing_privacy_chip_content_multiple_apps" msgid="4994455315457996796">"<xliff:g id="TYPES_LIST">%s</xliff:g> in Verwendung."</string>
     <string name="ongoing_privacy_dialog_separator" msgid="1866222499727706187">", "</string>
     <string name="ongoing_privacy_dialog_last_separator" msgid="5615876114268009767">" und "</string>
     <string name="ongoing_privacy_dialog_using_op" msgid="426635338010011796">"Von <xliff:g id="APPLICATION_NAME">%1$s</xliff:g> verwendet"</string>
@@ -1132,6 +1182,8 @@
     <string name="magnification_exit_edit_mode_click_label" msgid="1664818325144887117">"Bearbeitungsmodus beenden"</string>
     <string name="magnification_drag_corner_to_resize" msgid="1249766311052418130">"Zum Anpassen der Größe Ecke ziehen"</string>
     <string name="accessibility_allow_diagonal_scrolling" msgid="3258050349191496398">"Diagonales Scrollen erlauben"</string>
+    <string name="accessibility_magnify_typing" msgid="4450037184548427852">"Tippen folgen"</string>
+    <string name="accessibility_magnify_keyboard" msgid="3083531635742744841">"Tastatur vergrößern"</string>
     <string name="accessibility_resize" msgid="5733759136600611551">"Größe ändern"</string>
     <string name="accessibility_change_magnification_type" msgid="666000085077432421">"Art der Vergrößerung ändern"</string>
     <string name="accessibility_magnification_end_resizing" msgid="4881690585800302628">"Vergrößerung beenden"</string>
@@ -1223,11 +1275,6 @@
     <string name="controls_media_button_prev" msgid="8126822360056482970">"Vorheriger Titel"</string>
     <string name="controls_media_button_next" msgid="6662636627525947610">"Nächster Titel"</string>
     <string name="controls_media_button_connecting" msgid="3138354625847598095">"Wird verbunden"</string>
-    <string name="controls_media_smartspace_rec_title" msgid="1699818353932537407">"Wiedergeben"</string>
-    <string name="controls_media_smartspace_rec_description" msgid="4136242327044070732">"<xliff:g id="APP_LABEL">%1$s</xliff:g> öffnen"</string>
-    <string name="controls_media_smartspace_rec_item_description" msgid="2189271793070870883">"<xliff:g id="SONG_NAME">%1$s</xliff:g> von <xliff:g id="ARTIST_NAME">%2$s</xliff:g> über <xliff:g id="APP_LABEL">%3$s</xliff:g> wiedergeben"</string>
-    <string name="controls_media_smartspace_rec_item_no_artist_description" msgid="8703614798636591077">"<xliff:g id="SONG_NAME">%1$s</xliff:g> über <xliff:g id="APP_LABEL">%2$s</xliff:g> wiedergeben"</string>
-    <string name="controls_media_smartspace_rec_header" msgid="5053461390357112834">"Für mich"</string>
     <string name="media_transfer_undo" msgid="1895606387620728736">"Rückgängig machen"</string>
     <string name="media_move_closer_to_start_cast" msgid="2673104707465013176">"Gehe für die Wiedergabe näher an „<xliff:g id="DEVICENAME">%1$s</xliff:g>“ heran"</string>
     <string name="media_move_closer_to_end_cast" msgid="7302555909119374738">"Für eine Wiedergabe auf diesem Gerät muss es näher bei <xliff:g id="DEVICENAME">%1$s</xliff:g> sein"</string>
@@ -1252,7 +1299,7 @@
     <string name="media_output_dialog_group" msgid="5571251347877452212">"Gruppe"</string>
     <string name="media_output_dialog_single_device" msgid="3102758980643351058">"Ein Gerät ausgewählt"</string>
     <string name="media_output_dialog_multiple_devices" msgid="1093771040315422350">"<xliff:g id="COUNT">%1$d</xliff:g> Geräte ausgewählt"</string>
-    <string name="media_output_dialog_disconnected" msgid="7090512852817111185">"(nicht verbunden)"</string>
+    <string name="media_output_item_connected_state" msgid="297439499870755458">"Verbunden"</string>
     <string name="media_output_dialog_connect_failed" msgid="3080972621975339387">"Wechseln nicht möglich. Tippe, um es noch einmal zu versuchen."</string>
     <string name="media_output_dialog_pairing_new" msgid="5098212763195577270">"Gerät verbinden"</string>
     <string name="media_output_dialog_button_connect_device" msgid="2819038239946643550">"Gerät verbinden"</string>
@@ -1263,6 +1310,7 @@
     <string name="media_output_dialog_volume_percentage" msgid="1613984910585111798">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="media_output_group_title_connected_speakers" msgid="3413876972919684479">"Verbundene Lautsprecher"</string>
     <string name="media_output_group_title_speakers_and_displays" msgid="7169712332365659820">"Lautsprecher &amp; Displays"</string>
+    <string name="media_output_group_title_suggested" msgid="5097061363820410332">"Vorschläge"</string>
     <string name="media_output_group_title_suggested_device" msgid="4157186235837903826">"Vorgeschlagene Geräte"</string>
     <string name="media_input_group_title" msgid="2057057473860783021">"Eingabe"</string>
     <string name="media_output_group_title" msgid="6789001895863332576">"Ausgabe"</string>
@@ -1288,7 +1336,7 @@
     <string name="select_conversation_title" msgid="6716364118095089519">"Unterhaltungs-Widgets"</string>
     <string name="select_conversation_text" msgid="3376048251434956013">"Tippe auf eine Unterhaltung, um sie deinem Startbildschirm hinzuzufügen"</string>
     <string name="no_conversations_text" msgid="5354115541282395015">"Deine letzten Unterhaltungen werden hier angezeigt"</string>
-    <string name="priority_conversations" msgid="3967482288896653039">"Vorrangige Unterhaltungen"</string>
+    <string name="priority_conversations" msgid="3967482288896653039">"Priorisierte Unterhaltungen"</string>
     <string name="recent_conversations" msgid="8531874684782574622">"Neueste Unterhaltungen"</string>
     <string name="days_timestamp" msgid="5821854736213214331">"Vor <xliff:g id="DURATION">%1$s</xliff:g> Tagen"</string>
     <string name="one_week_timestamp" msgid="4925600765473875590">"Vor 1 Woche"</string>
@@ -1334,6 +1382,8 @@
     <string name="pause_animation" msgid="1919705510058107504">"Animation pausieren"</string>
     <string name="ongoing_call_content_description" msgid="6394763878322348560">"Aktiver Anruf"</string>
     <string name="ongoing_notification_extra_content_description" msgid="2098752668861351265">"Aktiv"</string>
+    <string name="status_bar_chip_custom_a11y_action_expand_notification" msgid="3937742348749607401">"Benachrichtigung maximieren"</string>
+    <string name="status_bar_chip_custom_a11y_action_collapse_notification" msgid="8413156834916891757">"Benachrichtigung minimieren"</string>
     <string name="mobile_data_settings_title" msgid="3955246641380064901">"Mobile Daten"</string>
     <string name="mobile_data_connection_active" msgid="944490013299018227">"Verbunden"</string>
     <string name="mobile_data_temp_connection_active" msgid="4590222725908806824">"Vorübergehend verbunden"</string>
@@ -1386,7 +1436,6 @@
     <string name="dream_overlay_status_bar_alarm_set" msgid="566707328356590886">"Wecker gestellt"</string>
     <string name="dream_overlay_status_bar_camera_off" msgid="5273073778969890823">"Kamera ist deaktiviert"</string>
     <string name="dream_overlay_status_bar_mic_off" msgid="8366534415013819396">"Mikrofon ist deaktiviert"</string>
-    <string name="dream_overlay_status_bar_camera_mic_off" msgid="3199425257833773569">"Kamera und Mikrofon ausgeschaltet"</string>
     <string name="dream_overlay_status_bar_notification_indicator" msgid="8091389255691081711">"{count,plural, =1{# Benachrichtigung}other{# Benachrichtigungen}}"</string>
     <string name="dream_overlay_weather_complication_desc" msgid="824503662089783824">"<xliff:g id="WEATHER_CONDITION">%1$s</xliff:g>, <xliff:g id="TEMPERATURE">%2$s</xliff:g>"</string>
     <string name="note_task_button_label" msgid="230135078402003532">"Notizen"</string>
@@ -1513,11 +1562,11 @@
     <string name="shortcut_helper_add_shortcut_button_label" msgid="7655779534665954910">"Verknüpfung hinzufügen"</string>
     <string name="shortcut_helper_delete_shortcut_button_label" msgid="3148773472696137052">"Verknüpfung löschen"</string>
     <string name="launch_keyboard_tutorial_notification_title" msgid="8849933155160522519">"Navigation mit der Tastatur"</string>
-    <string name="launch_keyboard_tutorial_notification_content" msgid="2880339951512757918">"Informationen zu Tastenkombinationen"</string>
+    <string name="launch_keyboard_tutorial_notification_content" msgid="2131074100205028210">"Informationen zu Tastenkombinationen"</string>
     <string name="launch_touchpad_tutorial_notification_title" msgid="2243780062772196901">"Navigation mit dem Touchpad"</string>
     <string name="launch_touchpad_tutorial_notification_content" msgid="7931085031240753226">"Informationen zu Touchpad-Gesten"</string>
     <string name="launch_keyboard_touchpad_tutorial_notification_title" msgid="1940023776496198762">"Navigation mit Tastatur und Touchpad"</string>
-    <string name="launch_keyboard_touchpad_tutorial_notification_content" msgid="1780725168171929365">"Informationen zu Touchpad-Gesten, Tastenkombinationen und mehr"</string>
+    <string name="launch_keyboard_touchpad_tutorial_notification_content" msgid="8557098239919786046">"Informationen zu Touchpad-Gesten, Tastenkombinationen und mehr"</string>
     <string name="touchpad_tutorial_back_gesture_button" msgid="3104716365403620315">"Zurück"</string>
     <string name="touchpad_tutorial_home_gesture_button" msgid="8023973153559885624">"Zum Startbildschirm"</string>
     <string name="touchpad_tutorial_recent_apps_gesture_button" msgid="8919227647650347359">"Letzte Apps aufrufen"</string>
@@ -1528,33 +1577,33 @@
     <string name="touchpad_back_gesture_action_title" msgid="7199067250654332735">"Zurück"</string>
     <string name="touchpad_back_gesture_guidance" msgid="5352221087725906542">"Wische mit drei Fingern auf dem Touchpad nach links oder rechts"</string>
     <string name="touchpad_back_gesture_success_title" msgid="7370719098633023496">"Sehr gut!"</string>
-    <string name="touchpad_back_gesture_success_body" msgid="2324724953720741719">"Du hast das Tutorial für die Touch-Geste „Zurück“ abgeschlossen."</string>
+    <string name="touchpad_back_gesture_success_body" msgid="2324724953720741719">"Du hast das Tutorial für die Touchgeste „Zurück“ abgeschlossen."</string>
     <string name="touchpad_back_gesture_error_body" msgid="7112668207481458792">"Wenn du mit dem Touchpad zurückgehen möchtest, wische mit drei Fingern nach links oder rechts"</string>
     <string name="touchpad_home_gesture_action_title" msgid="8885107349719257882">"Startbildschirm"</string>
     <string name="touchpad_home_gesture_guidance" msgid="4178219118381915899">"Wische an einer beliebigen Stelle auf dem Touchpad mit drei Fingern nach oben"</string>
     <string name="touchpad_home_gesture_success_title" msgid="3648264553645798470">"Gut gemacht!"</string>
-    <string name="touchpad_home_gesture_success_body" msgid="2590690589194027059">"Du hast das Tutorial für die Touch-Geste „Zum Startbildschirm“ abgeschlossen"</string>
+    <string name="touchpad_home_gesture_success_body" msgid="2590690589194027059">"Du hast den Schritt für die „Startbildschirm“-Touchgeste abgeschlossen"</string>
     <string name="touchpad_home_gesture_error_body" msgid="3810674109999513073">"Wenn du zum Startbildschirm gelangen möchtest, wische auf dem Touchpad mit drei Fingern nach oben"</string>
     <string name="touchpad_recent_apps_gesture_action_title" msgid="934906836867137906">"Letzte Apps aufrufen"</string>
     <string name="touchpad_recent_apps_gesture_guidance" msgid="6304446013842271822">"Wische mit drei Fingern nach oben und halte das Touchpad gedrückt"</string>
     <string name="touchpad_recent_apps_gesture_success_title" msgid="8481920554139332593">"Gut gemacht!"</string>
-    <string name="touchpad_recent_apps_gesture_success_body" msgid="4334263906697493273">"Du hast das Tutorial für die Touch-Geste zum Aufrufen der zuletzt verwendeten Apps abgeschlossen."</string>
+    <string name="touchpad_recent_apps_gesture_success_body" msgid="4334263906697493273">"Du hast das Tutorial für die Touchgeste zum Aufrufen der zuletzt verwendeten Apps abgeschlossen."</string>
     <string name="touchpad_recent_gesture_error_body" msgid="8695535720378462022">"Wenn du zuletzt verwendete Apps aufrufen möchtest, wische mit drei Fingern nach oben und halte das Touchpad gedrückt"</string>
     <string name="touchpad_switch_apps_gesture_action_title" msgid="6835222344612924512">"Zwischen Apps wechseln"</string>
     <string name="touchpad_switch_apps_gesture_guidance" msgid="2554844933805502538">"Wische mit vier Fingern auf dem Touchpad nach rechts"</string>
     <string name="touchpad_switch_apps_gesture_success_title" msgid="4894947244328032458">"Gut gemacht!"</string>
-    <string name="touchpad_switch_apps_gesture_success_body" msgid="8151089866035126312">"Du hast das Tutorial für die Touch-Geste „Apps wechseln“ abgeschlossen."</string>
+    <string name="touchpad_switch_apps_gesture_success_body" msgid="8151089866035126312">"Du hast das Tutorial für die Touchgeste „Apps wechseln“ abgeschlossen."</string>
     <string name="touchpad_switch_gesture_error_body" msgid="5895231916964677918">"Wische mit vier Fingern auf dem Touchpad nach rechts, um zwischen Apps zu wechseln"</string>
     <string name="tutorial_action_key_title" msgid="8172535792469008169">"Alle Apps anzeigen"</string>
     <string name="tutorial_action_key_guidance" msgid="5040613427202799294">"Drücke die Aktionstaste auf deiner Tastatur"</string>
     <string name="tutorial_action_key_success_title" msgid="2371827347071979571">"Perfekt!"</string>
-    <string name="tutorial_action_key_success_body" msgid="1688986269491357832">"Du hast das Tutorial für die Touch-Geste zum Aufrufen aller Apps abgeschlossen"</string>
+    <string name="tutorial_action_key_success_body" msgid="1688986269491357832">"Du hast das Tutorial für die Touchgeste zum Aufrufen aller Apps abgeschlossen"</string>
     <string name="touchpad_action_key_error_body" msgid="8685502040091860903">"Drücke die Aktionstaste auf deiner Tastatur, um alle deine Apps aufzurufen"</string>
     <string name="tutorial_animation_content_description" msgid="2698816574982370184">"Animation während des Tutorials, zum Pausieren und Fortsetzen der Wiedergabe klicken."</string>
     <string name="keyboard_backlight_dialog_title" msgid="8273102932345564724">"Tastaturbeleuchtung"</string>
     <string name="keyboard_backlight_value" msgid="7336398765584393538">"Level %1$d von %2$d"</string>
-    <string name="home_controls_dream_label" msgid="6567105701292324257">"Smart-Home-Steuerung"</string>
-    <string name="home_controls_dream_description" msgid="4644150952104035789">"Smart-Home-Steuer­ung als Bild­schirm­schoner nutzen"</string>
+    <string name="home_controls_dream_label" msgid="6567105701292324257">"Smart-Home"</string>
+    <string name="home_controls_dream_description" msgid="4644150952104035789">"Smart-Home-Steuer­ung anzeigen"</string>
     <string name="volume_undo_action" msgid="5815519725211877114">"Rückgängig machen"</string>
     <string name="back_edu_toast_content" msgid="4530314597378982956">"Wenn du zurückgehen möchtest, wische auf dem Touchpad mit drei Fingern nach links oder rechts"</string>
     <string name="home_edu_toast_content" msgid="3381071147871955415">"Wenn du den Startbildschirm aufrufen möchtest, wische auf dem Touchpad mit drei Fingern nach oben"</string>
@@ -1580,11 +1629,15 @@
     <string name="qs_edit_mode_category_accessibility" msgid="7969091385071475922">"Bedienungshilfen"</string>
     <string name="qs_edit_mode_category_utilities" msgid="8123080090108420095">"Dienstprogramme"</string>
     <string name="qs_edit_mode_category_privacy" msgid="6577774443194551775">"Datenschutz"</string>
-    <string name="qs_edit_mode_category_providedByApps" msgid="8346112074897919019">"Von Apps bereitgestellt"</string>
+    <string name="qs_edit_mode_category_providedBySystemApps" msgid="8010990312139645288">"Von System-Apps"</string>
+    <string name="qs_edit_mode_category_providedByApps" msgid="4736433865199049415">"Von Apps, die du installiert hast"</string>
     <string name="qs_edit_mode_category_display" msgid="4749511439121053942">"Display"</string>
     <string name="qs_edit_mode_category_unknown" msgid="509314252124053550">"Unbekannt"</string>
     <string name="qs_edit_mode_reset_dialog_title" msgid="5344853290033761627">"Alle Kacheln zurücksetzen?"</string>
     <string name="qs_edit_mode_reset_dialog_content" msgid="7474773130622653653">"Alle Schnelleinstellungen-Kacheln werden auf die Standardeinstellungen des Geräts zurückgesetzt"</string>
     <string name="demote_explain_text" msgid="3942301497888762295">"<xliff:g id="APPLICATION">%1$s</xliff:g> zeigt keine Livemeldungen mehr an. Du kannst dies jederzeit in den Einstellungen ändern."</string>
     <string name="volume_slider_disabled_message_template" msgid="1305088816797803460">"<xliff:g id="STREAM_NAME">%1$s</xliff:g>, <xliff:g id="DISABLED_MESSAGE">%2$s</xliff:g>"</string>
+    <string name="underlay_close_button_content_description" msgid="6518481455548869894">"Schließen"</string>
+    <string name="dual_shade_educational_tooltip_notifs" msgid="7666159428113013319">"Zum Öffnen von Benachrichtigungen von links oben nach unten wischen"</string>
+    <string name="dual_shade_educational_tooltip_qs" msgid="3842355853737057332">"Zum Öffnen der Schnelleinstellungen von rechts oben nach unten wischen"</string>
 </resources>

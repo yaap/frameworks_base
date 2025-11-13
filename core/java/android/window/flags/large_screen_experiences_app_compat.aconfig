@@ -58,21 +58,6 @@ flag {
 }
 
 flag {
-  name: "allow_hide_scm_button"
-  namespace: "large_screen_experiences_app_compat"
-  description: "Whether we should allow hiding the size compat restart button"
-  bug: "318840081"
-}
-
-flag {
-  name: "configurable_font_scale_default"
-  namespace: "large_screen_experiences_app_compat"
-  description: "Whether the font_scale is read from a device dependent configuration file"
-  bug: "319808237"
-  is_fixed_read_only: true
-}
-
-flag {
   name: "camera_compat_for_freeform"
   namespace: "large_screen_experiences_app_compat"
   description: "Whether to apply Camera Compat treatment to fixed-orientation apps in freeform windowing mode"
@@ -118,6 +103,26 @@ flag {
 }
 
 flag {
+  name: "app_compat_refactoring_rounded_corners"
+  namespace: "large_screen_experiences_app_compat"
+  description: "Whether the rounded corners refactoring for letterboxing in shell is enabled./n"
+  bug: "375124280"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "enable_transition_on_activity_set_requested_orientation"
+  namespace: "large_screen_experiences_app_compat"
+  description: "Whether a Transition should be created after setRequestedOrientation"
+  bug: "409043134"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
   name: "letterbox_background_wallpaper"
   namespace: "large_screen_experiences_app_compat"
   description: "Whether the blurred letterbox wallpaper background is enabled by default"
@@ -148,19 +153,20 @@ flag {
 }
 
 flag {
-  name: "release_user_aspect_ratio_wm"
-  namespace: "large_screen_experiences_app_compat"
-  description: "Whether to release UserAspectRatioSettingsWindowManager when button is hidden"
-  bug: "385049711"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
   name: "backup_and_restore_for_user_aspect_ratio_settings"
   namespace: "large_screen_experiences_app_compat"
   description: "Whether B&R for user aspect ratio settings is enabled"
   bug: "396650383"
   is_fixed_read_only: true
+}
+
+flag {
+  name: "restore_user_aspect_ratio_settings_using_service"
+  namespace: "large_screen_experiences_app_compat"
+  description: "Whether a system service should handle setting restored user aspect ratio settings for apps that install after SUW is complete."
+  bug: "413014252"
+  is_fixed_read_only: true
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }

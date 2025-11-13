@@ -802,12 +802,6 @@ public abstract class BatteryStats {
         @UnsupportedAppUsage
         public abstract ArrayMap<String, ? extends Pkg> getPackageStats();
 
-        /**
-         * Returns the proportion of power consumed by the System Service
-         * calls made by this UID.
-         */
-        public abstract double getProportionalSystemServiceUsage();
-
         public abstract ControllerActivityCounter getWifiControllerActivity();
         public abstract ControllerActivityCounter getBluetoothControllerActivity();
         public abstract ControllerActivityCounter getModemControllerActivity();
@@ -1054,130 +1048,6 @@ public abstract class BatteryStats {
          * @param which one of STATS_*
          */
         public abstract void getDeferredJobsLineLocked(StringBuilder sb, int which);
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of bluetooth for this uid,
-         * derived from {@link android.hardware.power.stats.EnergyConsumerType#BLUETOOTH} bucket
-         * provided by the PowerStats service.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getBluetoothEnergyConsumptionUC();
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the uid's bluetooth usage
-         * when in the specified process state.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getBluetoothEnergyConsumptionUC(
-                @BatteryConsumer.ProcessState int processState);
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the uid's cpu usage, derived from
-         * derived from {@link android.hardware.power.stats.EnergyConsumerType#CPU} bucket
-         * provided by the PowerStats service.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getCpuEnergyConsumptionUC();
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the uid's cpu usage when in the
-         * specified process state.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getCpuEnergyConsumptionUC(
-                @BatteryConsumer.ProcessState int processState);
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the uid's GNSS usage, derived from
-         * derived from {@link android.hardware.power.stats.EnergyConsumerType#GNSS} bucket
-         * provided by the PowerStats service.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getGnssEnergyConsumptionUC();
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the uid's radio usage, derived from
-         * derived from {@link android.hardware.power.stats.EnergyConsumerType#MOBILE_RADIO}
-         * bucket provided by the PowerStats service.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getMobileRadioEnergyConsumptionUC();
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the uid's radio usage when in the
-         * specified process state.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getMobileRadioEnergyConsumptionUC(
-                @BatteryConsumer.ProcessState int processState);
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the screen while on and uid active,
-         * derived from {@link android.hardware.power.stats.EnergyConsumerType#DISPLAY} bucket
-         * provided by the PowerStats service.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getScreenOnEnergyConsumptionUC();
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of wifi for this uid,
-         * derived from {@link android.hardware.power.stats.EnergyConsumerType#WIFI} bucket
-         * provided by the PowerStats service.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getWifiEnergyConsumptionUC();
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of the uid's wifi usage when in the
-         * specified process state.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getWifiEnergyConsumptionUC(
-                @BatteryConsumer.ProcessState int processState);
-
-
-
-        /**
-         * Returns the battery consumption (in microcoulombs) of UID's camera usage, derived from
-         * on-device power measurement data.
-         * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-         *
-         * {@hide}
-         */
-        public abstract long getCameraEnergyConsumptionUC();
-
-        /**
-         * Returns the battery consumption (in microcoulombs) used by this uid for each
-         * {@link android.hardware.power.stats.EnergyConsumer.ordinal} of (custom) energy consumer
-         * type {@link android.hardware.power.stats.EnergyConsumerType#OTHER}).
-         *
-         * @return charge (in microcoulombs) consumed since last reset for each (custom) energy
-         *         consumer of type OTHER, indexed by their ordinal. Returns null if no energy
-         *         reporting is supported.
-         *
-         * {@hide}
-         */
-        public abstract @Nullable long[] getCustomEnergyConsumerBatteryConsumptionUC();
 
         public static abstract class Sensor {
 
@@ -2917,7 +2787,7 @@ public abstract class BatteryStats {
      *
      * {@hide}
      */
-    public static final long POWER_DATA_UNAVAILABLE = -1L;
+//    public static final long POWER_DATA_UNAVAILABLE = -1L;
 
     /**
      * Returned value if duration data is unavailable.
@@ -2925,99 +2795,6 @@ public abstract class BatteryStats {
      * {@hide}
      */
     public static final long DURATION_UNAVAILABLE = -1L;
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of bluetooth, derived from on
-     * device power measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getBluetoothEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of the cpu, derived from on device power
-     * measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getCpuEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of the GNSS, derived from on device power
-     * measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getGnssEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of the radio, derived from on device power
-     * measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getMobileRadioEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of the phone calls, derived from on device
-     * power measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getPhoneEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of the screen while on, derived from on
-     * device power measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getScreenOnEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of the screen in doze, derived from on
-     * device power measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getScreenDozeEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of wifi, derived from on
-     * device power measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getWifiEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) of camera, derived from on
-     * device power measurement data.
-     * Will return {@link #POWER_DATA_UNAVAILABLE} if data is unavailable.
-     *
-     * {@hide}
-     */
-    public abstract long getCameraEnergyConsumptionUC();
-
-    /**
-     * Returns the battery consumption (in microcoulombs) that each
-     * {@link android.hardware.power.stats.EnergyConsumer.ordinal} of (custom) energy consumer
-     * type {@link android.hardware.power.stats.EnergyConsumerType#OTHER}) consumed.
-     *
-     * @return charge (in microcoulombs) used by each (custom) energy consumer of type OTHER,
-     * indexed by their ordinal. Returns null if no energy reporting is supported.
-     *
-     * {@hide}
-     */
-    public abstract @Nullable long[] getCustomEnergyConsumerBatteryConsumptionUC();
 
     /**
      * Returns the names of all {@link android.hardware.power.stats.EnergyConsumer}'s
@@ -3445,20 +3222,6 @@ public abstract class BatteryStats {
      * since the last time the device was charged.
      */
     public abstract int getDischargeAmountScreenDozeSinceCharge();
-
-    /**
-     * Returns the approximate CPU time (in microseconds) spent by the system server handling
-     * incoming service calls from apps.  The result is returned as an array of longs,
-     * organized as a sequence like this:
-     * <pre>
-     *     cluster1-speed1, cluster1-speed2, ..., cluster2-speed1, cluster2-speed2, ...
-     * </pre>
-     *
-     * @see com.android.internal.os.CpuScalingPolicies#getPolicies
-     * @see com.android.internal.os.CpuScalingPolicies#getFrequencies
-     */
-    @Nullable
-    public abstract long[] getSystemServiceTimeAtCpuSpeeds();
 
     /**
      * Returns the total, last, or current battery uptime in microseconds.
@@ -6947,6 +6710,8 @@ public abstract class BatteryStats {
         // This constant MUST be incremented whenever the history dump format changes.
         private static final int FORMAT_VERSION = 2;
 
+        private static final boolean DEBUG_TIMELINE = false;
+
         private final boolean mPerformanceBaseline;
         private final HistoryLogTimeFormatter mHistoryLogTimeFormatter;
         private final SimpleDateFormat mHistoryItemTimestampFormat;
@@ -6983,9 +6748,7 @@ public abstract class BatteryStats {
         }
 
         public HistoryPrinter(TimeZone timeZone, int flags) {
-            this(com.android.server.power.optimization.Flags
-                    .extendedBatteryHistoryContinuousCollectionEnabled()
-                    ? FORMAT_VERSION : FORMAT_LEGACY, timeZone, flags);
+            this(FORMAT_VERSION, timeZone, flags);
         }
 
         private HistoryPrinter(int formatVersion, TimeZone timeZone, int flags) {
@@ -7049,6 +6812,12 @@ public abstract class BatteryStats {
                     } else {
                         mHistoryLogTimeFormatter.append(item, rec.currentTime);
                         item.append(' ');
+                        if (DEBUG_TIMELINE) {
+                            if (rec.time < lastTime) {
+                                item.append("[Earlier timestamp by ")
+                                        .append(rec.time - lastTime).append("] ");
+                            }
+                        }
                     }
                 }
             } else {
@@ -7059,8 +6828,8 @@ public abstract class BatteryStats {
                 } else {
                     item.append(rec.time - lastTime);
                 }
-                lastTime = rec.time;
             }
+            lastTime = rec.time;
             if (rec.cmd == HistoryItem.CMD_START) {
                 if (checkin) {
                     item.append(":");
@@ -7188,6 +6957,9 @@ public abstract class BatteryStats {
                             break;
                         case BatteryManager.BATTERY_PLUGGED_WIRELESS:
                             item.append(checkin ? "w" : "wireless");
+                            break;
+                        case BatteryManager.BATTERY_PLUGGED_DOCK:
+                            item.append(checkin ? "d" : "dock");
                             break;
                         default:
                             item.append(oldPlug);
@@ -7663,7 +7435,8 @@ public abstract class BatteryStats {
     public static final int DUMP_DEVICE_WIFI_ONLY = 1<<6;
     public static final int DUMP_DEBUG_PERF_BASELINE = 1 << 7;
 
-    private void dumpHistory(PrintWriter pw, int flags, long histStart, boolean checkin) {
+    private void dumpHistory(PrintWriter pw, int flags, long histStart, boolean checkin,
+                              long monotonicClockStart) {
         final HistoryPrinter hprinter = new HistoryPrinter(flags);
         synchronized (this) {
             if (!checkin) {
@@ -7694,7 +7467,8 @@ public abstract class BatteryStats {
         boolean printed = false;
         HistoryEventTracker tracker = null;
         try (BatteryStatsHistoryIterator iterator =
-                     iterateBatteryStatsHistory(0, MonotonicClock.UNDEFINED)) {
+                     iterateBatteryStatsHistory(monotonicClockStart,
+                         MonotonicClock.UNDEFINED)) {
             HistoryItem rec;
             while ((rec = iterator.next()) != null) {
                 try {
@@ -7857,7 +7631,7 @@ public abstract class BatteryStats {
      */
     @SuppressWarnings("unused")
     public void dump(Context context, PrintWriter pw, int flags, int reqUid, long histStart,
-            BatteryStatsDumpHelper dumpHelper) {
+            BatteryStatsDumpHelper dumpHelper, long monotonicClockStart) {
         synchronized (this) {
             prepareForDumpLocked();
         }
@@ -7866,7 +7640,7 @@ public abstract class BatteryStats {
                 & (DUMP_HISTORY_ONLY|DUMP_CHARGED_ONLY|DUMP_DAILY_ONLY)) != 0;
 
         if ((flags&DUMP_HISTORY_ONLY) != 0 || !filtering) {
-            dumpHistory(pw, flags, histStart, false);
+            dumpHistory(pw, flags, histStart, false, monotonicClockStart);
             pw.println();
         }
 
@@ -8023,7 +7797,7 @@ public abstract class BatteryStats {
     // This is called from BatteryStatsService.
     @SuppressWarnings("unused")
     public void dumpCheckin(Context context, PrintWriter pw, List<ApplicationInfo> apps, int flags,
-            long histStart, BatteryStatsDumpHelper dumpHelper) {
+            long histStart, BatteryStatsDumpHelper dumpHelper, long monotonicCheckinStartTime) {
         synchronized (this) {
             prepareForDumpLocked();
 
@@ -8033,7 +7807,7 @@ public abstract class BatteryStats {
         }
 
         if ((flags & (DUMP_INCLUDE_HISTORY | DUMP_HISTORY_ONLY)) != 0) {
-            dumpHistory(pw, flags, histStart, true);
+            dumpHistory(pw, flags, histStart, true, monotonicCheckinStartTime);
         }
 
         if ((flags & DUMP_HISTORY_ONLY) != 0) {

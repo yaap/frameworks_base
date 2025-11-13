@@ -89,6 +89,7 @@ import org.mockito.MockitoAnnotations;
 @RunWith(AndroidJUnit4.class)
 @RunWithLooper(setAsMainLooper = true)
 @SmallTest
+@android.platform.test.annotations.EnabledOnRavenwood
 public class QSTileImplTest extends SysuiTestCase {
 
     public static final int POSITION = 14;
@@ -208,6 +209,19 @@ public class QSTileImplTest extends SysuiTestCase {
         mTile.click(null /* expandable */);
         mTestableLooper.processAllMessages();
         assertThat(mTile.mClicked).isTrue();
+    }
+
+    @Test
+    public void testSecondaryClick_falsing() {
+        mFalsingManager.setFalseTap(true);
+        mTile.secondaryClick(null /* expandable */);
+        mTestableLooper.processAllMessages();
+        assertThat(mTile.mSecondaryClicked).isFalse();
+
+        mFalsingManager.setFalseTap(false);
+        mTile.secondaryClick(null /* expandable */);
+        mTestableLooper.processAllMessages();
+        assertThat(mTile.mSecondaryClicked).isTrue();
     }
 
     @Test
@@ -556,6 +570,7 @@ public class QSTileImplTest extends SysuiTestCase {
     private static class TileImpl extends QSTileImpl<QSTile.BooleanState> {
         boolean mClicked;
         boolean mLongClicked;
+        boolean mSecondaryClicked;
         int mRefreshes = 0;
 
         protected TileImpl(
@@ -591,6 +606,11 @@ public class QSTileImplTest extends SysuiTestCase {
         @Override
         protected void handleLongClick(@Nullable Expandable expandable) {
             mLongClicked = true;
+        }
+
+        @Override
+        protected void handleSecondaryClick(@Nullable Expandable expandable) {
+            mSecondaryClicked = true;
         }
 
         @Override

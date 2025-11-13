@@ -1015,14 +1015,19 @@
     <string name="permgroupdesc_notifications">show notifications</string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=40]-->
+    <string name="permgrouplab_xr_eye_sensitive">XR sensitive eye tracking data</string>
+    <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=NONE]-->
+    <string name="permgroupdesc_xr_eye_sensitive">access sensitive eye gaze data</string>
+
+    <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=40]-->
     <string name="permgrouplab_xr_tracking">XR tracking data</string>
     <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=NONE]-->
     <string name="permgroupdesc_xr_tracking">access XR data about you and the environment around you</string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=40]-->
-    <string name="permgrouplab_xr_tracking_sensitive">sensitive XR tracking data</string>
+    <string name="permgrouplab_xr_tracking_sensitive">Sensitive XR tracking data</string>
     <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=NONE]-->
-    <string name="permgroupdesc_xr_tracking_sensitive">access sensitive tracking data, such as eye gaze</string>
+    <string name="permgroupdesc_xr_tracking_sensitive">access sensitive tracking data about you and the environment around you</string>
 
     <!-- Title for the capability of an accessibility service to retrieve window content. -->
     <string name="capability_title_canRetrieveWindowContent">Retrieve window content</string>
@@ -1094,6 +1099,11 @@
     <string name="permlab_fullScreenIntent">display notifications as full screen activities on a locked device</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
     <string name="permdesc_fullScreenIntent">Allows the app to display notifications as full screen activities on a locked device</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permlab_postPromotedNotifications">Show live updates</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_postPromotedNotifications">Allows the app to display ongoing, time-sensitive notifications on the status bar and lock screen</string>
 
     <!-- Title of an application permission, listed so the user can install application shortcuts
     in their Launcher -->
@@ -3196,26 +3206,6 @@
         in <xliff:g id="count">%d</xliff:g>y
     </string>
 
-    <!-- Phrase describing a time duration using minutes that is as short as possible, preferrably one character. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=14] -->
-    <string name="duration_minutes_shortest_past">
-        <xliff:g id="count">%d</xliff:g>m ago
-    </string>
-
-    <!-- Phrase describing a time duration using hours that is as short as possible, preferrably one character. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=14] -->
-    <string name="duration_hours_shortest_past">
-        <xliff:g id="count">%d</xliff:g>h ago
-    </string>
-
-    <!-- Phrase describing a time duration using days that is as short as possible, preferrably one character. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=14] -->
-    <string name="duration_days_shortest_past">
-        <xliff:g example="1" id="count">%d</xliff:g>d ago
-    </string>
-
-    <!-- Phrase describing a time duration using years that is as short as possible, preferrably one character. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=14] -->
-    <string name="duration_years_shortest_past">
-        <xliff:g id="count">%d</xliff:g>y ago
-    </string>
-
     <!-- Phrase describing a time duration using minutes that is a medium length, preferrably two or three characters. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=8] -->
     <string name="duration_minutes_medium">
         <xliff:g id="count">%d</xliff:g>min
@@ -3224,56 +3214,6 @@
     <!-- Phrase describing a time duration using hours that is a medium length, preferrably two or three characters. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=8] -->
     <string name="duration_hours_medium">
         <xliff:g id="count">%d</xliff:g>hr
-    </string>
-
-    <!-- Phrase describing a time duration using days that is a medium length, preferrably two or three characters. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=8] -->
-    <string name="duration_days_medium">
-       <xliff:g id="count">%d</xliff:g>d
-    </string>
-
-    <!-- Phrase describing a time duration using years that is a medium length, preferrably two or three characters. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=8] -->
-    <string name="duration_years_medium">
-        <xliff:g id="count">%d</xliff:g>yr
-    </string>
-
-    <!-- Phrase describing a time duration using minutes that is a medium length, preferrably two or three characters. This version should be a future point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_minutes_medium_future">
-        in <xliff:g id="count">%d</xliff:g>min
-    </string>
-
-    <!-- Phrase describing a time duration using hours that is a medium length, preferrably two or three characters. This version should be a future point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_hours_medium_future">
-        in <xliff:g id="count">%d</xliff:g>hr
-    </string>
-
-    <!-- Phrase describing a time duration using days that is a medium length, preferrably two or three characters. This version should be a future point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_days_medium_future">
-        in <xliff:g example="1" id="count">%d</xliff:g>d
-    </string>
-
-    <!-- Phrase describing a time duration using years that is a medium length, preferrably two or three characters. This version should be a future point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_years_medium_future">
-        in <xliff:g id="count">%d</xliff:g>yr
-    </string>
-
-    <!-- Phrase describing a time duration using minutes that is a medium length, preferrably two or three characters. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_minutes_medium_past">
-        <xliff:g id="count">%d</xliff:g>min ago
-    </string>
-
-    <!-- Phrase describing a time duration using hours that is a medium length, preferrably two or three characters. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_hours_medium_past">
-        <xliff:g id="count">%d</xliff:g>hr ago
-    </string>
-
-    <!-- Phrase describing a time duration using days that is a medium length, preferrably two or three characters. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_days_medium_past">
-        <xliff:g example="1" id="count">%d</xliff:g>d ago
-    </string>
-
-    <!-- Phrase describing a time duration using years that is a medium length, preferrably two or three characters. This version should be a past point in time. If the language needs a space in between the integer and the unit, please also integrate it in the string, but preferably it should not have a space in between.[CHAR LIMIT=18] -->
-    <string name="duration_years_medium_past">
-        <xliff:g id="count">%d</xliff:g>yr ago
     </string>
 
     <!-- Phrase describing a relative time using minutes in the past that is not shown on the screen but used for accessibility. [CHAR LIMIT=NONE] -->
@@ -4673,6 +4613,24 @@
     <!-- Name of the default audio route when USB is connected. [CHAR LIMIT=50] -->
     <string name="default_audio_route_name_usb">USB</string>
 
+    <!-- Name of the default audio route when HDMI is connected on a TV device. [CHAR LIMIT=50] -->
+    <string name="default_audio_route_name_hdmi_tv">TV Audio</string>
+
+    <!-- Name of the default audio route for TV when ARC audio device is connected. [CHAR LIMIT=50] -->
+    <string name="default_audio_route_name_arc">ARC</string>
+
+    <!-- Name of the default audio route for TV when eARC audio device is connected. [CHAR LIMIT=50] -->
+    <string name="default_audio_route_name_earc">eARC</string>
+
+    <!-- Name of the default audio route for TV when analog audio device is connected. [CHAR LIMIT=50] -->
+    <string name="default_audio_route_name_analog">Analog</string>
+
+    <!-- Name of the default audio route for TV when digital audio device is connected. [CHAR LIMIT=50] -->
+    <string name="default_audio_route_name_digital">Digital</string>
+
+    <!-- Name of the default audio route for TV when AUX audio device is connected. [CHAR LIMIT=50] -->
+    <string name="default_audio_route_name_aux">AUX</string>
+
     <!-- Name of the default audio route category. [CHAR LIMIT=50] -->
     <string name="default_audio_route_category_name">System</string>
 
@@ -5013,7 +4971,10 @@
     <string name="hearing_aids_feature_name">Hearing devices</string>
 
     <!-- Title of autoclick feature, shown in the warning dialog about the accessibility shortcut. [CHAR LIMIT=none] -->
-    <string name="autoclick_feature_name">Autoclick</string>
+    <string name="autoclick_feature_name">Autoclick (dwell timing)</string>
+
+    <!-- Title of mouse keys feature, shown in the warning dialog about the mouse keys shortcut. [CHAR LIMIT=none] -->
+    <string name="mouse_keys_feature_name">Mouse keys</string>
 
     <!-- Text of hearing device disconnected state. [CHAR LIMIT=20] -->
     <string name="hearing_device_status_disconnected">Disconnected</string>
@@ -5074,6 +5035,9 @@
     <string name="owner_name" msgid="3879126011135546571">Owner</string>
     <!-- Default name of the guest user [CHAR LIMIT=35] -->
     <string name="guest_name">Guest</string>
+    <!-- Default name of the headless system user, on HSUM devices. This users hosts the system, but
+    is not a human user. [CHAR LIMIT=35] -->
+    <string name="headless_system_user_name">System User</string>
     <!-- Error message title [CHAR LIMIT=35] -->
     <string name="error_message_title">Error</string>
     <!-- Message informing user that the change was disallowed by an administrator. [CHAR LIMIT=none] -->
@@ -5642,7 +5606,7 @@
     <string name="promotional_notification_channel_label">Promotions</string>
     <string name="social_notification_channel_label">Social</string>
     <string name="news_notification_channel_label">News</string>
-    <string name="recs_notification_channel_label">Recommendations</string>
+    <string name="recs_notification_channel_label">Suggested</string>
 
     <string name="importance_from_user">You set the importance of these notifications.</string>
     <string name="importance_from_person">This is important because of the people involved.</string>
@@ -6214,31 +6178,35 @@
 
     <!-- Accessibility autoclick related strings -->
     <!-- Label for autoclick type settings panel [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_type_settings_panel_title">Autoclick type settings panel</string>
+    <string name="accessibility_autoclick_type_settings_panel_title">Autoclick options menu</string>
     <!-- Label for autoclick left click button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_left_click">Left click</string>
+    <string name="accessibility_autoclick_left_click">Left-click</string>
     <!-- Label for autoclick right click button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_right_click">Right click</string>
+    <string name="accessibility_autoclick_right_click">Right-click</string>
     <!-- Label for autoclick double click button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_double_click">Double click</string>
+    <string name="accessibility_autoclick_double_click">Double-click</string>
     <!-- Label for autoclick drag button [CHAR LIMIT=NONE] -->
     <string name="accessibility_autoclick_drag">Drag</string>
     <!-- Label for autoclick scroll button [CHAR LIMIT=NONE] -->
     <string name="accessibility_autoclick_scroll">Scroll</string>
+    <!-- Label for autoclick drag button [CHAR LIMIT=NONE] -->
+    <string name="accessibility_autoclick_long_press">Touch &amp; hold</string>
     <!-- Label for autoclick pause button [CHAR LIMIT=NONE] -->
     <string name="accessibility_autoclick_pause">Pause</string>
+    <!-- Label for autoclick resume button [CHAR LIMIT=NONE] -->
+    <string name="accessibility_autoclick_resume">Resume</string>
     <!-- Label for autoclick position button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_position">Position</string>
+    <string name="accessibility_autoclick_position">Change menu position</string>
     <!-- Label for autoclick scroll up button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_scroll_up">Scroll Up</string>
+    <string name="accessibility_autoclick_scroll_up">Scroll up</string>
     <!-- Label for autoclick scroll down button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_scroll_down">Scroll Down</string>
+    <string name="accessibility_autoclick_scroll_down">Scroll down</string>
     <!-- Label for autoclick scroll left button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_scroll_left">Scroll Left</string>
+    <string name="accessibility_autoclick_scroll_left">Scroll left</string>
     <!-- Label for autoclick scroll right button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_scroll_right">Scroll Right</string>
+    <string name="accessibility_autoclick_scroll_right">Scroll right</string>
     <!-- Label for autoclick scroll exit button [CHAR LIMIT=NONE] -->
-    <string name="accessibility_autoclick_scroll_exit">Exit Scroll Mode</string>
+    <string name="accessibility_autoclick_scroll_exit">Exit scroll mode</string>
     <!-- Label for autoclick scroll panel title [CHAR LIMIT=NONE] -->
     <string name="accessibility_autoclick_scroll_panel_title">Scroll Panel</string>
 
@@ -6863,8 +6831,23 @@ ul.</string>
     <string name="fingerprint_loe_notification_msg">Your fingerprints can no longer be recognized. Set up Fingerprint Unlock again.</string>
 
     <!--  AdvancedProtectionService USB notifications -->
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title">USB device plugged in when locked</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text">USB device is plugged in when Android is locked. To use device, please unlock Android first and then reinsert USB device to use it.</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title">Security &amp; privacy</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title">Advanced Protection for USB</string>
+
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_text">Unlock device for data transfer</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text">You may need to unlock and reconnect your device for data transfer</string>
+
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text">Unlock device for fast charging and data transferring</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text">You may need to unlock and reconnect your device for fast charging and data transferring</string>
+
+    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text">Unlock device for fast charging</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text">You may need to unlock and reconnect your device for fast charging</string>
+
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text">Silence</string>
+
+    <string name="usb_apm_usb_notification_silenced_title">Notification silenced</string>
+    <string name="usb_apm_usb_notification_silenced_text">Silenced until you restart your device</string>
+
     <string name="usb_apm_usb_suspicious_activity_notification_title">Suspicious USB activity</string>
     <string name="usb_apm_usb_suspicious_activity_notification_text">USB data signal has been disabled.</string>
 

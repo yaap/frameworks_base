@@ -21,16 +21,15 @@ import android.os.Bundle
 import android.os.UserHandle
 import android.view.View
 import androidx.annotation.StyleRes
-import com.android.systemui.Prefs
-import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.mediaprojection.MediaProjectionMetricsLogger
+import com.android.systemui.mediaprojection.permission.BaseMediaProjectionPermissionContentManager
 import com.android.systemui.mediaprojection.permission.BaseMediaProjectionPermissionDialogDelegate
-import com.android.systemui.mediaprojection.permission.BaseMediaProjectionPermissionViewBinder
 import com.android.systemui.mediaprojection.permission.SINGLE_APP
 import com.android.systemui.mediaprojection.permission.ScreenShareMode
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
 import com.android.systemui.settings.UserContextProvider
+import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.statusbar.phone.SystemUIDialog
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -40,7 +39,7 @@ import dagger.assisted.AssistedInject
 class ScreenRecordPermissionDialogDelegate(
     private val hostUserHandle: UserHandle,
     private val hostUid: Int,
-    private val controller: RecordingController,
+    private val controller: ScreenRecordUxController,
     private val activityStarter: ActivityStarter,
     private val userContextProvider: UserContextProvider,
     private val onStartRecordingClicked: Runnable?,
@@ -52,7 +51,7 @@ class ScreenRecordPermissionDialogDelegate(
     private val displayManager: DisplayManager,
 ) :
     BaseMediaProjectionPermissionDialogDelegate<SystemUIDialog>(
-        ScreenRecordPermissionViewBinder.createOptionList(displayManager),
+        ScreenRecordPermissionContentManager.createOptionList(displayManager),
         appName = null,
         hostUid = hostUid,
         mediaProjectionMetricsLogger,
@@ -65,13 +64,13 @@ class ScreenRecordPermissionDialogDelegate(
     constructor(
         @Assisted hostUserHandle: UserHandle,
         @Assisted hostUid: Int,
-        @Assisted controller: RecordingController,
+        @Assisted controller: ScreenRecordUxController,
         activityStarter: ActivityStarter,
         userContextProvider: UserContextProvider,
         @Assisted onStartRecordingClicked: Runnable?,
         mediaProjectionMetricsLogger: MediaProjectionMetricsLogger,
         systemUIDialogFactory: SystemUIDialog.Factory,
-        @Application context: Context,
+        @ShadeDisplayAware context: Context,
         displayManager: DisplayManager,
     ) : this(
         hostUserHandle,
@@ -91,15 +90,15 @@ class ScreenRecordPermissionDialogDelegate(
     @AssistedFactory
     interface Factory {
         fun create(
-            recordingController: RecordingController,
+            controller: ScreenRecordUxController,
             hostUserHandle: UserHandle,
             hostUid: Int,
             onStartRecordingClicked: Runnable?,
         ): ScreenRecordPermissionDialogDelegate
     }
 
-    override fun createViewBinder(): BaseMediaProjectionPermissionViewBinder {
-        return ScreenRecordPermissionViewBinder(
+    override fun createContentManager(): BaseMediaProjectionPermissionContentManager {
+        return ScreenRecordPermissionContentManager(
             hostUserHandle,
             hostUid,
             mediaProjectionMetricsLogger,
@@ -121,15 +120,15 @@ class ScreenRecordPermissionDialogDelegate(
         setDialogTitle(R.string.screenrecord_permission_dialog_title)
         dialog.setTitle(R.string.screenrecord_title)
         setStartButtonOnClickListener { v: View? ->
-            val screenRecordViewBinder: ScreenRecordPermissionViewBinder? =
-                viewBinder as ScreenRecordPermissionViewBinder?
-            screenRecordViewBinder?.startButtonOnClicked()
+            val screenRecordContentManager: ScreenRecordPermissionContentManager? =
+                contentManager as ScreenRecordPermissionContentManager?
+            screenRecordContentManager?.startButtonOnClicked()
             dialog.dismiss()
         }
         dialog.setOnDismissListener { dialog ->
-            val screenRecordViewBinder: ScreenRecordPermissionViewBinder? =
-                viewBinder as ScreenRecordPermissionViewBinder?
-            screenRecordViewBinder?.savePreferences()
+            val screenRecordContentManager: ScreenRecordPermissionContentManager? =
+                contentManager as ScreenRecordPermissionContentManager?
+            screenRecordContentManager?.savePreferences()
         }
         setCancelButtonOnClickListener { dialog.dismiss() }
     }

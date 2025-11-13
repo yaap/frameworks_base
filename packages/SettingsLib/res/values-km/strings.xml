@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> មុន"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"នៅសល់ <xliff:g id="ID_1">%1$s</xliff:g>"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"តូចបំផុត"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"តូចជាង"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"តូច"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"លំនាំដើម"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"ធំ"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"ធំជាង"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"ធំបំផុត"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"ធំជាង"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"ធំខ្លាំង"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"ធំលើសធម្មតា"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"ធំបំផុត"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"ផ្ទាល់ខ្លួន (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"ម៉ឺនុយ"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"បញ្ចូល​ពាក្យ​សម្ងាត់ ដើម្បី​កំណត់ឧបករណ៍​​ឡើង​វិញ​ដូចពេលចេញ​ពី​រោងចក្រ នៅក្នុង​មុខងារ​សាកល្បង"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{បានភ្ជាប់ឧបករណ៍ 1}other{បានភ្ជាប់ឧបករណ៍ #}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"រយៈពេល​ច្រើន​ជាង។"</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"រយៈពេល​តិច​ជាង។"</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"ការ​ពង្រីក"</string>
     <string name="cancel" msgid="5665114069455378395">"បោះ​បង់​"</string>
     <string name="next" msgid="2699398661093607009">"បន្ទាប់"</string>
     <string name="back" msgid="5554327870352703710">"ថយក្រោយ"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"ប្រសិនបើអ្នក​ផ្សាយ <xliff:g id="SWITCHAPP">%1$s</xliff:g> ឬប្ដូរឧបករណ៍បញ្ចេញសំឡេង ការផ្សាយបច្ចុប្បន្នរបស់អ្នកនឹង​បញ្ឈប់"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"ការផ្សាយ <xliff:g id="SWITCHAPP">%1$s</xliff:g>"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"ប្ដូរឧបករណ៍បញ្ចេញសំឡេង"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"ចលនា​ថយក្រោយ​ដែល​ព្យាករ"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"បើក​ចលនា​ប្រព័ន្ធ​សម្រាប់​ការ​ថយក្រោយ​ព្យាករ។"</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"ការ​កំណត់នេះ​បើក​ចលនា​ប្រព័ន្ធ​សម្រាប់​ចលនាព្យាករ។ ចលនា​នេះ​ទាមទារ​ការ​កំណត់ enableOnBackInvokedCallback នៅ​ក្នុងកម្មវិធី​ទៅពិត​នៅ​ក្នុង​ឯកសារ​មេនីហ្វេសថ៍។"</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="not_specified" msgid="5423502443185110328">"មិនបានបញ្ជាក់"</string>
     <string name="neuter" msgid="2075249330106127310">"អភេទ"</string>

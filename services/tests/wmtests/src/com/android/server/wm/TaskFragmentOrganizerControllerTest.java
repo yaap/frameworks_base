@@ -90,6 +90,7 @@ import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.view.RemoteAnimationDefinition;
 import android.view.SurfaceControl;
@@ -246,8 +247,6 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
     @Test
     public void testOnTaskFragmentAppeared_systemOrganizer() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_TASK_FRAGMENT_SYSTEM_ORGANIZER_FLAG);
-
         mController.unregisterOrganizer(mIOrganizer);
         registerTaskFragmentOrganizer(mIOrganizer, true /* isSystemOrganizer */);
 
@@ -606,8 +605,6 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
     @Test
     public void testApplyTransaction_allowRemoteTransitionForSystemOrganizer() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_TASK_FRAGMENT_SYSTEM_ORGANIZER_FLAG);
-
         mController.unregisterOrganizer(mIOrganizer);
         registerTaskFragmentOrganizer(mIOrganizer, true /* isSystemOrganizer */);
 
@@ -1017,7 +1014,6 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
     @Test
     public void testApplyTransaction_createTaskFragment_overrideOrientation_systemOrganizer() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_TASK_FRAGMENT_SYSTEM_ORGANIZER_FLAG);
         mController.unregisterOrganizer(mIOrganizer);
         registerTaskFragmentOrganizer(mIOrganizer, true /* isSystemOrganizer */);
 
@@ -1120,6 +1116,7 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
         mTransaction.requestFocusOnTaskFragment(token0);
         assertApplyTransactionAllowed(mTransaction);
 
+        waitHandlerIdle(mWm.mAtmService.mH);
         assertEquals(activityInOtherTask, mDisplayContent.mFocusedApp);
 
         // No effect if there is no resumed activity in the request TaskFragment.
@@ -1128,6 +1125,7 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
         mDisplayContent.setFocusedApp(activity1);
         assertApplyTransactionAllowed(mTransaction);
 
+        waitHandlerIdle(mWm.mAtmService.mH);
         assertEquals(activity1, mDisplayContent.mFocusedApp);
 
         // Set focus to the request TaskFragment when the current focus is in the same Task, and it
@@ -1136,6 +1134,7 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
         mDisplayContent.setFocusedApp(activity1);
         assertApplyTransactionAllowed(mTransaction);
 
+        waitHandlerIdle(mWm.mAtmService.mH);
         assertEquals(activity0, mDisplayContent.mFocusedApp);
     }
 
@@ -1798,8 +1797,6 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
     @Test
     public void testApplyTransaction_reorderToBottomOfTask() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_TASK_FRAGMENT_SYSTEM_ORGANIZER_FLAG);
-
         mController.unregisterOrganizer(mIOrganizer);
         registerTaskFragmentOrganizer(mIOrganizer, true /* isSystemOrganizer */);
         final Task task = createTask(mDisplayContent);
@@ -1835,8 +1832,6 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
     @Test
     public void testApplyTransaction_reorderToTopOfTask() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_TASK_FRAGMENT_SYSTEM_ORGANIZER_FLAG);
-
         mController.unregisterOrganizer(mIOrganizer);
         registerTaskFragmentOrganizer(mIOrganizer, true /* isSystemOrganizer */);
         final Task task = createTask(mDisplayContent);
@@ -1872,8 +1867,6 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
     @Test
     public void testApplyTransaction_createTaskFragmentDecorSurface() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_TASK_FRAGMENT_SYSTEM_ORGANIZER_FLAG);
-
         final Task task = createTask(mDisplayContent);
         final TaskFragment tf = createTaskFragment(task);
         final TaskFragmentOperation operation = new TaskFragmentOperation.Builder(
@@ -1887,8 +1880,6 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
     @Test
     public void testApplyTransaction_removeTaskFragmentDecorSurface() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_TASK_FRAGMENT_SYSTEM_ORGANIZER_FLAG);
-
         final Task task = createTask(mDisplayContent);
         final TaskFragment tf = createTaskFragment(task);
 
@@ -1958,6 +1949,40 @@ public class TaskFragmentOrganizerControllerTest extends WindowTestsBase {
 
         assertTaskFragmentErrorTransaction(OP_TYPE_PRIVILEGED_SET_CAN_AFFECT_SYSTEM_UI_FLAGS,
                 SecurityException.class);
+    }
+
+    @EnableFlags(Flags.FLAG_FIX_SET_ADJACENT_TASK_FRAGMENTS_WITH_PARAMS)
+    @Test
+    public void testApplyTransaction_setAdjacentTaskFragments_withParams() {
+        final Task task = createTask(mDisplayContent);
+        mTaskFragment = new TaskFragmentBuilder(mAtm)
+                .setParentTask(task)
+                .setFragmentToken(mFragmentToken)
+                .setOrganizer(mOrganizer)
+                .build();
+        mWindowOrganizerController.mLaunchTaskFragments.put(mFragmentToken, mTaskFragment);
+        final IBinder fragmentToken2 = new Binder();
+        final TaskFragment taskFragment2 = new TaskFragmentBuilder(mAtm)
+                .setParentTask(task)
+                .setFragmentToken(fragmentToken2)
+                .setOrganizer(mOrganizer)
+                .build();
+        mWindowOrganizerController.mLaunchTaskFragments.put(fragmentToken2, taskFragment2);
+
+        assertFalse(mTaskFragment.isDelayLastActivityRemoval());
+        assertFalse(taskFragment2.isDelayLastActivityRemoval());
+
+        final WindowContainerTransaction.TaskFragmentAdjacentParams params =
+                new WindowContainerTransaction.TaskFragmentAdjacentParams();
+        params.setShouldDelayPrimaryLastActivityRemoval(true);
+        params.setShouldDelaySecondaryLastActivityRemoval(true);
+        mTransaction.setAdjacentTaskFragments(mFragmentToken, fragmentToken2, params);
+        mOrganizer.applyTransaction(mTransaction, TASK_FRAGMENT_TRANSIT_CHANGE,
+                false /* shouldApplyIndependently */);
+
+        assertApplyTransactionAllowed(mTransaction);
+        assertTrue(mTaskFragment.isDelayLastActivityRemoval());
+        assertTrue(taskFragment2.isDelayLastActivityRemoval());
     }
 
     @NonNull

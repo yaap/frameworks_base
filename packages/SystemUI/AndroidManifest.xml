@@ -409,6 +409,7 @@
     <protected-broadcast android:name="com.android.settingslib.action.UNREGISTER_SLICE_RECEIVER" />
     <protected-broadcast android:name="com.android.settings.flashlight.action.FLASHLIGHT_CHANGED" />
     <protected-broadcast android:name="com.android.systemui.action.ACTION_LAUNCH_MEDIA_OUTPUT_BROADCAST_DIALOG" />
+    <protected-broadcast android:name="com.android.systemui.action.LAUNCH_MEDIA_OUTPUT_DIALOG" />
     <protected-broadcast android:name="com.android.systemui.STARTED" />
 
     <!-- Smartspace -->
@@ -554,6 +555,8 @@
             android:exported="true"
             android:singleUser="true"
             android:permission="android.permission.LAUNCH_CAPTURE_CONTENT_ACTIVITY_FOR_NOTE" />
+
+        <service android:name=".screenrecord.service.ScreenRecordingService" />
 
         <service android:name=".screenrecord.RecordingService"
             android:foregroundServiceType="systemExempted"
@@ -1213,7 +1216,7 @@
         <receiver android:name=".statusbar.GamingStopBroadcastReceiver"
                   android:exported="false" />
 
-	<service
+        <service
             android:name="com.google.android.systemui.lowlightclock.LowLightClockDreamService"
             android:enabled="false"
             android:exported="false"
@@ -1224,5 +1227,11 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
+
+        <service android:name=".selectiontoolbar.app.service.SysUiSelectionToolbarRenderService"
+            android:permission="android.permission.BIND_SELECTION_TOOLBAR_RENDER_SERVICE"
+            android:exported="true"
+            />
+
     </application>
 </manifest>

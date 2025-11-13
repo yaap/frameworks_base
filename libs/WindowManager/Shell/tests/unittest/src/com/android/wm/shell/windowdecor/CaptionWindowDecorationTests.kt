@@ -56,7 +56,9 @@ class CaptionWindowDecorationTests : ShellTestCase() {
             false /* isKeyguardVisibleAndOccluded */,
             InsetsState(),
             true /* hasGlobalFocus */,
-            exclusionRegion
+            exclusionRegion,
+            false /* shouldSetBackground */,
+            /* inSyncWithTransition= */ true
         )
 
         Truth.assertThat(relayoutParams.hasInputFeatureSpy()).isTrue()
@@ -80,7 +82,9 @@ class CaptionWindowDecorationTests : ShellTestCase() {
             false /* isKeyguardVisibleAndOccluded */,
             InsetsState(),
             true /* hasGlobalFocus */,
-            exclusionRegion
+            exclusionRegion,
+            false /* shouldSetBackground */,
+            /* inSyncWithTransition= */ true
         )
 
         Truth.assertThat(relayoutParams.hasInputFeatureSpy()).isFalse()
@@ -100,7 +104,9 @@ class CaptionWindowDecorationTests : ShellTestCase() {
             false /* isKeyguardVisibleAndOccluded */,
             InsetsState(),
             true /* hasGlobalFocus */,
-            exclusionRegion
+            exclusionRegion,
+            false /* shouldSetBackground */,
+            /* inSyncWithTransition= */ true
         )
         Truth.assertThat(relayoutParams.mOccludingCaptionElements.size).isEqualTo(2)
         Truth.assertThat(relayoutParams.mOccludingCaptionElements[0].mAlignment).isEqualTo(

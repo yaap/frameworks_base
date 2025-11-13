@@ -20,7 +20,10 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Bundle
-import androidx.lifecycle.LifecycleCoroutineScope
+import androidx.activity.result.ActivityResultCallback
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.fragment.app.FragmentManager
 import com.android.settingslib.datastore.KeyValueStore
 import kotlinx.coroutines.CoroutineScope
 
@@ -33,6 +36,18 @@ interface PreferenceTitleProvider {
 
     /** Provides preference title. */
     fun getTitle(context: Context): CharSequence?
+}
+
+/**
+ * Provides preference title to be shown in search result.
+ *
+ * This is used to add more context to the title, and it is effective only when building indexable
+ * data in [PreferenceSearchIndexablesProvider].
+ */
+interface PreferenceIndexableTitleProvider {
+
+    /** Provides preference indexable title. */
+    fun getIndexableTitle(context: Context): CharSequence?
 }
 
 /**
@@ -57,14 +72,17 @@ interface PreferenceIconProvider {
     fun getIcon(context: Context): Int
 }
 
-/**
- * Interface to provide the state of preference availability.
- *
- * UI framework normally does not show the preference widget if it is unavailable.
- */
+/** Interface to provide the state of preference availability. */
 interface PreferenceAvailabilityProvider {
 
-    /** Returns if the preference is available. */
+    /**
+     * Returns if the preference is available.
+     *
+     * When unavailable (i.e. `false` returned),
+     * - UI framework normally does not show the preference widget.
+     * - If it is a preference screen, all children may be disabled (depends on UI framework
+     *   implementation).
+     */
     fun isAvailable(context: Context): Boolean
 }
 
@@ -81,9 +99,11 @@ interface PreferenceRestrictionProvider {
 }
 
 /**
- * Preference lifecycle to deal with preference state.
+ * Preference lifecycle to deal with preference UI state.
  *
- * Implement this interface when preference depends on runtime conditions.
+ * Implement this interface when preference depends on runtime conditions for UI update. Note that
+ * [PreferenceMetadata] could be created for UI (shown in UI widget) or background (e.g. external
+ * Get/Set), callbacks in this interface will ONLY be invoked when it is for UI.
  */
 interface PreferenceLifecycleProvider {
 
@@ -146,7 +166,23 @@ abstract class PreferenceLifecycleContext(context: Context) : ContextWrapper(con
      *
      * @see [androidx.lifecycle.lifecycleScope]
      */
-    abstract val lifecycleScope: LifecycleCoroutineScope
+    abstract val lifecycleScope: CoroutineScope
+
+    /**
+     * Return the [FragmentManager] for interacting with fragments associated with current
+     * fragment's activity.
+     *
+     * @see [androidx.fragment.app.Fragment.getParentFragmentManager]
+     */
+    abstract val fragmentManager: FragmentManager
+
+    /**
+     * Return a private `FragmentManager` for placing and managing Fragments inside of current
+     * Fragment.
+     *
+     * @see [androidx.fragment.app.Fragment.getChildFragmentManager]
+     */
+    abstract val childFragmentManager: FragmentManager
 
     /** Returns the preference widget object associated with given key. */
     abstract fun <T> findPreference(key: String): T?
@@ -165,10 +201,28 @@ abstract class PreferenceLifecycleContext(context: Context) : ContextWrapper(con
     abstract fun notifyPreferenceChange(key: String)
 
     /**
+     * Switches preference hierarchy to given type, the screen metadata must implement
+     * `PreferenceHierarchyGenerator`.
+     */
+    open fun switchPreferenceHierarchy(type: Any?): Unit = TODO()
+
+    /**
      * Starts activity for result, see [android.app.Activity.startActivityForResult].
      *
      * This API can be invoked by any preference, the caller must ensure the request code is unique
      * on the preference screen.
      */
     abstract fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?)
+
+    /**
+     * Register a request to start an activity, see [androidx.activity.result.ActivityResultCaller].
+     *
+     * Because this must be called unconditionally as part of the initialization path of the
+     * Fragment, this API can only be invoked by a preference during
+     * [PreferenceLifecycleProvider.onCreate].
+     */
+    abstract fun <I, O> registerForActivityResult(
+        contract: ActivityResultContract<I, O>,
+        callback: ActivityResultCallback<O>,
+    ): ActivityResultLauncher<I>
 }

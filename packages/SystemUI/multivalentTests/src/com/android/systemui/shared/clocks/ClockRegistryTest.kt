@@ -27,6 +27,7 @@ import com.android.systemui.plugins.PluginListener
 import com.android.systemui.plugins.PluginManager
 import com.android.systemui.plugins.clocks.ClockAxisStyle
 import com.android.systemui.plugins.clocks.ClockController
+import com.android.systemui.plugins.clocks.ClockEventListeners
 import com.android.systemui.plugins.clocks.ClockId
 import com.android.systemui.plugins.clocks.ClockMessageBuffers
 import com.android.systemui.plugins.clocks.ClockMetadata
@@ -36,7 +37,6 @@ import com.android.systemui.plugins.clocks.ClockSettings
 import com.android.systemui.util.ThreadAssert
 import com.android.systemui.util.mockito.argumentCaptor
 import com.android.systemui.util.mockito.eq
-import java.util.function.BiConsumer
 import junit.framework.Assert.assertEquals
 import junit.framework.Assert.fail
 import kotlinx.coroutines.CoroutineDispatcher
@@ -109,8 +109,6 @@ class ClockRegistryTest : SysuiTestCase() {
 
         override fun getComponentName(): ComponentName = mComponentName
 
-        override fun setLogFunc(func: BiConsumer<String, String>) {}
-
         override fun loadPlugin() {
             if (!mIsLoaded) {
                 mIsLoaded = true
@@ -133,7 +131,7 @@ class ClockRegistryTest : SysuiTestCase() {
 
         override fun getClocks() = metadata
 
-        override fun createClock(settings: ClockSettings): ClockController {
+        override fun createClock(ctx: Context, settings: ClockSettings): ClockController {
             val clockId = settings.clockId ?: throw IllegalArgumentException("No clockId specified")
             return createCallbacks[clockId]?.invoke(clockId)
                 ?: throw NotImplementedError("No callback for '$clockId'")
@@ -176,6 +174,7 @@ class ClockRegistryTest : SysuiTestCase() {
         fakeDefaultProvider =
             FakeClockPlugin().addClock(DEFAULT_CLOCK_ID, { mockDefaultClock }, { pickerConfig })
         whenever(mockContext.contentResolver).thenReturn(mockContentResolver)
+        whenever(mockClock.eventListeners).thenReturn(ClockEventListeners())
 
         val captor = argumentCaptor<PluginListener<ClockProviderPlugin>>()
         registry =
@@ -243,7 +242,7 @@ class ClockRegistryTest : SysuiTestCase() {
 
     @Test
     fun noPlugins_createDefaultClock() {
-        val clock = registry.createCurrentClock()
+        val clock = registry.createCurrentClock(mockContext)
         assertEquals(mockDefaultClock, clock)
     }
 
@@ -270,8 +269,8 @@ class ClockRegistryTest : SysuiTestCase() {
             list.toSet(),
         )
 
-        assertEquals(mockClock, registry.createExampleClock("clock_1"))
-        assertEquals(mockClock, registry.createExampleClock("clock_2"))
+        assertEquals(mockClock, registry.createExampleClock(mockContext, "clock_1"))
+        assertEquals(mockClock, registry.createExampleClock(mockContext, "clock_2"))
         assertEquals(pickerConfig, registry.getClockPickerConfig("clock_1"))
         assertEquals(pickerConfig, registry.getClockPickerConfig("clock_2"))
         verify(lifecycle1, never()).unloadPlugin()
@@ -290,7 +289,7 @@ class ClockRegistryTest : SysuiTestCase() {
         pluginListener.onPluginLoaded(plugin1, mockContext, lifecycle1)
         pluginListener.onPluginLoaded(plugin2, mockContext, lifecycle2)
 
-        val clock = registry.createCurrentClock()
+        val clock = registry.createCurrentClock(mockContext)
         assertEquals(mockClock, clock)
     }
 
@@ -324,7 +323,7 @@ class ClockRegistryTest : SysuiTestCase() {
         pluginListener.onPluginLoaded(plugin2, mockContext, lifecycle2)
         pluginListener.onPluginUnloaded(plugin2, lifecycle2)
 
-        val clock = registry.createCurrentClock()
+        val clock = registry.createCurrentClock(mockContext)
         assertEquals(mockDefaultClock, clock)
     }
 

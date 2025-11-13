@@ -874,29 +874,38 @@ public class UsbDeviceManager implements ActivityTaskManagerInternal.ScreenObser
                 // successfully entered accessory mode
                 String[] accessoryStrings = mUsbDeviceManager.getAccessoryStrings();
                 if (accessoryStrings != null) {
-                    UsbSerialReader serialReader = new UsbSerialReader(mContext, mPermissionManager,
-                            accessoryStrings[UsbAccessory.SERIAL_STRING]);
+                    if (accessoryStrings[UsbAccessory.MANUFACTURER_STRING] != null
+                            && accessoryStrings[UsbAccessory.MODEL_STRING] != null) {
+                        UsbSerialReader serialReader =
+                                new UsbSerialReader(
+                                        mContext,
+                                        mPermissionManager,
+                                        accessoryStrings[UsbAccessory.SERIAL_STRING]);
 
-                    mCurrentAccessory = new UsbAccessory(
-                            accessoryStrings[UsbAccessory.MANUFACTURER_STRING],
-                            accessoryStrings[UsbAccessory.MODEL_STRING],
-                            accessoryStrings[UsbAccessory.DESCRIPTION_STRING],
-                            accessoryStrings[UsbAccessory.VERSION_STRING],
-                            accessoryStrings[UsbAccessory.URI_STRING],
-                            serialReader);
+                        mCurrentAccessory =
+                                new UsbAccessory(
+                                        accessoryStrings[UsbAccessory.MANUFACTURER_STRING],
+                                        accessoryStrings[UsbAccessory.MODEL_STRING],
+                                        accessoryStrings[UsbAccessory.DESCRIPTION_STRING],
+                                        accessoryStrings[UsbAccessory.VERSION_STRING],
+                                        accessoryStrings[UsbAccessory.URI_STRING],
+                                        serialReader);
 
-                    serialReader.setDevice(mCurrentAccessory);
+                        serialReader.setDevice(mCurrentAccessory);
 
-                    Slog.d(TAG, "entering USB accessory mode: " + mCurrentAccessory);
-                    // defer accessoryAttached if system is not ready
-                    if (!Flags.checkUserActionUnlocked() && mBootCompleted) {
-                        attachAccessory();
+                        Slog.d(TAG, "entering USB accessory mode: " + mCurrentAccessory);
+                        // defer accessoryAttached if system is not ready
+                        if (!Flags.checkUserActionUnlocked() && mBootCompleted) {
+                            attachAccessory();
+                        }
+                        // Defer accessoryAttached till user unlocks after boot.
+                        // When no pin pattern is set, ACTION_USER_UNLOCKED would fire anyways
+                        if (Flags.checkUserActionUnlocked() && mUserUnlockedAfterBoot) {
+                            attachAccessory();
+                        } // else handle in boot completed
+                    } else {
+                        Slog.e(TAG, "expected non-null accessory strings are null");
                     }
-                    // Defer accessoryAttached till user unlocks after boot.
-                    // When no pin pattern is set, ACTION_USER_UNLOCKED would fire anyways
-                    if (Flags.checkUserActionUnlocked() && mUserUnlockedAfterBoot) {
-                        attachAccessory();
-                    } // else handle in boot completed
                 } else {
                     Slog.e(TAG, "nativeGetAccessoryStrings failed");
                 }
@@ -2498,19 +2507,6 @@ public class UsbDeviceManager implements ActivityTaskManagerInternal.ScreenObser
                     return;
                 }
                 try {
-                    if ((config & UsbManager.FUNCTION_ADB) != 0) {
-                        /**
-                         * Start adbd if ADB function is included in the configuration.
-                         */
-                        LocalServices.getService(AdbManagerInternal.class)
-                                .startAdbdForTransport(AdbTransportType.USB);
-                    } else {
-                        /**
-                         * Stop adbd otherwise
-                         */
-                        LocalServices.getService(AdbManagerInternal.class)
-                                .stopAdbdForTransport(AdbTransportType.USB);
-                    }
                     mUsbGadgetHal.setCurrentUsbFunctions(mCurrentRequest,
                             config, chargingFunctions,
                             SET_FUNCTIONS_TIMEOUT_MS - SET_FUNCTIONS_LEEWAY_MS, operationId);

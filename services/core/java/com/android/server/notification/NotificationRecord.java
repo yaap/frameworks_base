@@ -15,10 +15,6 @@
  */
 package com.android.server.notification;
 
-import static android.app.Flags.restrictAudioAttributesAlarm;
-import static android.app.Flags.restrictAudioAttributesCall;
-import static android.app.Flags.restrictAudioAttributesMedia;
-import static android.app.Flags.sortSectionByTime;
 import static android.app.NotificationChannel.USER_LOCKED_IMPORTANCE;
 import static android.app.NotificationManager.IMPORTANCE_DEFAULT;
 import static android.app.NotificationManager.IMPORTANCE_HIGH;
@@ -227,6 +223,10 @@ public final class NotificationRecord {
     private @Adjustment.Types int mBundleType = Adjustment.TYPE_OTHER;
 
     private String mSummarization = null;
+
+    // If this notification was unclassified, whether the notification's original group summary
+    // was present at the time of unclassification.
+    private boolean mHadGroupSummaryWhenUnclassified = false;
 
     public NotificationRecord(Context context, StatusBarNotification sbn,
             NotificationChannel channel) {
@@ -601,6 +601,9 @@ public final class NotificationRecord {
                 + " found valid? " + (mShortcutInfo != null));
         pw.println(prefix + "mUserVisOverride=" + getPackageVisibilityOverride());
         pw.println(prefix + "hasSummarization=" + (mSummarization != null));
+        if (android.service.notification.Flags.notificationClassification()) {
+            pw.println(prefix + "bundleType=" + getBundleType());
+        }
     }
 
     private void dumpNotification(PrintWriter pw, String prefix, Notification notification,
@@ -815,13 +818,20 @@ public final class NotificationRecord {
                             Adjustment.KEY_SENSITIVE_CONTENT,
                             Boolean.toString(mSensitiveContent));
                 }
-                if (android.service.notification.Flags.notificationClassification()
-                        && signals.containsKey(Adjustment.KEY_TYPE)) {
-                    updateNotificationChannel(signals.getParcelable(Adjustment.KEY_TYPE,
-                            NotificationChannel.class));
-                    EventLogTags.writeNotificationAdjusted(getKey(),
-                            Adjustment.KEY_TYPE,
-                            mChannel.getId());
+                if (android.service.notification.Flags.notificationClassification()) {
+                    if (signals.containsKey(Adjustment.KEY_TYPE)) {
+                        updateNotificationChannel(signals.getParcelable(Adjustment.KEY_TYPE,
+                                NotificationChannel.class));
+                        EventLogTags.writeNotificationAdjusted(getKey(),
+                                Adjustment.KEY_TYPE,
+                                mChannel.getId());
+                    }
+                    if (signals.containsKey(Adjustment.KEY_UNCLASSIFY)) {
+                        updateNotificationChannel(signals.getParcelable(Adjustment.KEY_UNCLASSIFY,
+                                NotificationChannel.class));
+                        EventLogTags.writeNotificationAdjusted(getKey(),
+                                Adjustment.KEY_UNCLASSIFY, mChannel.getId());
+                    }
                 }
                 if ((android.app.Flags.nmSummarizationUi() || android.app.Flags.nmSummarization())
                         && signals.containsKey(KEY_SUMMARIZATION)) {
@@ -1156,14 +1166,8 @@ public final class NotificationRecord {
     private long calculateRankingTimeMs(long previousRankingTimeMs) {
         Notification n = getNotification();
         // Take developer provided 'when', unless it's in the future.
-        if (sortSectionByTime()) {
-            if (n.hasAppProvidedWhen() && n.getWhen() <= getSbn().getPostTime()){
-                return n.getWhen();
-            }
-        } else {
-            if (n.when != 0 && n.when <= getSbn().getPostTime()) {
-                return n.when;
-            }
+        if (n.hasAppProvidedWhen() && n.getWhen() <= getSbn().getPostTime()){
+            return n.getWhen();
         }
         // If we've ranked a previous instance with a timestamp, inherit it. This case is
         // important in order to have ranking stability for updating notifications.
@@ -1242,13 +1246,10 @@ public final class NotificationRecord {
             calculateImportance();
             calculateUserSentiment();
             mVibration = calculateVibration();
-            if (restrictAudioAttributesCall() || restrictAudioAttributesAlarm()
-                    || restrictAudioAttributesMedia()) {
-                if (channel.getAudioAttributes() != null) {
-                    mAttributes = channel.getAudioAttributes();
-                } else {
-                    mAttributes = Notification.AUDIO_ATTRIBUTES_DEFAULT;
-                }
+            if (channel.getAudioAttributes() != null) {
+                mAttributes = channel.getAudioAttributes();
+            } else {
+                mAttributes = Notification.AUDIO_ATTRIBUTES_DEFAULT;
             }
         }
     }
@@ -1290,9 +1291,7 @@ public final class NotificationRecord {
     }
 
     public void resetRankingTime() {
-        if (sortSectionByTime()) {
-            mRankingTimeMs = calculateRankingTimeMs(getSbn().getPostTime());
-        }
+        mRankingTimeMs = calculateRankingTimeMs(getSbn().getPostTime());
     }
 
     public void setInterruptive(boolean interruptive) {
@@ -1677,6 +1676,14 @@ public final class NotificationRecord {
 
     public void setBundleType(@Adjustment.Types int bundleType) {
         mBundleType = bundleType;
+    }
+
+    public boolean hadGroupSummaryWhenUnclassified() {
+        return mHadGroupSummaryWhenUnclassified;
+    }
+
+    public void setHadGroupSummaryWhenUnclassified(boolean exists) {
+        mHadGroupSummaryWhenUnclassified = exists;
     }
 
     /**

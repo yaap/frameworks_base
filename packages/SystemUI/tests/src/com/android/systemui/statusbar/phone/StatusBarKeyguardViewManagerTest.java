@@ -40,7 +40,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.platform.test.annotations.DisableFlags;
-import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.testing.TestableLooper;
@@ -193,7 +192,7 @@ public class StatusBarKeyguardViewManagerTest extends SysuiTestCase {
     public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @Before
-    @DisableFlags(com.android.systemui.Flags.FLAG_KEYGUARD_WM_STATE_REFACTOR)
+    @DisableFlags(Flags.FLAG_KEYGUARD_WM_STATE_REFACTOR)
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         when(mContainer.findViewById(anyInt())).thenReturn(mKeyguardMessageArea);
@@ -846,18 +845,6 @@ public class StatusBarKeyguardViewManagerTest extends SysuiTestCase {
 
     @Test
     @DisableSceneContainer
-    @DisableFlags(Flags.FLAG_SIM_PIN_RACE_CONDITION_ON_RESTART)
-    public void testShowBouncerOrKeyguard_needsFullScreen() {
-        when(mKeyguardSecurityModel.getSecurityMode(anyInt())).thenReturn(
-                KeyguardSecurityModel.SecurityMode.SimPin);
-        mStatusBarKeyguardViewManager.showBouncerOrKeyguard(false, false, TEST_REASON);
-        verify(mCentralSurfaces).hideKeyguard();
-        verify(mPrimaryBouncerInteractor).show(true, TEST_REASON);
-    }
-
-    @Test
-    @DisableSceneContainer
-    @EnableFlags(Flags.FLAG_SIM_PIN_RACE_CONDITION_ON_RESTART)
     public void testShowBouncerOrKeyguard_showsKeyguardIfShowBouncerReturnsFalse() {
         when(mKeyguardSecurityModel.getSecurityMode(anyInt())).thenReturn(
                 KeyguardSecurityModel.SecurityMode.SimPin);
@@ -878,7 +865,6 @@ public class StatusBarKeyguardViewManagerTest extends SysuiTestCase {
 
     @Test
     @DisableSceneContainer
-    @EnableFlags(Flags.FLAG_SIM_PIN_RACE_CONDITION_ON_RESTART)
     public void testShowBouncerOrKeyguard_showsKeyguardIfSleeping() {
         when(mKeyguardTransitionInteractor.getTransitionState().getValue().getTo())
                 .thenReturn(KeyguardState.LOCKSCREEN);
@@ -934,6 +920,7 @@ public class StatusBarKeyguardViewManagerTest extends SysuiTestCase {
     }
 
     @Test
+    @DisableSceneContainer
     public void altBouncerNotVisible_keyguardAuthenticatedBiometricsHandled() {
         clearInvocations(mAlternateBouncerInteractor);
         when(mAlternateBouncerInteractor.isVisibleState()).thenReturn(false);
@@ -942,6 +929,7 @@ public class StatusBarKeyguardViewManagerTest extends SysuiTestCase {
     }
 
     @Test
+    @DisableSceneContainer
     public void altBouncerVisible_keyguardAuthenticatedBiometricsHandled() {
         clearInvocations(mAlternateBouncerInteractor);
         when(mAlternateBouncerInteractor.isVisibleState()).thenReturn(true);
@@ -950,6 +938,7 @@ public class StatusBarKeyguardViewManagerTest extends SysuiTestCase {
     }
 
     @Test
+    @DisableSceneContainer
     public void fromAlternateBouncerTransitionStep() {
         clearInvocations(mAlternateBouncerInteractor);
         mStatusBarKeyguardViewManager.consumeFromAlternateBouncerTransitionSteps(

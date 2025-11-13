@@ -38,52 +38,32 @@ public final class FgThread extends ServiceThread {
     private static final long SLOW_DISPATCH_THRESHOLD_MS = 100;
     private static final long SLOW_DELIVERY_THRESHOLD_MS = 200;
 
-    private static volatile FgThread sInstance;
-    private static volatile Handler sHandler;
-    private static volatile HandlerExecutor sHandlerExecutor;
+    private static final class NoPreloadHolder {
+        private static final FgThread sInstance = new FgThread();
+    }
+
+    private final Handler mHandler;
+    private final HandlerExecutor mHandlerExecutor;
 
     private FgThread() {
         super("android.fg", android.os.Process.THREAD_PRIORITY_DEFAULT, true /*allowIo*/);
-    }
-
-    private static void ensureThreadLocked() {
-        if (sInstance == null) {
-            FgThread thread = new FgThread();
-            thread.start();
-            final Looper looper = thread.getLooper();
-            looper.setTraceTag(Trace.TRACE_TAG_SYSTEM_SERVER);
-            looper.setSlowLogThresholdMs(
-                    SLOW_DISPATCH_THRESHOLD_MS, SLOW_DELIVERY_THRESHOLD_MS);
-            sInstance = thread;
-            sHandler = makeSharedHandler(looper);
-            sHandlerExecutor = new HandlerExecutor(sHandler);
-        }
+        start();
+        final Looper looper = getLooper();
+        looper.setTraceTag(Trace.TRACE_TAG_SYSTEM_SERVER);
+        looper.setSlowLogThresholdMs(SLOW_DISPATCH_THRESHOLD_MS, SLOW_DELIVERY_THRESHOLD_MS);
+        mHandler = makeSharedHandler(looper);
+        mHandlerExecutor = new HandlerExecutor(mHandler);
     }
 
     public static FgThread get() {
-        if (sInstance == null) {
-            synchronized (FgThread.class) {
-                ensureThreadLocked();
-            }
-        }
-        return sInstance;
+        return NoPreloadHolder.sInstance;
     }
 
     public static Handler getHandler() {
-        if (sHandler == null) {
-            synchronized (FgThread.class) {
-                ensureThreadLocked();
-            }
-        }
-        return sHandler;
+        return NoPreloadHolder.sInstance.mHandler;
     }
 
     public static Executor getExecutor() {
-        if (sHandlerExecutor == null) {
-            synchronized (FgThread.class) {
-                ensureThreadLocked();
-            }
-        }
-        return sHandlerExecutor;
+        return NoPreloadHolder.sInstance.mHandlerExecutor;
     }
 }

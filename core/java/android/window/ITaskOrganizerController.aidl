@@ -46,7 +46,8 @@ interface ITaskOrganizerController {
     * {@link WindowContainerTransaction#removeRootTask}.
     */
     void createRootTask(int displayId, int windowingMode, IBinder launchCookie,
-            boolean removeWithTaskOrganizer);
+            boolean removeWithTaskOrganizer, boolean reparentOnDisplayRemoval,
+            in @nullable String name);
 
     /** Deletes a persistent root task in WM */
     boolean deleteRootTask(in WindowContainerToken task);
@@ -58,15 +59,11 @@ interface ITaskOrganizerController {
     /** Gets all root tasks on a display (ordered from top-to-bottom) */
     List<ActivityManager.RunningTaskInfo> getRootTasks(int displayId, in int[] activityTypes);
 
-    /** Get the {@link WindowContainerToken} of the task which contains the current ime target */
-    WindowContainerToken getImeTarget(int display);
-
     /**
-     * Requests that the given task organizer is notified when back is pressed on the root activity
-     * of one of its controlled tasks.
+     * Get the {@link WindowContainerToken} of the task which contains the current IME layering
+     * target
      */
-    void setInterceptBackPressedOnTaskRoot(in WindowContainerToken task,
-            boolean interceptBackPressed);
+    @nullable WindowContainerToken getImeLayeringTarget(int display);
 
     /**
      * Restarts the top activity in the given task by killing its process if it is visible.

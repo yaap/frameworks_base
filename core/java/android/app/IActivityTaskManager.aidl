@@ -72,6 +72,7 @@ import android.view.IRemoteAnimationRunner;
 import android.view.RemoteAnimationDefinition;
 import android.view.RemoteAnimationAdapter;
 import android.window.IWindowOrganizerController;
+import android.window.ITaskSnapshotManager;
 import android.window.BackAnimationAdapter;
 import android.window.BackNavigationInfo;
 import android.window.SplashScreenView;
@@ -137,6 +138,7 @@ interface IActivityTaskManager {
 
     boolean isActivityStartAllowedOnDisplay(int displayId, in Intent intent, in String resolvedType,
             int userId);
+    boolean isTaskMoveAllowedOnDisplay(int displayId);
 
     void unhandledBack();
 
@@ -246,6 +248,10 @@ interface IActivityTaskManager {
 
     /** Returns an interface enabling the management of window organizers. */
     IWindowOrganizerController getWindowOrganizerController();
+
+    /** Returns an interface enabling the access of task snapshots. */
+    @EnforcePermission(allOf={"MANAGE_ACTIVITY_TASKS", "READ_FRAME_BUFFER"})
+    ITaskSnapshotManager getTaskSnapshotManager();
 
     boolean supportsLocalVoiceInteraction();
 
@@ -369,11 +375,6 @@ interface IActivityTaskManager {
             in RemoteCallback navigationObserver, in BackAnimationAdapter adaptor);
 
     /**
-     * Registers a callback to be invoked when the system server requests a back gesture.
-     */
-    void registerBackGestureDelegate(in RemoteCallback monitor);
-
-    /**
      * registers a callback to be invoked when a background activity launch is aborted.
      *
      * @param observer callback to be registered.
@@ -408,4 +409,14 @@ interface IActivityTaskManager {
      * @hide
      */
     void unregisterScreenCaptureObserver(IBinder activityToken, IScreenCaptureObserver observer);
+
+    /**
+    * Move the task to the top/ bottom of the activity stack of specific display
+    *
+    * @param taskId Id of the task that has to be moved
+    * @param displayId Id of the display to which it has to be moved
+    * @param onTop defines the task has to be moved on top or bottom of the stack
+    * @hide
+    */
+    void moveRootTaskToDisplayOnTopOrBottom(int taskId, int displayId, boolean onTop);
 }

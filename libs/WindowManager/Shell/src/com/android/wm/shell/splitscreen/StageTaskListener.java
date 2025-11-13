@@ -17,8 +17,11 @@
 package com.android.wm.shell.splitscreen;
 
 import static android.app.ActivityTaskManager.INVALID_TASK_ID;
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.app.WindowConfiguration.WINDOWING_MODE_MULTI_WINDOW;
 import static android.app.WindowConfiguration.WINDOWING_MODE_UNDEFINED;
+import static android.content.res.Configuration.SCREEN_HEIGHT_DP_UNDEFINED;
+import static android.content.res.Configuration.SCREEN_WIDTH_DP_UNDEFINED;
 import static android.content.res.Configuration.SMALLEST_SCREEN_WIDTH_DP_UNDEFINED;
 import static android.view.RemoteAnimationTarget.MODE_OPENING;
 
@@ -39,6 +42,7 @@ import android.os.IBinder;
 import android.util.SparseArray;
 import android.view.RemoteAnimationTarget;
 import android.view.SurfaceControl;
+import android.window.TaskOrganizer;
 import android.window.WindowContainerToken;
 import android.window.WindowContainerTransaction;
 
@@ -55,9 +59,13 @@ import com.android.wm.shell.splitscreen.SplitScreen.StageType;
 import com.android.wm.shell.windowdecor.WindowDecorViewModel;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Base class that handle common task org. related for split-screen stages.
@@ -78,14 +86,17 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
     @StageType private final int mId;
     /** Callback interface for listening to changes in a split-screen stage. */
     public interface StageListenerCallbacks {
-        void onRootTaskAppeared();
+        /** Called when the root task on current display appears. */
+        void onRootTaskAppeared(ActivityManager.RunningTaskInfo taskInfo);
 
         void onStageVisibilityChanged(StageTaskListener stageTaskListener);
 
         void onChildTaskStatusChanged(StageTaskListener stage, int taskId, boolean present,
                 boolean visible);
 
-        void onRootTaskVanished();
+
+        /** Called when the root task on current display vanishes. */
+        void onRootTaskVanished(ActivityManager.RunningTaskInfo taskInfo);
 
         void onNoLongerSupportMultiWindow(StageTaskListener stageTaskListener,
                 ActivityManager.RunningTaskInfo taskInfo);
@@ -120,7 +131,12 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
         mSyncQueue = syncQueue;
         mIconProvider = iconProvider;
         mWindowDecorViewModel = windowDecorViewModel;
-        taskOrganizer.createRootTask(displayId, WINDOWING_MODE_MULTI_WINDOW, this);
+        taskOrganizer.createRootTask(
+                new TaskOrganizer.CreateRootTaskRequest()
+                        .setName(stageTypeToString(id).toLowerCase())
+                        .setDisplayId(displayId)
+                        .setWindowingMode(WINDOWING_MODE_MULTI_WINDOW),
+                this);
         mId = id;
     }
 
@@ -149,6 +165,16 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
         final ActivityManager.RunningTaskInfo taskInfo = getChildTaskInfo(t -> t.isVisible
                 && t.isVisibleRequested);
         return taskInfo != null ? taskInfo.taskId : INVALID_TASK_ID;
+    }
+
+    /**
+     * Returns all visible child task's ids.
+     */
+    List<Integer> getAllVisibleChildTaskIds() {
+        return getAllChildTaskInfos(t -> t.isVisible
+                && t.isVisibleRequested && t.taskId != INVALID_TASK_ID).stream()
+                .map(runningTaskInfo -> runningTaskInfo.taskId)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -191,6 +217,14 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
         return mSplitDecorManager;
     }
 
+    /**
+     * Gets the leash for this task's dim layer. We manipulate this surface's alpha to dim the app
+     * when it's moving offscreen or toward dismissal.
+     */
+    public SurfaceControl getDimLayer() {
+        return mDimLayer;
+    }
+
     @Nullable
     private ActivityManager.RunningTaskInfo getChildTaskInfo(
             Predicate<ActivityManager.RunningTaskInfo> predicate) {
@@ -201,6 +235,18 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
             }
         }
         return null;
+    }
+
+    private List<ActivityManager.RunningTaskInfo> getAllChildTaskInfos(
+            Predicate<ActivityManager.RunningTaskInfo> predicate) {
+        List<ActivityManager.RunningTaskInfo> matchingTasks = new ArrayList<>();
+        for (int i = mChildrenTaskInfo.size() - 1; i >= 0; --i) {
+            final ActivityManager.RunningTaskInfo taskInfo = mChildrenTaskInfo.valueAt(i);
+            if (predicate.test(taskInfo)) {
+                matchingTasks.add(taskInfo);
+            }
+        }
+        return matchingTasks;
     }
 
     @Override
@@ -218,7 +264,7 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
                     mRootTaskInfo.configuration,
                     mIconProvider);
             mHasRootTask = true;
-            mCallbacks.onRootTaskAppeared();
+            mCallbacks.onRootTaskAppeared(taskInfo);
             if (mVisible != mRootTaskInfo.isVisible) {
                 mVisible = mRootTaskInfo.isVisible;
                 mCallbacks.onStageVisibilityChanged(this);
@@ -279,7 +325,7 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
             mHasRootTask = false;
             mVisible = false;
             mHasChildren = false;
-            mCallbacks.onRootTaskVanished();
+            mCallbacks.onRootTaskVanished(taskInfo);
             mRootTaskInfo = null;
             mRootLeash = null;
             mSyncQueue.runInSync(t -> {
@@ -394,11 +440,11 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
         }
     }
 
-    void evictOtherChildren(WindowContainerTransaction wct, int taskId) {
+    void evictOtherChildren(WindowContainerTransaction wct, Set<Integer> keepTaskIds) {
         for (int i = mChildrenTaskInfo.size() - 1; i >= 0; i--) {
             final ActivityManager.RunningTaskInfo taskInfo = mChildrenTaskInfo.valueAt(i);
-            if (taskId == taskInfo.taskId) continue;
-            evictChild(wct, taskInfo, "other");
+            if (keepTaskIds.contains(taskInfo.taskId)) continue;
+            evictChild(wct, taskInfo, "other_" + stageTypeToString(mId));
         }
     }
 
@@ -453,6 +499,8 @@ public class StageTaskListener implements ShellTaskOrganizer.TaskListener {
         wct.setBounds(mRootTaskInfo.token, null);
         wct.setAppBounds(mRootTaskInfo.token, null);
         wct.setSmallestScreenWidthDp(mRootTaskInfo.token, SMALLEST_SCREEN_WIDTH_DP_UNDEFINED);
+        wct.setScreenSizeDp(mRootTaskInfo.token, SCREEN_WIDTH_DP_UNDEFINED,
+                SCREEN_HEIGHT_DP_UNDEFINED);
     }
 
     void onSplitScreenListenerRegistered(SplitScreen.SplitScreenListener listener,

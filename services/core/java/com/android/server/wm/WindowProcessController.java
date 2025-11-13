@@ -337,11 +337,6 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
     public static final int ACTIVITY_STATE_FLAG_VISIBLE_MULTI_WINDOW_MODE = 1 << 25;
     public static final int ACTIVITY_STATE_FLAG_MASK_MIN_TASK_LAYER = 0x0000ffff;
 
-    private static final int ACTIVITY_STATE_VISIBLE =
-            com.android.window.flags.Flags.useVisibleRequestedForProcessTracker()
-                    ? ACTIVITY_STATE_FLAG_IS_VISIBLE
-                    : ACTIVITY_STATE_FLAG_IS_VISIBLE | ACTIVITY_STATE_FLAG_IS_WINDOW_VISIBLE;
-
     /**
      * The state for oom-adjustment calculation. The higher 16 bits are the activity states, and the
      * lower 16 bits are the task layer rank (see {@link Task#mLayerRank}). This field is written by
@@ -457,15 +452,8 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
             }
             // Schedule immediately to make sure the app component (e.g. receiver, service) can get
             // the latest configuration in their lifecycle callbacks (e.g. onReceive, onCreate).
-            try {
-                // No WM lock here.
-                mAtm.getLifecycleManager().scheduleTransactionItemNow(
-                        thread, configurationChangeItem);
-            } catch (Exception e) {
-                // TODO(b/323801078): remove Exception when cleanup
-                Slog.e(TAG_CONFIGURATION, "Failed to schedule ConfigurationChangeItem="
-                        + configurationChangeItem + " owner=" + mOwner, e);
-            }
+            // No WM lock here.
+            mAtm.getLifecycleManager().scheduleTransactionItemNow(thread, configurationChangeItem);
         }
     }
 
@@ -480,6 +468,7 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
     boolean handleAppCrash() {
         boolean hasVisibleActivity = false;
         ArrayList<ActivityRecord> activities = new ArrayList<>(mActivities);
+        final ActionChain chain = mAtm.mChainTracker.startTransit("appCrash");
         for (int i = activities.size() - 1; i >= 0; --i) {
             final ActivityRecord r = activities.get(i);
             Slog.w(TAG, "  Force finishing activity "
@@ -488,11 +477,14 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
             if (r.isVisibleRequested()) {
                 hasVisibleActivity = true;
                 Task finishingTask = r.getTask();
-                r.mDisplayContent.requestTransitionAndLegacyPrepare(TRANSIT_CLOSE,
-                        TRANSIT_FLAG_APP_CRASHED, finishingTask);
+                if (!chain.isCollecting()) {
+                    r.mDisplayContent.requestTransitionAndLegacyPrepare(TRANSIT_CLOSE,
+                            TRANSIT_FLAG_APP_CRASHED, finishingTask, chain);
+                }
             }
             r.destroyIfPossible("handleAppCrashed");
         }
+        mAtm.mChainTracker.end();
         return hasVisibleActivity;
     }
 
@@ -1266,7 +1258,7 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
         int nonOccludedRatio = 0;
         long perceptibleTaskStoppedTimeMillis = Long.MIN_VALUE;
         final boolean wasResumed = hasResumedActivity();
-        final boolean wasAnyVisible = (mActivityStateFlags & ACTIVITY_STATE_VISIBLE) != 0;
+        final boolean wasAnyVisible = (mActivityStateFlags & ACTIVITY_STATE_FLAG_IS_VISIBLE) != 0;
         for (int i = mActivities.size() - 1; i >= 0; i--) {
             final ActivityRecord r = mActivities.get(i);
             if (r.isVisible()) {
@@ -1286,8 +1278,6 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
                     stateFlags |= ACTIVITY_STATE_FLAG_HAS_RESUMED;
                     final int windowingMode = r.getWindowingMode();
                     if (windowingMode == WINDOWING_MODE_MULTI_WINDOW
-                            && com.android.window.flags.Flags
-                                    .processPriorityPolicyForMultiWindowMode()
                             && task.hasAdjacentTask()) {
                         stateFlags |= ACTIVITY_STATE_FLAG_RESUMED_SPLIT_SCREEN;
                     } else if (windowingMode == WINDOWING_MODE_FREEFORM) {
@@ -1311,8 +1301,7 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
                     bestInvisibleState = PAUSING;
                     // Treat PAUSING as visible in case the next activity in the same process has
                     // not yet been set as visible-requested.
-                    if (com.android.window.flags.Flags.useVisibleRequestedForProcessTracker()
-                            && r.isVisible()) {
+                    if (r.isVisible()) {
                         stateFlags |= ACTIVITY_STATE_FLAG_IS_VISIBLE;
                     }
                 } else if (state == PAUSED) {
@@ -1341,7 +1330,6 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
         }
 
         if (hasResumedFreeform
-                && com.android.window.flags.Flags.processPriorityPolicyForMultiWindowMode()
                 // Exclude task layer 1 because it is already the top most.
                 && minTaskLayer > 1) {
             if (minTaskLayer <= 1 + MAX_NUM_PERCEPTIBLE_FREEFORM
@@ -1365,7 +1353,7 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
         mActivityStateFlags = stateFlags;
         mPerceptibleTaskStoppedTimeMillis = perceptibleTaskStoppedTimeMillis;
 
-        final boolean anyVisible = (stateFlags & ACTIVITY_STATE_VISIBLE) != 0;
+        final boolean anyVisible = (stateFlags & ACTIVITY_STATE_FLAG_IS_VISIBLE) != 0;
         if (!wasAnyVisible && anyVisible) {
             mAtm.mVisibleActivityProcessTracker.onAnyActivityVisible(this);
             mAtm.mWindowManager.onProcessActivityVisibilityChanged(mUid, true /*visible*/);
@@ -1799,18 +1787,11 @@ public class WindowProcessController extends ConfigurationContainer<Configuratio
 
     private void scheduleClientTransactionItem(@NonNull IApplicationThread thread,
             @NonNull ClientTransactionItem transactionItem) {
-        try {
-            if (mWindowSession != null && mWindowSession.hasWindow()) {
-                mAtm.getLifecycleManager().scheduleTransactionItem(thread, transactionItem);
-            } else {
-                // Non-UI process can handle the change directly.
-                mAtm.getLifecycleManager().scheduleTransactionItemNow(thread, transactionItem);
-            }
-        } catch (RemoteException e) {
-            // TODO(b/323801078): remove Exception when cleanup
-            // Expected if the process has been killed.
-            Slog.w(TAG_CONFIGURATION, "Failed for dead process. ClientTransactionItem="
-                    + transactionItem + " owner=" + mOwner);
+        if (mWindowSession != null && mWindowSession.hasWindow()) {
+            mAtm.getLifecycleManager().scheduleTransactionItem(thread, transactionItem);
+        } else {
+            // Non-UI process can handle the change directly.
+            mAtm.getLifecycleManager().scheduleTransactionItemNow(thread, transactionItem);
         }
     }
 

@@ -49,6 +49,7 @@ import platform.test.runner.parameterized.Parameters
 
 @SmallTest
 @RunWith(ParameterizedAndroidJunit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class CommunalAppWidgetViewModelTest(flags: FlagsParameterization) : SysuiTestCase() {
     val kosmos = testKosmos()
 
@@ -138,6 +139,30 @@ class CommunalAppWidgetViewModelTest(flags: FlagsParameterization) : SysuiTestCa
                     /* maxHeight = */ eq(200),
                     /* ignorePadding = */ eq(true),
                 )
+        }
+
+    @Test
+    fun removeListener() =
+        kosmos.runTest {
+            val listener = mock<AppWidgetHostListener>()
+
+            underTest.setListener(123, listener)
+            runAll()
+            underTest.removeListener(123)
+
+            verify(appWidgetHost).removeListener(123)
+        }
+
+    @Test
+    fun removeListener_HSUM() =
+        kosmos.runTest {
+            fakeGlanceableHubMultiUserHelper.setIsInHeadlessSystemUser(true)
+            val listener = mock<AppWidgetHostListener>()
+
+            underTest.setListener(123, listener)
+            runAll()
+
+            verify(listener).updateAppWidget(any())
         }
 
     private fun Kosmos.runAll() {

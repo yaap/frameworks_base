@@ -62,6 +62,7 @@ import com.android.wm.shell.compatui.api.CompatUIInfo;
 import com.android.wm.shell.compatui.impl.CompatUIRequests;
 import com.android.wm.shell.desktopmode.DesktopRepository;
 import com.android.wm.shell.desktopmode.DesktopUserRepositories;
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState;
 import com.android.wm.shell.sysui.ShellController;
 import com.android.wm.shell.sysui.ShellInit;
 import com.android.wm.shell.transition.Transitions;
@@ -90,6 +91,7 @@ import java.util.Optional;
 public class CompatUIControllerTest extends ShellTestCase {
     private static final int DISPLAY_ID = 0;
     private static final int TASK_ID = 12;
+    private static final int TASK_ID_2 = 18;
 
     private CompatUIController mController;
     private ShellInit mShellInit;
@@ -135,12 +137,15 @@ public class CompatUIControllerTest extends ShellTestCase {
 
     @NonNull
     private CompatUIStatusManager mCompatUIStatusManager;
+    @NonNull
+    private FakeDesktopState mDesktopState;
 
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
+        mDesktopState = new FakeDesktopState();
         doReturn(mMockDisplayLayout).when(mMockDisplayController).getDisplayLayout(anyInt());
         doReturn(DISPLAY_ID).when(mMockCompatLayout).getDisplayId();
         doReturn(TASK_ID).when(mMockCompatLayout).getTaskId();
@@ -164,7 +169,8 @@ public class CompatUIControllerTest extends ShellTestCase {
                 mMockDisplayController, mMockDisplayInsetsController, mMockImeController,
                 mMockSyncQueue, mMockExecutor, mMockTransitionsLazy, mDockStateReader,
                 mCompatUIConfiguration, mCompatUIShellCommandHandler, mAccessibilityManager,
-                mCompatUIStatusManager, Optional.of(mDesktopUserRepositories)) {
+                mCompatUIStatusManager, Optional.of(mDesktopUserRepositories),
+                mDesktopState) {
             @Override
             CompatUIWindowManager createCompatUiWindowManager(Context context, TaskInfo taskInfo,
                     ShellTaskOrganizer.TaskListener taskListener) {
@@ -720,6 +726,36 @@ public class CompatUIControllerTest extends ShellTestCase {
         mController.onCompatInfoChanged(new CompatUIInfo(taskInfo, mMockTaskListener));
 
         verify(mController).removeLayouts(taskInfo.taskId);
+    }
+
+    @Test
+    @RequiresFlagsDisabled(Flags.FLAG_APP_COMPAT_UI_FRAMEWORK)
+    @EnableFlags(Flags.FLAG_SKIP_COMPAT_UI_EDUCATION_IN_DESKTOP_MODE)
+    public void testUpdateActiveTaskInfo_alwaysRemoveLetterboxEdu() {
+        TaskInfo taskInfo = createTaskInfo(DISPLAY_ID, TASK_ID, /* hasSizeCompat= */ true);
+
+        // When not in Desktop Mode the LetterboxEdu is removed only if the taskId is the one used
+        // when created.
+        when(mDesktopUserRepositories.getCurrent().isAnyDeskActive(DISPLAY_ID)).thenReturn(false);
+
+        mController.onCompatInfoChanged(new CompatUIInfo(taskInfo, mMockTaskListener));
+        mController.removeLetterboxEdu(TASK_ID_2);
+        verify(mMockLetterboxEduLayout, never()).release();
+
+        mController.onCompatInfoChanged(new CompatUIInfo(taskInfo, mMockTaskListener));
+        mController.removeLetterboxEdu(TASK_ID);
+        verify(mMockLetterboxEduLayout).release();
+
+        // When in Desktop Mode the LetterboxEdu is always removed
+        when(mDesktopUserRepositories.getCurrent().isAnyDeskActive(DISPLAY_ID)).thenReturn(true);
+
+        mController.onCompatInfoChanged(new CompatUIInfo(taskInfo, mMockTaskListener));
+        mController.removeLetterboxEdu(TASK_ID);
+        verify(mMockLetterboxEduLayout).release();
+
+        mController.onCompatInfoChanged(new CompatUIInfo(taskInfo, mMockTaskListener));
+        mController.removeLetterboxEdu(TASK_ID_2);
+        verify(mMockLetterboxEduLayout).release();
     }
 
     @Test

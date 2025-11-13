@@ -28,6 +28,7 @@ import com.android.systemui.kairos.State
 import com.android.systemui.kairos.combine
 import com.android.systemui.kairos.flatMap
 import com.android.systemui.kairos.map
+import com.android.systemui.kairos.util.nameTag
 import com.android.systemui.kairosBuilder
 import com.android.systemui.log.table.TableLogBuffer
 import com.android.systemui.log.table.logDiffsForTable
@@ -162,12 +163,6 @@ class MobileIconInteractorKairosImpl(
     override val carrierNetworkChangeActive: State<Boolean>
         get() = connectionRepository.carrierNetworkChangeActive
 
-    // True if there exists _any_ icon override for this carrierId. Note that overrides can include
-    // any or none of the icon groups defined in MobileMappings, so we still need to check on a
-    // per-network-type basis whether or not the given icon group is overridden
-    private val carrierIdIconOverrideExists: State<Boolean> =
-        connectionRepository.carrierId.map { carrierIdOverrides.carrierIdEntryExists(it) }
-
     override val networkName: State<NetworkNameModel> =
         combine(connectionRepository.operatorAlphaShort, connectionRepository.networkName) {
             operatorAlphaShort,
@@ -200,22 +195,17 @@ class MobileIconInteractorKairosImpl(
             when (resolvedNetworkType) {
                 is ResolvedNetworkType.CarrierMergedNetworkType ->
                     resolvedNetworkType.iconGroupOverride
-
-                else -> {
-                    mapping[resolvedNetworkType.lookupKey] ?: defaultGroup
-                }
+                else -> mapping[resolvedNetworkType.lookupKey] ?: defaultGroup
             }
         }
 
-    override val networkTypeIconGroup: State<NetworkTypeIconModel> = buildState {
-        combineTransactionally(defaultNetworkType, carrierIdIconOverrideExists) {
-                networkType,
-                overrideExists ->
+    override val networkTypeIconGroup: State<NetworkTypeIconModel> =
+        combine(defaultNetworkType, connectionRepository.carrierId) { networkType, carrierId ->
                 // DefaultIcon comes out of the icongroup lookup, we check for overrides here
-                if (overrideExists) {
+                if (carrierIdOverrides.carrierIdEntryExists(carrierId)) {
                     val iconOverride =
                         carrierIdOverrides.getOverrideFor(
-                            connectionRepository.carrierId.sample(),
+                            carrierId,
                             networkType.name,
                             context.resources,
                         )
@@ -228,8 +218,18 @@ class MobileIconInteractorKairosImpl(
                     DefaultIcon(networkType)
                 }
             }
-            .also { logDiffsForTable(it, tableLogBuffer = tableLogBuffer) }
-    }
+            .also {
+                onActivated {
+                    logDiffsForTable(
+                        name =
+                            nameTag {
+                                "MobileIconInteractorKairosImpl(subId=$subscriptionId).networkTypeIconGroup"
+                            },
+                        it,
+                        tableLogBuffer = tableLogBuffer,
+                    )
+                }
+            }
 
     override val showSliceAttribution: State<Boolean> =
         combine(
@@ -249,12 +249,10 @@ class MobileIconInteractorKairosImpl(
             connectionRepository.isRoaming,
             connectionRepository.cdmaRoaming,
         ) { carrierNetworkChangeActive, isGsm, isRoaming, cdmaRoaming ->
-            if (carrierNetworkChangeActive) {
-                false
-            } else if (isGsm) {
-                isRoaming
-            } else {
-                cdmaRoaming
+            when {
+                carrierNetworkChangeActive -> false
+                isGsm -> isRoaming
+                else -> cdmaRoaming
             }
         }
 
@@ -280,7 +278,18 @@ class MobileIconInteractorKairosImpl(
         connectionRepository.dataConnectionState
             .map { it == Connected }
             .also {
-                onActivated { logDiffsForTable(it, tableLogBuffer, "icon", "isDataConnected") }
+                onActivated {
+                    logDiffsForTable(
+                        name =
+                            nameTag {
+                                "MobileIconInteractorKairosImpl(subId=$subscriptionId).isDataConnected"
+                            },
+                        it,
+                        tableLogBuffer,
+                        "icon",
+                        "isDataConnected",
+                    )
+                }
             }
 
     override val isInService
@@ -356,5 +365,17 @@ class MobileIconInteractorKairosImpl(
                     cellularIcon
                 }
             }
-            .also { onActivated { logDiffsForTable(it, tableLogBuffer, columnPrefix = "icon") } }
+            .also {
+                onActivated {
+                    logDiffsForTable(
+                        name =
+                            nameTag {
+                                "MobileIconInteractorKairosImpl(subId=$subscriptionId).signalLevelIcon"
+                            },
+                        it,
+                        tableLogBuffer,
+                        columnPrefix = "icon",
+                    )
+                }
+            }
 }

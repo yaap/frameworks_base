@@ -15,29 +15,79 @@
   ~ limitations under the License.
   -->
 <resources>
-    <style name="AlertDialog">
-        <item name="fullDark">@empty</item>
-        <item name="topDark">@empty</item>
-        <item name="centerDark">@empty</item>
-        <item name="bottomDark">@empty</item>
-        <item name="fullBright">@empty</item>
-        <item name="topBright">@empty</item>
-        <item name="centerBright">@empty</item>
-        <item name="bottomBright">@empty</item>
-        <item name="bottomMedium">@empty</item>
-        <item name="centerMedium">@empty</item>
-        <item name="layout">@layout/alert_dialog_material</item>
-        <item name="listLayout">@layout/select_dialog_material</item>
-        <item name="progressLayout">@layout/progress_dialog_material</item>
-        <item name="horizontalProgressLayout">@layout/alert_dialog_progress_material</item>
-        <item name="listItemLayout">@layout/select_dialog_item_material</item>
-        <item name="multiChoiceItemLayout">@layout/select_dialog_multichoice_material</item>
-        <item name="singleChoiceItemLayout">@layout/select_dialog_singlechoice_material</item>
-        <item name="controllerType">@integer/config_alertDialogController</item>
-        <item name="selectionScrollOffset">@dimen/config_alertDialogSelectionScrollOffset</item>
-        <item name="needsDefaultBackgrounds">false</item>
+
+    <!-- TODO (b/274120822): Remove these styles when we replace all dialogs to MaterialAlertDialog -->
+    <style name="Widget.PackageInstaller.Button.Colored" parent="android:Widget.DeviceDefault.Button.Colored">
+        <item name="android:background">@drawable/background_colored_button</item>
+        <item name="android:minHeight">@dimen/button_min_height</item>
+        <item name="android:paddingHorizontal">24dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Widget.Button</item>
     </style>
-    <style name="TextAppearance">
-        <item name="textSize">16sp</item>
+
+    <style name="Widget.PackageInstaller.Button.Outlined" parent="android:Widget.DeviceDefault.Button.Colored">
+        <item name="android:background">@drawable/background_outlined_button</item>
+        <item name="android:textColor">?android:attr/colorAccent</item>
+        <item name="android:minHeight">@dimen/button_min_height</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Widget.Button</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.ButtonBar" parent="">
+        <item name="android:paddingBottom">20dp</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingHorizontal">12dp</item>
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Widget.Button</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.WindowTitle" parent="">
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Headline</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:autoSizeTextType">uniform</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.Material.WindowTitle" parent="@style/MaterialAlertDialog.Material3.Title.Text">
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Headline</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:autoSizeTextType">uniform</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.Material.Button" parent="@style/Widget.Material3.Button.TextButton">
+        <item name="android:textColor">?android:attr/colorAccent</item>
+        <item name="android:minHeight">@dimen/button_min_height</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Widget.Button</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.Material.Button.Colored" parent="@style/Widget.Material3.Button">
+        <item name="android:minHeight">@dimen/button_min_height</item>
+        <item name="android:paddingHorizontal">24dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Widget.Button</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.Material.Button.Outlined" parent="@style/Widget.Material3.Button.OutlinedButton">
+        <item name="android:textColor">?android:attr/colorAccent</item>
+        <item name="android:minHeight">@dimen/button_min_height</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textAppearance">@android:style/TextAppearance.DeviceDefault.Widget.Button</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.TextView.AppLabel" parent="@android:style/TextAppearance.DeviceDefault.SearchResult.Subtitle">
+        <item name="android:textFontWeight">600</item>
+        <item name="android:color">?android:attr/textColorPrimary</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.TextView.CustomMessage" parent="@android:style/TextAppearance.DeviceDefault.SearchResult.Subtitle">
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.TextView.KeepData.Heading" parent="@android:style/TextAppearance.DeviceDefault.SearchResult.Subtitle">
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
+        <item name="android:textFontWeight">600</item>
+    </style>
+
+    <style name="Widget.PackageInstaller.TextView.KeepData.SubHeading" parent="@android:style/TextAppearance.DeviceDefault.SearchResult.Subtitle">
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
     </style>
 </resources>

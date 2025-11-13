@@ -19,6 +19,9 @@ package com.android.wm.shell.scenarios
 import android.app.Instrumentation
 import android.content.Intent.FLAG_ACTIVITY_MULTIPLE_TASK
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.tools.NavBar
+import android.tools.PlatformConsts.DEFAULT_DISPLAY
+import android.tools.Rotation
 import android.tools.traces.parsers.WindowManagerStateHelper
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -26,18 +29,21 @@ import com.android.launcher3.tapl.LauncherInstrumentation
 import com.android.server.wm.flicker.helpers.DesktopModeAppHelper
 import com.android.server.wm.flicker.helpers.MailAppHelper
 import com.android.server.wm.flicker.helpers.SimpleAppHelper
-import com.android.window.flags.Flags
-import com.android.wm.shell.shared.desktopmode.DesktopModeStatus
+import com.android.wm.shell.Utils
+import com.android.wm.shell.shared.desktopmode.DesktopConfig
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import org.junit.After
 import org.junit.Assume
 import org.junit.Before
 import org.junit.Ignore
+import org.junit.Rule
 import org.junit.Test
+
 /**
  * Base scenario test for opening many apps on the device without the window limit.
  */
 @Ignore("Test Base Class")
-abstract class OpenUnlimitedApps()
+abstract class OpenUnlimitedApps() : TestScenarioBase()
 {
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
     private val tapl = LauncherInstrumentation()
@@ -46,12 +52,20 @@ abstract class OpenUnlimitedApps()
 
     private val testApp = DesktopModeAppHelper(SimpleAppHelper(instrumentation))
     private val mailApp = MailAppHelper(instrumentation)
+    private val desktopConfig = DesktopConfig.fromContext(instrumentation.context)
 
-    private val maxNum = DesktopModeStatus.getMaxTaskLimit(instrumentation.context)
+    private val maxNum = desktopConfig.maxTaskLimit
+
+    @Rule
+    @JvmField
+    val testSetupRule = Utils.testSetupRule(NavBar.MODE_GESTURAL, Rotation.ROTATION_0)
 
     @Before
     fun setup() {
-        Assume.assumeTrue(Flags.enableDesktopWindowingMode() && tapl.isTablet)
+        Assume.assumeTrue(
+            DesktopState.fromContext(instrumentation.context)
+                .isDesktopModeSupportedOnDisplay(DEFAULT_DISPLAY)
+        )
         Assume.assumeTrue(maxNum == 0)
         testApp.enterDesktopMode(wmHelper, device)
     }

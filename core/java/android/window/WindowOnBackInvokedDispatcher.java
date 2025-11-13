@@ -314,6 +314,24 @@ public class WindowOnBackInvokedDispatcher implements OnBackInvokedDispatcher {
         }
     }
 
+    /**
+     * Returns whether current app should not receive motion event.
+     */
+    public boolean isInterceptedMotionEvent() {
+        synchronized (mLock) {
+            return mTouchTracker.isInterceptedMotionEvent();
+        }
+    }
+
+    /**
+     * Marks the app will not receive motion event from current gesture.
+     */
+    public void setMotionEventIntercepted() {
+        synchronized (mLock) {
+            mTouchTracker.setMotionEventIntercepted();
+        }
+    }
+
     private void sendCancelledIfInProgress(@NonNull OnBackInvokedCallback callback) {
         boolean isInProgress = mProgressAnimator.isBackAnimationInProgress();
         if (isInProgress && callback instanceof OnBackAnimationCallback) {
@@ -322,9 +340,6 @@ public class WindowOnBackInvokedDispatcher implements OnBackInvokedDispatcher {
             if (DEBUG) {
                 Log.d(TAG, "sendCancelIfRunning: callback canceled");
             }
-        } else {
-            Log.w(TAG, "sendCancelIfRunning: isInProgress=" + isInProgress
-                    + " callback=" + callback);
         }
     }
 
@@ -414,6 +429,7 @@ public class WindowOnBackInvokedDispatcher implements OnBackInvokedDispatcher {
                         callback instanceof OnBackAnimationCallback,
                         overrideAnimation);
             }
+            Log.d(TAG, "setTopOnBackInvokedCallback (unwrapped): " + callback);
             mWindowSession.setOnBackInvokedCallbackInfo(mWindow, callbackInfo);
         } catch (RemoteException e) {
             Log.e(TAG, "Failed to set OnBackInvokedCallback to WM. Error: " + e);

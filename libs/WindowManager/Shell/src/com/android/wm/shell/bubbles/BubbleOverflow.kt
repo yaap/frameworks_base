@@ -79,6 +79,7 @@ class BubbleOverflow(private val context: Context, private val positioner: Bubbl
                 expandedViewManager,
                 positioner,
                 /* isOverflow= */ true,
+                /* bubble= */ null,
                 /* bubbleTaskView= */ null,
                 /* mainExecutor= */ null,
                 /* backgroundExecutor= */ null,
@@ -203,29 +204,17 @@ class BubbleOverflow(private val context: Context, private val positioner: Bubbl
 
     override fun getBubbleBarExpandedView(): BubbleBarExpandedView? = bubbleBarExpandedView
 
-    override fun getDotColor(): Int {
-        return dotColor
-    }
+    override fun getDotColor() = dotColor
 
-    override fun getAppBadge(): Bitmap? {
-        return null
-    }
+    override fun getAppBadge() = null
 
-    override fun getRawAppBadge(): Bitmap? {
-        return null
-    }
+    override fun getRawAppBadge() = null
 
-    override fun getBubbleIcon(): Bitmap {
-        return bitmap
-    }
+    override fun getBubbleIcon() = bitmap
 
-    override fun showDot(): Boolean {
-        return showDot
-    }
+    override fun showDot() = showDot
 
-    override fun getDotPath(): Path? {
-        return dotPath
-    }
+    override fun getDotPath() = dotPath
 
     override fun setTaskViewVisibility(visible: Boolean) {
         // Overflow does not have a TaskView.
@@ -249,13 +238,9 @@ class BubbleOverflow(private val context: Context, private val positioner: Bubbl
         return overflowBtn
     }
 
-    override fun getKey(): String {
-        return KEY
-    }
+    override fun getKey() = KEY
 
-    override fun getTaskId(): Int {
-        return if (expandedView != null) expandedView!!.taskId else INVALID_TASK_ID
-    }
+    override fun getTaskId() = INVALID_TASK_ID
 
     companion object {
         const val KEY = "Overflow"

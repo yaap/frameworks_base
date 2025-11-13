@@ -36,6 +36,7 @@ import static android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK;
 import static android.view.accessibility.AccessibilityNodeInfo.ACTION_LONG_CLICK;
 
 import static com.android.server.pm.UserManagerService.enforceCurrentUserIfVisibleBackgroundEnabled;
+import static com.android.window.flags.Flags.scvhSurfaceControlLifetimeFix;
 
 import android.accessibilityservice.AccessibilityGestureEvent;
 import android.accessibilityservice.AccessibilityService;
@@ -2805,7 +2806,15 @@ abstract class AbstractAccessibilityServiceConnection extends IAccessibilityServ
         try {
             mSystemSupport.attachAccessibilityOverlayToDisplay(
                     interactionId, displayId, sc, callback);
-            mOverlays.add(sc);
+            if (scvhSurfaceControlLifetimeFix()) {
+                // AccessibilityManagerService#attachAccessibilityOverlayToDisplay releases the
+                // SurfaceControl supplied to it. In order to reparent any attached overlays when
+                // the session is removed, we need a not-released SurfaceControl. For this purpose,
+                // we store a copy of the provided SurfaceControl in mOverlays.
+                mOverlays.add(new SurfaceControl(sc, "attachAccessibilityOverlayToDisplay"));
+            } else {
+                mOverlays.add(sc);
+            }
         } finally {
             Binder.restoreCallingIdentity(identity);
         }
@@ -2850,6 +2859,7 @@ abstract class AbstractAccessibilityServiceConnection extends IAccessibilityServ
         for (SurfaceControl sc : mOverlays) {
             if (sc.isValid()) {
                 t.reparent(sc, null);
+                sc.release();
             }
         }
         t.apply();

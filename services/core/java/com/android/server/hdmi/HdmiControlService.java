@@ -451,6 +451,9 @@ public class HdmiControlService extends SystemService {
     @GuardedBy("mLock")
     private boolean mEarcEnabled;
 
+    // Flag for disable absolute volume behavior b/406050353
+    private boolean mAvbDisabled = true;
+
     private int mEarcPortId = -1;
 
     // Set to true while the service is in normal mode. While set to false, no input change is
@@ -704,13 +707,18 @@ public class HdmiControlService extends SystemService {
         publishBinderService(Context.HDMI_CONTROL_SERVICE, new BinderService());
 
         if (mCecController != null) {
-            // Register broadcast receiver for power state change.
-            IntentFilter filter = new IntentFilter();
-            filter.addAction(Intent.ACTION_SCREEN_OFF);
-            filter.addAction(Intent.ACTION_SCREEN_ON);
-            filter.addAction(Intent.ACTION_SHUTDOWN);
-            filter.addAction(Intent.ACTION_CONFIGURATION_CHANGED);
-            getContext().registerReceiver(mHdmiControlBroadcastReceiver, filter);
+            // Register broadcast receiver for power state change with high priority.
+            IntentFilter powerFilter = new IntentFilter();
+            powerFilter.addAction(Intent.ACTION_SCREEN_OFF);
+            powerFilter.addAction(Intent.ACTION_SCREEN_ON);
+            powerFilter.addAction(Intent.ACTION_SHUTDOWN);
+            powerFilter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
+            getContext().registerReceiver(mHdmiControlBroadcastReceiver, powerFilter);
+
+            // Register broadcast receiver for configuration change.
+            IntentFilter configFilter = new IntentFilter();
+            configFilter.addAction(Intent.ACTION_CONFIGURATION_CHANGED);
+            getContext().registerReceiver(mHdmiControlBroadcastReceiver, configFilter);
 
             // Register ContentObserver to monitor the settings change.
             registerContentObserver();
@@ -3789,6 +3797,11 @@ public class HdmiControlService extends SystemService {
         return SystemProperties.getBoolean(Constants.PROPERTY_ARC_SUPPORT, true);
     }
 
+    @VisibleForTesting
+    protected void setAvbDisabled(boolean disabled) {
+        mAvbDisabled = disabled;
+    }
+
     @ServiceThreadOnly
     int getPowerStatus() {
         assertRunOnServiceThread();
@@ -4721,11 +4734,21 @@ public class HdmiControlService extends SystemService {
             return;
         }
 
+        // Determine if the selected System Audio output is a TV.
+        // Unlike amplifiers, TVs are not mandated to send <Report Audio Status> even in HDMI 2.0.
+        // To avoid these problems, we only allow absolute volume when an amplifier is being used
+        // as the system audio device.
+        if (mAvbDisabled && systemAudioDeviceInfo.getDeviceType() == HdmiDeviceInfo.DEVICE_TV) {
+            switchToFullVolumeBehavior();
+            return;
+        }
+
         // Condition 5: The System Audio device supports <Set Audio Volume Level>
         switch (systemAudioDeviceInfo.getDeviceFeatures().getSetAudioVolumeLevelSupport()) {
             case DeviceFeatures.FEATURE_SUPPORTED:
                 if (currentVolumeBehavior
                         != AudioDeviceVolumeManager.DEVICE_VOLUME_BEHAVIOR_ABSOLUTE) {
+                    // Keep using AVB for other cases
                     // Start an action that will call enableAbsoluteVolumeBehavior
                     // once the System Audio device sends <Report Audio Status>
                     localCecDevice.startNewAvbAudioStatusAction(
@@ -4807,10 +4830,6 @@ public class HdmiControlService extends SystemService {
         mAbsoluteVolumeChangedListener = new AbsoluteVolumeChangedListener(
                 localDevice, systemAudioDevice);
 
-        // AudioService sets the volume of the stream and device based on the input VolumeInfo
-        // when enabling absolute volume behavior, but not the mute state
-        notifyAvbMuteChange(audioStatus.getMute());
-
         // If <Set Audio Volume Level> is supported, enable absolute volume behavior.
         // Otherwise, enable adjust-only AVB on TVs only.
         if (systemAudioDevice.getDeviceFeatures().getSetAudioVolumeLevelSupport()
@@ -4829,6 +4848,10 @@ public class HdmiControlService extends SystemService {
                         mAbsoluteVolumeChangedListener);
             }
         }
+
+        // AudioService sets the volume of the stream and device based on the input VolumeInfo
+        // when enabling absolute volume behavior, but not the mute state
+        notifyAvbMuteChange(audioStatus.getMute());
 
     }
 
@@ -5193,6 +5216,9 @@ public class HdmiControlService extends SystemService {
         // of sound when CEC is disabled and eARC is enabled due to SAM being in the off state.
         if (!isCecControlEnabled()) {
             setSystemAudioActivated(true);
+        } else if (isTvDeviceEnabled() && tv().getAvrDeviceInfo() == null) {
+            // The AVR might not support CEC.
+            tv().changeSystemAudioMode(enabled, null);
         }
         getAudioManager().setWiredDeviceConnectionState(attributes, enabled ? 1 : 0);
     }

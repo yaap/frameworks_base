@@ -103,10 +103,6 @@ object Flags {
     @JvmField
     val WALLPAPER_PICKER_GRID_APPLY_BUTTON = unreleasedFlag("wallpaper_picker_grid_apply_button")
 
-    /** Flag meant to guard the talkback fix for the KeyguardIndicationTextView */
-    // TODO(b/286563884): Tracking bug
-    @JvmField val KEYGUARD_TALKBACK_FIX = unreleasedFlag("keyguard_talkback_fix")
-
     /** Enables preview loading animation in the wallpaper picker. */
     // TODO(b/274443705): Tracking Bug
     @JvmField
@@ -197,9 +193,6 @@ object Flags {
     // TODO(b/254512673): Tracking Bug
     @JvmField val DREAM_MEDIA_TAP_TO_OPEN = unreleasedFlag("dream_media_tap_to_open")
 
-    // TODO(b/266157412): Tracking Bug
-    val MEDIA_RETAIN_SESSIONS = unreleasedFlag("media_retain_sessions")
-
     // 1000 - dock
     val SIMULATE_DOCK_THROUGH_CHARGING = releasedFlag("simulate_dock_through_charging")
 
@@ -241,9 +234,6 @@ object Flags {
 
     // 1700 - clipboard
     @JvmField val CLIPBOARD_REMOTE_BEHAVIOR = releasedFlag("clipboard_remote_behavior")
-    // TODO(b/278714186) Tracking Bug
-    @JvmField
-    val CLIPBOARD_IMAGE_TIMEOUT = unreleasedFlag("clipboard_image_timeout", teamfood = true)
 
     // 1900
     @JvmField val NOTE_TASKS = releasedFlag("keycode_flag")
@@ -272,11 +262,6 @@ object Flags {
     @Keep
     @JvmField
     val ENABLE_DARK_VIGNETTE_WHEN_FOLDING = unreleasedFlag("enable_dark_vignette_when_folding")
-
-    // TODO(b/265764985): Tracking Bug
-    @Keep
-    @JvmField
-    val ENABLE_UNFOLD_STATUS_BAR_ANIMATIONS = unreleasedFlag("enable_unfold_status_bar_animations")
 
     // TODO(b/316157842): Tracking Bug
     // Adds extra delay to notifications measure

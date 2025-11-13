@@ -38,6 +38,7 @@ import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class QSPreferencesRepositoryTest : SysuiTestCase() {
     private val kosmos = testKosmos()
     private val underTest = with(kosmos) { qsPreferencesRepository }
@@ -83,6 +84,15 @@ class QSPreferencesRepositoryTest : SysuiTestCase() {
         val setB = setOf("tileA", "tileB")
         underTest.writeLargeTileSpecs(setB.toTileSpecs())
         assertThat(getLargeTilesSpecsFromSharedPreferences()).isEqualTo(setB)
+    }
+
+    @Test
+    fun removeLargeTilesSpecs_inSharedPreferences() {
+        val setA = setOf("tileA", "tileB", "tileC", "tileD")
+        setLargeTilesSpecsInSharedPreferences(setA)
+
+        underTest.removeLargeTileSpecs(setOf(TileSpec.create("tileB"), TileSpec.create("tileD")))
+        assertThat(getLargeTilesSpecsFromSharedPreferences()).isEqualTo(setOf("tileA", "tileC"))
     }
 
     @Test

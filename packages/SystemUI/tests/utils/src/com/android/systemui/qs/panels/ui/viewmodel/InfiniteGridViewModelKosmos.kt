@@ -17,7 +17,8 @@
 package com.android.systemui.qs.panels.ui.viewmodel
 
 import com.android.systemui.kosmos.Kosmos
-import com.android.systemui.qs.panels.ui.dialog.qsResetDialogDelegateKosmos
+import com.android.systemui.qs.panels.ui.dialog.qsResetDialogDelegateFactoryKosmos
+import com.android.systemui.shade.domain.interactor.shadeModeInteractor
 
 val Kosmos.infiniteGridViewModelFactory by
     Kosmos.Fixture {
@@ -27,7 +28,9 @@ val Kosmos.infiniteGridViewModelFactory by
                     dynamicIconTilesViewModelFactory,
                     qsColumnsViewModelFactory,
                     tileSquishinessViewModel,
-                    qsResetDialogDelegateKosmos,
+                    infiniteGridSnapshotViewModelFactory,
+                    qsResetDialogDelegateFactoryKosmos,
+                    shadeModeInteractor,
                 )
             }
         }

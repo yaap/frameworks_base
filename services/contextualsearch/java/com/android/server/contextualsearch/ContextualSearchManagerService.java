@@ -19,6 +19,7 @@ package com.android.server.contextualsearch;
 import static android.Manifest.permission.ACCESS_CONTEXTUAL_SEARCH;
 import static android.app.AppOpsManager.OP_ASSIST_SCREENSHOT;
 import static android.app.AppOpsManager.OP_ASSIST_STRUCTURE;
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.content.Context.CONTEXTUAL_SEARCH_SERVICE;
 import static android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK;
 import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
@@ -53,6 +54,9 @@ import android.content.pm.PackageManagerInternal;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.media.AudioManager;
+import android.media.projection.IMediaProjection;
+import android.media.projection.IMediaProjectionManager;
+import android.media.projection.MediaProjectionManager;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
@@ -70,7 +74,9 @@ import android.os.UserManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.Slog;
+import android.view.Display;
 import android.view.IWindowManager;
+import android.window.DesktopExperienceFlags;
 import android.window.ScreenCapture.ScreenshotHardwareBuffer;
 
 import com.android.internal.R;
@@ -368,8 +374,7 @@ public class ContextualSearchManagerService extends SystemService {
                 Log.e(TAG, "Could not request assist data", e);
             }
         }
-        final ScreenshotHardwareBuffer shb = mWmInternal.takeContextualSearchScreenshot(
-                (Flags.contextualSearchPreventSelfCapture() ? csUid : -1));
+        final ScreenshotHardwareBuffer shb = mWmInternal.takeContextualSearchScreenshot(csUid);
         final Bitmap bm = shb != null ? shb.asBitmap() : null;
         // Now that everything is fetched, putting it in the launchIntent.
         if (bm != null) {
@@ -380,6 +385,13 @@ public class ContextualSearchManagerService extends SystemService {
                 launchIntent.putExtra(ContextualSearchManager.EXTRA_SCREENSHOT, bm.asShared());
             }
         }
+
+        IMediaProjection mediaProjection = getMediaProjection(csUid, csPackage);
+        if (mediaProjection != null) {
+            launchIntent.putExtra(MediaProjectionManager.EXTRA_MEDIA_PROJECTION,
+                    mediaProjection.asBinder());
+        }
+
         launchIntent.putExtra(ContextualSearchManager.EXTRA_IS_MANAGED_PROFILE_VISIBLE,
                 isManagedProfileVisible);
         // Only put the list of visible package names if assist data is allowed
@@ -390,6 +402,24 @@ public class ContextualSearchManagerService extends SystemService {
         return launchIntent;
     }
 
+    private IMediaProjection getMediaProjection(int uid, String packageName) {
+        if (Flags.contextualSearchMediaProjection()) {
+
+            return Binder.withCleanCallingIdentity(() -> {
+                IBinder binder = ServiceManager.getService(Context.MEDIA_PROJECTION_SERVICE);
+                IMediaProjectionManager mediaProjectionManager =
+                        IMediaProjectionManager.Stub.asInterface(binder);
+                IMediaProjection mediaProjection = mediaProjectionManager.createProjection(uid,
+                        packageName,
+                        MediaProjectionManager.TYPE_SCREEN_CAPTURE, false, Display.DEFAULT_DISPLAY);
+                mediaProjection.setRecordingOverlay(true);
+                return mediaProjection;
+            });
+        } else {
+            return null;
+        }
+    }
+
     @RequiresPermission(android.Manifest.permission.START_TASKS_FROM_RECENTS)
     private int invokeContextualSearchIntent(Intent launchIntent, final int userId) {
         // Contextual search starts with a frozen screen - so we launch without
@@ -397,6 +427,9 @@ public class ContextualSearchManagerService extends SystemService {
         final ActivityOptions opts = ActivityOptions.makeCustomTaskAnimation(mContext,
                 /* enterResId= */ 0, /* exitResId= */ 0, null, null, null);
         opts.setDisableStartingWindow(true);
+        if (DesktopExperienceFlags.ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue()) {
+            opts.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+        }
         return mAtmInternal.startActivityWithScreenshot(launchIntent,
                 mContext.getPackageName(), Binder.getCallingUid(), Binder.getCallingPid(), null,
                 opts.toBundle(), userId);
@@ -549,19 +582,26 @@ public class ContextualSearchManagerService extends SystemService {
                 issueToken();
                 Bundle bundle = new Bundle();
                 bundle.putParcelable(ContextualSearchManager.EXTRA_TOKEN, mToken);
+
                 // We get take the screenshot with the system server's identity because the system
                 // server has READ_FRAME_BUFFER permission to get the screenshot.
                 final int callingUid = Binder.getCallingUid();
+                IMediaProjection mediaProjection = getMediaProjection(callingUid,
+                        getContextualSearchPackageName());
                 Binder.withCleanCallingIdentity(() -> {
                     final ScreenshotHardwareBuffer shb =
-                            mWmInternal.takeContextualSearchScreenshot(
-                               (Flags.contextualSearchPreventSelfCapture() ? callingUid : -1));
+                            mWmInternal.takeContextualSearchScreenshot(callingUid);
                     final Bitmap bm = shb != null ? shb.asBitmap() : null;
                     if (bm != null) {
                         bundle.putParcelable(ContextualSearchManager.EXTRA_SCREENSHOT,
                                 bm.asShared());
                         bundle.putBoolean(ContextualSearchManager.EXTRA_FLAG_SECURE_FOUND,
                                 shb.containsSecureLayers());
+                    }
+
+                    if (mediaProjection != null) {
+                        bundle.putBinder(MediaProjectionManager.EXTRA_MEDIA_PROJECTION,
+                                mediaProjection.asBinder());
                     }
                     try {
                         callback.onResult(

@@ -37,7 +37,6 @@ import com.android.systemui.power.domain.interactor.PowerInteractor
 import com.android.systemui.power.shared.model.WakefulnessModel
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.util.kotlin.Utils.Companion.sample as sampleCombine
-import com.android.systemui.util.kotlin.sample
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineDispatcher
@@ -98,12 +97,8 @@ constructor(
         scope.launch {
             powerInteractor.isAwake
                 .filterRelevantKeyguardStateAnd { isAwake -> isAwake }
-                .sample(keyguardInteractor.biometricUnlockState, ::Pair)
                 .collect {
-                    (
-                        _,
-                        biometricUnlockState,
-                    ) ->
+                    val biometricUnlockState = keyguardInteractor.biometricUnlockState.value
                     if (isWakeAndUnlock(biometricUnlockState.mode)) {
                         if (SceneContainerFlag.isEnabled) {
                             // TODO(b/360368320): Adapt for scene framework
@@ -162,7 +157,6 @@ constructor(
                 .collect { (detailedWakefulness, isCommunalAvailable, shouldShowCommunal) ->
                     val isKeyguardOccludedLegacy = keyguardInteractor.isKeyguardOccluded.value
                     val primaryBouncerShowing = keyguardInteractor.primaryBouncerShowing.value
-                    val isKeyguardGoingAway = keyguardInteractor.isKeyguardGoingAway.value
 
                     if (!deviceEntryInteractor.isLockscreenEnabled()) {
                         if (!SceneContainerFlag.isEnabled) {
@@ -171,16 +165,11 @@ constructor(
                                 ownerReason = "lockscreen not enabled",
                             )
                         }
-                    } else if (canDismissLockscreen() || isKeyguardGoingAway) {
+                    } else if (canDismissLockscreen()) {
                         if (!SceneContainerFlag.isEnabled) {
                             startTransitionTo(
                                 KeyguardState.GONE,
-                                ownerReason =
-                                    if (canDismissLockscreen()) {
-                                        "canDismissLockscreen()"
-                                    } else {
-                                        "isKeyguardGoingAway"
-                                    },
+                                ownerReason = "canDismissLockscreen()",
                             )
                         }
                     } else if (primaryBouncerShowing) {

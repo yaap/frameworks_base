@@ -20,6 +20,7 @@ import static android.os.PowerManager.WAKE_REASON_BIOMETRIC;
 import static android.os.PowerManager.WAKE_REASON_GESTURE;
 import static android.os.PowerManager.WAKE_REASON_LIFT;
 import static android.os.PowerManager.WAKE_REASON_PLUGGED_IN;
+import static android.os.PowerManager.WAKE_REASON_POWER_BUTTON;
 import static android.os.PowerManager.WAKE_REASON_TAP;
 
 import android.annotation.IntDef;
@@ -33,6 +34,7 @@ import com.android.keyguard.KeyguardUpdateMonitorCallback;
 import com.android.systemui.Dumpable;
 import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.dump.DumpManager;
+import com.android.systemui.keyguard.shared.model.FingerprintAuthenticationStatus;
 import com.android.systemui.statusbar.policy.DevicePostureController;
 
 import com.google.errorprone.annotations.CompileTimeConstant;
@@ -276,6 +278,33 @@ public class DozeLog implements Dumpable {
     public void traceProximityResult(boolean near, long millis, @Reason int reason) {
         mLogger.logProximityResult(near, millis, reason);
         mProxStats[reason][near ? 0 : 1].append();
+    }
+
+    /**
+     * Appends usudfps long press requestPulse event to the logs.
+     * @param immediate indicates if should request pulse immediately.
+     * @param flagEnabled indicates if the bug flag is enabled.
+     * @param fpsLockout indicates if fingerprint unlock is locked out.
+     * @param fpsAllowed indicates if fingerprint unlock is allowed.
+     * @param collectingEvents indicates if is collecting usudfps pulse events.
+     * @param featureEnabled indicates if usudfps screen-off unlock is enabled.
+     */
+    public void traceShouldRequestUdfpsLongPressPulseImmediately(boolean immediate,
+            boolean flagEnabled, boolean fpsLockout, boolean fpsAllowed, boolean collectingEvents,
+            boolean featureEnabled) {
+        mLogger.logShouldRequestUdfpsLongPressPulseImmediately(immediate, fpsLockout,
+                fpsAllowed, collectingEvents);
+        mLogger.logShouldRequestUdfpsLongPressPulseImmediatelyFeatureAndFlagState(
+                flagEnabled, featureEnabled);
+    }
+
+    /**
+     * Appends usudfps screen-off pulse event to the logs.
+     * @param state the state while usudfps screen-off pulse event raised.
+     */
+    public void traceUltrasonicScreenOffPulseEvent(FingerprintAuthenticationStatus state) {
+        if (state == null) return;
+        mLogger.logUltrasonicScreenOffPulseEvent(state);
     }
 
     @Override
@@ -539,6 +568,8 @@ public class DozeLog implements Dumpable {
             case REASON_SENSOR_UDFPS_LONG_PRESS: return "udfps";
             case REASON_SENSOR_QUICK_PICKUP: return "quickPickup";
             case PULSE_REASON_FINGERPRINT_ACTIVATED: return "fingerprint-triggered";
+            case REASON_USUDFPS_PULSE: return "usudfps-pulse";
+            case PULSE_REASON_MINMODE: return "minmode";
             default: throw new IllegalArgumentException("invalid reason: " + pulseReason);
         }
     }
@@ -557,6 +588,8 @@ public class DozeLog implements Dumpable {
                 return WAKE_REASON_BIOMETRIC;
             case PULSE_REASON_DOCKING:
                 return WAKE_REASON_PLUGGED_IN;
+            case PULSE_REASON_MINMODE:
+                return WAKE_REASON_POWER_BUTTON;
             default:
                 return WAKE_REASON_GESTURE;
         }
@@ -568,7 +601,7 @@ public class DozeLog implements Dumpable {
             PULSE_REASON_SENSOR_LONG_PRESS, PULSE_REASON_DOCKING, REASON_SENSOR_WAKE_UP_PRESENCE,
             PULSE_REASON_SENSOR_WAKE_REACH, REASON_SENSOR_TAP,
             REASON_SENSOR_UDFPS_LONG_PRESS, REASON_SENSOR_QUICK_PICKUP,
-            PULSE_REASON_FINGERPRINT_ACTIVATED
+            PULSE_REASON_FINGERPRINT_ACTIVATED, REASON_USUDFPS_PULSE, PULSE_REASON_MINMODE
     })
     public @interface Reason {}
     public static final int PULSE_REASON_NONE = -1;
@@ -585,6 +618,8 @@ public class DozeLog implements Dumpable {
     public static final int REASON_SENSOR_UDFPS_LONG_PRESS = 10;
     public static final int REASON_SENSOR_QUICK_PICKUP = 11;
     public static final int PULSE_REASON_FINGERPRINT_ACTIVATED = 12;
+    public static final int REASON_USUDFPS_PULSE = 13;
+    public static final int PULSE_REASON_MINMODE = 14;
 
-    public static final int TOTAL_REASONS = 13;
+    public static final int TOTAL_REASONS = 15;
 }

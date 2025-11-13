@@ -44,6 +44,7 @@ import static android.app.ForegroundServiceTypePolicy.FGS_TYPE_POLICY_CHECK_PERM
 import static android.app.ForegroundServiceTypePolicy.FGS_TYPE_POLICY_CHECK_PERMISSION_DENIED_PERMISSIVE;
 import static android.app.ForegroundServiceTypePolicy.FGS_TYPE_POLICY_CHECK_UNKNOWN;
 import static android.content.Context.BIND_ALLOW_WHITELIST_MANAGEMENT;
+import static android.content.flags.Flags.enableBindPackageIsolatedProcess;
 import static android.content.pm.PackageManager.PERMISSION_DENIED;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST;
@@ -94,8 +95,6 @@ import static android.os.Process.ROOT_UID;
 import static android.os.Process.SHELL_UID;
 import static android.os.Process.SYSTEM_UID;
 import static android.os.Process.ZYGOTE_POLICY_FLAG_EMPTY;
-import static android.content.flags.Flags.enableBindPackageIsolatedProcess;
-
 
 import static com.android.internal.messages.nano.SystemMessageProto.SystemMessage.NOTE_FOREGROUND_SERVICE_BG_LAUNCH;
 import static com.android.internal.util.FrameworkStatsLog.FOREGROUND_SERVICE_STATE_CHANGED__FGS_START_API__FGSSTARTAPI_DELEGATE;
@@ -134,6 +133,7 @@ import android.Manifest;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SpecialUsers.CanBeCURRENT;
 import android.annotation.UptimeMillisLong;
 import android.annotation.UserIdInt;
 import android.app.ActivityManager;
@@ -151,6 +151,7 @@ import android.app.ForegroundServiceTypePolicy.ForegroundServicePolicyCheckCode;
 import android.app.ForegroundServiceTypePolicy.ForegroundServiceTypePermission;
 import android.app.ForegroundServiceTypePolicy.ForegroundServiceTypePolicyInfo;
 import android.app.IApplicationThread;
+import android.app.IBinderSession;
 import android.app.IForegroundServiceObserver;
 import android.app.IServiceConnection;
 import android.app.InvalidForegroundServiceTypeException;
@@ -393,7 +394,7 @@ public final class ActiveServices {
      * <li>{@link android.content.pm.ServiceInfo#FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK}</li>
      */
     @ChangeId
-    @EnabledSince(targetSdkVersion = VERSION_CODES.VANILLA_ICE_CREAM)
+    @EnabledSince(targetSdkVersion = VERSION_CODES.UPSIDE_DOWN_CAKE)
     @Overridable
     public static final long MEDIA_FGS_STATE_TRANSITION = 281762171L;
 
@@ -785,7 +786,7 @@ public final class ActiveServices {
         this.mActiveServiceAnrTimer = new ProcessAnrTimer(service,
                 ActivityManagerService.SERVICE_TIMEOUT_MSG,
                 "SERVICE_TIMEOUT",
-                new AnrTimer.Args().freeze(true));
+                new AnrTimer.Args());
         this.mShortFGSAnrTimer = new ServiceAnrTimer(service,
                 ActivityManagerService.SERVICE_SHORT_FGS_ANR_TIMEOUT_MSG,
                 "SHORT_FGS_TIMEOUT");
@@ -945,7 +946,8 @@ public final class ActiveServices {
 
     ComponentName startServiceLocked(IApplicationThread caller, Intent service, String resolvedType,
             int callingPid, int callingUid, boolean fgRequired,
-            String callingPackage, @Nullable String callingFeatureId, final int userId,
+            String callingPackage, @Nullable String callingFeatureId,
+            @CanBeCURRENT @UserIdInt final int userId,
             BackgroundStartPrivileges backgroundStartPrivileges, boolean isSdkSandboxService,
             int sdkSandboxClientAppUid, String sdkSandboxClientAppPackage, String instanceName)
             throws TransactionTooLargeException {
@@ -991,7 +993,7 @@ public final class ActiveServices {
         // Also, if the app tries to change the type of the FGS later (using
         // Service.startForeground()), at that point we will consult the BFSL check and the timeout
         // and make the necessary decisions.
-        setFgsRestrictionLocked(callingPackage, callingPid, callingUid, service, r, userId,
+        setFgsRestrictionLocked(callingPackage, callingPid, callingUid, service, r,
                 backgroundStartPrivileges, false /* isBindService */);
 
         if (!mAm.mUserController.exists(r.userId)) {
@@ -1034,8 +1036,9 @@ public final class ActiveServices {
         }
 
         if (fgRequired) {
-            logFgsBackgroundStart(r);
-            if (!r.isFgsAllowedStart() && isBgFgsRestrictionEnabled(r, callingUid)) {
+            boolean isBgFgsRestrictionEnabledForService =  isBgFgsRestrictionEnabled(r, callingUid);
+            logFgsBackgroundStart(r, isBgFgsRestrictionEnabledForService);
+            if (!r.isFgsAllowedStart() && isBgFgsRestrictionEnabledForService) {
                 String msg = "startForegroundService() not allowed due to "
                         + "mAllowStartForeground false: service "
                         + r.shortInstanceName;
@@ -1176,8 +1179,7 @@ public final class ActiveServices {
 
     private boolean shouldAllowBootCompletedStart(ServiceRecord r, int foregroundServiceType) {
         @PowerExemptionManager.ReasonCode final int fgsStartReasonCode = r.getFgsAllowStart();
-        if (Flags.fgsBootCompleted()
-                && CompatChanges.isChangeEnabled(FGS_BOOT_COMPLETED_RESTRICTIONS, r.appInfo.uid)
+        if (CompatChanges.isChangeEnabled(FGS_BOOT_COMPLETED_RESTRICTIONS, r.appInfo.uid)
                 && fgsStartReasonCode == PowerExemptionManager.REASON_BOOT_COMPLETED) {
             // Filter through types
             return ((foregroundServiceType & mAm.mConstants.FGS_BOOT_COMPLETED_ALLOWLIST) != 0);
@@ -1571,7 +1573,6 @@ public final class ActiveServices {
             r.startingBgTimeout = SystemClock.uptimeMillis() + mAm.mConstants.BG_START_TIMEOUT;
             if (DEBUG_DELAYED_SERVICE) {
                 RuntimeException here = new RuntimeException("here");
-                here.fillInStackTrace();
                 Slog.v(TAG_SERVICE, "Starting background (first=" + first + "): " + r, here);
             } else if (DEBUG_DELAYED_STARTS) {
                 Slog.v(TAG_SERVICE, "Starting background (first=" + first + "): " + r);
@@ -1649,7 +1650,7 @@ public final class ActiveServices {
     }
 
     int stopServiceLocked(IApplicationThread caller, Intent service,
-            String resolvedType, int userId, boolean isSdkSandboxService,
+            String resolvedType, @CanBeCURRENT @UserIdInt int userId, boolean isSdkSandboxService,
             int sdkSandboxClientAppUid, String sdkSandboxClientAppPackage, String instanceName) {
         if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "stopService: " + service
                 + " type=" + resolvedType);
@@ -2293,8 +2294,10 @@ public final class ActiveServices {
                 }
 
                 // Whether FGS-BG-start restriction is enabled for this service.
-                final boolean isBgFgsRestrictionEnabledForService = isBgFgsRestrictionEnabled(r,
-                        callingUidIfStart);
+                // Valid only if not system initiated tranistion.
+                final boolean isBgFgsRestrictionEnabledForService =
+                        (!systemRequestedTransition && isBgFgsRestrictionEnabled(r,
+                                callingUidIfStart));
 
                 // Whether to extend the SHORT_SERVICE time out.
                 boolean extendShortServiceTimeout = false;
@@ -2366,7 +2369,7 @@ public final class ActiveServices {
                         // See if the app could start an FGS or not.
                         r.clearFgsAllowStart();
                         setFgsRestrictionLocked(r.serviceInfo.packageName, r.app.getPid(),
-                                r.appInfo.uid, r.intent.getIntent(), r, r.userId,
+                                r.appInfo.uid, r.intent.getIntent(), r,
                                 BackgroundStartPrivileges.NONE,
                                 false /* isBindService */);
                         fgsRestrictionRecalculated = true;
@@ -2426,7 +2429,7 @@ public final class ActiveServices {
                         // See if the app could start an FGS or not.
                         r.clearFgsAllowStart();
                         setFgsRestrictionLocked(r.serviceInfo.packageName, r.app.getPid(),
-                                r.appInfo.uid, r.intent.getIntent(), r, r.userId,
+                                r.appInfo.uid, r.intent.getIntent(), r,
                                 BackgroundStartPrivileges.NONE, false /* isBindService */);
                         fgsRestrictionRecalculated = true;
 
@@ -2458,19 +2461,11 @@ public final class ActiveServices {
                                 } else if (lastTimeOutAt > 0) {
                                     // Time limit was exhausted within the past 24 hours and the app
                                     // has not been in the TOP state since then, throw an exception.
-                                    final String exceptionMsg = "Time limit already exhausted for"
-                                            + " foreground service type "
-                                            + ServiceInfo.foregroundServiceTypeToLabel(
-                                                    foregroundServiceType);
-                                    // Only throw an exception if the new crashing logic gate
-                                    // is enabled; otherwise, reset the limit temporarily.
-                                    if (android.app.Flags.enableFgsTimeoutCrashBehavior()) {
-                                        throw new ForegroundServiceStartNotAllowedException(
-                                                    exceptionMsg);
-                                    } else {
-                                        Slog.wtf(TAG, exceptionMsg);
-                                        fgsTypeInfo.reset();
-                                    }
+                                    throw new ForegroundServiceStartNotAllowedException(
+                                            "Time limit already exhausted for "
+                                                    + "foreground service type "
+                                                    + ServiceInfo.foregroundServiceTypeToLabel(
+                                                            foregroundServiceType));
                                 }
                             }
                         } else {
@@ -2495,7 +2490,7 @@ public final class ActiveServices {
                             if (delayMs > mAm.mConstants.mFgsStartForegroundTimeoutMs) {
                                 resetFgsRestrictionLocked(r);
                                 setFgsRestrictionLocked(r.serviceInfo.packageName, r.app.getPid(),
-                                        r.appInfo.uid, r.intent.getIntent(), r, r.userId,
+                                        r.appInfo.uid, r.intent.getIntent(), r,
                                         BackgroundStartPrivileges.NONE,
                                         false /* isBindService */);
                                 fgsRestrictionRecalculated = true;
@@ -2516,7 +2511,7 @@ public final class ActiveServices {
                         // The second or later time startForeground() is called after service is
                         // started. Check for app state again.
                         setFgsRestrictionLocked(r.serviceInfo.packageName, r.app.getPid(),
-                                r.appInfo.uid, r.intent.getIntent(), r, r.userId,
+                                r.appInfo.uid, r.intent.getIntent(), r,
                                 BackgroundStartPrivileges.NONE,
                                 false /* isBindService */);
                         fgsRestrictionRecalculated = true;
@@ -2535,7 +2530,7 @@ public final class ActiveServices {
                     // logic.
                     if (!fgsRestrictionRecalculated && !r.startRequested) {
                         setFgsRestrictionLocked(r.serviceInfo.packageName, r.app.getPid(),
-                                r.appInfo.uid, r.intent.getIntent(), r, r.userId,
+                                r.appInfo.uid, r.intent.getIntent(), r,
                                 BackgroundStartPrivileges.NONE,
                                 false /* isBindService */, true /* forBoundFgs */);
                     }
@@ -2550,7 +2545,7 @@ public final class ActiveServices {
                     }
                     r.maybeLogFgsLogicChange();
                     if (!bypassBfslCheck) {
-                        logFgsBackgroundStart(r);
+                        logFgsBackgroundStart(r, isBgFgsRestrictionEnabledForService);
                         if (!r.isFgsAllowedStart()
                                 && isBgFgsRestrictionEnabledForService) {
                             final String msg = "Service.startForeground() not allowed due to "
@@ -3724,7 +3719,7 @@ public final class ActiveServices {
                 mShortFGSAnrTimer.discard(sr);
                 return;
             }
-            mShortFGSAnrTimer.accept(sr);
+            mShortFGSAnrTimer.accept(sr, tr);
 
             final String message = "Short FGS ANR'ed: " + sr;
             if (DEBUG_SHORT_SERVICE) {
@@ -3977,20 +3972,15 @@ public final class ActiveServices {
             final String reason = "A foreground service of type "
                     + ServiceInfo.foregroundServiceTypeToLabel(fgsType)
                     + " did not stop within its timeout: " + sr.getComponentName();
-            if (android.app.Flags.enableFgsTimeoutCrashBehavior()) {
-                // Crash the app
-                Slog.e(TAG_SERVICE, "FGS Crashed: " + sr);
-                traceInstant("FGS Crash: ", sr);
-                if (sr.app != null) {
-                    mAm.crashApplicationWithTypeWithExtras(sr.app.uid, sr.app.getPid(),
-                            sr.app.info.packageName, sr.app.userId, reason, false /*force*/,
-                            ForegroundServiceDidNotStopInTimeException.TYPE_ID,
-                            ForegroundServiceDidNotStopInTimeException
-                                    .createExtrasForService(sr.getComponentName()));
-                }
-            } else {
-                // Log a WTF instead of crashing the app while the new behavior is gated.
-                Slog.wtf(TAG, reason);
+            // Crash the app
+            Slog.e(TAG_SERVICE, "FGS Crashed: " + sr);
+            traceInstant("FGS Crash: ", sr);
+            if (sr.app != null) {
+                mAm.crashApplicationWithTypeWithExtras(sr.app.uid, sr.app.getPid(),
+                        sr.app.info.packageName, sr.app.userId, reason, false /*force*/,
+                        ForegroundServiceDidNotStopInTimeException.TYPE_ID,
+                        ForegroundServiceDidNotStopInTimeException
+                                .createExtrasForService(sr.getComponentName()));
             }
         }
     }
@@ -4076,7 +4066,7 @@ public final class ActiveServices {
             String resolvedType, final IServiceConnection connection, long flags,
             String instanceName, boolean isSdkSandboxService, int sdkSandboxClientAppUid,
             String sdkSandboxClientAppPackage, IApplicationThread sdkSandboxClientApplicationThread,
-            String callingPackage, final int userId)
+            String callingPackage, @CanBeCURRENT @UserIdInt final int userId)
             throws TransactionTooLargeException {
         if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "bindService: " + service
                 + " type=" + resolvedType + " conn=" + connection.asBinder()
@@ -4158,6 +4148,15 @@ public final class ActiveServices {
             mAm.enforceCallingPermission(
                     android.Manifest.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND,
                     "BIND_ALLOW_FOREGROUND_SERVICE_STARTS_FROM_BACKGROUND");
+        }
+
+        if ((flags & Context.BIND_ALLOW_FREEZE) != 0 && !isCallerSystem) {
+            throw new SecurityException("Non-system caller (pid=" + callingPid
+                    + ") set BIND_ALLOW_FREEZE when binding service " + service);
+        }
+        if ((flags & Context.BIND_SIMULATE_ALLOW_FREEZE) != 0 && !isCallerSystem) {
+            throw new SecurityException("Non-system caller (pid=" + callingPid
+                    + ") set BIND_SIMULATE_ALLOW_FREEZE when binding service " + service);
         }
 
         final boolean callerFg = callerApp.mState.getSetSchedGroup()
@@ -4341,7 +4340,7 @@ public final class ActiveServices {
                     return 0;
                 }
             }
-            setFgsRestrictionLocked(callingPackage, callingPid, callingUid, service, s, userId,
+            setFgsRestrictionLocked(callingPackage, callingPid, callingUid, service, s,
                     BackgroundStartPrivileges.NONE, true /* isBindService */);
 
             if (s.app != null) {
@@ -4406,8 +4405,10 @@ public final class ActiveServices {
                 // pass the alias component name instead to the client.
                 final ComponentName clientSideComponentName =
                         res.aliasComponent != null ? res.aliasComponent : s.name;
+                final IBinderSession session =
+                        mAm.mProcessStateController.getBoundServiceSessionFor(c);
                 try {
-                    c.conn.connected(clientSideComponentName, b.intent.binder, false);
+                    c.conn.connected(clientSideComponentName, b.intent.binder, session, false);
                 } catch (Exception e) {
                     Slog.w(TAG, "Failure sending service " + s.shortInstanceName
                             + " to connection " + c.conn.asBinder()
@@ -4464,15 +4465,12 @@ public final class ActiveServices {
                 .write();
     }
 
-    void publishServiceLocked(ServiceRecord r, Intent intent, IBinder service) {
+    void publishServiceLocked(ServiceRecord r, IntentBindRecord b, IBinder service) {
         final long origId = mAm.mInjector.clearCallingIdentity();
         try {
             if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "PUBLISHING " + r
-                    + " " + intent + ": " + service);
+                    + " " + b.intent.getIntent() + ": " + service);
             if (r != null) {
-                Intent.FilterComparison filter
-                        = new Intent.FilterComparison(intent);
-                IntentBindRecord b = r.bindings.get(filter);
                 if (b != null && !b.received) {
                     b.binder = service;
                     b.requested = true;
@@ -4482,13 +4480,13 @@ public final class ActiveServices {
                         ArrayList<ConnectionRecord> clist = connections.valueAt(conni);
                         for (int i=0; i<clist.size(); i++) {
                             ConnectionRecord c = clist.get(i);
-                            if (!filter.equals(c.binding.intent.intent)) {
+                            if (!b.intent.equals(c.binding.intent.intent)) {
                                 if (DEBUG_SERVICE) Slog.v(
                                         TAG_SERVICE, "Not publishing to: " + c);
                                 if (DEBUG_SERVICE) Slog.v(
                                         TAG_SERVICE, "Bound intent: " + c.binding.intent.intent);
                                 if (DEBUG_SERVICE) Slog.v(
-                                        TAG_SERVICE, "Published intent: " + intent);
+                                        TAG_SERVICE, "Published intent: " + b.intent.getIntent());
                                 continue;
                             }
                             if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "Publishing to: " + c);
@@ -4496,8 +4494,10 @@ public final class ActiveServices {
                             // pass the alias component name instead to the client.
                             final ComponentName clientSideComponentName =
                                     c.aliasComponent != null ? c.aliasComponent : r.name;
+                            final IBinderSession session =
+                                    mAm.mProcessStateController.getBoundServiceSessionFor(c);
                             try {
-                                c.conn.connected(clientSideComponentName, service, false);
+                                c.conn.connected(clientSideComponentName, service, session, false);
                             } catch (Exception e) {
                                 Slog.w(TAG, "Failure sending service " + r.shortInstanceName
                                       + " to connection " + c.conn.asBinder()
@@ -4619,13 +4619,10 @@ public final class ActiveServices {
         return true;
     }
 
-    void unbindFinishedLocked(ServiceRecord r, Intent intent) {
+    void unbindFinishedLocked(ServiceRecord r, IntentBindRecord b) {
         final long origId = mAm.mInjector.clearCallingIdentity();
         try {
             if (r != null) {
-                Intent.FilterComparison filter
-                        = new Intent.FilterComparison(intent);
-                IntentBindRecord b = r.bindings.get(filter);
                 if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "unbindFinished in " + r
                         + " at " + b + ": apps="
                         + (b != null ? b.apps.size() : 0));
@@ -4723,12 +4720,21 @@ public final class ActiveServices {
     // TODO(b/265746493): Special case for HotwordDetectionService,
     // VisualQueryDetectionService, WearableSensingService and OnDeviceSandboxedInferenceService
     // Need a cleaner way to append this seInfo.
-    private String generateAdditionalSeInfoFromService(Intent service) {
-        if (service != null && service.getAction() != null
-                && (service.getAction().equals(HotwordDetectionService.SERVICE_INTERFACE)
-                || service.getAction().equals(VisualQueryDetectionService.SERVICE_INTERFACE)
-                || service.getAction().equals(WearableSensingService.SERVICE_INTERFACE)
-            || service.getAction().equals(OnDeviceSandboxedInferenceService.SERVICE_INTERFACE))) {
+    private String generateAdditionalSeInfoFromService(Intent service, String packageName) {
+        if (service == null || service.getAction() == null) {
+            return "";
+        }
+        final String action = service.getAction();
+        if (action.equals(HotwordDetectionService.SERVICE_INTERFACE)
+                || action.equals(VisualQueryDetectionService.SERVICE_INTERFACE)
+                || action.equals(OnDeviceSandboxedInferenceService.SERVICE_INTERFACE)) {
+            return ":isolatedComputeApp";
+        }
+
+        // WearableSensingService needs additional SeInfo unless it is restricted at the package
+        // level via allow-association restrictions.
+        if (action.equals(WearableSensingService.SERVICE_INTERFACE)
+                && !mAm.hasRestrictedAssociations(packageName)) {
             return ":isolatedComputeApp";
         }
         return "";
@@ -4751,7 +4757,8 @@ public final class ActiveServices {
     private ServiceLookupResult retrieveServiceLocked(
             Intent service, String instanceName, boolean isSdkSandboxService,
             int sdkSandboxClientAppUid, String sdkSandboxClientAppPackage, String resolvedType,
-            String callingPackage, int callingPid, int callingUid, int userId,
+            String callingPackage, int callingPid, int callingUid,
+            @CanBeCURRENT @UserIdInt int userId,
             boolean createIfNeeded, boolean callingFromFg, boolean isBindExternal,
             boolean allowInstant, ForegroundServiceDelegationOptions fgsDelegateOptions,
             boolean inSharedIsolatedProcess, boolean inPrivateSharedIsolatedProcess,
@@ -4869,7 +4876,7 @@ public final class ActiveServices {
                 r.mRecentCallingPackage = callingPackage;
                 r.mRecentCallingUid = callingUid;
             }
-            r.appInfo.seInfo += generateAdditionalSeInfoFromService(service);
+            r.appInfo.seInfo += generateAdditionalSeInfoFromService(service, r.packageName);
             return new ServiceLookupResult(r, resolution.getAlias());
         }
 
@@ -5124,7 +5131,8 @@ public final class ActiveServices {
                     return null;
                 }
             }
-            r.appInfo.seInfo += generateAdditionalSeInfoFromService(service);
+
+            r.appInfo.seInfo += generateAdditionalSeInfoFromService(service, r.packageName);
             return new ServiceLookupResult(r, resolution.getAlias());
         }
         return null;
@@ -5226,7 +5234,7 @@ public final class ActiveServices {
         r.executingStart = SystemClock.uptimeMillis();
     }
 
-    private final boolean requestServiceBindingLocked(ServiceRecord r, IntentBindRecord i,
+    private final boolean requestServiceBindingLocked(ServiceRecord r, IntentBindRecord b,
             boolean execInFg, boolean rebind,
             @ServiceBindingOomAdjPolicy int serviceBindingOomAdjPolicy)
             throws TransactionTooLargeException {
@@ -5234,26 +5242,26 @@ public final class ActiveServices {
             // If service is not currently running, can't yet bind.
             return false;
         }
-        if (DEBUG_SERVICE) Slog.d(TAG_SERVICE, "requestBind " + i + ": requested=" + i.requested
+        if (DEBUG_SERVICE) Slog.d(TAG_SERVICE, "requestBind " + b + ": requested=" + b.requested
                 + " rebind=" + rebind);
         final boolean skipOomAdj = (serviceBindingOomAdjPolicy
                 & SERVICE_BIND_OOMADJ_POLICY_SKIP_OOM_UPDATE_ON_BIND) != 0;
-        if ((!i.requested || rebind) && i.apps.size() > 0) {
+        if ((!b.requested || rebind) && b.apps.size() > 0) {
             try {
                 bumpServiceExecutingLocked(r, execInFg, "bind",
                         skipOomAdj ? OOM_ADJ_REASON_NONE : OOM_ADJ_REASON_BIND_SERVICE,
                         skipOomAdj /* skipTimeoutIfPossible */);
                 if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
                     Trace.instant(Trace.TRACE_TAG_ACTIVITY_MANAGER, "requestServiceBinding="
-                            + i.intent.getIntent() + ". bindSeq=" + mBindServiceSeqCounter);
+                            + b.intent.getIntent() + ". bindSeq=" + mBindServiceSeqCounter);
                 }
-                r.app.getThread().scheduleBindService(r, i.intent.getIntent(), rebind,
+                r.app.getThread().scheduleBindService(r, b, b.intent.getIntent(), rebind,
                         r.app.mState.getReportedProcState(), mBindServiceSeqCounter++);
                 if (!rebind) {
-                    i.requested = true;
+                    b.requested = true;
                 }
-                i.hasBound = true;
-                i.doRebind = false;
+                b.hasBound = true;
+                b.doRebind = false;
             } catch (TransactionTooLargeException e) {
                 // Keep the executeNesting count accurate.
                 if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "Crashed while binding " + r, e);
@@ -5935,6 +5943,13 @@ public final class ActiveServices {
         // Not running -- get it started, and enqueue this service record
         // to be executed when the app comes up.
         if (app == null && !permissionsReviewRequired && !packageFrozen) {
+            // Fixup the seInfo as the service's app info might have been updated during restart.
+            final String seInfo = generateAdditionalSeInfoFromService(
+                    r.intent.getIntent(), r.packageName);
+            if (!TextUtils.isEmpty(seInfo) && (TextUtils.isEmpty(r.appInfo.seInfo)
+                    || r.appInfo.seInfo.indexOf(seInfo) < 0)) {
+                r.appInfo.seInfo += seInfo;
+            }
             // TODO (chriswailes): Change the Zygote policy flags based on if the launch-for-service
             //  was initiated from a notification tap or not.
             if (r.isSdkSandbox) {
@@ -6018,9 +6033,11 @@ public final class ActiveServices {
             if (clientApp == hostApp) {
                 policy = DEFAULT_SERVICE_NO_BUMP_BIND_POLICY_FLAG;
             } else if (clientApp.isCached()) {
-                policy = DEFAULT_SERVICE_NO_BUMP_BIND_POLICY_FLAG;
-                if (clientApp.isFreezable()) {
-                    policy |= SERVICE_BIND_OOMADJ_POLICY_FREEZE_CALLER;
+                if (!Flags.cpuTimeCapabilityBasedFreezePolicy()) {
+                    policy = DEFAULT_SERVICE_NO_BUMP_BIND_POLICY_FLAG;
+                    if (clientApp.isFreezable()) {
+                        policy |= SERVICE_BIND_OOMADJ_POLICY_FREEZE_CALLER;
+                    }
                 }
             }
             if ((policy & SERVICE_BIND_OOMADJ_POLICY_SKIP_OOM_UPDATE_ON_CONNECT) == 0) {
@@ -6030,6 +6047,12 @@ public final class ActiveServices {
                 if (!mAm.mOomAdjuster.evaluateServiceConnectionAdd(clientApp, hostApp, cr)) {
                     // Running an oom adjuster won't be give the host app a better score, skip it.
                     policy = DEFAULT_SERVICE_NO_BUMP_BIND_POLICY_FLAG;
+                }
+            }
+            if (Flags.cpuTimeCapabilityBasedFreezePolicy()) {
+                // Non cached processes can possibly be frozen, always check their freezability.
+                if (clientApp.isFreezable()) {
+                    policy |= SERVICE_BIND_OOMADJ_POLICY_FREEZE_CALLER;
                 }
             }
         }
@@ -6343,7 +6366,7 @@ public final class ActiveServices {
                 final ComponentName clientSideComponentName =
                         cr.aliasComponent != null ? cr.aliasComponent : r.name;
                 try {
-                    cr.conn.connected(clientSideComponentName, null, true);
+                    cr.conn.connected(clientSideComponentName, null, null, true);
                 } catch (Exception e) {
                     Slog.w(TAG, "Failure disconnecting service " + r.shortInstanceName
                           + " to connection " + c.get(i).conn.asBinder()
@@ -6368,7 +6391,7 @@ public final class ActiveServices {
                         oomAdjusted |= r.wasOomAdjUpdated();
                         ibr.hasBound = false;
                         ibr.requested = false;
-                        r.app.getThread().scheduleUnbindService(r,
+                        r.app.getThread().scheduleUnbindService(r, ibr,
                                 ibr.intent.getIntent());
                     } catch (Exception e) {
                         Slog.w(TAG, "Exception when unbinding service "
@@ -6412,7 +6435,6 @@ public final class ActiveServices {
 
         if (DEBUG_SERVICE) {
             RuntimeException here = new RuntimeException();
-            here.fillInStackTrace();
             Slog.v(TAG_SERVICE, "Bringing down " + r + " " + r.intent, here);
         }
         r.destroyTime = SystemClock.uptimeMillis();
@@ -6694,7 +6716,8 @@ public final class ActiveServices {
                     // Assume the client doesn't want to know about a rebind;
                     // we will deal with that later if it asks for one.
                     b.intent.doRebind = false;
-                    s.app.getThread().scheduleUnbindService(s, b.intent.intent.getIntent());
+                    s.app.getThread().scheduleUnbindService(s, b.intent,
+                            b.intent.intent.getIntent());
                 } catch (Exception e) {
                     Slog.w(TAG, "Exception when unbinding service " + s.shortInstanceName, e);
                     serviceProcessGoneLocked(s, enqueueOomAdj);
@@ -6727,7 +6750,7 @@ public final class ActiveServices {
     }
 
     void serviceDoneExecutingLocked(ServiceRecord r, int type, int startId, int res,
-            boolean enqueueOomAdj, Intent intent) {
+            boolean enqueueOomAdj) {
         boolean inDestroying = mDestroyingServices.contains(r);
         if (r != null) {
             boolean skipOomAdj = false;
@@ -7586,7 +7609,6 @@ public final class ActiveServices {
                     }
                 }
                 if (timeout != null && mAm.mProcessList.isInLruListLOSP(proc)) {
-                    final AutoCloseable timer = mActiveServiceAnrTimer.accept(proc);
                     Slog.w(TAG, "Timeout executing service: " + timeout);
                     StringWriter sw = new StringWriter();
                     PrintWriter pw = new FastPrintWriter(sw, false, 1024);
@@ -7599,7 +7621,8 @@ public final class ActiveServices {
                             LAST_ANR_LIFETIME_DURATION_MSECS);
                     long waitedMillis = now - timeout.executingStart;
                     timeoutRecord = TimeoutRecord.forServiceExec(timeout.shortInstanceName,
-                            waitedMillis).setExpiredTimer(timer);
+                            waitedMillis);
+                    mActiveServiceAnrTimer.accept(proc, timeoutRecord);
                 } else {
                     mActiveServiceAnrTimer.discard(proc);
                     final long delay = psr.shouldExecServicesFg()
@@ -7643,7 +7666,7 @@ public final class ActiveServices {
                     return;
                 }
 
-                mServiceFGAnrTimer.accept(r);
+                mServiceFGAnrTimer.accept(r, timeoutRecord);
 
                 if (DEBUG_BACKGROUND_CHECK) {
                     Slog.i(TAG, "Service foreground-required timeout for " + r);
@@ -8307,9 +8330,9 @@ public final class ActiveServices {
     }
 
     private void setFgsRestrictionLocked(String callingPackage,
-            int callingPid, int callingUid, Intent intent, ServiceRecord r, int userId,
+            int callingPid, int callingUid, Intent intent, ServiceRecord r,
             BackgroundStartPrivileges backgroundStartPrivileges, boolean isBindService) {
-        setFgsRestrictionLocked(callingPackage, callingPid, callingUid, intent, r, userId,
+        setFgsRestrictionLocked(callingPackage, callingPid, callingUid, intent, r,
                 backgroundStartPrivileges, isBindService, /*forBoundFgs*/ false);
     }
 
@@ -8328,7 +8351,7 @@ public final class ActiveServices {
      *                    service that's not started but bound.
      */
     private void setFgsRestrictionLocked(String callingPackage,
-            int callingPid, int callingUid, Intent intent, ServiceRecord r, int userId,
+            int callingPid, int callingUid, Intent intent, ServiceRecord r,
             BackgroundStartPrivileges backgroundStartPrivileges, boolean inBindService,
             boolean forBoundFgs) {
 
@@ -8829,8 +8852,7 @@ public final class ActiveServices {
                                     callingUid, callingPid, callingPackage)) {
                 // Starting from Android V, it is not enough to only have the SYSTEM_ALERT_WINDOW
                 // permission granted - apps must also be showing an overlay window.
-                if (Flags.fgsDisableSaw()
-                        && CompatChanges.isChangeEnabled(FGS_SAW_RESTRICTIONS, callingUid)) {
+                if (CompatChanges.isChangeEnabled(FGS_SAW_RESTRICTIONS, callingUid)) {
                     final UidRecord uidRecord = mAm.mProcessList.getUidRecordLOSP(callingUid);
                     if (uidRecord != null) {
                         for (int i = uidRecord.getNumOfProcs() - 1; i >= 0; i--) {
@@ -9008,7 +9030,7 @@ public final class ActiveServices {
         return true;
     }
 
-    private void logFgsBackgroundStart(ServiceRecord r) {
+    private void logFgsBackgroundStart(ServiceRecord r, boolean isBgFgsRestrictedForService) {
         /*
         // Only log if FGS is started from background.
         if (!isFgsBgStart(r.mAllowStartForeground)) {
@@ -9017,7 +9039,8 @@ public final class ActiveServices {
         */
         if (!r.mLoggedInfoAllowStartForeground) {
             final String msg = "Background started FGS: "
-                    + (r.isFgsAllowedStart() ? "Allowed " : "Disallowed ")
+                    + (r.isFgsAllowedStart() || !isBgFgsRestrictedForService ? "Allowed "
+                    : "Disallowed ")
                     + r.mInfoAllowStartForeground
                     + (r.isShortFgs() ? " (Called on SHORT_SERVICE)" : "");
             if (r.isFgsAllowedStart()) {
@@ -9027,11 +9050,7 @@ public final class ActiveServices {
                 }
                 Slog.i(TAG, msg);
             } else {
-                //if (ActivityManagerUtils.shouldSamplePackageForAtom(r.packageName,
-                //        mAm.mConstants.mFgsStartDeniedLogSampleRate)) {
-                    Slog.wtfQuiet(TAG, msg);
-                //}
-                Slog.w(TAG, msg);
+                Slog.wtf(TAG, msg);
             }
             r.mLoggedInfoAllowStartForeground = true;
         }
@@ -9265,7 +9284,7 @@ public final class ActiveServices {
         r.mFgsEnterTime = SystemClock.uptimeMillis();
         mAm.mProcessStateController.setForegroundServiceType(r, options.mForegroundServiceTypes);
         r.updateOomAdjSeq();
-        setFgsRestrictionLocked(callingPackage, callingPid, callingUid, intent, r, userId,
+        setFgsRestrictionLocked(callingPackage, callingPid, callingUid, intent, r,
                 BackgroundStartPrivileges.NONE,  false /* isBindService */);
         final ProcessServiceRecord psr = callerApp.mServices;
         final boolean newService = mAm.mProcessStateController.startService(psr, r);

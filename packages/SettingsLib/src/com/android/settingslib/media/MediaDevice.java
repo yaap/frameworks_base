@@ -69,6 +69,7 @@ import androidx.annotation.IntDef;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.media.flags.Flags;
 import com.android.settingslib.R;
 
 import java.lang.annotation.Retention;
@@ -125,16 +126,23 @@ public abstract class MediaDevice implements Comparable<MediaDevice> {
 
     protected final Context mContext;
     protected final MediaRoute2Info mRouteInfo;
+    @Nullable private final DynamicRouteAttributes mDynamicRouteAttributes;
     protected final RouteListingPreference.Item mItem;
+    private boolean mIsSuggested;
 
     MediaDevice(
             @NonNull Context context,
             @Nullable MediaRoute2Info info,
+            @Nullable DynamicRouteAttributes dynamicRouteAttributes,
             @Nullable RouteListingPreference.Item item) {
         mContext = context;
         mRouteInfo = info;
         mItem = item;
+        mDynamicRouteAttributes = dynamicRouteAttributes;
         setType(info);
+        if (Flags.enableSuggestedDeviceApi()) {
+            mState = LocalMediaManager.MediaDeviceState.STATE_DISCONNECTED;
+        }
     }
 
     // MediaRoute2Info.getType was made public on API 34, but exists since API 30.
@@ -313,11 +321,26 @@ public abstract class MediaDevice implements Comparable<MediaDevice> {
     }
 
     /**
-     * Checks if device is suggested device from application
+     * Checks if device is suggested device from application. A device can be suggested through
+     * either RouteListingPreferences or through MediaRouter2#setDeviceSuggestions.
+     *
+     * <p>Prioritization and conflict resolution between the two APIs is as follows: - Suggestions
+     * from both RLP and the new API will be visible in OSw - Only suggestions from the new API will
+     * be visible in both OSw and new UI surfaces such as UMO - If suggestions are provided from
+     * local and proxy routers, priority will be given to the local router
      *
      * @return true if device is suggested device
      */
     public boolean isSuggestedDevice() {
+        return mIsSuggested || isSuggestedByRouteListingPreferences();
+    }
+
+    /**
+     * Checks if the device is suggested from the application's RouteListingPreferences
+     *
+     * @return true if the device is suggested
+     */
+    public boolean isSuggestedByRouteListingPreferences() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
                 && Api34Impl.isSuggestedDevice(mItem);
     }
@@ -418,9 +441,7 @@ public abstract class MediaDevice implements Comparable<MediaDevice> {
         return mRouteInfo.getVolumeHandling() == MediaRoute2Info.PLAYBACK_VOLUME_FIXED;
     }
 
-    /**
-     * Set current device's state
-     */
+    /** Set current device's state */
     public void setState(@LocalMediaManager.MediaDeviceState int state) {
         mState = state;
     }
@@ -432,6 +453,11 @@ public abstract class MediaDevice implements Comparable<MediaDevice> {
      */
     public @LocalMediaManager.MediaDeviceState int getState() {
         return mState;
+    }
+
+    /** Sets whether the current device is suggested. */
+    public void setIsSuggested(boolean suggested) {
+        mIsSuggested = suggested;
     }
 
     /**
@@ -580,6 +606,38 @@ public abstract class MediaDevice implements Comparable<MediaDevice> {
         }
         final MediaDevice otherDevice = (MediaDevice) obj;
         return otherDevice.getId().equals(getId());
+    }
+
+    /** Whether a device supports moving media playback to itself. */
+    public boolean isTransferable() {
+        if (mDynamicRouteAttributes == null) {
+            return false;
+        }
+        return mDynamicRouteAttributes.getTransferable();
+    }
+
+    /** Whether a device has active playback. */
+    public boolean isSelected() {
+        if (mDynamicRouteAttributes == null) {
+            return false;
+        }
+        return mDynamicRouteAttributes.getSelected();
+    }
+
+    /** Whether a device can be added to playback session. */
+    public boolean isSelectable() {
+        if (mDynamicRouteAttributes == null) {
+            return false;
+        }
+        return mDynamicRouteAttributes.getSelectable();
+    }
+
+    /** Whether a device can be removed from a playback session. */
+    public boolean isDeselectable() {
+        if (mDynamicRouteAttributes == null) {
+            return false;
+        }
+        return mDynamicRouteAttributes.getDeselectable();
     }
 
     @RequiresApi(34)

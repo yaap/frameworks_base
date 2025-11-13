@@ -32,7 +32,7 @@ import com.android.compose.animation.scene.UserActionResult
 import com.android.internal.jank.InteractionJankMonitor
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.keyguard.ui.composable.blueprint.rememberBurnIn
-import com.android.systemui.keyguard.ui.composable.section.DefaultClockSection
+import com.android.systemui.keyguard.ui.composable.element.SmallClockElement
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardClockViewModel
 import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.media.controls.ui.composable.MediaCarousel
@@ -50,9 +50,9 @@ import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.ui.composable.Overlay
 import com.android.systemui.shade.ui.composable.OverlayShade
 import com.android.systemui.shade.ui.composable.OverlayShadeHeader
+import com.android.systemui.shade.ui.composable.ShadeHeader
 import com.android.systemui.shade.ui.composable.isFullWidthShade
 import com.android.systemui.statusbar.notification.stack.ui.view.NotificationScrollView
-import com.android.systemui.util.Utils
 import dagger.Lazy
 import javax.inject.Inject
 import javax.inject.Named
@@ -66,7 +66,7 @@ constructor(
     private val contentViewModelFactory: NotificationsShadeOverlayContentViewModel.Factory,
     private val shadeSession: SaveableSession,
     private val stackScrollView: Lazy<NotificationScrollView>,
-    private val clockSection: DefaultClockSection,
+    private val smallClockElement: SmallClockElement,
     private val keyguardClockViewModel: KeyguardClockViewModel,
     private val mediaCarouselController: MediaCarouselController,
     @Named(QUICK_QS_PANEL) private val mediaHost: Lazy<MediaHost>,
@@ -98,13 +98,16 @@ constructor(
             }
 
         val usingCollapsedLandscapeMedia =
-            Utils.useCollapsedMediaInLandscape(LocalResources.current)
+            LocalResources.current.getBoolean(R.bool.config_quickSettingsMediaLandscapeCollapsed)
         mediaHost.get().expansion =
             if (usingCollapsedLandscapeMedia && isLandscape()) COLLAPSED else EXPANDED
+
+        val isFullWidth = isFullWidthShade()
 
         OverlayShade(
             panelElement = NotificationsShade.Elements.Panel,
             alignmentOnWideScreens = Alignment.TopStart,
+            enableTransparency = viewModel.isTransparencyEnabled,
             modifier = modifier,
             onScrimClicked = viewModel::onScrimClicked,
             header = {
@@ -114,16 +117,19 @@ constructor(
                     }
                 OverlayShadeHeader(
                     viewModel = headerViewModel,
+                    notificationsHighlight = ShadeHeader.ChipHighlight.Strong,
+                    quickSettingsHighlight = ShadeHeader.ChipHighlight.Weak,
+                    showClock = !isFullWidth,
                     modifier = Modifier.element(NotificationsShade.Elements.StatusBar),
                 )
             },
         ) {
             Box {
                 Column {
-                    if (isFullWidthShade()) {
+                    if (isFullWidth) {
                         val burnIn = rememberBurnIn(keyguardClockViewModel)
 
-                        with(clockSection) {
+                        with(smallClockElement) {
                             SmallClock(
                                 burnInParams = burnIn.parameters,
                                 onTopChanged = burnIn.onSmallClockTopChanged,

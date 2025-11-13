@@ -39,6 +39,7 @@ import android.graphics.Region;
 import android.util.Pair;
 import android.view.Display;
 import android.view.SurfaceControl;
+import android.window.DesktopExperienceFlags;
 import android.window.DesktopModeFlags;
 
 import androidx.annotation.VisibleForTesting;
@@ -130,6 +131,7 @@ public class DesktopModeVisualIndicator {
     private final SnapEventHandler mSnapEventHandler;
 
     private final boolean mUseSmallTabletRegions;
+    private boolean mIsReleased = false;
     /**
      * Ordered list of {@link Rect} zones that we will match an input coordinate against.
      * List is traversed from first to last element. The first rect that contains the input event
@@ -235,6 +237,7 @@ public class DesktopModeVisualIndicator {
 
     /** Release the visual indicator view and its viewhost. */
     public void releaseVisualIndicator() {
+        mIsReleased = true;
         mVisualIndicatorViewContainer.releaseVisualIndicator();
     }
 
@@ -253,23 +256,47 @@ public class DesktopModeVisualIndicator {
 
     /**
      * Based on the coordinates of the current drag event, determine which indicator type we should
+     * display, including no visible indicator, and update the indicator.
+     */
+    @NonNull
+    IndicatorType updateIndicatorType(int displayId, PointF inputCoordinates) {
+        final IndicatorType result = calculateIndicatorType(displayId, inputCoordinates);
+        updateIndicatorWithType(result);
+        return result;
+    }
+
+    /**
+     * Based on the coordinates of the current drag event, determine which indicator type we should
      * display, including no visible indicator.
      */
     @NonNull
-    IndicatorType updateIndicatorType(PointF inputCoordinates) {
+    IndicatorType calculateIndicatorType(int displayId, PointF inputCoordinates) {
+        if (DesktopExperienceFlags.ENABLE_CONNECTED_DISPLAYS_WINDOW_DRAG.isTrue()
+                && mTaskInfo.displayId != displayId) {
+            // TODO(b/411292927): Allow indicator to show on the target display (`displayId`)
+            // even if it differs from the task's original display.
+            return NO_INDICATOR;
+        }
         final IndicatorType result;
         if (mUseSmallTabletRegions) {
             result = getIndicatorSmallTablet(inputCoordinates);
         } else {
             result = getIndicatorLargeTablet(inputCoordinates);
         }
-        if (mDragStartState != DragStartState.DRAGGED_INTENT) {
-            mVisualIndicatorViewContainer.transitionIndicator(
-                    mTaskInfo, mDisplayController, mCurrentType, result
-            );
-            mCurrentType = result;
-        }
         return result;
+    }
+
+    /**
+     * Update the indicator based on IndicatorType.
+     */
+    @NonNull
+    void updateIndicatorWithType(IndicatorType type) {
+        if (!mIsReleased && mDragStartState != DragStartState.DRAGGED_INTENT) {
+            mVisualIndicatorViewContainer.transitionIndicator(
+                    mTaskInfo, mDisplayController, mCurrentType, type
+            );
+            mCurrentType = type;
+        }
     }
 
     @NonNull

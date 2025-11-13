@@ -38,6 +38,7 @@ import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class ChipTransitionHelperTest : SysuiTestCase() {
     private val kosmos = testKosmos()
     private val testScope = kosmos.testScope
@@ -51,11 +52,11 @@ class ChipTransitionHelperTest : SysuiTestCase() {
             val latest by collectLastValue(underTest.createChipFlow(inputChipFlow))
 
             val newChip =
-                OngoingActivityChipModel.Active.Timer(
+                OngoingActivityChipModel.Active(
                     key = KEY,
                     icon = createIcon(R.drawable.ic_cake),
+                    content = OngoingActivityChipModel.Content.Timer(startTimeMs = 100L),
                     colors = ColorsModel.AccentThemed,
-                    startTimeMs = 100L,
                     onClickListenerLegacy = null,
                     clickBehavior = OngoingActivityChipModel.ClickBehavior.None,
                 )
@@ -65,9 +66,10 @@ class ChipTransitionHelperTest : SysuiTestCase() {
             assertThat(latest).isEqualTo(newChip)
 
             val newerChip =
-                OngoingActivityChipModel.Active.IconOnly(
+                OngoingActivityChipModel.Active(
                     key = KEY,
                     icon = createIcon(R.drawable.ic_hotspot),
+                    content = OngoingActivityChipModel.Content.IconOnly,
                     colors = ColorsModel.AccentThemed,
                     onClickListenerLegacy = null,
                     clickBehavior = OngoingActivityChipModel.ClickBehavior.None,
@@ -87,11 +89,11 @@ class ChipTransitionHelperTest : SysuiTestCase() {
             val latest by collectLastValue(underTest.createChipFlow(inputChipFlow))
 
             val activeChip =
-                OngoingActivityChipModel.Active.Timer(
+                OngoingActivityChipModel.Active(
                     key = KEY,
                     icon = createIcon(R.drawable.ic_cake),
+                    content = OngoingActivityChipModel.Content.Timer(startTimeMs = 100L),
                     colors = ColorsModel.AccentThemed,
-                    startTimeMs = 100L,
                     onClickListenerLegacy = null,
                     clickBehavior = OngoingActivityChipModel.ClickBehavior.None,
                 )
@@ -129,11 +131,11 @@ class ChipTransitionHelperTest : SysuiTestCase() {
             val latest by collectLastValue(underTest.createChipFlow(inputChipFlow))
 
             val activeChip =
-                OngoingActivityChipModel.Active.Timer(
+                OngoingActivityChipModel.Active(
                     key = KEY,
                     icon = createIcon(R.drawable.ic_cake),
+                    content = OngoingActivityChipModel.Content.Timer(startTimeMs = 100L),
                     colors = ColorsModel.AccentThemed,
-                    startTimeMs = 100L,
                     onClickListenerLegacy = null,
                     clickBehavior = OngoingActivityChipModel.ClickBehavior.None,
                 )

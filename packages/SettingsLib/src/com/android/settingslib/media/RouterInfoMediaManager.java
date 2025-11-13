@@ -20,11 +20,13 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.media.MediaRoute2Info;
 import android.media.MediaRouter2;
+import android.media.MediaRouter2.DeviceSuggestionsUpdatesCallback;
 import android.media.MediaRouter2.RoutingController;
 import android.media.MediaRouter2Manager;
 import android.media.RouteDiscoveryPreference;
 import android.media.RouteListingPreference;
 import android.media.RoutingSessionInfo;
+import android.media.SuggestedDeviceInfo;
 import android.media.session.MediaController;
 import android.os.UserHandle;
 import android.text.TextUtils;
@@ -33,6 +35,7 @@ import androidx.annotation.GuardedBy;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.media.flags.Flags;
 import com.android.settingslib.bluetooth.LocalBluetoothManager;
 
@@ -40,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -52,17 +56,39 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
     private static final String TAG = "RouterInfoMediaManager";
 
     private final MediaRouter2 mRouter;
-    private final MediaRouter2Manager mRouterManager;
+    @VisibleForTesting
+    MediaRouter2Manager mRouterManager;
 
     private final Executor mExecutor = Executors.newSingleThreadExecutor();
-
-    private final RouteCallback mRouteCallback = new RouteCallback();
-    private final TransferCallback mTransferCallback = new TransferCallback();
-    private final ControllerCallback mControllerCallback = new ControllerCallback();
-    private final Consumer<RouteListingPreference> mRouteListingPreferenceCallback =
+    @VisibleForTesting
+    final RouteCallback mRouteCallback = new RouteCallback();
+    @VisibleForTesting
+    final TransferCallback mTransferCallback = new TransferCallback();
+    @VisibleForTesting
+    final ControllerCallback mControllerCallback = new ControllerCallback();
+    @VisibleForTesting
+    final Consumer<RouteListingPreference> mRouteListingPreferenceCallback =
             (preference) -> {
                 notifyRouteListingPreferenceUpdated(preference);
                 refreshDevices();
+            };
+
+    private final DeviceSuggestionsUpdatesCallback mDeviceSuggestionsUpdatesCallback =
+            new DeviceSuggestionsUpdatesCallback() {
+                @Override
+                public void onSuggestionsUpdated(
+                        String suggestingPackageName,
+                        List<SuggestedDeviceInfo> suggestedDeviceInfo) {
+                    updateDeviceSuggestion(suggestingPackageName, suggestedDeviceInfo);
+                }
+
+                @Override
+                public void onSuggestionsCleared(String suggestingPackageName) {
+                    updateDeviceSuggestion(suggestingPackageName, null);
+                }
+
+                @Override
+                public void onSuggestionsRequested() {} // no-op
             };
 
     @GuardedBy("this")
@@ -100,6 +126,20 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         mRouterManager = MediaRouter2Manager.getInstance(context);
     }
 
+    @VisibleForTesting
+    RouterInfoMediaManager(
+            Context context,
+            @NonNull String packageName,
+            @NonNull UserHandle userHandle,
+            LocalBluetoothManager localBluetoothManager,
+            @Nullable MediaController mediaController,
+            MediaRouter2 mediaRouter2,
+            MediaRouter2Manager mediaRouter2Manager) {
+        super(context, packageName, userHandle, localBluetoothManager, mediaController);
+        mRouter = mediaRouter2;
+        mRouterManager = mediaRouter2Manager;
+    }
+
     @Override
     protected void startScanOnRouter() {
         if (Flags.enableScreenOffScanning()) {
@@ -120,6 +160,14 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         mRouter.registerRouteCallback(mExecutor, mRouteCallback, RouteDiscoveryPreference.EMPTY);
         mRouter.registerRouteListingPreferenceUpdatedCallback(
                 mExecutor, mRouteListingPreferenceCallback);
+        mRouter.registerDeviceSuggestionsUpdatesCallback(
+                mExecutor, mDeviceSuggestionsUpdatesCallback);
+        if (Flags.enableSuggestedDeviceApi()) {
+            for (Map.Entry<String, List<SuggestedDeviceInfo>> entry :
+                    mRouter.getDeviceSuggestions().entrySet()) {
+                updateDeviceSuggestion(entry.getKey(), entry.getValue());
+            }
+        }
         mRouter.registerTransferCallback(mExecutor, mTransferCallback);
         mRouter.registerControllerCallback(mExecutor, mControllerCallback);
     }
@@ -143,6 +191,7 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         mRouter.unregisterControllerCallback(mControllerCallback);
         mRouter.unregisterTransferCallback(mTransferCallback);
         mRouter.unregisterRouteListingPreferenceUpdatedCallback(mRouteListingPreferenceCallback);
+        mRouter.unregisterDeviceSuggestionsUpdatesCallback(mDeviceSuggestionsUpdatesCallback);
         mRouter.unregisterRouteCallback(mRouteCallback);
     }
 
@@ -282,6 +331,11 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         return getTransferableRoutes(activeController);
     }
 
+    @Override
+    public void requestDeviceSuggestion() {
+        mRouter.notifyDeviceSuggestionRequested();
+    }
+
     @NonNull
     private List<MediaRoute2Info> getTransferableRoutes(@Nullable RoutingController controller) {
         HashMap<String, MediaRoute2Info> transferableRoutes = new HashMap<>();
@@ -308,7 +362,8 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         return mRouter.getController(sessionInfo.getId());
     }
 
-    private final class RouteCallback extends MediaRouter2.RouteCallback {
+    @VisibleForTesting
+    final class RouteCallback extends MediaRouter2.RouteCallback {
         @Override
         public void onRoutesUpdated(@NonNull List<MediaRoute2Info> routes) {
             refreshDevices();
@@ -320,7 +375,8 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         }
     }
 
-    private final class TransferCallback extends MediaRouter2.TransferCallback {
+    @VisibleForTesting
+    final class TransferCallback extends MediaRouter2.TransferCallback {
         @Override
         public void onTransfer(
                 @NonNull RoutingController oldController,
@@ -345,7 +401,8 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         }
     }
 
-    private final class ControllerCallback extends MediaRouter2.ControllerCallback {
+    @VisibleForTesting
+    final class ControllerCallback extends MediaRouter2.ControllerCallback {
         @Override
         public void onControllerUpdated(@NonNull RoutingController controller) {
             refreshDevices();

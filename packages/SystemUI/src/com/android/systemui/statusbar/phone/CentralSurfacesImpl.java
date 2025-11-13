@@ -32,7 +32,6 @@ import static androidx.lifecycle.Lifecycle.State.RESUMED;
 
 import static com.android.systemui.Dependency.TIME_TICK_HANDLER_NAME;
 import static com.android.systemui.Flags.keyboardShortcutHelperRewrite;
-import static com.android.systemui.Flags.relockWithPowerButtonImmediately;
 import static com.android.systemui.Flags.statusBarSignalPolicyRefactor;
 import static com.android.systemui.charging.WirelessChargingAnimation.UNKNOWN_BATTERY_LEVEL;
 import static com.android.systemui.flags.Flags.SHORTCUT_LIST_SEARCH_LAYOUT;
@@ -245,6 +244,8 @@ import com.android.systemui.statusbar.policy.UserInfoControllerImpl;
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.surfaceeffects.ripple.RippleShader.RippleShape;
+import com.android.systemui.topui.TopUiController;
+import com.android.systemui.topui.TopUiControllerRefactor;
 import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
@@ -406,6 +407,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     private final AuthRippleController mAuthRippleController;
     @WindowVisibleState private int mStatusBarWindowState = WINDOW_STATE_SHOWING;
     private final NotificationShadeWindowController mNotificationShadeWindowController;
+    private final TopUiController mTopUiController;
     private final StatusBarInitializer mStatusBarInitializer;
     private final StatusBarWindowControllerStore mStatusBarWindowControllerStore;
     private final StatusBarModeRepositoryStore mStatusBarModeRepository;
@@ -701,6 +703,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             ConfigurationController configurationController,
             NotificationShadeWindowController notificationShadeWindowController,
             Lazy<NotificationShadeWindowViewController> notificationShadeWindowViewControllerLazy,
+            TopUiController topUiController,
             NotificationStackScrollLayoutController notificationStackScrollLayoutController,
             // Lazys due to b/298099682.
             Lazy<NotificationPresenter> notificationPresenterLazy,
@@ -814,6 +817,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mAssistManagerLazy = assistManagerLazy;
         mConfigurationController = configurationController;
         mNotificationShadeWindowController = notificationShadeWindowController;
+        mTopUiController = topUiController;
         mNotificationShadeWindowViewControllerLazy = notificationShadeWindowViewControllerLazy;
         mStackScrollerController = notificationStackScrollLayoutController;
         mStackScroller = mStackScrollerController.getView();
@@ -1163,9 +1167,15 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 }, OverlayPlugin.class, true /* Allow multiple plugins */);
 
         mStartingSurfaceOptional.ifPresent(startingSurface -> startingSurface.setSysuiProxy(
-                (requestTopUi, componentTag) -> mMainExecutor.execute(() ->
-                        mNotificationShadeWindowController.setRequestTopUi(
-                                requestTopUi, componentTag))));
+                (requestTopUi, componentTag) -> mMainExecutor.execute(() -> {
+                            if (TopUiControllerRefactor.isEnabled()) {
+                                mTopUiController.setRequestTopUi(requestTopUi, componentTag);
+                            } else {
+                                mNotificationShadeWindowController.setRequestTopUi(requestTopUi,
+                                        componentTag);
+                            }
+                        }
+                )));
     }
 
     @VisibleForTesting
@@ -1338,7 +1348,6 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
                         @Override
                         public void hide() {
-                            mStatusBarModeRepository.getDefaultDisplay().clearTransient();
                         }
                     });
         }
@@ -1805,12 +1814,20 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 new WirelessChargingAnimation.Callback() {
                     @Override
                     public void onAnimationStarting() {
-                        mNotificationShadeWindowController.setRequestTopUi(true, TAG);
+                        if (TopUiControllerRefactor.isEnabled()) {
+                            mTopUiController.setRequestTopUi(true, TAG);
+                        } else {
+                            mNotificationShadeWindowController.setRequestTopUi(true, TAG);
+                        }
                     }
 
                     @Override
                     public void onAnimationEnded() {
-                        mNotificationShadeWindowController.setRequestTopUi(false, TAG);
+                        if (TopUiControllerRefactor.isEnabled()) {
+                            mTopUiController.setRequestTopUi(false, TAG);
+                        } else {
+                            mNotificationShadeWindowController.setRequestTopUi(false, TAG);
+                        }
                     }
                 }, /* isDozing= */ false, RippleShape.CIRCLE,
                 sUiEventLogger, mWindowManager, mWindowManagerProvider).show(animationDelay);
@@ -2511,12 +2528,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 mStatusBarKeyguardViewManager.reset(true);
             } else if (mState == StatusBarState.KEYGUARD
                     && !mStatusBarKeyguardViewManager.primaryBouncerIsOrWillBeShowing()) {
-                boolean needsBouncer = mStatusBarKeyguardViewManager.isSecure();
-                if (relockWithPowerButtonImmediately()) {
-                    // Only request if SIM bouncer is needed
-                    needsBouncer = mStatusBarKeyguardViewManager.needsFullscreenBouncer();
-                }
-
+                // Only request if SIM bouncer is needed
+                boolean needsBouncer = mStatusBarKeyguardViewManager.needsFullscreenBouncer();
                 if (needsBouncer) {
                     var reason = "CentralSurfacesImpl#showBouncerOrLockScreenIfKeyguard";
                     if (SceneContainerFlag.isEnabled()) {
@@ -2816,6 +2829,11 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
         @Override
         public void onScreenTurnedOn() {
+            if (SceneContainerFlag.isEnabled()) {
+                // Already handled in ScrimStartable when the scene framework is enabled.
+                return;
+            }
+
             mScrimController.onScreenTurnedOn();
         }
 
@@ -2823,7 +2841,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         public void onScreenTurnedOff() {
             Trace.beginSection("CentralSurfaces#onScreenTurnedOff");
             mFalsingCollector.onScreenOff();
-            mScrimController.onScreenTurnedOff();
+            if (!SceneContainerFlag.isEnabled()) {
+                mScrimController.onScreenTurnedOff();
+            }
             if (mCloseQsBeforeScreenOff) {
                 mQsController.closeQs();
                 mCloseQsBeforeScreenOff = false;

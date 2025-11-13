@@ -21,6 +21,7 @@ import static android.app.WindowConfiguration.ACTIVITY_TYPE_HOME;
 import static android.app.WindowConfiguration.ACTIVITY_TYPE_RECENTS;
 import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.view.Display.DEFAULT_DISPLAY;
+import static android.view.Display.INVALID_DISPLAY;
 import static android.view.WindowManager.KEYGUARD_VISIBILITY_TRANSIT_FLAGS;
 import static android.view.WindowManager.TRANSIT_CHANGE;
 import static android.view.WindowManager.TRANSIT_CLOSE;
@@ -39,15 +40,16 @@ import static com.android.wm.shell.recents.RecentsTransitionStateListener.TRANSI
 import static com.android.wm.shell.shared.ShellSharedConstants.KEY_EXTRA_SHELL_CAN_HAND_OFF_ANIMATION;
 import static com.android.wm.shell.shared.split.SplitBounds.KEY_EXTRA_SPLIT_BOUNDS;
 import static com.android.wm.shell.transition.Transitions.TRANSIT_END_RECENTS_TRANSITION;
+import static com.android.wm.shell.transition.Transitions.TRANSIT_REMOVE_PIP;
 import static com.android.wm.shell.transition.Transitions.TRANSIT_START_RECENTS_TRANSITION;
 
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
+import android.app.ActivityOptions;
 import android.app.ActivityTaskManager;
 import android.app.IApplicationThread;
 import android.app.PendingIntent;
-import android.app.WindowConfiguration;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
@@ -62,6 +64,7 @@ import android.util.Pair;
 import android.util.Slog;
 import android.view.RemoteAnimationTarget;
 import android.view.SurfaceControl;
+import android.window.DesktopExperienceFlags;
 import android.window.PictureInPictureSurfaceTransaction;
 import android.window.TaskSnapshot;
 import android.window.TransitionInfo;
@@ -77,17 +80,21 @@ import com.android.internal.os.IResultReceiver;
 import com.android.internal.protolog.ProtoLog;
 import com.android.wm.shell.Flags;
 import com.android.wm.shell.ShellTaskOrganizer;
+import com.android.wm.shell.common.DisplayController;
 import com.android.wm.shell.common.ShellExecutor;
-import com.android.wm.shell.common.pip.PipUtils;
+import com.android.wm.shell.desktopmode.multidesks.DesksOrganizer;
 import com.android.wm.shell.protolog.ShellProtoLogGroup;
 import com.android.wm.shell.shared.R;
 import com.android.wm.shell.shared.TransitionUtil;
+import com.android.wm.shell.shared.pip.PipFlags;
 import com.android.wm.shell.sysui.ShellInit;
 import com.android.wm.shell.transition.HomeTransitionObserver;
 import com.android.wm.shell.transition.Transitions;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Handles the Recents (overview) animation. Only one of these can run at a time. A recents
@@ -108,6 +115,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
     private IApplicationThread mAnimApp = null;
     private final ArrayList<RecentsController> mControllers = new ArrayList<>();
     private final ArrayList<RecentsTransitionStateListener> mStateListeners = new ArrayList<>();
+    private Supplier<SurfaceControl.Transaction> mFinishTransactionSupplier = null;
 
     /**
      * List of other handlers which might need to mix recents with other things. These are checked
@@ -117,19 +125,24 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
 
     private final HomeTransitionObserver mHomeTransitionObserver;
     private @Nullable Color mBackgroundColor;
+    private final DisplayController mDisplayController;
+    private final DesksOrganizer mDesksOrganizer;
 
     public RecentsTransitionHandler(
             @NonNull ShellInit shellInit,
             @NonNull ShellTaskOrganizer shellTaskOrganizer,
             @NonNull Transitions transitions,
             @Nullable RecentTasksController recentTasksController,
-            @NonNull HomeTransitionObserver homeTransitionObserver) {
+            @NonNull HomeTransitionObserver homeTransitionObserver,
+            @NonNull DisplayController displayController,
+            @NonNull DesksOrganizer desksOrganizer) {
         mShellTaskOrganizer = shellTaskOrganizer;
         mTransitions = transitions;
         mExecutor = transitions.getMainExecutor();
         mRecentTasksController = recentTasksController;
         mHomeTransitionObserver = homeTransitionObserver;
-        if (!Transitions.ENABLE_SHELL_TRANSITIONS) return;
+        mDisplayController = displayController;
+        mDesksOrganizer = desksOrganizer;
         if (recentTasksController == null) return;
         shellInit.addInitCallback(this::onInit, this);
     }
@@ -165,10 +178,21 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
     }
 
     /**
+     * Used for testing to provide a supplier for the transaction used in
+     * RecentsController#finishInner() which later gets merged into the final finish transaction.
+     */
+    @VisibleForTesting
+    public void setFinishTransactionSupplier(
+            Supplier<SurfaceControl.Transaction> finishTransactionSupplier) {
+        mFinishTransactionSupplier = finishTransactionSupplier;
+    }
+
+    /**
      * Starts a new real/synthetic recents transition.
      */
     @VisibleForTesting
     public IBinder startRecentsTransition(PendingIntent intent, Intent fillIn, Bundle options,
+            @Nullable WindowContainerTransaction wct,
             IApplicationThread appThread, IRecentsAnimationRunner listener) {
         // only care about latest one.
         mAnimApp = appThread;
@@ -180,10 +204,16 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
         final boolean isSyntheticRequest = options.getBoolean(
                 "is_synthetic_recents_transition", /* defaultValue= */ false);
         final IBinder transition;
+        ActivityOptions activityOptions = ActivityOptions.fromBundle(options);
+        int displayId = activityOptions.getLaunchDisplayId();
+        if (displayId == INVALID_DISPLAY) {
+            displayId = DEFAULT_DISPLAY;
+        }
         if (isSyntheticRequest) {
-            transition = startSyntheticRecentsTransition(listener);
+            transition = startSyntheticRecentsTransition(listener, displayId);
         } else {
-            transition = startRealRecentsTransition(intent, fillIn, options, listener);
+            transition = startRealRecentsTransition(intent, fillIn, options, wct, listener,
+                    displayId);
         }
         return transition;
     }
@@ -191,7 +221,8 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
     /**
      * Starts a synthetic recents transition that is not backed by a real WM transition.
      */
-    private IBinder startSyntheticRecentsTransition(@NonNull IRecentsAnimationRunner listener) {
+    private IBinder startSyntheticRecentsTransition(@NonNull IRecentsAnimationRunner listener,
+            int displayId) {
         ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
                 "RecentsTransitionHandler.startRecentsTransition(synthetic)");
         final RecentsController lastController = getLastController();
@@ -204,7 +235,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
 
         // Create a new synthetic transition and start it immediately
         final RecentsController controller = new RecentsController(listener);
-        controller.startSyntheticTransition();
+        controller.startSyntheticTransition(displayId);
         mControllers.add(controller);
         return SYNTHETIC_TRANSITION;
     }
@@ -213,11 +244,13 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
      * Starts a real WM-backed recents transition.
      */
     private IBinder startRealRecentsTransition(PendingIntent intent, Intent fillIn, Bundle options,
-            IRecentsAnimationRunner listener) {
+            @Nullable WindowContainerTransaction requestWct, IRecentsAnimationRunner listener,
+            int displayId) {
         ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
-                "RecentsTransitionHandler.startRecentsTransition");
+                "RecentsTransitionHandler.startRecentsTransition, displayId=%d", displayId);
 
-        final WindowContainerTransaction wct = new WindowContainerTransaction();
+        final WindowContainerTransaction wct = requestWct != null
+                ? requestWct : new WindowContainerTransaction();
         wct.sendPendingIntent(intent, fillIn, options);
 
         // Find the mixed handler which should handle this request (if we are in a state where a
@@ -226,7 +259,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
         RecentsMixedHandler mixer = null;
         Consumer<IBinder> setTransitionForMixer = null;
         for (int i = 0; i < mMixers.size(); ++i) {
-            setTransitionForMixer = mMixers.get(i).handleRecentsRequest();
+            setTransitionForMixer = mMixers.get(i).handleRecentsRequest(displayId);
             if (setTransitionForMixer != null) {
                 mixer = mMixers.get(i);
                 break;
@@ -360,11 +393,16 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
         private SurfaceControl.Transaction mFinishTransaction = null;
 
         /**
-         * List of tasks that we are switching away from via this transition. Upon finish, these
-         * pausing tasks will become invisible.
+         * List of tasks that we are switching away from via this transition, ordered from top most
+         * to bottom most in z-order. Upon finish, these pausing tasks will become invisible.
          * These need to be ordered since the order must be restored if there is no task-switch.
          */
         private ArrayList<TaskState> mPausingTasks = null;
+        /**
+         * The desk that we are switching away from via this transition. Upon finish it will become
+         * invisible. It may be included in {@link RecentsController#mPausingTasks}.
+         */
+        private WindowContainerToken mPausingDesk = null;
 
         /**
          * List of tasks were pausing but closed in a subsequent merged transition. If a
@@ -413,6 +451,8 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
         // enableRecentsBookendTransition() is enabled
         private IBinder mPendingFinishTransition;
         private IResultReceiver mPendingRunnerFinishCb;
+        // This stores the pending finish transaction to merge with the actual finish transaction
+        private SurfaceControl.Transaction mPendingFinishTransaction;
 
         RecentsController(IRecentsAnimationRunner listener) {
             mInstanceId = System.identityHashCode(this);
@@ -548,6 +588,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
             }
             mFinishTransaction = null;
             mPausingTasks = null;
+            mPausingDesk = null;
             mClosingTasks = null;
             mOpeningTasks = null;
             mInfo = null;
@@ -558,6 +599,10 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
             mPipTransaction = null;
             mPendingRunnerFinishCb = null;
             mPendingFinishTransition = null;
+            if (mPendingFinishTransaction != null) {
+                mPendingFinishTransaction.close();
+            }
+            mPendingFinishTransaction = null;
             mControllers.remove(this);
             for (int i = 0; i < mStateListeners.size(); i++) {
                 mStateListeners.get(i).onTransitionStateChanged(TRANSITION_STATE_NOT_RUNNING);
@@ -567,30 +612,31 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
         /**
          * Starts a new transition that is not backed by a system transition.
          */
-        void startSyntheticTransition() {
+        void startSyntheticTransition(int displayId) {
             mTransition = SYNTHETIC_TRANSITION;
 
             // TODO(b/366021931): Update mechanism for pulling the home task, for now add home as
             //                    both opening and closing since there's some pre-existing
             //                    dependencies on having a closing task
             final ActivityManager.RunningTaskInfo homeTask =
-                    mShellTaskOrganizer.getRunningTasks(DEFAULT_DISPLAY).stream()
+                    mShellTaskOrganizer.getRunningTasks(displayId).stream()
                             .filter(task -> task.getActivityType() == ACTIVITY_TYPE_HOME)
                             .findFirst()
                             .get();
             final RemoteAnimationTarget openingTarget = TransitionUtil.newSyntheticTarget(
-                    homeTask, mShellTaskOrganizer.getHomeTaskSurface(), TRANSIT_OPEN,
+                    homeTask, mShellTaskOrganizer.getHomeTaskSurface(displayId), TRANSIT_OPEN,
                     0, true /* isTranslucent */);
             final RemoteAnimationTarget closingTarget = TransitionUtil.newSyntheticTarget(
-                    homeTask, mShellTaskOrganizer.getHomeTaskSurface(), TRANSIT_CLOSE,
+                    homeTask, mShellTaskOrganizer.getHomeTaskSurface(displayId), TRANSIT_CLOSE,
                     0, true /* isTranslucent */);
             final ArrayList<RemoteAnimationTarget> apps = new ArrayList<>();
             apps.add(openingTarget);
             apps.add(closingTarget);
             try {
                 ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
-                        "[%d] RecentsController.start: calling onAnimationStart with %d apps",
-                        mInstanceId, apps.size());
+                        "[%d] RecentsController.start: calling onAnimationStart with %d apps, "
+                                + "displayId=%d",
+                        mInstanceId, apps.size(), displayId);
                 mListener.onAnimationStart(this,
                         apps.toArray(new RemoteAnimationTarget[apps.size()]),
                         new RemoteAnimationTarget[0],
@@ -701,6 +747,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
             mFinishCB = finishCB;
             mFinishTransaction = finishT;
             mPausingTasks = new ArrayList<>();
+            mPausingDesk = null;
             mClosingTasks = new ArrayList<>();
             mOpeningTasks = new ArrayList<>();
             mLeashMap = new ArrayMap<>();
@@ -782,11 +829,19 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                     // Root tasks
                     if (TransitionUtil.isClosingType(change.getMode())) {
                         final int layer = aboveLayers - i;
-                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
-                                "  adding pausing taskId=%d at layer=%d", taskInfo.taskId, layer);
                         // raise closing (pausing) task to "above" layer so it isn't covered
                         t.setLayer(change.getLeash(), layer);
                         mPausingTasks.add(new TaskState(change, null /* leash */));
+                        if (mDesksOrganizer.isDeskChange(change)) {
+                            mPausingDesk = change.getContainer();
+                            ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                    "  adding pausing deskId=%d at layer=%d", taskInfo.taskId,
+                                    layer);
+                        } else {
+                            ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                    "  adding pausing taskId=%d at layer=%d", taskInfo.taskId,
+                                    layer);
+                        }
                     } else if (TransitionUtil.isOpeningType(change.getMode())) {
                         final int layer = belowLayers - i;
                         ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
@@ -957,17 +1012,28 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                 cancel("transit_sleep");
                 return;
             }
+
+            if (info.getType() == TRANSIT_REMOVE_PIP) {
+                ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                        "[%d] RecentsController.merge: transit_remove_pip", mInstanceId);
+                // Cancel the merge if transition is removing PiP; PiP is on top of everything else.
+                cancel(true /* toHome */, mWillFinishToHome /* withScreenshots */,
+                        "transit_remove_pip");
+                return;
+            }
+
             if (mKeyguardLocked || (info.getFlags() & KEYGUARD_VISIBILITY_TRANSIT_FLAGS) != 0) {
                 ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
                         "[%d] RecentsController.merge: keyguard is locked", mInstanceId);
                 // We will not accept new changes if we are swiping over the keyguard.
-                cancel(true /* toHome */, false /* withScreenshots */, "keyguard_locked");
+                cancel("keyguard_locked");
                 return;
             }
             ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
                     "[%d] RecentsController.merge", mInstanceId);
             // Keep all tasks in one list because order matters.
             ArrayList<TransitionInfo.Change> openingTasks = null;
+            TransitionInfo.Change openingDesk = null;
             IntArray openingTaskIsLeafs = null;
             ArrayList<TransitionInfo.Change> closingTasks = null;
             mOpeningSeparateHome = false;
@@ -982,18 +1048,20 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                 final ActivityManager.RunningTaskInfo taskInfo = change.getTaskInfo();
                 if (taskInfo != null
                         && taskInfo.configuration.windowConfiguration.isAlwaysOnTop()) {
+                    ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                            "[%d]   Canceling due to always on top task", mInstanceId);
                     // Tasks that are always on top (e.g. bubbles), will handle their own transition
                     // as they are on top of everything else. So cancel the merge here.
-                    cancel(false /* toHome */, false /* withScreenshots */,
-                            "task #" + taskInfo.taskId + " is always_on_top");
+                    cancel("task #" + taskInfo.taskId + " is always_on_top");
                     return;
                 }
                 if (TransitionUtil.isClosingType(change.getMode())
                         && taskInfo != null && taskInfo.lastParentTaskIdBeforePip > 0) {
+                    ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                            "[%d]   Canceling due to restoring PIP activity", mInstanceId);
                     // Pinned task is closing as a side effect of the removal of its original Task,
                     // such transition should be handled by PiP. So cancel the merge here.
-                    cancel(false /* toHome */, false /* withScreenshots */,
-                            "task #" + taskInfo.taskId + " is removed with its original parent");
+                    cancel("task #" + taskInfo.taskId + " is removed with its original parent");
                     return;
                 }
                 final boolean isRootTask = taskInfo != null
@@ -1004,9 +1072,14 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                 final boolean isLeafTask = leafTaskFilter.test(change);
                 if (TransitionUtil.isOpeningType(change.getMode())
                         || TransitionUtil.isOrderOnly(change)) {
+                    final String chgTypeMsg = TransitionUtil.isOpeningType(change.getMode())
+                            ? "Opening" : "Changing";
                     if (isRecentsTask) {
+                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                "[%d]   %s recents", mInstanceId, chgTypeMsg);
                         recentsOpening = change;
                     } else if (isRootTask || isLeafTask) {
+                        String containerTypeMsg = "task";
                         if (isLeafTask && taskInfo.topActivityType == ACTIVITY_TYPE_HOME) {
                             // This is usually a 3p launcher
                             mOpeningSeparateHome = true;
@@ -1016,12 +1089,22 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                             openingTaskIsLeafs = new IntArray();
                         }
                         openingTasks.add(change);
+                        if (mDesksOrganizer.isDeskChange(change)) {
+                            openingDesk = change;
+                            containerTypeMsg = "desk";
+                        }
                         openingTaskIsLeafs.add(isLeafTask ? 1 : 0);
+                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                "[%d]   %s %s", mInstanceId, chgTypeMsg, containerTypeMsg);
                     }
                 } else if (TransitionUtil.isClosingType(change.getMode())) {
                     if (isRecentsTask) {
+                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                "[%d]   Closing recents", mInstanceId);
                         foundRecentsClosing = true;
                     } else if (isRootTask || isLeafTask) {
+                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                "[%d]   Closing task", mInstanceId);
                         if (closingTasks == null) {
                             closingTasks = new ArrayList<>();
                         }
@@ -1032,9 +1115,11 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                     // transition handler can play the animation such as rotation effect.
                     if (change.hasFlags(TransitionInfo.FLAG_IS_DISPLAY)
                             && info.getType() == TRANSIT_CHANGE) {
+                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                "[%d]   Canceling due to display change", mInstanceId);
                         // This call to cancel will use the screenshots taken preemptively in
                         // handleMidTransitionRequest() prior to the display changing
-                        cancel(mWillFinishToHome, true /* withScreenshots */, "display change");
+                        cancel(true /* toHome */, true /* withScreenshots */, "display change");
                         return;
                     }
                     // Don't consider order-only & non-leaf changes as changing apps.
@@ -1047,6 +1132,8 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                                 && taskInfo != null
                                 && taskInfo.getWindowingMode()
                                 == WINDOWING_MODE_FULLSCREEN) {
+                            ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                    "[%d]   Moving task to fullscreen", mInstanceId);
                             if (openingTasks == null) {
                                 openingTasks = new ArrayList<>();
                                 openingTaskIsLeafs = new IntArray();
@@ -1055,7 +1142,9 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                             openingTaskIsLeafs.add(1);
                         }
                     } else if (isLeafTask && taskInfo.topActivityType == ACTIVITY_TYPE_HOME
-                            && !isRecentsTask ) {
+                            && !isRecentsTask) {
+                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                "[%d]   Opening home", mInstanceId);
                         // Unless it is a 3p launcher. This means that the 3p launcher was already
                         // visible (eg. the "pausing" task is translucent over the 3p launcher).
                         // Treat it as if we are "re-opening" the 3p launcher.
@@ -1123,20 +1212,27 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                     didMergeThings = true;
                 }
             }
-            RemoteAnimationTarget[] appearedTargets = null;
+            ArrayList<RemoteAnimationTarget> appearedTargets = null;
             if (openingTasks != null && openingTasks.size() > 0) {
                 // Switching to some new tasks, add to mOpening and remove from mPausing. Also,
                 // enter NEW_TASK state since this will start the switch-to animation.
                 final int layer = mInfo.getChanges().size() * 3;
-                int openingLeafCount = 0;
                 for (int i = 0; i < openingTaskIsLeafs.size(); ++i) {
-                    openingLeafCount += openingTaskIsLeafs.get(i);
+                    if (openingTaskIsLeafs.get(i) > 0) {
+                        // There is at least one opening leaf task, so initialize the appeared
+                        // targets list
+                        appearedTargets = new ArrayList<>();
+                        break;
+                    }
                 }
-                if (openingLeafCount > 0) {
-                    appearedTargets = new RemoteAnimationTarget[openingLeafCount];
-                }
-                boolean onlyOpeningPausedTasks = true;
-                int nextTargetIdx = 0;
+
+                // An initially paused and now opening desk means we're returning to the desk. We
+                // save it here to identify whether any of the opening tasks below belong to the
+                // desk, and are thus part of a returning-to-desk operation.
+                final TransitionInfo.Change openingPausedDesk = mPausingDesk != null
+                        && openingDesk != null
+                        && mPausingDesk.equals(openingDesk.getContainer()) ? openingDesk : null;
+                boolean onlyOpeningPausedTasksOrPausedDesk = true;
                 for (int i = 0; i < openingTasks.size(); ++i) {
                     final TransitionInfo.Change change = openingTasks.get(i);
                     final boolean isLeaf = openingTaskIsLeafs.get(i) == 1;
@@ -1149,12 +1245,22 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                     if (pausingIdx >= 0) {
                         // Something is showing/opening a previously-pausing app.
                         if (isLeaf) {
-                            appearedTargets[nextTargetIdx++] = TransitionUtil.newTarget(
-                                    change, layer, mPausingTasks.get(pausingIdx).mLeash);
+                            appearedTargets.add(TransitionUtil.newTarget(
+                                    change, layer, mPausingTasks.get(pausingIdx).mLeash));
+                            // In multi-desk mode, we can have a root task which the leaf tasks are
+                            // relative to, but if both the root and leaf are a part of the
+                            // transition then Transitions#setupStartState() will incorrectly apply
+                            // an offset to the task surface which is already leashed. Unlike the
+                            // start of the transition, we don't end up going through
+                            // TransitionUtil#createLeash(), which normally resets the position of
+                            // the task within the leash, so we have to do it manually here
+                            if (DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue()) {
+                                startT.setPosition(change.getLeash(), /* x= */ 0, /* y= */ 0);
+                            }
                         }
                         final TaskState pausingTask = mPausingTasks.remove(pausingIdx);
                         ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
-                                "  opening pausing %staskId=%d", isLeaf ? "leaf " : "",
+                                "  opening pausing %staskId=%d", isLeaf ? "leaf " : "non-leaf ",
                                 pausingTask.mTaskInfo.taskId);
                         mOpeningTasks.add(pausingTask);
                         // Setup hides opening tasks initially, so make it visible again (since we
@@ -1165,7 +1271,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                         // We are receiving new opening leaf tasks, so convert to onTasksAppeared.
                         final RemoteAnimationTarget target = TransitionUtil.newTarget(
                                 change, layer, info, startT, mLeashMap);
-                        appearedTargets[nextTargetIdx++] = target;
+                        appearedTargets.add(target);
                         // reparent into the original `mInfo` since that's where we are animating.
                         final TransitionInfo.Root root = TransitionUtil.getRootFor(change, mInfo);
                         final boolean wasClosing = closingIdx >= 0;
@@ -1185,11 +1291,24 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                             // Hide the animation leash, let the listener show it
                             startT.hide(target.leash);
                         }
-                        ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
-                                "  opening new leaf taskId=%d wasClosing=%b",
-                                target.taskId, wasClosing);
                         mOpeningTasks.add(new TaskState(change, target.leash));
-                        onlyOpeningPausedTasks = false;
+                        if (!DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue()) {
+                            ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                    "  opening new leaf taskId=%d wasClosing=%b",
+                                    target.taskId, wasClosing);
+                            onlyOpeningPausedTasksOrPausedDesk = false;
+                        } else {
+                            final boolean childOfOpeningPausedDesk = openingPausedDesk != null
+                                     && change.getTaskInfo().parentTaskId
+                                    == openingPausedDesk.getTaskInfo().taskId;
+                            ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                                    "  opening new leaf taskId=%d wasClosing=%b "
+                                            + "childOfOpeningPausedDesk=%b",
+                                    target.taskId, wasClosing, childOfOpeningPausedDesk);
+                            if (!childOfOpeningPausedDesk) {
+                                onlyOpeningPausedTasksOrPausedDesk = false;
+                            }
+                        }
                     } else {
                         ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
                                 "  opening new taskId=%d", change.getTaskInfo().taskId);
@@ -1198,11 +1317,11 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                         // is only animating the leafs.
                         startT.show(change.getLeash());
                         mOpeningTasks.add(new TaskState(change, null));
-                        onlyOpeningPausedTasks = false;
+                        onlyOpeningPausedTasksOrPausedDesk = false;
                     }
                 }
                 didMergeThings = true;
-                if (!onlyOpeningPausedTasks) {
+                if (!onlyOpeningPausedTasksOrPausedDesk) {
                     // If we are only opening paused leaf tasks, then we aren't actually quick
                     // switching or launching a new task from overview, and if Launcher requests to
                     // finish(toHome=false) as a response to the pausing tasks being opened again,
@@ -1226,7 +1345,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                         + foundRecentsClosing + " recentsTaskId=" + mRecentsTaskId);
                 if (foundRecentsClosing || mRecentsTaskId < 0) {
                     mWillFinishToHome = false;
-                    cancel(false /* toHome */, false /* withScreenshots */, "didn't merge");
+                    cancel("didn't merge");
                 }
                 return;
             }
@@ -1240,7 +1359,9 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                 try {
                     ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
                             "[%d] RecentsController.merge: calling onTasksAppeared", mInstanceId);
-                    mListener.onTasksAppeared(appearedTargets, passTransitionInfo ? info : null);
+                    final RemoteAnimationTarget[] targets = appearedTargets.toArray(
+                            new RemoteAnimationTarget[0]);
+                    mListener.onTasksAppeared(targets, passTransitionInfo ? info : null);
                 } catch (RemoteException e) {
                     Slog.e(TAG, "Error sending appeared tasks to recents animation", e);
                 }
@@ -1356,6 +1477,8 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                 return;
             }
 
+            // Note: returning to a desk tile, whether it be by clicking the tile or one of the
+            // existing exploded tasks is considered to be returning to app.
             boolean returningToApp = !toHome
                     && !mWillFinishToHome
                     && mPausingTasks != null
@@ -1381,7 +1504,9 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                     mInstanceId, toHome, sendUserLeaveHint, mWillFinishToHome, mState,
                     mPausingTasks != null, reason);
 
-            final SurfaceControl.Transaction t = mFinishTransaction;
+            final SurfaceControl.Transaction t = mFinishTransactionSupplier != null
+                    ? mFinishTransactionSupplier.get()
+                    : new SurfaceControl.Transaction();
             final WindowContainerTransaction wct = new WindowContainerTransaction();
 
             // The following code must set this if it is changing anything in core that might affect
@@ -1398,15 +1523,30 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
             if (returningToApp) {
                 ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION, "  returning to app");
                 // The gesture is returning to the pausing-task(s) rather than continuing with
-                // recents, so end the transition by moving the app back to the top (and also
-                // re-showing it's task).
-                for (int i = mPausingTasks.size() - 1; i >= 0; --i) {
-                    // reverse order so that index 0 ends up on top
-                    wct.reorder(mPausingTasks.get(i).mToken, true /* onTop */);
-                    t.show(mPausingTasks.get(i).mTaskSurface);
+                // recents, so end the transition by moving the app(s) back to the top (and also
+                // re-showing their tasks).
+                final List<TaskState> tasksToShowFrontToBack = new ArrayList<>();
+                if (DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue()) {
+                    // Opening tasks can also exist in a |returningToApp| case, such as when
+                    // returning to the desk tile by clicking on one of the exploded view tasks.
+                    // These are really "pausing" tasks that became "opening" because they were
+                    // re-brought to front. They should be on top of pausing tasks, so insert them
+                    // first.
+                    tasksToShowFrontToBack.addAll(mOpeningTasks);
                 }
-                setCornerRadiusForFreeformTasks(
-                        mRecentTasksController.getContext(), t, mPausingTasks);
+                // The remaining pausing tasks should also be moved back to top, but below the
+                // opening ones.
+                tasksToShowFrontToBack.addAll(mPausingTasks);
+                for (int i = tasksToShowFrontToBack.size() - 1; i >= 0; --i) {
+                    // reverse order so that index 0 ends up on top
+                    final TaskState taskState = tasksToShowFrontToBack.get(i);
+                    ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
+                            "  reorder task#%d to top", taskState.mTaskInfo.taskId);
+                    wct.reorder(taskState.mToken, true /* onTop */);
+                    t.show(taskState.mTaskSurface);
+                }
+                setCornerRadiusForFreeformTasks(mRecentTasksController.getContext(), t,
+                        tasksToShowFrontToBack);
                 if (!mKeyguardLocked && mRecentsTask != null) {
                     wct.restoreTransientOrder(mRecentsTask);
                 }
@@ -1489,7 +1629,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                         ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
                                 "RecentsController.finishInner: PiP transaction %s merged",
                                 mPipTransaction);
-                        if (PipUtils.isPip2ExperimentEnabled()) {
+                        if (PipFlags.isPip2ExperimentEnabled()) {
                             // If this path is triggered, we are in auto-enter PiP flow in gesture
                             // navigation mode, which means "Recents" transition should be followed
                             // by a TRANSIT_PIP. Hence, we take the WCT was about to be sent
@@ -1520,6 +1660,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                                 // In this case, we've already started the PIP transition, so we can
                                 // clean up immediately
                                 mPendingRunnerFinishCb = runnerFinishCb;
+                                mPendingFinishTransaction = t;
                                 onFinishInner(null);
                                 return;
                             }
@@ -1540,6 +1681,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                                 "[%d] RecentsController.finishInner: "
                                         + "Queuing TRANSIT_END_RECENTS_TRANSITION", mInstanceId);
                         mPendingRunnerFinishCb = runnerFinishCb;
+                        mPendingFinishTransaction = t;
                         mPendingFinishTransition = mTransitions.startTransition(
                                 TRANSIT_END_RECENTS_TRANSITION, wct,
                                 new PendingFinishTransitionHandler());
@@ -1548,15 +1690,18 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                                 "[%d] RecentsController.finishInner: Non-transition affecting wct",
                                 mInstanceId);
                         mPendingRunnerFinishCb = runnerFinishCb;
+                        mPendingFinishTransaction = t;
                         onFinishInner(wct);
                     }
                 } else {
                     // If there's no work to do, just go ahead and clean up
                     mPendingRunnerFinishCb = runnerFinishCb;
+                    mPendingFinishTransaction = t;
                     onFinishInner(null /* wct */);
                 }
             } else {
                 mPendingRunnerFinishCb = runnerFinishCb;
+                mPendingFinishTransaction = t;
                 onFinishInner(wct);
             }
         }
@@ -1569,6 +1714,11 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                     "[%d] RecentsController.finishInner: Completing finish", mInstanceId);
             final Transitions.TransitionFinishCallback finishCb = mFinishCB;
             final IResultReceiver runnerFinishCb = mPendingRunnerFinishCb;
+
+            // We merge the cleanup transaction (prepared in finishInner()) with the last accepted
+            // finish transaction to ensure that it's applied after the default finish transaction
+            // created for the bookend transition (if it's used)
+            mFinishTransaction.merge(mPendingFinishTransaction);
 
             cleanUp();
             finishCb.onTransitionFinished(wct);
@@ -1584,24 +1734,28 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
             }
         }
 
-        private static void setCornerRadiusForFreeformTasks(
+        private void setCornerRadiusForFreeformTasks(
                 Context context,
                 SurfaceControl.Transaction t,
-                ArrayList<TaskState> tasks) {
+                List<TaskState> tasks) {
             if (!ENABLE_DESKTOP_RECENTS_TRANSITIONS_CORNERS_BUGFIX.isTrue()) {
                 return;
             }
-            int cornerRadius = getCornerRadius(context);
             for (int i = 0; i < tasks.size(); ++i) {
                 TaskState task = tasks.get(i);
                 if (task.mTaskInfo != null && task.mTaskInfo.isFreeform()) {
+                    int cornerRadius = getCornerRadius(context, task.mTaskInfo.displayId);
                     t.setCornerRadius(task.mTaskSurface, cornerRadius);
                 }
             }
         }
 
-        private static int getCornerRadius(Context context) {
-            return context.getResources().getDimensionPixelSize(
+        private int getCornerRadius(Context context, int displayId) {
+            Context displayContext = mDisplayController.getDisplayContext(displayId);
+            if (displayContext == null) {
+                displayContext = context;
+            }
+            return displayContext.getResources().getDimensionPixelSize(
                     R.dimen.desktop_windowing_freeform_rounded_corner_radius);
         }
 
@@ -1777,7 +1931,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
          * {@link #mergeAnimation}, and {@link #onTransitionConsumed} methods.
          */
         @Nullable
-        Consumer<IBinder> handleRecentsRequest();
+        Consumer<IBinder> handleRecentsRequest(int displayId);
 
         /**
          * Called when a recents transition has finished, with a WCT and SurfaceControl Transaction

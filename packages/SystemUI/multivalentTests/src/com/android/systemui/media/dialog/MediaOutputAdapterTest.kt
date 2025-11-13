@@ -20,6 +20,7 @@ import android.graphics.drawable.Icon
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
 import android.testing.TestableLooper.RunWithLooper
+import android.text.BidiFormatter
 import android.view.View.GONE
 import android.view.View.VISIBLE
 import android.widget.LinearLayout
@@ -124,7 +125,7 @@ class MediaOutputAdapterTest : SysuiTestCase() {
     }
 
     @Test
-    fun getItemId_forDifferentItemsTypes_returnCorrespondingHashCode() {
+    fun getItemId_forDevice_returnsIdHashCode() {
         updateAdapterWithDevices(listOf(mMediaDevice1, mMediaDevice2))
 
         assertThat(mMediaOutputAdapter.getItemId(0))
@@ -132,7 +133,24 @@ class MediaOutputAdapterTest : SysuiTestCase() {
     }
 
     @Test
-    fun getItemId_invalidPosition_returnPosition() {
+    fun getItemId_forGroupSeparator_returnsTitleHashCode() {
+        mMediaItems.add(MediaItem.createGroupDividerMediaItem("Suggested Devices"))
+        mMediaOutputAdapter.updateItems()
+
+        assertThat(mMediaOutputAdapter.getItemId(0)).isEqualTo("Suggested Devices".hashCode())
+    }
+
+    @Test
+    fun getItemId_forDeviceGroup_returnsItemType() {
+        mMediaSwitchingController.stub { on { isGroupListCollapsed } doReturn true }
+        initializeSession()
+
+        assertThat(mMediaOutputAdapter.getItemId(1))
+            .isEqualTo(MediaItemType.TYPE_DEVICE_GROUP.toLong())
+    }
+
+    @Test
+    fun getItemId_invalidPosition_returnsNoId() {
         updateAdapterWithDevices(listOf(mMediaDevice1, mMediaDevice2))
         val invalidPosition = mMediaItems.size + 1
 
@@ -149,6 +167,7 @@ class MediaOutputAdapterTest : SysuiTestCase() {
             assertThat(mTitleText.visibility).isEqualTo(VISIBLE)
             assertThat(mTitleText.text.toString()).isEqualTo(TEST_DEVICE_NAME_2)
             assertThat(mSlider.visibility).isEqualTo(GONE)
+            assertThat(mMainContent.stateDescription).isNull()
         }
     }
 
@@ -162,6 +181,8 @@ class MediaOutputAdapterTest : SysuiTestCase() {
             assertThat(mTitleText.visibility).isEqualTo(VISIBLE)
             assertThat(mTitleText.text.toString()).isEqualTo(TEST_DEVICE_NAME_1)
             assertThat(mSlider.visibility).isEqualTo(VISIBLE)
+            assertThat(mMainContent.stateDescription.toString())
+                .isEqualTo(mContext.getString(R.string.media_output_item_connected_state))
         }
     }
 
@@ -218,6 +239,7 @@ class MediaOutputAdapterTest : SysuiTestCase() {
             assertThat(mSlider.value).isEqualTo(TEST_CURRENT_VOLUME)
             assertThat(mSlider.valueFrom).isEqualTo(0)
             assertThat(mSlider.valueTo).isEqualTo(TEST_MAX_VOLUME)
+            assertThat(mSlider.stateDescription).isEqualTo("50%")
         }
     }
 
@@ -289,7 +311,8 @@ class MediaOutputAdapterTest : SysuiTestCase() {
             assertThat(mDivider.visibility).isEqualTo(VISIBLE)
             assertThat(mGroupButton.visibility).isEqualTo(VISIBLE)
             assertThat(mGroupButton.contentDescription)
-                .isEqualTo(mContext.getString(R.string.accessibility_add_device_to_group))
+                .isEqualTo(mContext.getString(R.string.accessibility_add_device_to_group_with_name,
+                         BidiFormatter.getInstance().unicodeWrap(TEST_DEVICE_NAME_2)))
             assertThat(mTitleText.visibility).isEqualTo(VISIBLE)
             assertThat(mTitleText.text.toString()).isEqualTo(TEST_DEVICE_NAME_2)
 
@@ -300,16 +323,20 @@ class MediaOutputAdapterTest : SysuiTestCase() {
 
     @Test
     fun onBindViewHolder_bindDeselectableDevice_verifyView() {
+        mMediaSwitchingController.stub { on { isGroupListCollapsed } doReturn false }
         mMediaSwitchingController.stub {
             on { selectedMediaDevice } doReturn listOf(mMediaDevice1, mMediaDevice2)
             on { deselectableMediaDevice } doReturn listOf(mMediaDevice1, mMediaDevice2)
         }
         updateAdapterWithDevices(listOf(mMediaDevice1, mMediaDevice2))
 
-        createAndBindDeviceViewHolder(position = 1).apply {
+        // positions: 0 - collapsible drop down, 1 - device1, 2 - device2.
+        createAndBindDeviceViewHolder(position = 2).apply {
             assertThat(mGroupButton.visibility).isEqualTo(VISIBLE)
             assertThat(mGroupButton.contentDescription)
-                .isEqualTo(mContext.getString(R.string.accessibility_remove_device_from_group))
+                .isEqualTo(mContext.getString(
+                        R.string.accessibility_remove_device_from_group_with_name,
+                        BidiFormatter.getInstance().unicodeWrap(TEST_DEVICE_NAME_2)))
             mGroupButton.performClick()
         }
 

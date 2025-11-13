@@ -30,14 +30,12 @@ import android.content.res.AssetManager;
 import android.content.res.CompatResources;
 import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
-import android.content.res.Flags;
 import android.content.res.Resources;
 import android.content.res.ResourcesImpl;
 import android.content.res.ResourcesKey;
 import android.content.res.loader.ResourcesLoader;
 import android.hardware.display.DisplayManagerGlobal;
 import android.os.IBinder;
-import android.os.LocaleList;
 import android.os.Process;
 import android.os.Trace;
 import android.ravenwood.annotation.RavenwoodKeepWholeClass;
@@ -136,11 +134,6 @@ public class ResourcesManager {
     private final ArrayList<WeakReference<Resources>> mAllResourceReferences = new ArrayList<>();
     private final ReferenceQueue<Resources> mAllResourceReferencesQueue = new ReferenceQueue<>();
 
-    /**
-     * The localeConfig of the app.
-     */
-    private LocaleConfig mLocaleConfig = new LocaleConfig(LocaleList.getEmptyLocaleList());
-
     private final ArrayMap<String, SharedLibraryAssets> mSharedLibAssetsMap =
             new ArrayMap<>();
 
@@ -154,12 +147,8 @@ public class ResourcesManager {
      * This will collect the package resources' paths from its ApplicationInfo and add them to all
      * existing and future contexts while the application is running.
      */
-    @RavenwoodThrow(reason = "FLAG_REGISTER_RESOURCE_PATHS is unsupported")
+    @RavenwoodThrow(reason = "registerResourcePaths is unsupported")
     public void registerResourcePaths(@NonNull String uniqueId, @NonNull ApplicationInfo appInfo) {
-        if (!Flags.registerResourcePaths()) {
-            return;
-        }
-
         final var application = ActivityThread.currentActivityThread().getApplication();
         final var currentAppInfo = application != null ? application.getApplicationInfo() : null;
         final var sharedLibAssets = new SharedLibraryAssets(appInfo, currentAppInfo);
@@ -184,10 +173,6 @@ public class ResourcesManager {
      */
     public @NonNull Pair<AssetManager, Integer> updateResourceImplAssetsWithRegisteredLibs(
             @NonNull AssetManager assets, boolean reuseAssets) {
-        if (!Flags.registerResourcePaths()) {
-            return new Pair<>(assets, 0);
-        }
-
         final int size;
         final PathCollector collector;
 
@@ -202,33 +187,23 @@ public class ResourcesManager {
                 collector.appendKey(libraryKey);
             }
         }
-        if (collector.isSameAsOriginal()) {
-            return new Pair<>(assets, size);
+        if (!collector.isSameAsOriginal()) {
+            // The right way to do this if we're not allowed to reuse the assets would be to create
+            // a new AssetManager object and set the required asset paths in it, leaving the old
+            // one intact. This would guarantee that the existing users of that object wouldn't be
+            // affected, and any currently running operation on it won't see inconsistent results,
+            // e.g. when we do a reference lookup and then resolution as a two-step operation from
+            // the Java layer.
+            // Unfortunately, several popular apps somehow link their internal state to the
+            // AssetManager object, I guess by using it as a key in a map, and replacing it makes
+            // them bug out in their resources customizations. That's why instead we have to
+            // perform an update to the existing object instead, using the more heavyweight full
+            // recalculation under its lock (preset = false), and hope that the newly added assets
+            // won't cause that bad issues for the non-atomic lookups.
+            // See b/412905284 and many of its duplicates.
+            assets.addApkKeys(extractApkKeys(collector.collectedKey()), reuseAssets);
         }
-        if (reuseAssets) {
-            assets.addPresetApkKeys(extractApkKeys(collector.collectedKey()));
-            return new Pair<>(assets, size);
-        }
-        final var newAssetsBuilder = new AssetManager.Builder().setNoInit();
-        for (final var asset : assets.getApkAssets()) {
-            // Skip everything that's either default, or will get added by the collector (builder
-            // doesn't check for duplicates at all).
-            if (asset.isSystem() || asset.isForLoader() || asset.isOverlay()
-                    || asset.isSharedLib()) {
-                continue;
-            }
-            newAssetsBuilder.addApkAssets(asset);
-        }
-        for (final var key : extractApkKeys(collector.collectedKey())) {
-            try {
-                final var asset = loadApkAssets(key);
-                newAssetsBuilder.addApkAssets(asset);
-            } catch (IOException e) {
-                Log.e(TAG, "Couldn't load assets for key " + key, e);
-            }
-        }
-        assets.getLoaders().forEach(newAssetsBuilder::addLoader);
-        return new Pair<>(newAssetsBuilder.build(), size);
+        return new Pair<>(assets, size);
     }
 
     public static class ApkKey {
@@ -1387,10 +1362,23 @@ public class ResourcesManager {
                     // constructions.
                     final ResourcesImpl resourcesImpl =
                             findOrCreateResourcesImplForKeyLocked(newKey);
-                    if (resourcesImpl != null && resourcesImpl != resources.getImpl()) {
+                    if (resourcesImpl == null) {
+                        continue;
+                    }
+                    if (resourcesImpl != resources.getImpl()) {
                         // Set the ResourcesImpl, updating it for all users of this Resources
                         // object.
                         resources.setImpl(resourcesImpl);
+                    } else if (android.content.res.Flags
+                            .ignoreNonPublicConfigDiffForResourcesKey()) {
+                        // If the ResourcesImpl is reused, also update fields not related to
+                        // resources in case the app accesses WindowConfiguration, e.g. rotation.
+                        final Configuration resConfig = resourcesImpl.getConfiguration();
+                        resConfig.windowConfiguration.updateFrom(
+                                newKey.mOverrideConfiguration.windowConfiguration);
+                        if (newKey.mOverrideConfiguration.seq != 0) {
+                            resConfig.seq = newKey.mOverrideConfiguration.seq;
+                        }
                     }
                 }
             }
@@ -1892,10 +1880,12 @@ public class ResourcesManager {
             final ResourcesKey key = updatedResourceKeys.get(r.getImpl());
             if (key != null) {
                 final ResourcesImpl impl = findOrCreateResourcesImplForKeyLocked(key);
-                if (impl == null) {
-                    throw new Resources.NotFoundException("failed to redirect ResourcesImpl");
+                if (impl != null) {
+                    r.setImpl(impl);
+                } else {
+                    Slog.w(TAG, "failed to redirect ResourcesImpl, left untouched, for a key "
+                            + key);
                 }
-                r.setImpl(impl);
             } else {
                 // ResourcesKey is null which means the ResourcesImpl could belong to a
                 // Resources created by application through Resources constructor and was not
@@ -1916,23 +1906,6 @@ public class ResourcesManager {
                     }
                 }
             }
-        }
-    }
-
-    /**
-     * Returns the LocaleConfig current set
-     */
-    public LocaleConfig getLocaleConfig() {
-        return mLocaleConfig;
-    }
-
-    /**
-     * Sets the LocaleConfig of the app
-     */
-    public void setLocaleConfig(LocaleConfig localeConfig) {
-        if ((localeConfig != null) && (localeConfig.getSupportedLocales() != null)
-                && !localeConfig.getSupportedLocales().isEmpty()) {
-            mLocaleConfig = localeConfig;
         }
     }
 
@@ -2006,7 +1979,9 @@ public class ResourcesManager {
             // its own ApplicationInfo.
             final var collector = new PathCollector(null);
             // Pre-populate the collector's sets with the base app paths so they all get filtered
-            // out if they exist in the info that's being registered as well.
+            // out if they exist in the info that's being registered as well. Ignore the linked
+            // shared libraries though, as those are commonly altered by the apps to make the system
+            // load the same library that's being registered here.
             // Note: if someone is registering their own appInfo, we can't filter out anything
             // here and this means any asset path changes are going to be ignored.
             if (baseAppInfo != null && !baseAppInfo.sourceDir.equals(appInfo.sourceDir)) {
@@ -2014,9 +1989,7 @@ public class ResourcesManager {
                 if (baseAppInfo.splitSourceDirs != null) {
                     collector.libsSet.addAll(Arrays.asList(baseAppInfo.splitSourceDirs));
                 }
-                if (baseAppInfo.sharedLibraryFiles != null) {
-                    collector.libsSet.addAll(Arrays.asList(baseAppInfo.sharedLibraryFiles));
-                }
+                // Skipped |baseAppInfo.sharedLibraryFiles| intentionally.
                 if (baseAppInfo.resourceDirs != null) {
                     collector.overlaysSet.addAll(Arrays.asList(baseAppInfo.resourceDirs));
                 }
@@ -2054,12 +2027,10 @@ public class ResourcesManager {
      * asset paths. This is invoked in Resources constructor to include all Resources instances.
      */
     public void registerAllResourcesReference(@NonNull Resources resources) {
-        if (android.content.res.Flags.registerResourcePaths()) {
-            synchronized (mLock) {
-                cleanupReferences(mAllResourceReferences, mAllResourceReferencesQueue);
-                mAllResourceReferences.add(
-                        new WeakReference<>(resources, mAllResourceReferencesQueue));
-            }
+        synchronized (mLock) {
+            cleanupReferences(mAllResourceReferences, mAllResourceReferencesQueue);
+            mAllResourceReferences.add(
+                    new WeakReference<>(resources, mAllResourceReferencesQueue));
         }
     }
 }

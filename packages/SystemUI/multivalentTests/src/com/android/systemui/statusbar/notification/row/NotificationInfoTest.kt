@@ -125,7 +125,10 @@ class NotificationInfoTest : SysuiTestCase() {
 
         // Inflate the layout
         val inflater = LayoutInflater.from(mContext)
-        underTest = inflater.inflate(R.layout.notification_info, null) as NotificationInfo
+        val layoutId =
+            if (Flags.notificationsRedesignTemplates()) R.layout.notification_2025_info
+            else R.layout.notification_info
+        underTest = inflater.inflate(layoutId, null) as NotificationInfo
 
         underTest.setGutsParent(mock<NotificationGuts>())
 
@@ -214,7 +217,7 @@ class NotificationInfoTest : SysuiTestCase() {
     }
 
     @Test
-    @DisableFlags(com.android.systemui.Flags.FLAG_NOTIFICATIONS_REDESIGN_GUTS)
+    @DisableFlags(Flags.FLAG_NOTIFICATIONS_REDESIGN_TEMPLATES)
     fun testBindNotification_SetsPackageIcon_flagOff() {
         val iconDrawable = mock<Drawable>()
         whenever(mockPackageManager.getApplicationIcon(any<ApplicationInfo>()))
@@ -225,7 +228,7 @@ class NotificationInfoTest : SysuiTestCase() {
     }
 
     @Test
-    @EnableFlags(com.android.systemui.Flags.FLAG_NOTIFICATIONS_REDESIGN_GUTS)
+    @EnableFlags(Flags.FLAG_NOTIFICATIONS_REDESIGN_TEMPLATES)
     fun testBindNotification_SetsPackageIcon_flagOn() {
         val iconDrawable = mock<Drawable>()
         whenever(mockIconStyleProvider.shouldShowWorkProfileBadge(anyOrNull(), anyOrNull()))

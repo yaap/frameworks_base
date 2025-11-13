@@ -179,11 +179,20 @@ public class VolumeHelperTest {
         }
 
         @Override
-        public int getDeviceForStream(int stream) {
+        public int getDeviceForStream(int stream, boolean selectAbsoluteDevices) {
             if (mStreamDevice.indexOfKey(stream) < 0) {
                 return DEVICE_OUT_SPEAKER;
             }
             return mStreamDevice.get(stream);
+        }
+
+        @Override
+        public AudioDeviceAttributes getDeviceAttributesForStream(int stream,
+                boolean selectAbsoluteDevices) {
+            if (mStreamDevice.indexOfKey(stream) < 0) {
+                return new AudioDeviceAttributes(DEVICE_OUT_SPEAKER, "speaker");
+            }
+            return new AudioDeviceAttributes(mStreamDevice.get(stream), "custom");
         }
 
         public void setMuteAffectedStreams(int muteAffectedStreams) {

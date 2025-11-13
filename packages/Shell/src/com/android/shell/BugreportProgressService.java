@@ -88,9 +88,9 @@ import com.android.internal.app.ChooserActivity;
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 
-import libcore.io.Streams;
-
 import com.google.android.collect.Lists;
+
+import libcore.io.Streams;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
@@ -767,7 +767,8 @@ public class BugreportProgressService extends Service {
     }
 
     // Sets up BugreportInfo. If needed, creates bugreport and screenshot files.
-    private BugreportInfo setupFilesAndCreateBugreportInfo(
+    @VisibleForTesting
+    BugreportInfo setupFilesAndCreateBugreportInfo(
             Intent intent,
             int bugreportType,
             String baseName,
@@ -1221,11 +1222,6 @@ public class BugreportProgressService extends Service {
                 + " and shareDescription: " + info.shareDescription);
         info.finished.set(true);
 
-        synchronized (mLock) {
-            // Stop running on foreground, otherwise share notification cannot be dismissed.
-            stopForegroundWhenDoneLocked(info.id);
-        }
-
         File bugreportFile = info.bugreportLocationInfo.mBugreportFile;
         if (!info.bugreportLocationInfo.isValidBugreportResult()) {
             Log.e(TAG, "Could not read bugreport file " + bugreportFile);
@@ -1237,6 +1233,14 @@ public class BugreportProgressService extends Service {
         }
 
         triggerLocalNotification(info);
+        // b/425350942: Stop running on foreground after triggering the local notification.
+        // AM re-sends the notification when the service is removed from the foreground.
+        // This way, we increase the chances of final notiifcation being sent via AM,
+        // rather than the progress one.
+        synchronized (mLock) {
+            // Stop running on foreground, otherwise share notification cannot be dismissed.
+            stopForegroundWhenDoneLocked(info.id);
+        }
     }
 
     /**
@@ -1480,7 +1484,6 @@ public class BugreportProgressService extends Service {
         final Notification.Builder builder = newBaseNotification(mContext)
                 .setContentTitle(title)
                 .setTicker(title)
-                .setProgress(100 /* max value of progress percentage */, 100, false)
                 .setOnlyAlertOnce(false)
                 .setContentText(content);
 
@@ -2081,7 +2084,8 @@ public class BugreportProgressService extends Service {
     /**
      * Information about a bugreport process while its in progress.
      */
-    private static final class BugreportInfo implements Parcelable {
+    @VisibleForTesting
+    static final class BugreportInfo implements Parcelable {
         private final Context context;
 
         /**
@@ -2191,7 +2195,7 @@ public class BugreportProgressService extends Service {
         final long nonce;
 
         @Nullable
-        public List<Uri> extraAttachments = null;
+        List<Uri> extraAttachments = null;
 
         private final Object mLock = new Object();
 
@@ -2490,9 +2494,10 @@ public class BugreportProgressService extends Service {
      * <li>If no URI is provided in the bugreport request, Shell will create a bugreport file and
      *     manage its lifecycle.
      */
-    private static final class BugreportLocationInfo {
+    @VisibleForTesting
+    static final class BugreportLocationInfo {
         /** Path of the main bugreport file. */
-        @Nullable private File mBugreportFile;
+        @Nullable File mBugreportFile;
 
         /** Uri to bugreport location. */
         @Nullable private Uri mBugreportUri;
@@ -2501,7 +2506,8 @@ public class BugreportProgressService extends Service {
             this.mBugreportFile = bugreportFile;
         }
 
-        BugreportLocationInfo(Uri bugreportUri, File bugreportsDir, String baseName, String name) {
+        BugreportLocationInfo(Uri bugreportUri, File bugreportsDir, String baseName,
+                String name) {
             if (bugreportUri != null) {
                 this.mBugreportUri = bugreportUri;
             } else {
@@ -2509,7 +2515,7 @@ public class BugreportProgressService extends Service {
             }
         }
 
-        private boolean maybeCreateBugreportFile() {
+        boolean maybeCreateBugreportFile() {
             if (mBugreportFile != null && mBugreportFile.exists()) {
                 Log.e(
                         TAG,
@@ -2522,13 +2528,13 @@ public class BugreportProgressService extends Service {
             return true;
         }
 
-        private void createBugreportFile() {
+        void createBugreportFile() {
             if (mBugreportUri == null) {
                 createReadWriteFile(mBugreportFile);
             }
         }
 
-        private ParcelFileDescriptor getBugreportFd(Context context) {
+        ParcelFileDescriptor getBugreportFd(Context context) {
             if (mBugreportUri != null) {
                 try {
                     return context.getContentResolver()
@@ -2555,7 +2561,7 @@ public class BugreportProgressService extends Service {
             mBugreportFile.delete();
         }
 
-        private boolean isValidBugreportResult() {
+       boolean isValidBugreportResult() {
             if (mBugreportFile != null) {
                 return mBugreportFile.exists() && mBugreportFile.canRead();
             }
@@ -2564,7 +2570,7 @@ public class BugreportProgressService extends Service {
             return true;
         }
 
-        private void maybeDeleteEmptyBugreport() {
+        void maybeDeleteEmptyBugreport() {
             if (mBugreportFile == null) {
                 // This means a URI is provided and shell is not responsible for the file's
                 // lifecycle.
@@ -2590,14 +2596,14 @@ public class BugreportProgressService extends Service {
             }
         }
 
-        private boolean isPlainText() {
+        boolean isPlainText() {
             if (mBugreportFile != null) {
                 return mBugreportFile.getName().toLowerCase().endsWith(".txt");
             }
             return false;
         }
 
-        private boolean isFileEmpty(Context context) {
+        boolean isFileEmpty(Context context) {
             if (mBugreportFile != null) {
                 return mBugreportFile.length() == 0;
             }
@@ -2614,7 +2620,7 @@ public class BugreportProgressService extends Service {
                     + '}';
         }
 
-        private String getBugreportPath() {
+        String getBugreportPath() {
             if (mBugreportUri != null) {
                 return mBugreportUri.getLastPathSegment();
             }
@@ -2630,13 +2636,14 @@ public class BugreportProgressService extends Service {
      * <li>If no URI is provided in the bugreport request, Shell will create the screenshot file and
      *     manage its lifecycle.
      */
-    private static final class ScreenshotLocationInfo {
+    @VisibleForTesting
+    static final class ScreenshotLocationInfo {
 
         /** Uri to screenshot location. */
         @Nullable private Uri mScreenshotUri;
 
         /** Path to screenshot files. */
-        private List<File> mScreenshotFiles = new ArrayList<>(1);
+        List<File> mScreenshotFiles = new ArrayList<>(1);
 
         ScreenshotLocationInfo(Uri screenshotUri) {
             if (screenshotUri != null) {
@@ -2644,7 +2651,7 @@ public class BugreportProgressService extends Service {
             }
         }
 
-        private ParcelFileDescriptor getScreenshotFd(Context context) {
+        ParcelFileDescriptor getScreenshotFd(Context context) {
             if (mScreenshotUri != null) {
                 try {
                     return context.getContentResolver()
@@ -2671,14 +2678,14 @@ public class BugreportProgressService extends Service {
                     + '}';
         }
 
-        private String getScreenshotPath() {
+        String getScreenshotPath() {
             if (mScreenshotUri != null) {
                 return mScreenshotUri.getLastPathSegment();
             }
             return getScreenshotForIntent();
         }
 
-        private void renameScreenshots(String initialName, String name) {
+        void renameScreenshots(String initialName, String name) {
             if (mScreenshotUri != null) {
                 // If a screenshot uri is provided, then shell is not responsible for the
                 // screenshot's naming.
@@ -2712,7 +2719,7 @@ public class BugreportProgressService extends Service {
             mScreenshotFiles = renamedFiles;
         }
 
-        private void deleteEmptyScreenshots() {
+        void deleteEmptyScreenshots() {
             mScreenshotFiles.removeIf(
                     file -> {
                         final long length = file.length();

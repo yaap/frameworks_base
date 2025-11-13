@@ -16,6 +16,7 @@
 
 package com.android.server.voiceinteraction;
 
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK;
 import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 import static android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION;
@@ -81,7 +82,6 @@ import android.service.voice.IMicrophoneHotwordDetectionVoiceInteractionCallback
 import android.service.voice.IVisualQueryDetectionVoiceInteractionCallback;
 import android.service.voice.IVoiceInteractionSession;
 import android.service.voice.VoiceInteractionManagerInternal;
-import android.service.voice.VoiceInteractionManagerInternal.WearableHotwordDetectionCallback;
 import android.service.voice.VoiceInteractionService;
 import android.service.voice.VoiceInteractionServiceInfo;
 import android.service.voice.VoiceInteractionSession;
@@ -90,6 +90,7 @@ import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
 import android.util.Slog;
+import android.window.DesktopExperienceFlags;
 import android.window.ScreenCapture;
 
 import com.android.internal.R;
@@ -110,6 +111,7 @@ import com.android.internal.util.DumpUtils;
 import com.android.server.FgThread;
 import com.android.server.LocalServices;
 import com.android.server.SoundTriggerInternal;
+import com.android.server.SystemServerInitThreadPool;
 import com.android.server.SystemService;
 import com.android.server.UiThread;
 import com.android.server.pm.UserManagerInternal;
@@ -127,8 +129,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 
 /**
  * SystemService that publishes an IVoiceInteractionManagerService.
@@ -346,6 +349,13 @@ public class VoiceInteractionManagerService extends SystemService {
         public void onPreCreatedUserConversion(int userId) {
             Slogf.d(TAG, "onPreCreatedUserConversion(%d): calling onRoleHoldersChanged() again",
                     userId);
+            if (mServiceStub.mRoleObserver == null) {
+                try {
+                    mServiceStub.mRoleObserver = mServiceStub.mRoleObserverFuture.get();
+                } catch (ExecutionException | InterruptedException e) {
+                    Slogf.wtf(TAG, "Unable to get role observer for user %d", userId);
+                }
+            }
             mServiceStub.mRoleObserver.onRoleHoldersChanged(RoleManager.ROLE_ASSISTANT,
                                                 UserHandle.of(userId));
         }
@@ -416,11 +426,23 @@ public class VoiceInteractionManagerService extends SystemService {
 
         private final boolean mEnableService;
         // TODO(b/226201975): remove reference once RoleService supports pre-created users
-        private final RoleObserver mRoleObserver;
+        private final Future<RoleObserver> mRoleObserverFuture;
+        private RoleObserver mRoleObserver;
 
         VoiceInteractionManagerServiceStub() {
             mEnableService = shouldEnableService(mContext);
-            mRoleObserver = new RoleObserver(mContext.getMainExecutor());
+
+            // If this flag is enabled, initialize in SystemServerInitThreadPool. This is intended
+            // to avoid blocking system_server start on loading resources.
+            if (android.server.Flags.voiceinteractionmanagerserviceGetResourcesInInitThread()) {
+                mRoleObserver = null;
+                mRoleObserverFuture = SystemServerInitThreadPool.submit(() -> {
+                    return new RoleObserver(mContext.getMainExecutor());
+                }, "RoleObserver");
+            } else {
+                mRoleObserver = new RoleObserver(mContext.getMainExecutor());
+                mRoleObserverFuture = null;
+            }
         }
 
         void handleUserStop(String packageName, int userHandle) {
@@ -2333,6 +2355,25 @@ public class VoiceInteractionManagerService extends SystemService {
             }
         }
 
+        @Override
+        public void setInvocationEffectEnabled(boolean enabled) {
+            synchronized (this) {
+                enforceIsCurrentVoiceInteractionService();
+
+                final int size = mVoiceInteractionSessionListeners.beginBroadcast();
+                for (int i = 0; i < size; ++i) {
+                    final IVoiceInteractionSessionListener listener =
+                            mVoiceInteractionSessionListeners.getBroadcastItem(i);
+                    try {
+                        listener.onSetInvocationEffectEnabled(enabled);
+                    } catch (RemoteException e) {
+                        Slog.e(TAG, "Error delivering set invocation effect enabled.", e);
+                    }
+                }
+                mVoiceInteractionSessionListeners.finishBroadcast();
+            }
+        }
+
         private boolean isCallerHoldingPermission(String permission) {
             return mContext.checkCallingOrSelfPermission(permission)
                     == PackageManager.PERMISSION_GRANTED;
@@ -2773,6 +2814,9 @@ public class VoiceInteractionManagerService extends SystemService {
             final ActivityOptions opts = ActivityOptions.makeCustomTaskAnimation(mContext,
                     /* enterResId= */ 0, /* exitResId= */ 0, null, null, null);
             opts.setDisableStartingWindow(true);
+            if (DesktopExperienceFlags.ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue()) {
+                opts.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+            }
             int resultCode = mAtmInternal.startActivityWithScreenshot(launchIntent,
                     mContext.getPackageName(), Binder.getCallingUid(), Binder.getCallingPid(), null,
                     opts.toBundle(), userId);
@@ -2809,6 +2853,9 @@ public class VoiceInteractionManagerService extends SystemService {
 
                 @Override
                 public void onSetUiHints(Bundle args) throws RemoteException {}
+
+                @Override
+                public void onSetInvocationEffectEnabled(boolean enabled) throws RemoteException {}
 
                 @Override
                 public IBinder asBinder() {

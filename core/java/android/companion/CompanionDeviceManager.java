@@ -23,6 +23,7 @@ import static android.Manifest.permission.REQUEST_COMPANION_PROFILE_WATCH;
 import static android.graphics.drawable.Icon.TYPE_URI;
 import static android.graphics.drawable.Icon.TYPE_URI_ADAPTIVE_BITMAP;
 
+import android.Manifest;
 import android.annotation.CallbackExecutor;
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
@@ -80,9 +81,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -259,6 +262,12 @@ public final class CompanionDeviceManager {
      */
     public static final int MESSAGE_REQUEST_CONTEXT_SYNC = 0x63678883; // ?CXS
     /**
+     * Message header assigned to task continuity messages.
+     *
+     * @hide
+     */
+    public static final int MESSAGE_ONEWAY_TASK_CONTINUITY = 0x43678884; // +TSK
+    /**
      * Message header assigned to the permission restore request.
      *
      * @hide
@@ -426,6 +435,10 @@ public final class CompanionDeviceManager {
     @GuardedBy("mTransportsChangedListeners")
     private final ArrayList<OnTransportsChangedListenerProxy> mTransportsChangedListeners =
             new ArrayList<>();
+
+    @GuardedBy("mMessageReceivedListeners")
+    private final SparseArray<Set<OnMessageReceivedListenerProxy>> mMessageReceivedListeners =
+            new SparseArray<>();
 
     @GuardedBy("mTransports")
     private final SparseArray<Transport> mTransports = new SparseArray<>();
@@ -1141,12 +1154,19 @@ public final class CompanionDeviceManager {
             return;
         }
 
-        final OnMessageReceivedListenerProxy proxy = new OnMessageReceivedListenerProxy(
-                executor, listener);
-        try {
-            mService.addOnMessageReceivedListener(messageType, proxy);
-        } catch (RemoteException e) {
-            throw e.rethrowFromSystemServer();
+        synchronized (mMessageReceivedListeners) {
+            final OnMessageReceivedListenerProxy proxy = new OnMessageReceivedListenerProxy(
+                    executor, listener);
+            try {
+                mService.addOnMessageReceivedListener(messageType, proxy);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+
+            if (!mMessageReceivedListeners.contains(messageType)) {
+                mMessageReceivedListeners.put(messageType, new HashSet<>());
+            }
+            mMessageReceivedListeners.get(messageType).add(proxy);
         }
     }
 
@@ -1163,12 +1183,26 @@ public final class CompanionDeviceManager {
             return;
         }
 
-        final OnMessageReceivedListenerProxy proxy = new OnMessageReceivedListenerProxy(
-                null, listener);
-        try {
-            mService.removeOnMessageReceivedListener(messageType, proxy);
-        } catch (RemoteException e) {
-            throw e.rethrowFromSystemServer();
+        synchronized (mMessageReceivedListeners) {
+            if (!mMessageReceivedListeners.contains(messageType)) {
+                Log.w(TAG, "Can't remove OnMessageReceivedListener. messageType " + messageType
+                        + " is not being listened.");
+                return;
+            }
+
+            final Iterator<OnMessageReceivedListenerProxy> iterator =
+                    mMessageReceivedListeners.get(messageType).iterator();
+            while (iterator.hasNext()) {
+                final OnMessageReceivedListenerProxy proxy = iterator.next();
+                if (proxy.mListener == listener) {
+                    try {
+                        mService.removeOnMessageReceivedListener(messageType, proxy);
+                    } catch (RemoteException e) {
+                        throw e.rethrowFromSystemServer();
+                    }
+                    iterator.remove();
+                }
+            }
         }
     }
 
@@ -1212,7 +1246,7 @@ public final class CompanionDeviceManager {
      * process completes, and its result.
      *
      * <p>This API should be used to remove a bluetooth bond that was created either
-     * by using {@link BluetoothDevice#createBond(int)} or by a direct user action.
+     * by using {@link BluetoothDevice#createBond()} or by a direct user action.
      * The association must already exist with this device before calling this method, but
      * this may be done retroactively to remove a bond that was created outside of the
      * CompanionDeviceManager.
@@ -1349,9 +1383,17 @@ public final class CompanionDeviceManager {
     }
 
     /**
-     * Register to receive callbacks whenever the associated device comes in and out of range.
+     * Register to receive callbacks whenever the associated device's presence changes.
+     * The presence could be:
+     * <ul>
+     *   <li>BLE range changes (in/out)</li>
+     *   <li>Bluetooth connection status changes (connected/disconnected)</li>
+     * </ul>
      *
-     * <p>The app doesn't need to remain running in order to receive its callbacks.</p>
+     * <p>Caller app must implement the {@link CompanionDeviceService} to receive callbacks via
+     * {@link CompanionDeviceService#onDevicePresenceEvent(DevicePresenceEvent)}.
+     * The system will bind to the implemented {@link CompanionDeviceService} to deliver the
+     * callbacks./p>
      *
      * <p>Calling app must check for feature presence of
      * {@link PackageManager#FEATURE_COMPANION_DEVICE_SETUP} before calling this API.</p>
@@ -1840,9 +1882,11 @@ public final class CompanionDeviceManager {
      * @param associationId The unique {@link AssociationInfo#getId ID} assigned to the Association
      *                          of the companion device recorded by CompanionDeviceManager.
      * @param deviceId to be used as device identifier to represent the associated device.
+     *
+     * @deprecated use {@link #createAndSetDeviceId(int, DeviceId)} instead.
      */
-    @FlaggedApi(Flags.FLAG_ASSOCIATION_TAG)
-    @UserHandleAware
+    @FlaggedApi(Flags.FLAG_ASSOCIATION_VERIFICATION)
+    @Deprecated
     public void setDeviceId(int associationId, @Nullable DeviceId deviceId) {
         if (mService == null) {
             Log.w(TAG, "CompanionDeviceManager service is not available.");
@@ -1851,6 +1895,67 @@ public final class CompanionDeviceManager {
 
         try {
             mService.setDeviceId(associationId, deviceId);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Returns a new {@link DeviceId} which can be passed to device manufacturers' apps,
+     * allowing them to fetch {@link AssociationInfo} or observe device presence for this
+     * associated device. This method creates a new object and does not mutate any existing
+     * {@link DeviceId}.
+     *
+     * <p>The system will generate and assign a new, random 128-bit key to this returned
+     * {@link DeviceId}. Each call to this method generates a new key, any previously associated
+     * key will be obsoleted. Therefore, the returned {@link DeviceId} is the one that contains
+     * the newly assigned key and should be used for subsequent operations.
+     *
+     * <p>This device id also helps the system uniquely identify your device for efficient device
+     * management and prevents duplicate entries.
+     *
+     * <p>WARNING: Do not pass the returned DeviceId to apps you do not trust.
+     *
+     * @param associationId The unique {@link AssociationInfo#getId} assigned to the Association
+     *                          of the companion device recorded by CompanionDeviceManager.
+     * @param deviceId to be used as device identifier to represent the associated device.
+     *
+     * @see AssociationInfo#getDeviceId()
+     */
+    @FlaggedApi(Flags.FLAG_ASSOCIATION_VERIFICATION)
+    @Nullable
+    public DeviceId createAndSetDeviceId(int associationId, @Nullable DeviceId deviceId) {
+        if (mService == null) {
+            Log.w(TAG, "CompanionDeviceManager service is not available.");
+            return null;
+        }
+
+        try {
+            return mService.setDeviceId(associationId, deviceId);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Returns an {@link AssociationInfo} matching the specified device id, or {@code null}
+     * if not found or the key in the {@link DeviceId} is invalid.
+     *
+     * @param deviceId A device id represents a device identifier managed by the companion app.
+     *
+     * @see #createAndSetDeviceId(int, DeviceId)
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_ASSOCIATION_VERIFICATION)
+    @UserHandleAware
+    @SystemApi
+    @RequiresPermission(Manifest.permission.ACCESS_COMPANION_INFO)
+    @Nullable
+    public AssociationInfo getAssociationByDeviceId(@NonNull DeviceId deviceId) {
+        Objects.requireNonNull(deviceId, "DeviceId can not be null.");
+
+        try {
+            return mService.getAssociationByDeviceId(mContext.getUserId(), deviceId);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

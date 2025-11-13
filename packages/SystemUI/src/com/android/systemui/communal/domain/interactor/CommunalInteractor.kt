@@ -42,7 +42,6 @@ import com.android.systemui.communal.shared.model.CommunalContentSize.FixedSize.
 import com.android.systemui.communal.shared.model.CommunalContentSize.FixedSize.THIRD
 import com.android.systemui.communal.shared.model.CommunalScenes
 import com.android.systemui.communal.shared.model.CommunalWidgetContentModel
-import com.android.systemui.communal.shared.model.EditModeState
 import com.android.systemui.communal.widgets.EditWidgetsActivityStarter
 import com.android.systemui.communal.widgets.WidgetConfigurator
 import com.android.systemui.dagger.SysUISingleton
@@ -149,18 +148,9 @@ constructor(
     val isCommunalEnabled: StateFlow<Boolean> = communalSettingsInteractor.isCommunalEnabled
 
     /** Whether communal features are enabled and available. */
-    @Deprecated("Use isCommunalEnabled instead", replaceWith = ReplaceWith("isCommunalEnabled"))
-    val isCommunalAvailable: Flow<Boolean> by lazy {
-        val availableFlow =
-            if (communalSettingsInteractor.isV2FlagEnabled()) {
-                communalSettingsInteractor.isCommunalEnabled
-            } else {
-                allOf(
-                    communalSettingsInteractor.isCommunalEnabled,
-                    keyguardInteractor.isKeyguardShowing,
-                )
-            }
-        availableFlow
+    val isCommunalAvailable: Flow<Boolean> =
+        allOf(communalSettingsInteractor.isCommunalEnabled, keyguardInteractor.isKeyguardShowing)
+            .distinctUntilChanged()
             .onEach { available ->
                 logger.i({ "Communal is ${if (bool1) "" else "un"}available" }) {
                     bool1 = available
@@ -176,7 +166,6 @@ constructor(
                 started = SharingStarted.WhileSubscribed(),
                 replay = 1,
             )
-    }
 
     private val _isDisclaimerDismissed = MutableStateFlow(false)
     val isDisclaimerDismissed: Flow<Boolean> = _isDisclaimerDismissed.asStateFlow()
@@ -199,9 +188,11 @@ constructor(
             .filter { step -> step.to == KeyguardState.OCCLUDED }
             .combine(isCommunalAvailable, ::Pair)
             .map { (step, available) ->
-                available &&
-                    (step.from == KeyguardState.GLANCEABLE_HUB ||
-                        step.from == KeyguardState.DREAMING)
+                val enteredFromHub = step.from == KeyguardState.GLANCEABLE_HUB
+                val enteredFromDream =
+                    step.from == KeyguardState.DREAMING &&
+                        !communalSettingsInteractor.isV2FlagEnabled()
+                available && (enteredFromHub || enteredFromDream)
             }
             .flowOn(bgDispatcher)
             .stateIn(
@@ -377,7 +368,6 @@ constructor(
 
     /** Show the widget editor Activity. */
     fun showWidgetEditor(shouldOpenWidgetPickerOnStart: Boolean = false) {
-        communalSceneInteractor.setEditModeState(EditModeState.STARTING)
         editWidgetsActivityStarter.startActivity(shouldOpenWidgetPickerOnStart)
     }
 
@@ -556,7 +546,7 @@ constructor(
                 )
 
                 // Add UMO
-                if (isMediaHostVisible && media.hasAnyMediaOrRecommendation) {
+                if (isMediaHostVisible && media.hasAnyMedia) {
                     ongoingContent.add(
                         CommunalContentModel.Umo(
                             createdTimestampMillis = media.createdTimestampMillis

@@ -104,6 +104,7 @@
                 android:exported="false" />
 
         <activity android:name=".UninstallerActivity"
+                android:theme="@style/Theme.UninstallerActivity"
                 android:configChanges="orientation|keyboardHidden|screenSize"
                 android:excludeFromRecents="true"
                 android:noHistory="true"
@@ -120,8 +121,7 @@
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:excludeFromRecents="true"
             android:noHistory="true"
-            android:exported="false">
-        </activity>
+            android:exported="false" />
 
         <receiver android:name=".common.UninstallEventReceiver"
             android:permission="android.permission.INSTALL_PACKAGES"
@@ -175,6 +175,10 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <activity android:name=".v2.ui.UnarchiveLaunch"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="false"/>
     </application>
 
 </manifest>

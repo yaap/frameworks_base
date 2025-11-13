@@ -32,6 +32,7 @@ import com.android.systemui.communal.domain.interactor.communalSceneInteractor
 import com.android.systemui.communal.domain.interactor.setCommunalV2ConfigEnabled
 import com.android.systemui.communal.shared.model.CommunalScenes
 import com.android.systemui.coroutines.collectLastValue
+import com.android.systemui.deviceentry.data.repository.fakeDeviceEntryBypassRepository
 import com.android.systemui.deviceentry.data.repository.fakeDeviceEntryRepository
 import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.flags.EnableSceneContainer
@@ -88,6 +89,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
     private val communalRepository by lazy { kosmos.communalSceneRepository }
     private val screenOffAnimationController by lazy { kosmos.screenOffAnimationController }
     private val deviceEntryRepository by lazy { kosmos.fakeDeviceEntryRepository }
+    private val deviceEntryBypassRepository by lazy { kosmos.fakeDeviceEntryBypassRepository }
     private val pulseExpansionInteractor by lazy { kosmos.pulseExpansionInteractor }
     private val notificationsKeyguardInteractor by lazy { kosmos.notificationsKeyguardInteractor }
     private val dozeParameters by lazy { kosmos.dozeParameters }
@@ -196,7 +198,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
             val isVisible by collectLastValue(underTest.isNotifIconContainerVisible)
             runCurrent()
             pulseExpansionInteractor.setPulseExpanding(true)
-            deviceEntryRepository.setBypassEnabled(false)
+            deviceEntryBypassRepository.setBypassEnabled(false)
             runCurrent()
 
             assertThat(isVisible?.value).isEqualTo(false)
@@ -208,7 +210,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
             val isVisible by collectLastValue(underTest.isNotifIconContainerVisible)
             runCurrent()
             pulseExpansionInteractor.setPulseExpanding(false)
-            deviceEntryRepository.setBypassEnabled(true)
+            deviceEntryBypassRepository.setBypassEnabled(true)
             notificationsKeyguardInteractor.setNotificationsFullyHidden(true)
             runCurrent()
 
@@ -227,7 +229,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
                 testScope,
             )
             pulseExpansionInteractor.setPulseExpanding(false)
-            deviceEntryRepository.setBypassEnabled(false)
+            deviceEntryBypassRepository.setBypassEnabled(false)
             whenever(dozeParameters.alwaysOn).thenReturn(false)
             notificationsKeyguardInteractor.setNotificationsFullyHidden(true)
             runCurrent()
@@ -247,7 +249,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
                 testScope,
             )
             pulseExpansionInteractor.setPulseExpanding(false)
-            deviceEntryRepository.setBypassEnabled(false)
+            deviceEntryBypassRepository.setBypassEnabled(false)
             whenever(dozeParameters.alwaysOn).thenReturn(true)
             whenever(dozeParameters.displayNeedsBlanking).thenReturn(true)
             notificationsKeyguardInteractor.setNotificationsFullyHidden(true)
@@ -268,7 +270,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
                 testScope,
             )
             pulseExpansionInteractor.setPulseExpanding(false)
-            deviceEntryRepository.setBypassEnabled(false)
+            deviceEntryBypassRepository.setBypassEnabled(false)
             whenever(dozeParameters.alwaysOn).thenReturn(true)
             whenever(dozeParameters.displayNeedsBlanking).thenReturn(false)
             notificationsKeyguardInteractor.setNotificationsFullyHidden(true)
@@ -284,7 +286,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
             val isVisible by collectLastValue(underTest.isNotifIconContainerVisible)
             runCurrent()
             pulseExpansionInteractor.setPulseExpanding(false)
-            deviceEntryRepository.setBypassEnabled(true)
+            deviceEntryBypassRepository.setBypassEnabled(true)
             whenever(dozeParameters.alwaysOn).thenReturn(true)
             whenever(dozeParameters.displayNeedsBlanking).thenReturn(false)
             notificationsKeyguardInteractor.setNotificationsFullyHidden(true)
@@ -306,7 +308,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
             val isVisible by collectLastValue(underTest.isNotifIconContainerVisible)
             runCurrent()
             pulseExpansionInteractor.setPulseExpanding(false)
-            deviceEntryRepository.setBypassEnabled(false)
+            deviceEntryBypassRepository.setBypassEnabled(false)
             whenever(dozeParameters.alwaysOn).thenReturn(true)
             whenever(dozeParameters.displayNeedsBlanking).thenReturn(false)
             notificationsKeyguardInteractor.setNotificationsFullyHidden(true)
@@ -325,6 +327,7 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
             val topClippingBounds by collectLastValue(underTest.topClippingBounds)
             assertThat(topClippingBounds).isNull()
 
+            shadeTestUtil.setShadeExpansion(0.5f)
             keyguardRepository.topClippingBounds.value = 50
             assertThat(topClippingBounds).isEqualTo(50)
 
@@ -339,9 +342,23 @@ class KeyguardRootViewModelTest(flags: FlagsParameterization) : SysuiTestCase() 
             )
 
             kosmos.setSceneTransition(Idle(Scenes.Gone))
-            // Make sure the value hasn't changed since we're GONE
+            shadeTestUtil.setShadeExpansion(0f)
             keyguardRepository.topClippingBounds.value = 5
-            assertThat(topClippingBounds).isEqualTo(1000)
+            assertThat(topClippingBounds).isEqualTo(null)
+        }
+
+    @Test
+    fun topClippingBoundsEmitsNullWhenNotExpanded() =
+        testScope.runTest {
+            val topClippingBounds by collectLastValue(underTest.topClippingBounds)
+            assertThat(topClippingBounds).isNull()
+
+            shadeTestUtil.setShadeExpansion(0f)
+            keyguardRepository.topClippingBounds.value = 50
+            assertThat(topClippingBounds).isNull()
+
+            keyguardRepository.topClippingBounds.value = 1000
+            assertThat(topClippingBounds).isNull()
         }
 
     @Test

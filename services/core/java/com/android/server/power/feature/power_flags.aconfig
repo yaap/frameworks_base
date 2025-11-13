@@ -50,13 +50,6 @@ flag {
 }
 
 flag {
-    name: "framework_wakelock_info"
-    namespace: "power"
-    description: "Feature flag to enable statsd pulling of FrameworkWakelockInfo atoms"
-    bug: "380847722"
-}
-
-flag {
     name: "policy_reason_in_display_power_request"
     namespace: "wear_frameworks"
     description: "Whether the policy reason is populted in DisplayPowerRequest."
@@ -76,4 +69,18 @@ flag {
     namespace: "power"
     description: "Feature flag to disable/enable wakelocks of a process when it is frozen/unfrozen"
     bug: "291115867"
+}
+
+flag {
+    name: "force_disable_wakelocks"
+    namespace: "power"
+    description: "Feature flag to force disable wakelocks"
+    bug: "370557028"
+}
+
+flag {
+    name: "enable_app_wakelock_data_source"
+    namespace: "power"
+    description: "Feature flag to enable a new Perfetto data source for tracing app wakelocks."
+    bug: "400774865"
 }

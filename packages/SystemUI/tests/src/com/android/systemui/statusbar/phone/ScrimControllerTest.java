@@ -74,6 +74,8 @@ import com.android.systemui.keyguard.shared.model.TransitionState;
 import com.android.systemui.keyguard.shared.model.TransitionStep;
 import com.android.systemui.keyguard.ui.transitions.BlurConfig;
 import com.android.systemui.keyguard.ui.viewmodel.AlternateBouncerToGoneTransitionViewModel;
+import com.android.systemui.keyguard.ui.viewmodel.LockscreenToDreamingTransitionViewModel;
+import com.android.systemui.keyguard.ui.viewmodel.PrimaryBouncerToDreamingTransitionViewModel;
 import com.android.systemui.keyguard.ui.viewmodel.PrimaryBouncerToGoneTransitionViewModel;
 import com.android.systemui.kosmos.KosmosJavaAdapter;
 import com.android.systemui.scene.shared.flag.SceneContainerFlag;
@@ -82,9 +84,6 @@ import com.android.systemui.shade.transition.LargeScreenShadeInterpolator;
 import com.android.systemui.shade.transition.LinearLargeScreenShadeInterpolator;
 import com.android.systemui.statusbar.policy.FakeConfigurationController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
-import com.android.systemui.util.concurrency.FakeExecutor;
-import com.android.systemui.util.kotlin.JavaAdapter;
-import com.android.systemui.util.time.FakeSystemClock;
 import com.android.systemui.util.wakelock.DelayedWakeLock;
 import com.android.systemui.utils.os.FakeHandler;
 
@@ -123,7 +122,6 @@ public class ScrimControllerTest extends SysuiTestCase {
     private LargeScreenShadeInterpolator mLinearLargeScreenShadeInterpolator;
 
     private final TestScope mTestScope = mKosmos.getTestScope();
-    private final JavaAdapter mJavaAdapter = new JavaAdapter(mTestScope.getBackgroundScope());
 
     private ScrimController mScrimController;
     private ScrimView mScrimBehind;
@@ -146,9 +144,12 @@ public class ScrimControllerTest extends SysuiTestCase {
     @Mock private DockManager mDockManager;
     @Mock private ScreenOffAnimationController mScreenOffAnimationController;
     @Mock private KeyguardUnlockAnimationController mKeyguardUnlockAnimationController;
+    @Mock private PrimaryBouncerToDreamingTransitionViewModel
+            mPrimaryBouncerToDreamingTransitionViewModel;
     @Mock private PrimaryBouncerToGoneTransitionViewModel mPrimaryBouncerToGoneTransitionViewModel;
     @Mock private AlternateBouncerToGoneTransitionViewModel
             mAlternateBouncerToGoneTransitionViewModel;
+    @Mock private LockscreenToDreamingTransitionViewModel mLockscreenToDreamingTransitionViewModel;
     @Mock private KeyguardInteractor mKeyguardInteractor;
 
     private KeyguardTransitionInteractor mKeyguardTransitionInteractor;
@@ -267,9 +268,13 @@ public class ScrimControllerTest extends SysuiTestCase {
         when(mDelayedWakeLockFactory.create(any(String.class))).thenReturn(mWakeLock);
         when(mDockManager.isDocked()).thenReturn(false);
 
+        when(mPrimaryBouncerToDreamingTransitionViewModel.getScrimAlpha())
+                .thenReturn(emptyFlow());
         when(mPrimaryBouncerToGoneTransitionViewModel.getScrimAlpha())
                 .thenReturn(emptyFlow());
         when(mAlternateBouncerToGoneTransitionViewModel.getScrimAlpha())
+                .thenReturn(emptyFlow());
+        when(mLockscreenToDreamingTransitionViewModel.getScrimAlpha())
                 .thenReturn(emptyFlow());
 
         mKeyguardTransitionRepository = mKosmos.getKeyguardTransitionRepository();
@@ -284,13 +289,13 @@ public class ScrimControllerTest extends SysuiTestCase {
                 mKeyguardUpdateMonitor,
                 mDockManager,
                 mConfigurationController,
-                new FakeExecutor(new FakeSystemClock()),
-                mJavaAdapter,
                 mScreenOffAnimationController,
                 mKeyguardUnlockAnimationController,
                 mStatusBarKeyguardViewManager,
+                mPrimaryBouncerToDreamingTransitionViewModel,
                 mPrimaryBouncerToGoneTransitionViewModel,
                 mAlternateBouncerToGoneTransitionViewModel,
+                mLockscreenToDreamingTransitionViewModel,
                 mKeyguardTransitionInteractor,
                 mKeyguardInteractor,
                 mKosmos.getTestDispatcher(),
@@ -1236,13 +1241,13 @@ public class ScrimControllerTest extends SysuiTestCase {
                 mKeyguardUpdateMonitor,
                 mDockManager,
                 mConfigurationController,
-                new FakeExecutor(new FakeSystemClock()),
-                mJavaAdapter,
                 mScreenOffAnimationController,
                 mKeyguardUnlockAnimationController,
                 mStatusBarKeyguardViewManager,
+                mPrimaryBouncerToDreamingTransitionViewModel,
                 mPrimaryBouncerToGoneTransitionViewModel,
                 mAlternateBouncerToGoneTransitionViewModel,
+                mLockscreenToDreamingTransitionViewModel,
                 mKeyguardTransitionInteractor,
                 mKeyguardInteractor,
                 mKosmos.getTestDispatcher(),

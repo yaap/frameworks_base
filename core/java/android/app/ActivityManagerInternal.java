@@ -24,6 +24,8 @@ import android.annotation.Nullable;
 import android.annotation.PermissionMethod;
 import android.annotation.PermissionName;
 import android.annotation.SpecialUsers.CanBeALL;
+import android.annotation.SpecialUsers.CanBeCURRENT;
+import android.annotation.SpecialUsers.CanBeCURRENT_OR_SELF;
 import android.annotation.UserIdInt;
 import android.app.ActivityManager.ProcessCapability;
 import android.app.ActivityManager.RestrictionLevel;
@@ -161,11 +163,25 @@ public abstract class ActivityManagerInternal {
     public abstract void onUserRemoved(@UserIdInt int userId);
 
     /**
-     * Start user, if it is not already running, but don't bring it to foreground.
+     * Start user in the background but only temporarily; if the user hasn't left the background
+     * in the provided duration, it may be automatically stopped (at the system's discretion).
+     *
+     * The automatic stopping is not guaranteed, and there are cases in which it won't be.
+     * Similarly, there is no guarantee that the user will not be stopped prior to the given
+     * duration.
+     *
+     * In the current implementation, this value simply replaces any default inactive stopping time
+     * (from config_backgroundUserScheduledStopTimeSecs), but that is subject to change.
+     *
+     * Automatically stopping background users is not currently enabled for devices supporting
+     * {@link android.os.UserManager#isVisibleBackgroundUsersEnabled() visible background users};
+     * on such devices, the user will still be started but not stopped.
+     *
      * @param userId ID of the user to start
+     * @param durSecs in how many seconds we should attempt to stop the user
      * @return true if the user has been successfully started
      */
-    public abstract boolean startUserInBackground(int userId);
+    public abstract boolean startUserInBackgroundTemporarily(@UserIdInt int userId, int durSecs);
 
     /**
      * Kill foreground apps from the specified user.
@@ -322,7 +338,8 @@ public abstract class ActivityManagerInternal {
      * Checks to see if the calling pid is allowed to handle the user. Returns adjusted user id as
      * needed.
      */
-    public abstract int handleIncomingUser(int callingPid, int callingUid, @UserIdInt int userId,
+    public abstract @CanBeALL @UserIdInt int handleIncomingUser(int callingPid, int callingUid,
+            @CanBeALL @CanBeCURRENT @CanBeCURRENT_OR_SELF @UserIdInt int userId,
             boolean allowAll, int allowMode, String name, String callerPackage);
 
     /** Checks if the calling binder pid/uid has the given permission. */
@@ -500,6 +517,11 @@ public abstract class ActivityManagerInternal {
      */
     public static final int OOM_ADJ_REASON_RECONFIGURATION = 24;
 
+    /**
+     * Oom Adj Reason: Either a binder call has started or finished.
+     */
+    public static final int OOM_ADJ_REASON_SERVICE_BINDER_CALL = 25;
+
     @IntDef(prefix = {"OOM_ADJ_REASON_"}, value = {
         OOM_ADJ_REASON_NONE,
         OOM_ADJ_REASON_ACTIVITY,
@@ -526,6 +548,7 @@ public abstract class ActivityManagerInternal {
         OOM_ADJ_REASON_COMPONENT_DISABLED,
         OOM_ADJ_REASON_FOLLOW_UP,
         OOM_ADJ_REASON_RECONFIGURATION,
+        OOM_ADJ_REASON_SERVICE_BINDER_CALL,
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface OomAdjReason {}
@@ -694,6 +717,17 @@ public abstract class ActivityManagerInternal {
      * @param data AppNotRespondingDialog.Data object
      */
     public abstract void rescheduleAnrDialog(Object data);
+
+    /**
+     * Move all the error dialogs (including {@code com.android.server.am.AppErrorDialog},
+     * {@code com.android.server.am.AppNotRespondingDialog},
+     * {@code com.android.server.am.StrictModeViolationDialog},
+     * and {@code com.android.server.am.AppWaitingForDebuggerDialog}) to the default display.
+     *
+     * @param displayId The display id of the display where the error dialogs are showing and need
+     *                  to be moved.
+     */
+    public abstract void moveErrorDialogsToDefaultDisplay(int displayId);
 
     /**
      * Sends {@link android.content.Intent#ACTION_CONFIGURATION_CHANGED} with all the appropriate
@@ -869,7 +903,7 @@ public abstract class ActivityManagerInternal {
     public abstract int broadcastIntent(Intent intent,
             IIntentReceiver resultTo,
             String[] requiredPermissions, boolean serialized,
-            int userId, int[] appIdAllowList,
+            @CanBeALL @CanBeCURRENT @UserIdInt int userId, int[] appIdAllowList,
             @Nullable BiFunction<Integer, Bundle, Bundle> filterExtrasForReceiver,
             @Nullable Bundle bOptions);
 
@@ -882,7 +916,7 @@ public abstract class ActivityManagerInternal {
     public abstract int broadcastIntentWithCallback(Intent intent,
             IIntentReceiver resultTo,
             String[] requiredPermissions,
-            int userId, int[] appIdAllowList,
+            @CanBeALL @CanBeCURRENT @UserIdInt int userId, int[] appIdAllowList,
             @Nullable BiFunction<Integer, Bundle, Bundle> filterExtrasForReceiver,
             @Nullable Bundle bOptions);
 
@@ -1311,7 +1345,7 @@ public abstract class ActivityManagerInternal {
      * @hide
      */
     public abstract boolean clearApplicationUserData(String packageName, boolean keepState,
-            boolean isRestore, IPackageDataObserver observer, int userId);
+            boolean isRestore, IPackageDataObserver observer, @CanBeCURRENT @UserIdInt int userId);
 
 
     /**

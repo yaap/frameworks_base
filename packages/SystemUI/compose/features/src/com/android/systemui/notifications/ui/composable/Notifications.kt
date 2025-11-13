@@ -70,6 +70,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
@@ -92,16 +93,17 @@ import com.android.compose.animation.scene.ElementKey
 import com.android.compose.animation.scene.LowestZIndexContentPicker
 import com.android.compose.animation.scene.SceneTransitionLayoutState
 import com.android.compose.animation.scene.content.state.TransitionState
-import com.android.compose.gesture.NestedScrollableBound
 import com.android.compose.gesture.effect.OffsetOverscrollEffect
 import com.android.compose.gesture.effect.rememberOffsetOverscrollEffect
 import com.android.compose.modifiers.thenIf
+import com.android.compose.nestedscroll.OnStopScope
+import com.android.compose.nestedscroll.PriorityNestedScrollConnection
+import com.android.compose.nestedscroll.ScrollController
+import com.android.internal.jank.Cuj.CUJ_NOTIFICATION_SHADE_SCROLL_FLING
 import com.android.internal.jank.InteractionJankMonitor
-import com.android.internal.jank.InteractionJankMonitor.CUJ_NOTIFICATION_SHADE_SCROLL_FLING
 import com.android.systemui.common.ui.compose.windowinsets.LocalScreenCornerRadius
 import com.android.systemui.res.R
 import com.android.systemui.scene.session.ui.composable.SaveableSession
-import com.android.systemui.scene.session.ui.composable.rememberSession
 import com.android.systemui.scene.session.ui.composable.sessionCoroutineScope
 import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.shade.ui.composable.ShadeHeader
@@ -306,13 +308,13 @@ fun ContentScope.NotificationScrollingStack(
     onEmptySpaceClick: (() -> Unit)? = null,
 ) {
     val composeViewRoot = LocalView.current
-    val coroutineScope = shadeSession.sessionCoroutineScope()
+    val coroutineScope = shadeSession.sessionCoroutineScope(key = "NotificationScrollingStack")
     val density = LocalDensity.current
     val screenCornerRadius = LocalScreenCornerRadius.current
     val scrimCornerRadius = dimensionResource(R.dimen.notification_scrim_corner_radius)
     val scrimBackgroundColor = MaterialTheme.colorScheme.surface
     val scrollState =
-        shadeSession.rememberSaveableSession(saver = ScrollState.Saver, key = null) {
+        shadeSession.rememberSaveableSession(saver = ScrollState.Saver, key = "ScrollState") {
             ScrollState(initial = 0)
         }
     val syntheticScroll = viewModel.syntheticScroll.collectAsStateWithLifecycle(0f)
@@ -327,7 +329,7 @@ fun ContentScope.NotificationScrollingStack(
      * notifications, this can exceed the space available on screen to show notifications, at which
      * point the notification stack should become scrollable.
      */
-    val stackHeight = remember { mutableIntStateOf(0) }
+    val stackHeight = shadeSession.rememberSession(key = "StackHeight") { mutableIntStateOf(0) }
 
     /**
      * Space available for the notification stack on the screen. These bounds don't scroll off the
@@ -344,13 +346,13 @@ fun ContentScope.NotificationScrollingStack(
     // When fully expanded (scrimOffset = minScrimOffset), its top bound is at minScrimStartY,
     // which is equal to the height of the Shade Header. Thus, when the scrim is fully expanded, the
     // entire height of the scrim is visible on screen.
-    val scrimOffset = shadeSession.rememberSession { Animatable(0f) }
+    val scrimOffset = shadeSession.rememberSession(key = "ScrimOffset") { Animatable(0f) }
 
     // set the bounds to null when the scrim disappears
     DisposableEffect(Unit) { onDispose { viewModel.onScrimBoundsChanged(null) } }
 
     // Top position if the scrim, when it is fully expanded.
-    val minScrimTop = ShadeHeader.Dimensions.CollapsedHeight
+    val minScrimTop = ShadeHeader.Dimensions.StatusBarHeight
 
     // The minimum offset for the scrim. The scrim is considered fully expanded when it
     // is at this offset.
@@ -369,17 +371,18 @@ fun ContentScope.NotificationScrollingStack(
     // The top y bound of the IME.
     val imeTop = remember { mutableFloatStateOf(0f) }
 
-    val shadeScrollState by remember {
-        derivedStateOf {
-            ShadeScrollState(
-                // we are not scrolled to the top unless the scroll position is zero,
-                // and the scrim is at its maximum offset
-                isScrolledToTop = scrimOffset.value >= 0f && scrollState.value == 0,
-                scrollPosition = scrollState.value,
-                maxScrollPosition = scrollState.maxValue,
-            )
+    val shadeScrollState by
+        shadeSession.rememberSession(key = "ShadeScrollState") {
+            derivedStateOf {
+                ShadeScrollState(
+                    // we are not scrolled to the top unless the scroll position is zero,
+                    // and the scrim is at its maximum offset
+                    isScrolledToTop = scrimOffset.value >= 0f && scrollState.value == 0,
+                    scrollPosition = scrollState.value,
+                    maxScrollPosition = scrollState.maxValue,
+                )
+            }
         }
-    }
 
     LaunchedEffect(shadeScrollState) { viewModel.setScrollState(shadeScrollState) }
 
@@ -461,12 +464,7 @@ fun ContentScope.NotificationScrollingStack(
     }
 
     val scrimNestedScrollConnection =
-        shadeSession.rememberSession(
-            scrimOffset,
-            minScrimTop,
-            viewModel.isCurrentGestureOverscroll,
-            density,
-        ) {
+        shadeSession.rememberSession(key = "ScrimConnection", scrimOffset, minScrimTop, density) {
             val flingSpec: DecayAnimationSpec<Float> = splineBasedDecay(density)
             val flingBehavior = NotificationScrimFlingBehavior(flingSpec)
             NotificationScrimNestedScrollConnection(
@@ -479,8 +477,47 @@ fun ContentScope.NotificationScrollingStack(
                 maxScrimOffset = 0f,
                 contentHeight = { stackHeight.intValue.toFloat() },
                 minVisibleScrimHeight = minVisibleScrimHeight,
-                isCurrentGestureOverscroll = { viewModel.isCurrentGestureOverscroll },
                 flingBehavior = flingBehavior,
+            )
+        }
+
+    val swipeToExpandNotificationScrollConnection =
+        shadeSession.rememberSession(
+            key = "SwipeToExpandNotificationScrollConnection",
+            scrimOffset,
+            minScrimTop,
+            density,
+            viewModel.isCurrentGestureExpandingNotification,
+        ) {
+            PriorityNestedScrollConnection(
+                orientation = Orientation.Vertical,
+                canStartPreScroll = { _, _, _ -> false },
+                canStartPostScroll = { _, _, _ -> viewModel.isCurrentGestureExpandingNotification },
+                onStart = { firstScroll ->
+                    object : ScrollController {
+                        override fun onScroll(
+                            deltaScroll: Float,
+                            source: NestedScrollSource,
+                        ): Float {
+                            return if (viewModel.isCurrentGestureExpandingNotification) {
+                                // consume all the amount, when this swipe is expanding a
+                                // notification
+                                deltaScroll
+                            } else {
+                                // don't consume anything, when the expansion is done
+                                0f
+                            }
+                        }
+
+                        override fun onCancel() {
+                            // No-op
+                        }
+
+                        override fun canStopOnPreFling(): Boolean = false
+
+                        override suspend fun OnStopScope.onStop(initialVelocity: Float): Float = 0f
+                    }
+                },
             )
         }
 
@@ -595,7 +632,8 @@ fun ContentScope.NotificationScrollingStack(
         ) {
             Column(
                 modifier =
-                    Modifier.disableSwipesWhenScrolling(NestedScrollableBound.BottomRight)
+                    Modifier.disableSwipesWhenScrolling()
+                        .nestedScroll(swipeToExpandNotificationScrollConnection)
                         .thenIf(supportNestedScrolling) {
                             Modifier.nestedScroll(scrimNestedScrollConnection)
                         }

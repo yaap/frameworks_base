@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -70,8 +71,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.compose.animation.scene.ContentScope
 import com.android.compose.animation.scene.UserAction
 import com.android.compose.animation.scene.UserActionResult
+import com.android.compose.animation.scene.animateContentFloatAsState
 import com.android.compose.animation.scene.animateSceneDpAsState
-import com.android.compose.animation.scene.animateSceneFloatAsState
 import com.android.compose.animation.scene.content.state.TransitionState
 import com.android.compose.modifiers.thenIf
 import com.android.compose.windowsizeclass.LocalWindowSizeClass
@@ -251,7 +252,7 @@ private fun ContentScope.QuickSettingsScene(
             remember(lifecycleOwner, viewModel) {
                 viewModel.getFooterActionsViewModel(lifecycleOwner)
             }
-        animateSceneFloatAsState(value = 1f, key = QuickSettings.SharedValues.TilesSquishiness)
+        animateContentFloatAsState(value = 1f, key = QuickSettings.SharedValues.TilesSquishiness)
 
         // ############## SCROLLING ################
 
@@ -282,7 +283,7 @@ private fun ContentScope.QuickSettingsScene(
             )
         val topPadding by
             animateDpAsState(
-                targetValue = if (isCustomizing) ShadeHeader.Dimensions.CollapsedHeight else 0.dp,
+                targetValue = if (isCustomizing) ShadeHeader.Dimensions.StatusBarHeight else 0.dp,
                 animationSpec = tween(customizingAnimationDuration),
                 label = "animateQSSceneTopPaddingAsState",
             )
@@ -294,7 +295,7 @@ private fun ContentScope.QuickSettingsScene(
         }
 
         // ############# Media ###############
-        val isMediaVisible by viewModel.isMediaVisible.collectAsStateWithLifecycle()
+        val isMediaVisible = viewModel.isMediaVisible
         val mediaInRow = isMediaVisible && isLandscape()
         val mediaOffset by
             animateSceneDpAsState(value = InQS, key = MediaLandscapeTopOffset, canOverflow = false)
@@ -311,6 +312,7 @@ private fun ContentScope.QuickSettingsScene(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier =
                 Modifier.fillMaxSize()
+                    .overscroll(verticalOverscrollEffect)
                     .padding(
                         top = topPadding.coerceAtLeast(0.dp),
                         bottom = bottomPadding.coerceAtLeast(0.dp),

@@ -374,6 +374,7 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
     private static final String ATTR_FINGERPRINT = "fingerprint";
     private static final String ATTR_VOLUME_UUID = "volumeUuid";
     private static final String ATTR_SDK_VERSION = "sdkVersion";
+    private static final String ATTR_SDK_VERSION_FULL = "sdkVersionFull";
     private static final String ATTR_DATABASE_VERSION = "databaseVersion";
     private static final String ATTR_VALUE = "value";
     private static final String ATTR_FIRST_INSTALL_TIME = "first-install-time";
@@ -457,6 +458,14 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
         /**
          * These are the last platform API version we were using for the apps
          * installed on internal and external storage. It is used to grant newer
+         * permissions one time during a system upgrade. The full SDK version includes a
+         * major version and a minor version.
+         */
+        int sdkVersionFull;
+
+        /**
+         * These are the last platform API version we were using for the apps
+         * installed on internal and external storage. It is used to grant newer
          * permissions one time during a system upgrade.
          */
         int sdkVersion;
@@ -485,6 +494,16 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
          */
         public void forceCurrent() {
             sdkVersion = Build.VERSION.SDK_INT;
+
+            if (android.sdk.Flags.majorMinorVersioningScheme()) {
+                sdkVersionFull = Build.VERSION.SDK_INT_FULL;
+                if (Build.getMajorSdkVersion(sdkVersionFull) != sdkVersion) {
+                    throw new RuntimeException("Build.VERSION.SDK_INT_FULL:" + sdkVersionFull
+                            + " and Build.VERSION.SDK_INT: " + sdkVersion + " don't match."
+                            + " Please check your build configurations!");
+                }
+            }
+
             databaseVersion = CURRENT_DATABASE_VERSION;
             buildFingerprint = Build.FINGERPRINT;
             fingerprint = PackagePartitions.FINGERPRINT;
@@ -1118,7 +1137,6 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
             if ((pkgFlags&ApplicationInfo.FLAG_SYSTEM) == 0) {
                 if (DEBUG_STOPPED) {
                     RuntimeException e = new RuntimeException("here");
-                    e.fillInStackTrace();
                     Slog.i(PackageManagerService.TAG, "Stopping package " + pkgName, e);
                 }
                 List<UserInfo> users = getAllUsers(userManager);
@@ -1165,7 +1183,6 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
             } else if (isStoppedSystemApp) {
                 if (DEBUG_STOPPED) {
                     RuntimeException e = new RuntimeException("here");
-                    e.fillInStackTrace();
                     Slog.i(PackageManagerService.TAG, "Stopping system package " + pkgName, e);
                 }
                 pkgSetting.setStopped(true, installUserId);
@@ -1274,7 +1291,7 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
                 pkgSetting.setLegacyNativeLibraryPath(legacyNativeLibraryPath);
             }
             pkgSetting.setPath(codePath);
-            if (isDontKill && Flags.improveInstallDontKill()) {
+            if (isDontKill) {
                 // We retain old code paths for DONT_KILL installs. Keep a record of old paths until
                 // they are removed.
                 pkgSetting.addOldPath(oldCodePath);
@@ -2800,7 +2817,13 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
         }
     }
 
+    /** only for test */
     void writeLPr(@NonNull Computer computer, boolean sync) {
+        final List<UserInfo> activeUsers = getActiveUsers(UserManagerService.getInstance());
+        writeLPr(computer, activeUsers, sync);
+    }
+
+    void writeLPr(@NonNull Computer computer, List<UserInfo> users, boolean sync) {
         //Debug.startMethodTracing("/data/system/packageprof", 8 * 1024 * 1024);
 
         final long startTime = SystemClock.uptimeMillis();
@@ -2832,6 +2855,7 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
                     serializer.startTag(null, TAG_VERSION);
                     XmlUtils.writeStringAttribute(serializer, ATTR_VOLUME_UUID, volumeUuid);
                     serializer.attributeInt(null, ATTR_SDK_VERSION, ver.sdkVersion);
+                    serializer.attributeInt(null, ATTR_SDK_VERSION_FULL, ver.sdkVersionFull);
                     serializer.attributeInt(null, ATTR_DATABASE_VERSION, ver.databaseVersion);
                     XmlUtils.writeStringAttribute(serializer, ATTR_BUILD_FINGERPRINT,
                             ver.buildFingerprint);
@@ -2900,7 +2924,7 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
                 atomicFile.finishWrite(str);
 
                 writeKernelMappingLPr();
-                writePackageListLPr();
+                writePackageListLPr(users);
                 writeAllUsersPackageRestrictionsLPr(sync);
                 writeAllRuntimePermissionsLPr();
                 com.android.internal.logging.EventLogTags.writeCommitSysConfigFile(
@@ -3017,11 +3041,11 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
         }
     }
 
-    void writePackageListLPr() {
-        writePackageListLPr(-1);
+    void writePackageListLPr(List<UserInfo> users) {
+        writePackageListLPr(users, -1);
     }
 
-    void writePackageListLPr(int creatingUserId) {
+    void writePackageListLPr(List<UserInfo> users, int creatingUserId) {
         String filename = mPackageListFilename.getAbsolutePath();
         String ctx = SELinux.fileSelabelLookup(filename);
         if (ctx == null) {
@@ -3033,15 +3057,14 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
             Slog.wtf(TAG, "Failed to set packages.list SELinux context");
         }
         try {
-            writePackageListLPrInternal(creatingUserId);
+            writePackageListLPrInternal(users, creatingUserId);
         } finally {
             SELinux.setFSCreateContext(null);
         }
     }
 
-    private void writePackageListLPrInternal(int creatingUserId) {
+    private void writePackageListLPrInternal(List<UserInfo> users, int creatingUserId) {
         // Only derive GIDs for active users (not dying)
-        final List<UserInfo> users = getActiveUsers(UserManagerService.getInstance(), true);
         int[] userIds = new int[users.size()];
         for (int i = 0; i < userIds.length; i++) {
             userIds[i] = users.get(i).id;
@@ -3497,6 +3520,12 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
                                 ATTR_VOLUME_UUID);
                         final VersionInfo ver = findOrCreateVersion(volumeUuid);
                         ver.sdkVersion = parser.getAttributeInt(null, ATTR_SDK_VERSION);
+                        final int defaultSdkVersionFull =
+                                android.sdk.Flags.majorMinorVersioningScheme()
+                                        ? Build.parseFullVersion(String.valueOf(ver.sdkVersion))
+                                        : 0;
+                        ver.sdkVersionFull = parser.getAttributeInt(null, ATTR_SDK_VERSION_FULL,
+                                defaultSdkVersionFull);
                         ver.databaseVersion = parser.getAttributeInt(null, ATTR_DATABASE_VERSION);
                         ver.buildFingerprint = XmlUtils.readStringAttribute(parser,
                                 ATTR_BUILD_FINGERPRINT);
@@ -4729,7 +4758,7 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
                                 ps.getPackageName()));
                 // Only system apps are initially installed.
                 ps.setInstalled(shouldReallyInstall, userHandle);
-                if (Flags.fixSystemAppsFirstInstallTime() && shouldReallyInstall) {
+                if (shouldReallyInstall) {
                     ps.setFirstInstallTime(currentTimeMillis, userHandle);
                 }
 
@@ -4796,7 +4825,13 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
         t.traceEnd(); // createNewUser
     }
 
+    /** only for test */
     void removeUserLPw(int userId) {
+        final List<UserInfo> activeUsers = getActiveUsers(UserManagerService.getInstance());
+        removeUserLPw(activeUsers, userId);
+    }
+
+    void removeUserLPw(List<UserInfo> users, int userId) {
         Set<Entry<String, PackageSetting>> entries = mPackages.entrySet();
         for (Entry<String, PackageSetting> entry : entries) {
             entry.getValue().removeUser(userId);
@@ -4813,7 +4848,7 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
         mRuntimePermissionsPersistence.onUserRemoved(userId);
         mDomainVerificationManager.clearUser(userId);
 
-        writePackageListLPr();
+        writePackageListLPr(users);
 
         // Inform kernel that the user was removed, so that packages are marked uninstalled
         // for sdcardfs
@@ -4848,11 +4883,12 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
         }
     }
 
-    public VerifierDeviceIdentity getVerifierDeviceIdentityLPw(@NonNull Computer computer) {
+    public VerifierDeviceIdentity getVerifierDeviceIdentityLPw(@NonNull Computer computer,
+            List<UserInfo> users) {
         if (mVerifierDeviceIdentity == null) {
             mVerifierDeviceIdentity = VerifierDeviceIdentity.generate();
 
-            writeLPr(computer, /*sync=*/false);
+            writeLPr(computer, users, /*sync=*/false);
         }
 
         return mVerifierDeviceIdentity;
@@ -4914,26 +4950,24 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
     }
 
     /**
-     * Returns all users on the device, including pre-created and dying users.
+     * Returns all users on the device, including dying users.
      *
      * @param userManager UserManagerService instance
      * @return the list of users
      */
     private static List<UserInfo> getAllUsers(UserManagerService userManager) {
-        return getUsers(userManager, /* excludeDying= */ false, /* excludePreCreated= */ false);
+        return getUsers(userManager, /* excludeDying= */ false);
     }
 
     /**
-     * Returns the list of users on the device, excluding pre-created ones.
+     * Returns the list of users on the device, excluding dying ones.
      *
      * @param userManager UserManagerService instance
-     * @param excludeDying Indicates whether to exclude any users marked for deletion.
      *
      * @return the list of users
      */
-    private static List<UserInfo> getActiveUsers(UserManagerService userManager,
-            boolean excludeDying) {
-        return getUsers(userManager, excludeDying, /* excludePreCreated= */ true);
+    static List<UserInfo> getActiveUsers(UserManagerService userManager) {
+        return getUsers(userManager, /* excludeDying= */ true);
     }
 
     /**
@@ -4941,16 +4975,13 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
      *
      * @param userManager UserManagerService instance
      * @param excludeDying Indicates whether to exclude any users marked for deletion.
-     * @param excludePreCreated Indicates whether to exclude any pre-created users.
      *
      * @return the list of users
      */
-    private static List<UserInfo> getUsers(UserManagerService userManager, boolean excludeDying,
-            boolean excludePreCreated) {
+    private static List<UserInfo> getUsers(UserManagerService userManager, boolean excludeDying) {
         final long id = Binder.clearCallingIdentity();
         try {
-            return userManager.getUsers(/* excludePartial= */ true, excludeDying,
-                    excludePreCreated);
+            return userManager.getUsers(excludeDying);
         } catch (NullPointerException npe) {
             // packagemanager not yet initialized
         } finally {
@@ -5046,6 +5077,7 @@ public final class Settings implements Watchable, Snappable, ResilientAtomicFile
             }
             pw.increaseIndent();
             pw.printPair("sdkVersion", ver.sdkVersion);
+            pw.printPair("sdkVersionFull", ver.sdkVersionFull);
             pw.printPair("databaseVersion", ver.databaseVersion);
             pw.println();
             pw.printPair("buildFingerprint", ver.buildFingerprint);

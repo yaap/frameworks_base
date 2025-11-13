@@ -16,11 +16,13 @@
 
 package com.android.systemui.keyguard.domain.interactor
 
+import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
 import android.platform.test.flag.junit.FlagsParameterization
 import androidx.test.filters.SmallTest
 import com.android.compose.animation.scene.ObservableTransitionState
 import com.android.systemui.Flags.FLAG_GLANCEABLE_HUB_V2
+import com.android.systemui.Flags.FLAG_HUB_EDIT_MODE_TRANSITION
 import com.android.systemui.Flags.FLAG_KEYGUARD_WM_STATE_REFACTOR
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.bouncer.data.repository.fakeKeyguardBouncerRepository
@@ -29,7 +31,10 @@ import com.android.systemui.communal.domain.interactor.communalSceneInteractor
 import com.android.systemui.communal.domain.interactor.setCommunalV2Available
 import com.android.systemui.communal.domain.interactor.setCommunalV2ConfigEnabled
 import com.android.systemui.communal.shared.model.CommunalScenes
+import com.android.systemui.communal.shared.model.EditModeState
 import com.android.systemui.coroutines.collectValues
+import com.android.systemui.flags.DisableSceneContainer
+import com.android.systemui.keyguard.data.repository.fakeKeyguardRepository
 import com.android.systemui.keyguard.data.repository.fakeKeyguardTransitionRepositorySpy
 import com.android.systemui.keyguard.data.repository.keyguardOcclusionRepository
 import com.android.systemui.keyguard.data.repository.keyguardTransitionRepository
@@ -46,6 +51,7 @@ import com.android.systemui.power.domain.interactor.powerInteractor
 import com.android.systemui.testKosmos
 import com.google.common.truth.Truth
 import junit.framework.Assert.assertEquals
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -56,8 +62,10 @@ import org.mockito.Mockito.reset
 import platform.test.runner.parameterized.ParameterizedAndroidJunit4
 import platform.test.runner.parameterized.Parameters
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @SmallTest
 @RunWith(ParameterizedAndroidJunit4::class)
+@DisableSceneContainer // PRIMARY_BOUNCER is not used in flexi.
 class FromPrimaryBouncerTransitionInteractorTest(flags: FlagsParameterization) : SysuiTestCase() {
 
     companion object {
@@ -76,7 +84,7 @@ class FromPrimaryBouncerTransitionInteractorTest(flags: FlagsParameterization) :
         testKosmos().apply {
             this.keyguardTransitionRepository = fakeKeyguardTransitionRepositorySpy
         }
-    val underTest = kosmos.fromPrimaryBouncerTransitionInteractor
+    val underTest by lazy { kosmos.fromPrimaryBouncerTransitionInteractor }
     val testScope = kosmos.testScope
     val transitionRepository = kosmos.fakeKeyguardTransitionRepositorySpy
     val bouncerRepository = kosmos.fakeKeyguardBouncerRepository
@@ -214,6 +222,45 @@ class FromPrimaryBouncerTransitionInteractorTest(flags: FlagsParameterization) :
         }
 
     @Test
+    @EnableFlags(FLAG_HUB_EDIT_MODE_TRANSITION)
+    @DisableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR)
+    fun testPrimaryBouncerToGone_whenEnteringHubEditMode_flagOn_doNothing() =
+        kosmos.runTest {
+            underTest.start()
+
+            transitionRepository.transitionTo(
+                from = KeyguardState.LOCKSCREEN,
+                to = KeyguardState.PRIMARY_BOUNCER,
+            )
+            runCurrent()
+
+            reset(transitionRepository)
+            communalSceneInteractor.setEditModeState(EditModeState.STARTING)
+            fakeKeyguardRepository.setKeyguardGoingAway(true)
+            runCurrent()
+
+            assertThat(transitionRepository).noTransitionsStarted()
+        }
+
+    @Test
+    @DisableFlags(FLAG_HUB_EDIT_MODE_TRANSITION, FLAG_KEYGUARD_WM_STATE_REFACTOR)
+    fun testPrimaryBouncerToGone_whenEnteringHubEditMode_flagOff_transitionToGone() =
+        kosmos.runTest {
+            underTest.start()
+
+            transitionRepository.transitionTo(
+                from = KeyguardState.LOCKSCREEN,
+                to = KeyguardState.PRIMARY_BOUNCER,
+            )
+            communalSceneInteractor.setEditModeState(EditModeState.STARTING)
+            fakeKeyguardRepository.setKeyguardGoingAway(true)
+            runCurrent()
+
+            assertThat(transitionRepository)
+                .startedTransition(from = KeyguardState.PRIMARY_BOUNCER, to = KeyguardState.GONE)
+        }
+
+    @Test
     @EnableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR)
     fun testTransitionToOccluded_bouncerHide_occludingActivityOnTop() =
         testScope.runTest {
@@ -240,6 +287,31 @@ class FromPrimaryBouncerTransitionInteractorTest(flags: FlagsParameterization) :
                 .startedTransition(
                     from = KeyguardState.PRIMARY_BOUNCER,
                     to = KeyguardState.OCCLUDED,
+                )
+        }
+
+    @Test
+    fun testTransitionToDreaming() =
+        kosmos.runTest {
+            underTest.start()
+            bouncerRepository.setPrimaryShow(true)
+            transitionRepository.sendTransitionSteps(
+                from = KeyguardState.LOCKSCREEN,
+                to = KeyguardState.PRIMARY_BOUNCER,
+                testScope,
+            )
+
+            reset(transitionRepository)
+
+            // Dream shows up.
+            fakeKeyguardRepository.setDreaming(true)
+            runCurrent()
+
+            // Dream transition starts.
+            assertThat(transitionRepository)
+                .startedTransition(
+                    from = KeyguardState.PRIMARY_BOUNCER,
+                    to = KeyguardState.DREAMING,
                 )
         }
 

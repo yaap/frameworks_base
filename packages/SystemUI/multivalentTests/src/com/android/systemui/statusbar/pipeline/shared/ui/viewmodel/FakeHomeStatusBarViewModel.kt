@@ -16,8 +16,10 @@
 
 package com.android.systemui.statusbar.pipeline.shared.ui.viewmodel
 
+import android.content.Context
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.RectF
 import android.view.View
 import androidx.compose.runtime.getValue
 import com.android.systemui.lifecycle.ExclusiveActivatable
@@ -28,12 +30,16 @@ import com.android.systemui.statusbar.chips.ui.model.MultipleOngoingActivityChip
 import com.android.systemui.statusbar.chips.ui.model.MultipleOngoingActivityChipsModelLegacy
 import com.android.systemui.statusbar.chips.ui.model.OngoingActivityChipModel
 import com.android.systemui.statusbar.events.shared.model.SystemEventAnimationState.Idle
-import com.android.systemui.statusbar.featurepods.popups.shared.model.PopupChipModel
+import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipModel
+import com.android.systemui.statusbar.layout.ui.viewmodel.StatusBarBoundsViewModel
 import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark
+import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryNextToPercentViewModel
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel
 import com.android.systemui.statusbar.pipeline.shared.ui.model.ChipsVisibilityModel
 import com.android.systemui.statusbar.pipeline.shared.ui.model.SystemInfoCombinedVisibilityModel
 import com.android.systemui.statusbar.pipeline.shared.ui.model.VisibilityModel
+import com.android.systemui.statusbar.policy.Clock
+import com.android.systemui.statusbar.systemstatusicons.ui.viewmodel.SystemStatusIconsViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,6 +62,8 @@ class FakeHomeStatusBarViewModel(
     override val ongoingActivityChips =
         ChipsVisibilityModel(MultipleOngoingActivityChipsModel(), areChipsAllowed = false)
 
+    override fun onChipBoundsChanged(key: String, bounds: RectF) {}
+
     override val ongoingActivityChipsLegacy =
         MutableStateFlow(MultipleOngoingActivityChipsModelLegacy())
 
@@ -68,9 +76,30 @@ class FakeHomeStatusBarViewModel(
 
     override val canShowOngoingActivityChips: Flow<Boolean> = MutableStateFlow(false)
 
-    override val batteryViewModelFactory: BatteryViewModel.Factory =
-        object : BatteryViewModel.Factory {
-            override fun create(): BatteryViewModel = mock(BatteryViewModel::class.java)
+    override val batteryNextToPercentViewModel: BatteryNextToPercentViewModel.Factory =
+        object : BatteryNextToPercentViewModel.Factory {
+            override fun create(): BatteryNextToPercentViewModel =
+                mock(BatteryNextToPercentViewModel::class.java)
+        }
+
+    override val unifiedBatteryViewModel: BatteryViewModel.BasedOnUserSetting.Factory =
+        BatteryViewModel.BasedOnUserSetting.Factory {
+            mock(BatteryViewModel.BasedOnUserSetting::class.java)
+        }
+
+    override val systemStatusIconsViewModelFactory: SystemStatusIconsViewModel.Factory =
+        object : SystemStatusIconsViewModel.Factory {
+            override fun create(context: Context): SystemStatusIconsViewModel =
+                mock(SystemStatusIconsViewModel::class.java)
+        }
+
+    override val statusBarBoundsViewModelFactory: StatusBarBoundsViewModel.Factory =
+        object : StatusBarBoundsViewModel.Factory {
+            override fun create(
+                displayId: Int,
+                startSideContainerView: View,
+                clockView: Clock,
+            ): StatusBarBoundsViewModel = mock(StatusBarBoundsViewModel::class.java)
         }
 
     override val shouldShowOperatorNameView = MutableStateFlow(false)

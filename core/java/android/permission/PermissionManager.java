@@ -25,7 +25,6 @@ import static android.content.pm.PackageManager.FLAG_PERMISSION_USER_FIXED;
 import static android.content.pm.PackageManager.FLAG_PERMISSION_USER_SET;
 import static android.os.Build.VERSION_CODES.S;
 import static android.permission.flags.Flags.FLAG_SHOULD_REGISTER_ATTRIBUTION_SOURCE;
-import static android.permission.flags.Flags.serverSideAttributionRegistration;
 
 import android.Manifest;
 import android.annotation.CheckResult;
@@ -62,7 +61,6 @@ import android.content.pm.PermissionGroupInfo;
 import android.content.pm.PermissionInfo;
 import android.content.pm.permission.SplitPermissionInfoParcelable;
 import android.media.AudioManager;
-import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -86,7 +84,6 @@ import android.util.Slog;
 import com.android.internal.R;
 import com.android.internal.annotations.Immutable;
 import com.android.internal.util.CollectionUtils;
-import com.android.modules.utils.build.SdkLevel;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -193,13 +190,6 @@ public final class PermissionManager {
     @ChangeId
     @EnabledAfter(targetSdkVersion = S)
     public static final long CANNOT_INSTALL_WITH_BAD_PERMISSION_GROUPS = 146211400;
-
-    /**
-     * Whether to use the new {@link com.android.server.permission.access.AccessCheckingService}.
-     *
-     * @hide
-     */
-    public static final boolean USE_ACCESS_CHECKING_SERVICE = SdkLevel.isAtLeastV();
 
     /**
      * The time to wait in between refreshing the exempted indicator role packages
@@ -1667,14 +1657,8 @@ public final class PermissionManager {
         // only used for process death detection. If we are about to use the source for security
         // enforcement we need to replace the binder with a unique one.
         try {
-            if (serverSideAttributionRegistration()) {
-                IBinder newToken = mPermissionManager.registerAttributionSource(source.asState());
-                return source.withToken(newToken);
-            } else {
-                AttributionSource registeredSource = source.withToken(new Binder());
-                mPermissionManager.registerAttributionSource(registeredSource.asState());
-                return registeredSource;
-            }
+            IBinder newToken = mPermissionManager.registerAttributionSource(source.asState());
+            return source.withToken(newToken);
         } catch (RemoteException e) {
             e.rethrowFromSystemServer();
         }
@@ -1744,10 +1728,6 @@ public final class PermissionManager {
 
     private static int checkPermissionUncached(@Nullable String permission, int pid, int uid,
             int deviceId) {
-        final int appId = UserHandle.getAppId(uid);
-        if (appId == Process.ROOT_UID || appId == Process.SYSTEM_UID) {
-            return PackageManager.PERMISSION_GRANTED;
-        }
         final IActivityManager am = ActivityManager.getService();
         if (am == null) {
             // We don't have an active ActivityManager instance and the calling UID is not root or
@@ -1927,6 +1907,12 @@ public final class PermissionManager {
 
     /** @hide */
     public static int checkPermission(@Nullable String permission, int pid, int uid, int deviceId) {
+        // Short-circuit the cache for unconditionally granted permissions. This was previously
+        // behind the cache, but placing here avoids marginal cache query overhead in system server.
+        final int appId = UserHandle.getAppId(uid);
+        if (appId == Process.SYSTEM_UID || appId == Process.ROOT_UID) {
+            return PackageManager.PERMISSION_GRANTED;
+        }
         return sPermissionCache.query(new PermissionQuery(permission, pid, uid, deviceId));
     }
 

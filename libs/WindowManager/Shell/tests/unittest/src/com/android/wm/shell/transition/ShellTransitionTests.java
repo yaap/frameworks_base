@@ -110,6 +110,7 @@ import com.android.wm.shell.common.DisplayController;
 import com.android.wm.shell.common.DisplayInsetsController;
 import com.android.wm.shell.common.DisplayLayout;
 import com.android.wm.shell.common.ShellExecutor;
+import com.android.wm.shell.desktopmode.multidesks.DesksOrganizer;
 import com.android.wm.shell.recents.IRecentsAnimationRunner;
 import com.android.wm.shell.recents.RecentTasksController;
 import com.android.wm.shell.recents.RecentsTransitionHandler;
@@ -146,7 +147,6 @@ public class ShellTransitionTests extends ShellTestCase {
     private final ShellExecutor mAnimExecutor = new TestShellExecutor();
     private final TestTransitionHandler mDefaultHandler = new TestTransitionHandler();
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
-    private final Handler mAnimHandler = mock(Handler.class);
     private final DisplayInsetsController mDisplayInsets =
             mock(DisplayInsetsController.class);
 
@@ -161,7 +161,7 @@ public class ShellTransitionTests extends ShellTestCase {
         ShellInit shellInit = mock(ShellInit.class);
         final Transitions t = new Transitions(mContext, shellInit, mock(ShellController.class),
                 mOrganizer, mTransactionPool, createTestDisplayController(), mDisplayInsets,
-                mMainExecutor, mMainHandler, mAnimExecutor, mAnimHandler,
+                mMainExecutor, mMainHandler, mAnimExecutor,
                 mock(HomeTransitionObserver.class), mock(FocusTransitionObserver.class));
         // One from Transitions, one from RootTaskDisplayAreaOrganizer
         verify(shellInit).addInitCallback(any(), eq(t));
@@ -174,7 +174,7 @@ public class ShellTransitionTests extends ShellTestCase {
         ShellController shellController = mock(ShellController.class);
         final Transitions t = new Transitions(mContext, shellInit, shellController,
                 mOrganizer, mTransactionPool, createTestDisplayController(), mDisplayInsets,
-                mMainExecutor, mMainHandler, mAnimExecutor, mAnimHandler,
+                mMainExecutor, mMainHandler, mAnimExecutor,
                 mock(HomeTransitionObserver.class), mock(FocusTransitionObserver.class));
         shellInit.init();
         verify(shellController, times(1)).addExternalInterface(
@@ -1319,14 +1319,17 @@ public class ShellTransitionTests extends ShellTestCase {
         final Transitions transitions =
                 new Transitions(mContext, shellInit, mock(ShellController.class), mOrganizer,
                         mTransactionPool, createTestDisplayController(), mDisplayInsets,
-                        mMainExecutor, mMainHandler, mAnimExecutor, mAnimHandler,
+                        mMainExecutor, mMainHandler, mAnimExecutor,
                         mock(HomeTransitionObserver.class),
                         mock(FocusTransitionObserver.class));
         final RecentTasksController mockRecentsTaskController = mock(RecentTasksController.class);
         doReturn(mContext).when(mockRecentsTaskController).getContext();
         final RecentsTransitionHandler recentsHandler =
                 new RecentsTransitionHandler(shellInit, mock(ShellTaskOrganizer.class), transitions,
-                        mockRecentsTaskController, mock(HomeTransitionObserver.class));
+                        mockRecentsTaskController, mock(HomeTransitionObserver.class),
+                        mock(DisplayController.class), mock(DesksOrganizer.class));
+        recentsHandler.setFinishTransactionSupplier(
+                () -> mock(SurfaceControl.Transaction.class));
         transitions.replaceDefaultHandlerForTest(mDefaultHandler);
         shellInit.init();
 
@@ -1360,6 +1363,7 @@ public class ShellTransitionTests extends ShellTestCase {
                 mock(PendingIntent.class) /* intent */,
                 mock(Intent.class) /* fillIn */,
                 new Bundle() /* options */,
+                null /* wct */,
                 mock(IApplicationThread.class) /* appThread */,
                 recentsListener);
         final TransitionInfo infoRecents =
@@ -1915,8 +1919,7 @@ public class ShellTransitionTests extends ShellTestCase {
         ShellInit shellInit = new ShellInit(mMainExecutor);
         final Transitions t = new Transitions(mContext, shellInit, mock(ShellController.class),
                 mOrganizer, mTransactionPool, createTestDisplayController(), mDisplayInsets,
-                mMainExecutor, mMainHandler, mAnimExecutor, mAnimHandler,
-                mock(HomeTransitionObserver.class),
+                mMainExecutor, mMainHandler, mAnimExecutor, mock(HomeTransitionObserver.class),
                 mock(FocusTransitionObserver.class));
         shellInit.init();
         return t;

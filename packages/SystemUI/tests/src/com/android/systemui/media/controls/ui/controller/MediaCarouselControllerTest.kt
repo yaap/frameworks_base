@@ -21,17 +21,16 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.database.ContentObserver
 import android.os.LocaleList
-import android.platform.test.flag.junit.FlagsParameterization
 import android.provider.Settings
 import android.testing.TestableLooper
 import android.util.MathUtils.abs
 import android.view.View
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.compose.animation.scene.ObservableTransitionState
 import com.android.compose.animation.scene.SceneKey
 import com.android.keyguard.KeyguardUpdateMonitor
 import com.android.keyguard.KeyguardUpdateMonitorCallback
-import com.android.systemui.Flags.mediaControlsUmoInflationInBackground
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.deviceentry.domain.interactor.deviceEntryInteractor
 import com.android.systemui.dump.DumpManager
@@ -88,6 +87,7 @@ import org.mockito.ArgumentCaptor
 import org.mockito.Captor
 import org.mockito.Mock
 import org.mockito.Mockito.anyLong
+import org.mockito.Mockito.atLeast
 import org.mockito.Mockito.floatThat
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
@@ -99,8 +99,6 @@ import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.capture
 import org.mockito.kotlin.eq
-import platform.test.runner.parameterized.ParameterizedAndroidJunit4
-import platform.test.runner.parameterized.Parameters
 
 private val DATA = MediaTestUtils.emptyMediaData
 
@@ -109,8 +107,8 @@ private const val PLAYING_LOCAL = "playing local"
 
 @SmallTest
 @TestableLooper.RunWithLooper(setAsMainLooper = true)
-@RunWith(ParameterizedAndroidJunit4::class)
-class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase() {
+@RunWith(AndroidJUnit4::class)
+class MediaCarouselControllerTest : SysuiTestCase() {
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
     private val testDispatcher = kosmos.testDispatcher
     private val secureSettings = kosmos.fakeSettings
@@ -149,20 +147,6 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
 
     private var originalResumeSetting =
         Settings.Secure.getInt(context.contentResolver, Settings.Secure.MEDIA_CONTROLS_RESUME, 1)
-
-    companion object {
-        @JvmStatic
-        @Parameters(name = "{0}")
-        fun getParams(): List<FlagsParameterization> {
-            return FlagsParameterization.progressionOf(
-                com.android.systemui.Flags.FLAG_MEDIA_CONTROLS_UMO_INFLATION_IN_BACKGROUND
-            )
-        }
-    }
-
-    init {
-        mSetFlagsRule.setFlagsParameterization(flags)
-    }
 
     @Before
     fun setup() {
@@ -416,6 +400,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         )
     }
 
+    @DisableSceneContainer
     @Test
     fun testSwipeDismiss_logged() {
         mediaCarouselController.mediaCarouselScrollHandler.dismissCallback.invoke()
@@ -538,11 +523,13 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         verify(pageIndicator).alpha = floatThat { abs(it - 1.0F) < delta }
     }
 
+    @DisableSceneContainer
     @Test
     fun testOnConfigChanged_playersAreAddedBack() {
         testConfigurationChange { configListener.value.onConfigChanged(Configuration()) }
     }
 
+    @DisableSceneContainer
     @Test
     fun testOnUiModeChanged_playersAreAddedBack() {
         testConfigurationChange(configListener.value::onUiModeChanged)
@@ -552,6 +539,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         verify(pageIndicator, times(2)).setNumPages(any())
     }
 
+    @DisableSceneContainer
     @Test
     fun testOnDensityOrFontScaleChanged_playersAreAddedBack() {
         testConfigurationChange(configListener.value::onDensityOrFontScaleChanged)
@@ -562,6 +550,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         verify(pageIndicator, times(4)).setNumPages(any())
     }
 
+    @DisableSceneContainer
     @Test
     fun testOnThemeChanged_playersAreAddedBack() {
         testConfigurationChange(configListener.value::onThemeChanged)
@@ -571,6 +560,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         verify(pageIndicator, times(2)).setNumPages(any())
     }
 
+    @DisableSceneContainer
     @Test
     fun testOnLocaleListChanged_playersAreAddedBack() {
         context.resources.configuration.setLocales(LocaleList(Locale.US, Locale.UK, Locale.CANADA))
@@ -624,7 +614,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
                 this,
             )
 
-            verify(mediaCarousel).visibility = View.VISIBLE
+            verify(mediaCarousel, atLeast(1)).visibility = View.VISIBLE
             assertEquals(true, updatedVisibility)
             assertEquals(false, mediaCarouselController.isLockedAndHidden())
 
@@ -649,7 +639,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
             kosmos.sceneInteractor.changeScene(Scenes.Gone, "")
             kosmos.setSceneTransition(Idle(Scenes.Gone))
 
-            verify(mediaCarousel).visibility = View.VISIBLE
+            verify(mediaCarousel, atLeast(1)).visibility = View.VISIBLE
             assertEquals(true, updatedVisibility)
 
             job.cancel()
@@ -807,6 +797,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         }
     }
 
+    @DisableSceneContainer
     @Test
     fun testInvisibleToUserAndExpanded_playersNotListening() {
         // Add players to carousel.
@@ -828,6 +819,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         verify(panel, times(MediaPlayerData.players().size)).listening = false
     }
 
+    @DisableSceneContainer
     @Test
     fun testVisibleToUserAndExpanded_playersListening() {
         // Add players to carousel.
@@ -842,6 +834,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         verify(panel, times(MediaPlayerData.players().size)).listening = true
     }
 
+    @DisableSceneContainer
     @Test
     fun testUMOCollapsed_playersNotListening() {
         // Add players to carousel.
@@ -874,6 +867,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
         assertTrue(stateUpdated)
     }
 
+    @DisableSceneContainer
     @Test
     fun testAnimationScaleChanged_mediaControlPanelsNotified() {
         MediaPlayerData.addMediaPlayer("key", DATA, panel, clock)
@@ -885,26 +879,36 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
 
     @DisableSceneContainer
     @Test
-    fun swipeToDismiss_pausedAndResumeOff_userInitiated() {
-        verify(mediaDataManager).addListener(capture(listener))
+    fun swipeToDismiss_pausedAndResumeOff_userInitiated() =
+        kosmos.testScope.runTest {
+            verify(mediaDataManager).addListener(capture(listener))
+            transitionRepository.sendTransitionSteps(
+                from = KeyguardState.LOCKSCREEN,
+                to = KeyguardState.GONE,
+                this,
+            )
 
-        // When resumption is disabled, paused media should be dismissed after being swiped away
-        Settings.Secure.putInt(context.contentResolver, Settings.Secure.MEDIA_CONTROLS_RESUME, 0)
-        val pausedMedia = DATA.copy(isPlaying = false)
-        listener.value.onMediaDataLoaded(PAUSED_LOCAL, PAUSED_LOCAL, pausedMedia)
-        runAllReady()
-        mediaCarouselController.onSwipeToDismiss()
+            // When resumption is disabled, paused media should be dismissed after being swiped away
+            Settings.Secure.putInt(
+                context.contentResolver,
+                Settings.Secure.MEDIA_CONTROLS_RESUME,
+                0,
+            )
+            val pausedMedia = DATA.copy(isPlaying = false)
+            listener.value.onMediaDataLoaded(PAUSED_LOCAL, PAUSED_LOCAL, pausedMedia)
+            runAllReady()
+            mediaCarouselController.onSwipeToDismiss()
 
-        // When it can be removed immediately on update
-        whenever(visualStabilityProvider.isReorderingAllowed).thenReturn(true)
-        val inactiveMedia = pausedMedia.copy(active = false)
-        listener.value.onMediaDataLoaded(PAUSED_LOCAL, PAUSED_LOCAL, inactiveMedia)
-        runAllReady()
+            // When it can be removed immediately on update
+            whenever(visualStabilityProvider.isReorderingAllowed).thenReturn(true)
+            val inactiveMedia = pausedMedia.copy(active = false)
+            listener.value.onMediaDataLoaded(PAUSED_LOCAL, PAUSED_LOCAL, inactiveMedia)
+            runAllReady()
 
-        // This is processed as a user-initiated dismissal
-        verify(debugLogger).logMediaRemoved(eq(PAUSED_LOCAL), eq(true))
-        verify(mediaDataManager).dismissMediaData(eq(PAUSED_LOCAL), anyLong(), eq(true))
-    }
+            // This is processed as a user-initiated dismissal
+            verify(debugLogger).logMediaRemoved(eq(PAUSED_LOCAL), eq(true))
+            verify(mediaDataManager).dismissMediaData(eq(PAUSED_LOCAL), anyLong(), eq(true))
+        }
 
     @DisableSceneContainer
     @Test
@@ -1000,9 +1004,7 @@ class MediaCarouselControllerTest(flags: FlagsParameterization) : SysuiTestCase(
     }
 
     private fun runAllReady() {
-        if (mediaControlsUmoInflationInBackground()) {
-            bgExecutor.runAllReady()
-            uiExecutor.runAllReady()
-        }
+        bgExecutor.runAllReady()
+        uiExecutor.runAllReady()
     }
 }

@@ -16,10 +16,16 @@
 
 package com.android.server.notification;
 
+import static android.app.Flags.nmSummarization;
+import static android.app.Flags.nmSummarizationUi;
 import static android.service.notification.NotificationListenerService.REASON_ASSISTANT_CANCEL;
+import static android.service.notification.NotificationListenerService.REASON_BUNDLE_DISMISSED;
 import static android.service.notification.NotificationListenerService.REASON_CANCEL;
 import static android.service.notification.NotificationListenerService.REASON_CLEAR_DATA;
 import static android.service.notification.NotificationListenerService.REASON_CLICK;
+import static android.service.notification.NotificationListenerService.REASON_LOCKDOWN;
+
+import static com.android.server.notification.Flags.logVisuallyChangedUpdates;
 
 import android.annotation.DurationMillisLong;
 import android.annotation.NonNull;
@@ -28,14 +34,17 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.Person;
 import android.os.Bundle;
+import android.service.notification.Adjustment;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.NotificationStats;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.internal.logging.InstanceId;
 import com.android.internal.logging.UiEvent;
 import com.android.internal.logging.UiEventLogger;
 import com.android.internal.util.FrameworkStatsLog;
+import com.android.os.notification.NotificationProtoEnums;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -215,7 +224,11 @@ interface NotificationRecordLogger {
                 + " shade.")
         NOTIFICATION_CANCEL_USER_SHADE(192),
         @UiEvent(doc = "Notification was canceled due to an assistant adjustment update.")
-        NOTIFICATION_CANCEL_ASSISTANT(906);
+        NOTIFICATION_CANCEL_ASSISTANT(906),
+        @UiEvent(doc = "Notification was canceled due to the device entering lockdown.")
+        NOTIFICATION_CANCEL_LOCKDOWN(2329),
+        @UiEvent(doc = "Notification was canceled because it was in a dismissed bundle.")
+        NOTIFICATION_CANCEL_BUNDLE(2330);
 
         private final int mId;
         NotificationCancelledEvent(int id) {
@@ -260,6 +273,12 @@ interface NotificationRecordLogger {
                 }
                 if (reason == REASON_ASSISTANT_CANCEL) {
                     return NotificationCancelledEvent.NOTIFICATION_CANCEL_ASSISTANT;
+                }
+                if (reason == REASON_LOCKDOWN) {
+                    return NotificationCancelledEvent.NOTIFICATION_CANCEL_LOCKDOWN;
+                }
+                if (reason == REASON_BUNDLE_DISMISSED) {
+                    return NotificationCancelledEvent.NOTIFICATION_CANCEL_BUNDLE;
                 }
                 Log.wtf(TAG, "Unexpected reason: " + reason + " with surface " + surface);
                 return INVALID;
@@ -368,7 +387,9 @@ interface NotificationRecordLogger {
 
     enum NotificationPullStatsEvent implements UiEventLogger.UiEventEnum {
         @UiEvent(doc = "Notification Bundle Preferences pulled.")
-        NOTIFICATION_BUNDLE_PREFERENCES_PULLED(2072);
+        NOTIFICATION_BUNDLE_PREFERENCES_PULLED(2072),
+        @UiEvent(doc = "Notification Summarization Preferences pulled.")
+        NOTIFICATION_SUMMARIZATION_PREFERENCES_PULLED(2245);
 
         private final int mId;
         NotificationPullStatsEvent(int id) {
@@ -376,6 +397,17 @@ interface NotificationRecordLogger {
         }
         @Override public int getId() {
             return mId;
+        }
+
+        /**
+         * Maps an adjustment key string to its corresponding logging enum.
+         */
+        public static int adjustmentKeyEnum(String adjustmentKey) {
+            return switch (adjustmentKey) {
+                case Adjustment.KEY_TYPE -> NotificationProtoEnums.KEY_TYPE;
+                case Adjustment.KEY_SUMMARIZATION -> NotificationProtoEnums.KEY_SUMMARIZATION;
+                default -> NotificationProtoEnums.KEY_UNKNOWN;
+            };
         }
     }
 
@@ -402,6 +434,10 @@ interface NotificationRecordLogger {
                 return false;
             }
             if ((old == null) || (buzzBeepBlink > 0)) {
+                return true;
+            }
+
+            if (logVisuallyChangedUpdates() && r.isTextChanged()) {
                 return true;
             }
 
@@ -516,6 +552,7 @@ interface NotificationRecordLogger {
         final int age_in_minutes;
         final boolean is_promoted_ongoing;
         final boolean has_promotable_characteristics;
+        final boolean has_summary;
         @DurationMillisLong long post_duration_millis; // Not final; calculated at the end.
 
         NotificationReported(NotificationRecordPair p,
@@ -557,6 +594,8 @@ interface NotificationRecordLogger {
                     p.r.getSbn().getPostTime(), notification.getWhen());
             this.is_promoted_ongoing = notification.isPromotedOngoing();
             this.has_promotable_characteristics = notification.hasPromotableCharacteristics();
+            this.has_summary = (nmSummarization() || nmSummarizationUi())
+                    ? !TextUtils.isEmpty(p.r.getSummarization()) : false;
         }
     }
 

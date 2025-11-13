@@ -77,7 +77,7 @@ constructor(
                 override val background: ImageBitmap?
                     get() = session.background
 
-                override val colorScheme: MediaColorScheme
+                override val colorScheme: MediaColorScheme?
                     get() = session.colorScheme
 
                 override val title = session.title
@@ -163,7 +163,10 @@ constructor(
                                             falsingSystem.runIfNotFalseTap(
                                                 FalsingManager.LOW_PENALTY
                                             ) {
-                                                interactor.hide(session.key)
+                                                interactor.hide(
+                                                    session.key,
+                                                    MEDIA_PLAYER_ANIMATION_DELAY_MS,
+                                                )
                                                 isGutsVisible = false
                                             }
                                         },
@@ -212,21 +215,42 @@ constructor(
                         )
                     }
 
-                override val outputSwitcherChips: List<MediaOutputSwitcherChipViewModel>
+                override val deviceSuggestionChip: MediaDeviceChipViewModel?
                     get() {
-                        return listOf(
-                            MediaOutputSwitcherChipViewModel(
-                                icon = session.outputDevice.icon,
-                                text = session.outputDevice.name,
+                        return session.suggestedOutputDevice?.let {
+                            MediaDeviceChipViewModel(
+                                icon = it.icon,
+                                text =
+                                    context.getString(
+                                        R.string.media_suggestion_disconnected_text,
+                                        it.name,
+                                    ),
+                                isConnecting = it.isInProgress,
                                 onClick = {
                                     falsingSystem.runIfNotFalseTap(
                                         FalsingManager.MODERATE_PENALTY
                                     ) {
-                                        // TODO(b/397989775): tell the UI to show the output
-                                        // switcher.
+                                        // TODO(b/397989775): Perform selection of the suggested
+                                        // device
                                     }
                                 },
                             )
+                        }
+                    }
+
+                override val outputSwitcherChip: MediaDeviceChipViewModel
+                    get() {
+                        return MediaDeviceChipViewModel(
+                            icon = session.outputDevice.icon,
+                            text =
+                                if (session.suggestedOutputDevice == null) session.outputDevice.name
+                                else null,
+                            onClick = {
+                                falsingSystem.runIfNotFalseTap(FalsingManager.MODERATE_PENALTY) {
+                                    // TODO(b/397989775): tell the UI to show the output
+                                    // switcher.
+                                }
+                            },
                         )
                     }
 
@@ -387,5 +411,6 @@ constructor(
     companion object {
         private const val OneMinuteInSec = 60
         private const val OneHourInSec = OneMinuteInSec * 60
+        private const val MEDIA_PLAYER_ANIMATION_DELAY_MS = 334L
     }
 }

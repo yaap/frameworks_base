@@ -40,8 +40,6 @@ import static android.os.UserManager.USER_TYPE_PROFILE_SUPERVISING;
 import static android.os.UserManager.USER_TYPE_PROFILE_TEST;
 import static android.os.UserManager.USER_TYPE_SYSTEM_HEADLESS;
 
-import static com.android.server.pm.UserTypeDetails.UNLIMITED_NUMBER_OF_USERS;
-
 import android.content.pm.UserInfo;
 import android.content.pm.UserProperties;
 import android.content.res.Resources;
@@ -75,6 +73,14 @@ import java.util.function.Consumer;
 public final class UserTypeFactory {
 
     private static final String LOG_TAG = "UserTypeFactory";
+
+    /**
+     * Default max number of secondary users allowed on the device at once. Can override this by
+     * changing the number here or in {@link com.android.internal.R.xml#config_user_types}.
+     */
+    private static final int DEFAULT_MAX_ALLOWED_SECONDARY_USERS =
+            android.multiuser.Flags.consistentMaxUsers() ? 3 :
+                    com.android.server.pm.UserTypeDetails.UNLIMITED_NUMBER_OF_USERS;
 
     /** This is a utility class, so no instantiable constructor. */
     private UserTypeFactory() {}
@@ -179,6 +185,8 @@ public final class UserTypeFactory {
                 .setName(USER_TYPE_PROFILE_MANAGED)
                 .setBaseType(FLAG_PROFILE)
                 .setDefaultUserInfoPropertyFlags(FLAG_MANAGED_PROFILE)
+                // Only allow one per device; we cannot currently handle conflicting policies.
+                .setMaxAllowed(1)
                 .setMaxAllowedPerParent(1)
                 .setProfileParentRequired(true)
                 .setLabels(
@@ -302,6 +310,7 @@ public final class UserTypeFactory {
                 .setName(USER_TYPE_PROFILE_PRIVATE)
                 .setBaseType(FLAG_PROFILE)
                 .setProfileParentRequired(true)
+                .setMaxAllowed(1)
                 .setMaxAllowedPerParent(1)
                 .setEnabled(UserManager.isPrivateProfileEnabled() ? 1 : 0)
                 .setLabels(R.string.profile_label_private)
@@ -375,7 +384,7 @@ public final class UserTypeFactory {
         return new UserTypeDetails.Builder()
                 .setName(USER_TYPE_FULL_SECONDARY)
                 .setBaseType(FLAG_FULL)
-                .setMaxAllowed(UNLIMITED_NUMBER_OF_USERS)
+                .setMaxAllowed(DEFAULT_MAX_ALLOWED_SECONDARY_USERS)
                 .setDefaultRestrictions(getDefaultSecondaryUserRestrictions());
     }
 
@@ -403,7 +412,7 @@ public final class UserTypeFactory {
                 .setName(USER_TYPE_FULL_DEMO)
                 .setBaseType(FLAG_FULL)
                 .setDefaultUserInfoPropertyFlags(FLAG_DEMO)
-                .setMaxAllowed(UNLIMITED_NUMBER_OF_USERS)
+                .setMaxAllowed(DEFAULT_MAX_ALLOWED_SECONDARY_USERS)
                 .setDefaultRestrictions(null);
     }
 
@@ -416,7 +425,7 @@ public final class UserTypeFactory {
                 .setName(USER_TYPE_FULL_RESTRICTED)
                 .setBaseType(FLAG_FULL)
                 .setDefaultUserInfoPropertyFlags(FLAG_RESTRICTED)
-                .setMaxAllowed(UNLIMITED_NUMBER_OF_USERS)
+                .setMaxAllowed(DEFAULT_MAX_ALLOWED_SECONDARY_USERS)
                 .setProfileParentRequired(false) // they have a "parent", but not a profile parent
                 // NB: UserManagerService.createRestrictedProfile() applies hardcoded restrictions.
                 .setDefaultRestrictions(null);

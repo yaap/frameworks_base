@@ -36,9 +36,12 @@ import android.app.PictureInPictureParams;
 import android.app.WindowConfiguration;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.graphics.Rect;
 import android.os.IBinder;
-import android.testing.AndroidTestingRunner;
+import android.platform.test.annotations.EnableFlags;
+import android.platform.test.flag.junit.FlagsParameterization;
+import android.platform.test.flag.junit.SetFlagsRule;
 import android.testing.TestableLooper;
 import android.view.Surface;
 import android.view.SurfaceControl;
@@ -51,9 +54,12 @@ import android.window.WindowContainerTransaction;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.wm.shell.Flags;
 import com.android.wm.shell.common.pip.PipBoundsAlgorithm;
 import com.android.wm.shell.common.pip.PipBoundsState;
+import com.android.wm.shell.common.pip.PipDesktopState;
 import com.android.wm.shell.common.pip.PipDisplayLayoutState;
+import com.android.wm.shell.pip2.PipSurfaceTransactionHelper;
 import com.android.wm.shell.pip2.animation.PipExpandAnimator;
 import com.android.wm.shell.pip2.phone.PipInteractionHandler;
 import com.android.wm.shell.pip2.phone.PipTransitionState;
@@ -62,6 +68,7 @@ import com.android.wm.shell.transition.TransitionInfoBuilder;
 import com.android.wm.shell.util.StubTransaction;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -69,6 +76,10 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
+import platform.test.runner.parameterized.Parameters;
+
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -77,13 +88,15 @@ import java.util.Optional;
 
 @SmallTest
 @TestableLooper.RunWithLooper
-@RunWith(AndroidTestingRunner.class)
+@EnableFlags(Flags.FLAG_ENABLE_PIP2)
+@RunWith(ParameterizedAndroidJunit4.class)
 public class PipExpandHandlerTest {
     @Mock private Context mMockContext;
     @Mock private PipBoundsState mMockPipBoundsState;
     @Mock private PipBoundsAlgorithm mMockPipBoundsAlgorithm;
     @Mock private PipTransitionState mMockPipTransitionState;
     @Mock private PipDisplayLayoutState mMockPipDisplayLayoutState;
+    @Mock private PipDesktopState mMockPipDesktopState;
     @Mock private PipInteractionHandler mMockPipInteractionHandler;
     @Mock private SplitScreenController mMockSplitScreenController;
 
@@ -107,19 +120,40 @@ public class PipExpandHandlerTest {
 
     private PipExpandHandler mPipExpandHandler;
 
+    @Mock
+    private PipSurfaceTransactionHelper mPipSurfaceTransactionHelper;
+
+    @Parameters(name = "{0}")
+    public static List<FlagsParameterization> getParams() {
+        return FlagsParameterization.allCombinationsOf(
+                Flags.FLAG_ENABLE_PIP_BOX_SHADOWS);
+    }
+
+    @Rule
+    public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
+
+    public PipExpandHandlerTest(FlagsParameterization flags) {
+        mSetFlagsRule.setFlagsParameterization(flags);
+    }
+
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         when(mMockPipBoundsState.getBounds()).thenReturn(PIP_BOUNDS);
         when(mMockPipBoundsAlgorithm.getSnapFraction(eq(PIP_BOUNDS))).thenReturn(SNAP_FRACTION);
         when(mMockPipDisplayLayoutState.getRotation()).thenReturn(DISPLAY_ROTATION);
+        when(mMockContext.getResources()).thenReturn(mock(Resources.class));
 
-        mPipExpandHandler = new PipExpandHandler(mMockContext, mMockPipBoundsState,
+        mPipExpandHandler = new PipExpandHandler(mMockContext,
+                mPipSurfaceTransactionHelper,
+                mMockPipBoundsState,
                 mMockPipBoundsAlgorithm, mMockPipTransitionState, mMockPipDisplayLayoutState,
-                mMockPipInteractionHandler, Optional.of(mMockSplitScreenController));
-        mPipExpandHandler.setPipExpandAnimatorSupplier((context, leash, startTransaction,
+                mMockPipDesktopState, mMockPipInteractionHandler,
+                Optional.of(mMockSplitScreenController));
+        mPipExpandHandler.setPipExpandAnimatorSupplier(
+                (context, pipSurfaceTransactionHelper, leash, startTransaction,
                 finishTransaction, baseBounds, startBounds, endBounds,
-                sourceRectHint, rotation) -> mMockPipExpandAnimator);
+                sourceRectHint, rotation, isPipInDesktopMode) -> mMockPipExpandAnimator);
     }
 
     @Test

@@ -110,6 +110,7 @@ static struct {
     jfieldID secure;
     jfieldID deviceProductInfo;
     jfieldID installOrientation;
+    jfieldID screenPartStatus;
 } gStaticDisplayInfoClassInfo;
 
 static struct {
@@ -578,14 +579,42 @@ static void nativeSetAnimationTransaction(JNIEnv* env, jclass clazz, jlong trans
     transaction->setAnimationTransaction();
 }
 
-static void nativeSetEarlyWakeupStart(JNIEnv* env, jclass clazz, jlong transactionObj) {
+static void nativeSetEarlyWakeupStart(JNIEnv* env, jclass clazz, jlong transactionObj,
+                                      jobject infoObj) {
+    Parcel* infoParcel = parcelForJavaObject(env, infoObj);
+    if (infoParcel == NULL) {
+        doThrowNPE(env);
+        return;
+    }
+    gui::EarlyWakeupInfo earlyWakeupInfo;
+    status_t err = earlyWakeupInfo.readFromParcel(infoParcel);
+    if (err != NO_ERROR) {
+        jniThrowException(env, "java/lang/IllegalArgumentException",
+                          "EarlyWakeupInfo parcel has wrong format");
+        return;
+    }
+
     auto transaction = reinterpret_cast<SurfaceComposerClient::Transaction*>(transactionObj);
-    transaction->setEarlyWakeupStart();
+    transaction->setEarlyWakeupStart(earlyWakeupInfo);
 }
 
-static void nativeSetEarlyWakeupEnd(JNIEnv* env, jclass clazz, jlong transactionObj) {
+static void nativeSetEarlyWakeupEnd(JNIEnv* env, jclass clazz, jlong transactionObj,
+                                    jobject infoObj) {
+    Parcel* infoParcel = parcelForJavaObject(env, infoObj);
+    if (infoParcel == NULL) {
+        doThrowNPE(env);
+        return;
+    }
+    gui::EarlyWakeupInfo earlyWakeupInfo;
+    status_t err = earlyWakeupInfo.readFromParcel(infoParcel);
+    if (err != NO_ERROR) {
+        jniThrowException(env, "java/lang/IllegalArgumentException",
+                          "EarlyWakeupInfo parcel has wrong format");
+        return;
+    }
+
     auto transaction = reinterpret_cast<SurfaceComposerClient::Transaction*>(transactionObj);
-    transaction->setEarlyWakeupEnd();
+    transaction->setEarlyWakeupEnd(earlyWakeupInfo);
 }
 
 static jlong nativeGetTransactionId(JNIEnv* env, jclass clazz, jlong transactionObj) {
@@ -1130,6 +1159,14 @@ static void nativeSetBackgroundBlurRadius(JNIEnv* env, jclass clazz, jlong trans
     transaction->setBackgroundBlurRadius(ctrl, blurRadius);
 }
 
+static void nativeSetBackgroundBlurScale(JNIEnv* env, jclass clazz, jlong transactionObj,
+         jlong nativeObject, jfloat blurScale) {
+    auto transaction = reinterpret_cast<SurfaceComposerClient::Transaction*>(transactionObj);
+
+    SurfaceControl* const ctrl = reinterpret_cast<SurfaceControl *>(nativeObject);
+    transaction->setBackgroundBlurScale(ctrl, blurScale);
+}
+
 static void nativeSetLayerStack(JNIEnv* env, jclass clazz, jlong transactionObj,
         jlong nativeObject, jint layerStack) {
     auto transaction = reinterpret_cast<SurfaceComposerClient::Transaction*>(transactionObj);
@@ -1144,6 +1181,27 @@ static void nativeSetShadowRadius(JNIEnv* env, jclass clazz, jlong transactionOb
 
     const auto ctrl = reinterpret_cast<SurfaceControl *>(nativeObject);
     transaction->setShadowRadius(ctrl, shadowRadius);
+}
+
+static void nativeSetBoxShadowSettings(JNIEnv* env, jclass clazz, jlong transactionObj,
+                                       jlong nativeObject, jobject settingsObj) {
+    Parcel* settingsParcel = parcelForJavaObject(env, settingsObj);
+    if (settingsParcel == NULL) {
+        doThrowNPE(env);
+        return;
+    }
+    gui::BoxShadowSettings settings;
+    status_t err = settings.readFromParcel(settingsParcel);
+    if (err != NO_ERROR) {
+        jniThrowException(env, "java/lang/IllegalArgumentException",
+                          "BoxShadowSettings parcel has wrong format");
+        return;
+    }
+
+    auto transaction = reinterpret_cast<SurfaceComposerClient::Transaction*>(transactionObj);
+    const auto ctrl = reinterpret_cast<SurfaceControl*>(nativeObject);
+
+    transaction->setBoxShadowSettings(ctrl, settings);
 }
 
 static void nativeSetBorderSettings(JNIEnv* env, jclass clazz, jlong transactionObj,
@@ -1459,6 +1517,8 @@ static jobject nativeGetStaticDisplayInfo(JNIEnv* env, jclass clazz, jlong id) {
                                                              isInternal));
     env->SetIntField(object, gStaticDisplayInfoClassInfo.installOrientation,
                      static_cast<uint32_t>(info.installOrientation));
+    env->SetIntField(object, gStaticDisplayInfoClassInfo.screenPartStatus,
+                     static_cast<uint8_t>(info.screenPartStatus));
     return object;
 }
 
@@ -2073,10 +2133,11 @@ static jlong nativeReadTransactionFromParcel(JNIEnv* env, jclass clazz, jobject 
     return reinterpret_cast<jlong>(transaction.release());
 }
 
-static jlong nativeMirrorSurface(JNIEnv* env, jclass clazz, jlong mirrorOfObj) {
+static jlong nativeMirrorSurface(JNIEnv* env, jclass clazz, jlong mirrorOfObj, jlong stopAtObj) {
     sp<SurfaceComposerClient> client = SurfaceComposerClient::getDefault();
     SurfaceControl *mirrorOf = reinterpret_cast<SurfaceControl*>(mirrorOfObj);
-    sp<SurfaceControl> surface = client->mirrorSurface(mirrorOf);
+    SurfaceControl* stopAt = reinterpret_cast<SurfaceControl*>(stopAtObj);
+    sp<SurfaceControl> surface = client->mirrorSurface(mirrorOf, stopAt);
 
     surface->incStrong((void *)nativeCreate);
     return reinterpret_cast<jlong>(surface.get());
@@ -2538,10 +2599,10 @@ static const JNINativeMethod sSurfaceControlMethods[] = {
             (void*)nativeMergeTransaction },
     {"nativeSetAnimationTransaction", "(J)V",
             (void*)nativeSetAnimationTransaction },
-    {"nativeSetEarlyWakeupStart", "(J)V",
-            (void*)nativeSetEarlyWakeupStart },
-    {"nativeSetEarlyWakeupEnd", "(J)V",
-            (void*)nativeSetEarlyWakeupEnd },
+    {"nativeSetEarlyWakeupStart", "(JLandroid/os/Parcel;)V",
+                (void*)nativeSetEarlyWakeupStart },
+    {"nativeSetEarlyWakeupEnd", "(JLandroid/os/Parcel;)V",
+                (void*)nativeSetEarlyWakeupEnd },
     {"nativeGetTransactionId", "(J)J",
                 (void*)nativeGetTransactionId },
     {"nativeSetLayer", "(JJI)V",
@@ -2581,6 +2642,8 @@ static const JNINativeMethod sSurfaceControlMethods[] = {
             (void*) nativeSetClientDrawnCornerRadius },
     {"nativeSetBackgroundBlurRadius", "(JJI)V",
             (void*)nativeSetBackgroundBlurRadius },
+    {"nativeSetBackgroundBlurScale", "(JJF)V",
+            (void*)nativeSetBackgroundBlurScale },
     {"nativeSetLayerStack", "(JJI)V",
             (void*)nativeSetLayerStack },
     {"nativeSetBlurRegions", "(JJ[[FI)V",
@@ -2591,6 +2654,8 @@ static const JNINativeMethod sSurfaceControlMethods[] = {
             (void*) nativeSetEdgeExtensionEffect },
     {"nativeSetShadowRadius", "(JJF)V",
             (void*)nativeSetShadowRadius },
+    {"nativeSetBoxShadowSettings", "(JJLandroid/os/Parcel;)V",
+            (void*)nativeSetBoxShadowSettings },
     {"nativeSetBorderSettings", "(JJLandroid/os/Parcel;)V",
             (void*)nativeSetBorderSettings },
     {"nativeSetFrameRate", "(JJFII)V",
@@ -2695,7 +2760,7 @@ static const JNINativeMethod sSurfaceControlMethods[] = {
             (void*)nativeWriteTransactionToParcel },
     {"nativeClearTransaction", "(J)V",
             (void*)nativeClearTransaction },
-    {"nativeMirrorSurface", "(J)J",
+    {"nativeMirrorSurface", "(JJ)J",
             (void*)nativeMirrorSurface },
     {"nativeSetGlobalShadowSettings", "([F[FFFF)V",
             (void*)nativeSetGlobalShadowSettings },
@@ -2795,6 +2860,8 @@ int register_android_view_SurfaceControl(JNIEnv* env)
     gStaticDisplayInfoClassInfo.installOrientation =
             GetFieldIDOrDie(env, infoClazz, "installOrientation", "I");
 
+    gStaticDisplayInfoClassInfo.screenPartStatus =
+            GetFieldIDOrDie(env, infoClazz, "screenPartStatus", "I");
     jclass dynamicInfoClazz = FindClassOrDie(env, "android/view/SurfaceControl$DynamicDisplayInfo");
     gDynamicDisplayInfoClassInfo.clazz = MakeGlobalRefOrDie(env, dynamicInfoClazz);
     gDynamicDisplayInfoClassInfo.ctor = GetMethodIDOrDie(env, dynamicInfoClazz, "<init>", "()V");

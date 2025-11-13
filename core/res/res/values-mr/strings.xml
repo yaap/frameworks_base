@@ -297,7 +297,7 @@
     <string name="notification_channel_car_mode" msgid="2123919247040988436">"कार मोड"</string>
     <string name="notification_channel_account" msgid="6436294521740148173">"खाते स्थिती"</string>
     <string name="notification_channel_developer" msgid="1691059964407549150">"डेव्हलपर मेसेज"</string>
-    <string name="notification_channel_developer_important" msgid="7197281908918789589">"महत्त्वाचा डेव्हलपर मेसेज"</string>
+    <string name="notification_channel_developer_important" msgid="7197281908918789589">"महत्त्वाचे डेव्हलपर मेसेज"</string>
     <string name="notification_channel_updates" msgid="7907863984825495278">"अपडेट"</string>
     <string name="notification_channel_network_status" msgid="2127687368725272809">"नेटवर्क स्थिती"</string>
     <string name="notification_channel_network_alerts" msgid="6312366315654526528">"नेटवर्क सूचना"</string>
@@ -354,10 +354,12 @@
     <string name="permgroupdesc_sensors" msgid="2610631290633747752">"आपल्‍या महत्त्वाच्या मापनांविषयी सेन्सर डेटा अ‍ॅक्सेस करा"</string>
     <string name="permgrouplab_notifications" msgid="5472972361980668884">"सूचना"</string>
     <string name="permgroupdesc_notifications" msgid="4608679556801506580">"नोटिफिकेशन दाखवा"</string>
+    <string name="permgrouplab_xr_eye_sensitive" msgid="2099659100156643683">"XR संवेदनशील डोळ्यांचा ट्रॅकिंग डेटा"</string>
+    <string name="permgroupdesc_xr_eye_sensitive" msgid="1414121516133760271">"डोळ्यांच्या अचूक हालचालीचा संवेदनशील डेटा अ‍ॅक्सेस करा"</string>
     <string name="permgrouplab_xr_tracking" msgid="7418994009794287471">"XR ट्रॅकिंग डेटा"</string>
     <string name="permgroupdesc_xr_tracking" msgid="6777198859446500821">"तुमच्याबद्दल आणि तुमच्या सभोवतालच्या वातावरणाबद्दल XR डेटा अ‍ॅक्सेस करा"</string>
-    <string name="permgrouplab_xr_tracking_sensitive" msgid="1194833982988144536">"संवेदनशील XR ट्रॅकिंग डेटा"</string>
-    <string name="permgroupdesc_xr_tracking_sensitive" msgid="9178027369004805829">"संवेदनशील ट्रॅकिंग डेटा अ‍ॅक्सेस करा, जसे की डोळ्यांची हालचाल"</string>
+    <string name="permgrouplab_xr_tracking_sensitive" msgid="2993940754322250652">"संवेदनशील XR ट्रॅकिंग डेटा"</string>
+    <string name="permgroupdesc_xr_tracking_sensitive" msgid="8498501397939308918">"तुमच्याबद्दल आणि तुमच्या सभोवतालच्या वातावरणाबद्दल संवेदनशील ट्रॅकिंग डेटा अ‍ॅक्सेस करा"</string>
     <string name="capability_title_canRetrieveWindowContent" msgid="7554282892101587296">"विंडोमधील आशय पुन्हा मिळवा"</string>
     <string name="capability_desc_canRetrieveWindowContent" msgid="6195610527625237661">"तुम्ही वापरत असलेल्‍या विंडोमधील आशय तपासा."</string>
     <string name="capability_title_canRequestTouchExploration" msgid="327598364696316213">"स्पर्श करून अन्वेषण सुरू करा"</string>
@@ -382,6 +384,8 @@
     <string name="permdesc_expandStatusBar" msgid="7180756900448498536">"स्टेटस बार विस्तृत करण्यासाठी किंवा संक्षिप्त करण्यासाठी अ‍ॅप ला अनुमती देते."</string>
     <string name="permlab_fullScreenIntent" msgid="4310888199502509104">"लॉक केलेल्या डिव्हाइसवर फुल स्क्रीन अ‍ॅक्टिव्हिटी म्हणून सूचना प्रदर्शित करणे"</string>
     <string name="permdesc_fullScreenIntent" msgid="1100721419406643997">"लॉक केलेल्या डिव्हाइसवर फुल स्क्रीन अ‍ॅक्टिव्हिटी म्हणून सूचना प्रदर्शित करण्यासाठी ॲपला अनुमती द्या"</string>
+    <string name="permlab_postPromotedNotifications" msgid="4873499297871691102">"लाइव्ह अपडेट दाखवा"</string>
+    <string name="permdesc_postPromotedNotifications" msgid="4530634734172420651">"अ‍ॅपला स्टेटस बार आणि लॉक स्‍क्रीनवर सद्य, वेळेनुसार संवेदनशील नोटिफिकेशन प्रदर्शित करण्याची अनुमती देते"</string>
     <string name="permlab_install_shortcut" msgid="7451554307502256221">"शॉर्टकट इंस्टॉल करा"</string>
     <string name="permdesc_install_shortcut" msgid="4476328467240212503">"ॲप्लिकेशनला वापरकर्ता हस्‍तक्षेपाशिवाय मुख्‍यस्‍क्रीन शॉर्टकट जोडण्‍याची अनुमती देते"</string>
     <string name="permlab_uninstall_shortcut" msgid="295263654781900390">"शॉर्टकट विस्‍थापित करा"</string>
@@ -761,7 +765,7 @@
     <skip />
     <string name="face_acquired_recalibrate_alt" msgid="5702674220280332115">"फेस मॉडेल तयार करू शकत नाही. पुन्हा प्रयत्न करा."</string>
     <string name="face_acquired_dark_glasses_detected_alt" msgid="4052123776406041972">"गडद चष्मा डिटेक्ट केला. तुमचा चेहरा पूर्णपणे दृश्यमान असणे आवश्यक आहे."</string>
-    <string name="face_acquired_mouth_covering_detected_alt" msgid="1122294982850589766">"चेहर्‍यावरील आच्छादन डिटेक्ट केले. तुमचा चेहरा पूर्णपणे दृश्यमान असणे आवश्यक आहे."</string>
+    <string name="face_acquired_mouth_covering_detected_alt" msgid="1122294982850589766">"चेहरा झाकलेला असल्याचे डिटेक्ट केले. तुमचा चेहरा पूर्णपणे दृश्यमान असणे आवश्यक आहे."</string>
   <string-array name="face_acquired_vendor">
   </string-array>
     <string name="face_error_hw_not_available" msgid="5085202213036026288">"चेहरा पडताळू शकत नाही. हार्डवेअर उपलब्ध नाही."</string>
@@ -1182,22 +1186,8 @@
     <string name="duration_hours_shortest_future" msgid="2979276794547981674">"<xliff:g id="COUNT">%d</xliff:g> तासांमध्ये"</string>
     <string name="duration_days_shortest_future" msgid="3392722163935571543">"<xliff:g id="COUNT">%d</xliff:g> दिवसांमध्ये"</string>
     <string name="duration_years_shortest_future" msgid="5537464088352970388">"<xliff:g id="COUNT">%d</xliff:g> वर्षांमध्ये"</string>
-    <string name="duration_minutes_shortest_past" msgid="1740022450020492407">"<xliff:g id="COUNT">%d</xliff:g>मिनिटापूर्वी"</string>
-    <string name="duration_hours_shortest_past" msgid="2098397414186628489">"<xliff:g id="COUNT">%d</xliff:g>तासापूर्वी"</string>
-    <string name="duration_days_shortest_past" msgid="1832006037955897625">"<xliff:g id="COUNT">%d</xliff:g>दिवसापूर्वी"</string>
-    <string name="duration_years_shortest_past" msgid="6168256514200469291">"<xliff:g id="COUNT">%d</xliff:g>वर्षापूर्वी"</string>
     <string name="duration_minutes_medium" msgid="5891933490342643944">"<xliff:g id="COUNT">%d</xliff:g>मिनिट"</string>
     <string name="duration_hours_medium" msgid="1465359726485910115">"<xliff:g id="COUNT">%d</xliff:g>तास"</string>
-    <string name="duration_days_medium" msgid="5994225628248661388">"<xliff:g id="COUNT">%d</xliff:g>दिवस"</string>
-    <string name="duration_years_medium" msgid="734023884353592526">"<xliff:g id="COUNT">%d</xliff:g>वर्ष"</string>
-    <string name="duration_minutes_medium_future" msgid="2750894988731934402">"<xliff:g id="COUNT">%d</xliff:g>मिनिटामध्‍ये"</string>
-    <string name="duration_hours_medium_future" msgid="6050833881463849764">"<xliff:g id="COUNT">%d</xliff:g>तासामध्ये"</string>
-    <string name="duration_days_medium_future" msgid="1700821545602729963">"<xliff:g id="COUNT">%d</xliff:g>दिवसामध्ये"</string>
-    <string name="duration_years_medium_future" msgid="3281018940397120166">"<xliff:g id="COUNT">%d</xliff:g>वर्षामध्ये"</string>
-    <string name="duration_minutes_medium_past" msgid="7400424340181947714">"<xliff:g id="COUNT">%d</xliff:g>मिनिटापूर्वी"</string>
-    <string name="duration_hours_medium_past" msgid="6709441336035202617">"<xliff:g id="COUNT">%d</xliff:g>तासापूर्वी"</string>
-    <string name="duration_days_medium_past" msgid="5748156261134344532">"<xliff:g id="COUNT">%d</xliff:g>दिवसापूर्वी"</string>
-    <string name="duration_years_medium_past" msgid="893797065424596243">"<xliff:g id="COUNT">%d</xliff:g>वर्षापूर्वी"</string>
     <string name="duration_minutes_relative" msgid="8620337701051015593">"{count,plural, =1{# मिनिटापूर्वी}other{# मिनिटांपूर्वी}}"</string>
     <string name="duration_hours_relative" msgid="4836449961693180253">"{count,plural, =1{# तासापूर्वी}other{# तासांपूर्वी}}"</string>
     <string name="duration_days_relative" msgid="621965767567258302">"{count,plural, =1{# दिवसापूर्वी}other{# दिवसांपूर्वी}}"</string>
@@ -1709,6 +1699,12 @@
     <string name="default_audio_route_name_external_device" msgid="8124229858618975">"बाह्य डिव्हाइस"</string>
     <string name="default_audio_route_name_headphones" msgid="6954070994792640762">"हेडफोन"</string>
     <string name="default_audio_route_name_usb" msgid="895668743163316932">"USB"</string>
+    <string name="default_audio_route_name_hdmi_tv" msgid="1629608564121895625">"टीव्ही ऑडिओ"</string>
+    <string name="default_audio_route_name_arc" msgid="5117738492549798911">"ARC"</string>
+    <string name="default_audio_route_name_earc" msgid="5869527419074773683">"eARC"</string>
+    <string name="default_audio_route_name_analog" msgid="7781645558035374980">"अ‍ॅनालॉग"</string>
+    <string name="default_audio_route_name_digital" msgid="6959855552809654826">"डिजिटल"</string>
+    <string name="default_audio_route_name_aux" msgid="7432808125413299672">"AUX"</string>
     <string name="default_audio_route_category_name" msgid="5241740395748134483">"सिस्टीम"</string>
     <string name="bluetooth_a2dp_audio_route_name" msgid="4214648773120426288">"ब्लूटूथ ऑडिओ"</string>
     <string name="wireless_display_route_description" msgid="8297563323032966831">"वायरलेस डिस्प्ले"</string>
@@ -1804,7 +1800,8 @@
     <string name="one_handed_mode_feature_name" msgid="2334330034828094891">"एकहाती मोड"</string>
     <string name="reduce_bright_colors_feature_name" msgid="3222994553174604132">"आणखी डिम"</string>
     <string name="hearing_aids_feature_name" msgid="1125892105105852542">"श्रवणयंत्रे"</string>
-    <string name="autoclick_feature_name" msgid="8149248738736949630">"ऑटोक्लिक"</string>
+    <string name="autoclick_feature_name" msgid="4056260617171267864">"ऑटोक्लिक (थांबल्याची वेळ)"</string>
+    <string name="mouse_keys_feature_name" msgid="3362643216513384542">"माउस की"</string>
     <string name="hearing_device_status_disconnected" msgid="497547752953543832">"डिस्कनेक्ट केले आहे"</string>
     <string name="hearing_device_status_connected" msgid="2149385149669918764">"कनेक्ट केले आहे"</string>
     <string name="hearing_device_status_active" msgid="4770378695482566032">"अ‍ॅक्टिव्ह"</string>
@@ -1829,6 +1826,7 @@
     <string name="user_logging_out_message" msgid="7216437629179710359">"<xliff:g id="NAME">%1$s</xliff:g> लॉग आउट करत आहे…"</string>
     <string name="owner_name" msgid="8713560351570795743">"मालक"</string>
     <string name="guest_name" msgid="8502103277839834324">"अतिथी"</string>
+    <string name="headless_system_user_name" msgid="1849150903255530049">"सिस्टीम वापरकर्ता"</string>
     <string name="error_message_title" msgid="4082495589294631966">"एरर"</string>
     <string name="error_message_change_not_allowed" msgid="843159705042381454">"या बदलासाठी तुमच्या अ‍ॅडमिनची अनुमती नाही"</string>
     <string name="app_not_found" msgid="3429506115332341800">"ही क्रिया हाताळण्यासाठी कोणताही ॲप्लिकेशन आढळला नाही"</string>
@@ -1971,7 +1969,7 @@
     <string name="confirm_battery_saver" msgid="5247976246208245754">"ओके"</string>
     <string name="battery_saver_description_with_learn_more" msgid="5444908404021316250">"बॅटरी सेव्हर गडद थीम सुरू करते आणि बॅकग्राउंड ॲक्टिव्हिटी, काही व्हिज्युअल इफेक्ट, ठरावीक वैशिष्ट्ये व काही नेटवर्क कनेक्शन मर्यादित किंवा बंद करते."</string>
     <string name="battery_saver_description" msgid="8518809702138617167">"बॅटरी सेव्हर गडद थीम सुरू करते आणि बॅकग्राउंड ॲक्टिव्हिटी, काही व्हिज्युअल इफेक्ट, ठरावीक वैशिष्ट्ये व काही नेटवर्क कनेक्शन मर्यादित किंवा बंद करते."</string>
-    <string name="data_saver_description" msgid="4995164271550590517">"डेटाचा वापर कमी करण्यात मदत करण्यासाठी काही अ‍ॅप्सना बॅकग्राउंडमध्ये डेटा पाठवण्यास किंवा मिळवण्यास डेटा सर्व्हर प्रतिबंध करतो. तुम्ही सध्या वापरत असलेले अ‍ॅप डेटा अ‍ॅक्सेस करू शकते, पण तसे खूप कमी वेळा होते. याचाच अर्थ असा, की तुम्ही इमेजवर टॅप करेपर्यंत त्या डिस्प्ले होणार नाहीत असे होऊ शकते."</string>
+    <string name="data_saver_description" msgid="4995164271550590517">"डेटाचा वापर कमी करण्यात मदत करण्यासाठी काही अ‍ॅप्सना बॅकग्राउंडमध्ये डेटा पाठवण्यास किंवा मिळवण्यास डेटा सर्व्हर प्रतिबंध करते. तुम्ही सध्या वापरत असलेले अ‍ॅप डेटा अ‍ॅक्सेस करू शकते, पण तसे खूप कमी वेळा होते. याचाच अर्थ असा, की तुम्ही इमेजवर टॅप करेपर्यंत त्या डिस्प्ले होणार नाहीत."</string>
     <string name="data_saver_enable_title" msgid="7080620065745260137">"डेटा सेव्हर सुरू करायचे?"</string>
     <string name="data_saver_enable_button" msgid="4399405762586419726">"सुरू करा"</string>
     <string name="zen_mode_duration_minutes_summary" msgid="4555514757230849789">"{count,plural, =1{एका मिनिटासाठी ({formattedTime} पर्यंत)}other{# मिनिटांसाठी ({formattedTime} पर्यंत)}}"</string>
@@ -2004,7 +2002,7 @@
     <string name="zen_mode_trigger_summary_range_words" msgid="7228261413029290750">"<xliff:g id="START">%1$s</xliff:g> ते <xliff:g id="END">%2$s</xliff:g>"</string>
     <string name="zen_mode_trigger_summary_combined" msgid="6492381546327807669">"<xliff:g id="DAYS">%1$s</xliff:g>, <xliff:g id="TIMES">%2$s</xliff:g>"</string>
     <string name="zen_mode_trigger_event_calendar_any" msgid="2086784607921121803">"कोणतेही कॅलेंडर"</string>
-    <string name="muted_by" msgid="91464083490094950">"<xliff:g id="THIRD_PARTY">%1$s</xliff:g> काही ध्‍वनी म्‍यूट करत आहे"</string>
+    <string name="muted_by" msgid="91464083490094950">"<xliff:g id="THIRD_PARTY">%1$s</xliff:g> काही आवाज म्‍यूट करत आहे"</string>
     <string name="system_error_wipe_data" msgid="5910572292172208493">"आपल्‍या डिव्‍हाइसमध्‍ये अंतर्गत समस्‍या आहे आणि तुमचा फॅक्‍टरी डेटा रीसेट होईपर्यंत ती अस्‍थिर असू शकते."</string>
     <string name="system_error_manufacturer" msgid="703545241070116315">"आपल्‍या डिव्‍हाइसमध्‍ये अंतर्गत समस्‍या आहे. तपशीलांसाठी आपल्‍या निर्मात्याशी संपर्क साधा."</string>
     <string name="stk_cc_ussd_to_dial" msgid="3139884150741157610">"USSD विनंती नियमित कॉलवर बदलली"</string>
@@ -2043,7 +2041,7 @@
     <string name="promotional_notification_channel_label" msgid="7414844730492860233">"प्रमोशन"</string>
     <string name="social_notification_channel_label" msgid="106520267132019945">"सोशल"</string>
     <string name="news_notification_channel_label" msgid="4299937455247883311">"बातम्या"</string>
-    <string name="recs_notification_channel_label" msgid="4945985121418684297">"शिफारशी"</string>
+    <string name="recs_notification_channel_label" msgid="4731685669194175453">"सुचवलेले"</string>
     <string name="importance_from_user" msgid="2782756722448800447">"तुम्ही या सूचनांचे महत्त्व सेट केले."</string>
     <string name="importance_from_person" msgid="4235804979664465383">"सामील असलेल्या लोकांमुळे हे महत्वाचे आहे."</string>
     <string name="notification_history_title_placeholder" msgid="7748630986182249599">"कस्टम ॲप सूचना"</string>
@@ -2266,19 +2264,21 @@
     <string name="accessibility_system_action_dpad_left_label" msgid="6557647179116479152">"Dpad डावीकडील"</string>
     <string name="accessibility_system_action_dpad_right_label" msgid="9180196950365804081">"Dpad चे उजवीकडील"</string>
     <string name="accessibility_system_action_dpad_center_label" msgid="8149791419358224893">"Dpad चे मधले"</string>
-    <string name="accessibility_autoclick_type_settings_panel_title" msgid="7354373370578758696">"ऑटोक्लिक प्रकाराचे सेटिंग्ज पॅनल"</string>
-    <string name="accessibility_autoclick_left_click" msgid="2301793352260551080">"लेफ्ट क्लिक करा"</string>
-    <string name="accessibility_autoclick_right_click" msgid="4353495816526181293">"राइट क्लिक करा"</string>
-    <string name="accessibility_autoclick_double_click" msgid="2103826849116176478">"डबल क्लिक करा"</string>
+    <string name="accessibility_autoclick_type_settings_panel_title" msgid="2153131135765368397">"ऑटोक्लिक पर्याय मेनू"</string>
+    <string name="accessibility_autoclick_left_click" msgid="8241237237588793835">"लेफ्ट-क्लिक करा"</string>
+    <string name="accessibility_autoclick_right_click" msgid="6208390123529830506">"राइट-क्लिक करा"</string>
+    <string name="accessibility_autoclick_double_click" msgid="2800154470129612873">"डबल-क्लिक करा"</string>
     <string name="accessibility_autoclick_drag" msgid="1499559489796843224">"ड्रॅग करा"</string>
     <string name="accessibility_autoclick_scroll" msgid="3499385943728726933">"स्क्रोल करा"</string>
+    <string name="accessibility_autoclick_long_press" msgid="6241367542788162585">"स्पर्श करा आणि धरून ठेवा"</string>
     <string name="accessibility_autoclick_pause" msgid="3272200156172573568">"थांबवा"</string>
-    <string name="accessibility_autoclick_position" msgid="2933660969907663545">"स्थिती"</string>
-    <string name="accessibility_autoclick_scroll_up" msgid="2044948780797117443">"वर स्क्रोल करा"</string>
-    <string name="accessibility_autoclick_scroll_down" msgid="3733401063292018116">"खाली स्क्रोल करा"</string>
-    <string name="accessibility_autoclick_scroll_left" msgid="8564421367992824198">"डावीकडे स्क्रोल करा"</string>
-    <string name="accessibility_autoclick_scroll_right" msgid="8932417330753984265">"उजवीकडे स्क्रोल करा"</string>
-    <string name="accessibility_autoclick_scroll_exit" msgid="3788610039146769696">"स्क्रोल करा मोड मधून बाहेर पडा"</string>
+    <string name="accessibility_autoclick_resume" msgid="3213396544455349247">"पुन्हा सुरू करा"</string>
+    <string name="accessibility_autoclick_position" msgid="5952428999227490977">"मेनूचे स्थान बदला"</string>
+    <string name="accessibility_autoclick_scroll_up" msgid="4018950185625702489">"वर स्क्रोल करा"</string>
+    <string name="accessibility_autoclick_scroll_down" msgid="7055049493005995473">"खाली स्क्रोल करा"</string>
+    <string name="accessibility_autoclick_scroll_left" msgid="7469540382570551732">"डावीकडे स्क्रोल करा"</string>
+    <string name="accessibility_autoclick_scroll_right" msgid="8395851755038161912">"उजवीकडे स्क्रोल करा"</string>
+    <string name="accessibility_autoclick_scroll_exit" msgid="8766731873098339511">"स्क्रोल करा मोड मधून बाहेर पडा"</string>
     <string name="accessibility_autoclick_scroll_panel_title" msgid="7120598166296447036">"स्क्रोल करा पॅनल"</string>
     <string name="as_app_forced_to_restricted_bucket" msgid="8233871289353898964">"<xliff:g id="PACKAGE_NAME">%1$s</xliff:g> हे प्रतिबंधित बादलीमध्ये ठेवण्यात आले आहे"</string>
     <string name="conversation_single_line_name_display" msgid="8958948312915255999">"<xliff:g id="SENDER_NAME">%1$s</xliff:g>:"</string>
@@ -2555,8 +2555,17 @@
     <string name="keyboard_shortcut_group_applications_maps" msgid="7950000659522589471">"Maps"</string>
     <string name="keyboard_shortcut_group_applications" msgid="3010389163951364798">"अ‍ॅप्लिकेशन"</string>
     <string name="fingerprint_loe_notification_msg" msgid="3927447270148854546">"तुमची फिंगरप्रिंट यापुढे ओळखता येणार नाहीत. फिंगरप्रिंट अनलॉक पुन्हा सेट करा."</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="468577168569874967">"लॉक केलेले असताना USB डिव्हाइस प्लग इन केले आहे"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="6695268246267993166">"Android लॉक केलेले असताना USB डिव्हाइस प्लग इन केले आहे. डिव्हाइस वापरण्यासाठी, कृपया सर्वप्रथम Android अनलॉक करा आणि त्यानंतर USB डिव्हाइस वापरण्यासाठी ते पुन्हा घाला."</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title" msgid="285421860627714333">"सुरक्षा आणि गोपनीयता"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="5205863500921477220">"USB साठी प्रगत संरक्षण"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="2147694109838597680">"डेटा ट्रान्सफरसाठी डिव्हाइस अनलॉक करा"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text" msgid="1979414895616432005">"डेटा ट्रान्सफर करण्यासाठी तुम्हाला तुमचे डिव्हाइस अनलॉक करून पुन्हा कनेक्ट करावे लागू शकते"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text" msgid="5974307859193807824">"फास्ट चार्जिंग आणि डेटा ट्रान्सफर करण्यासाठी डिव्हाइस अनलॉक करा"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text" msgid="9045166614060168068">"फास्ट चार्जिंग आणि डेटा ट्रान्सफर करण्यासाठी तुम्हाला तुमचे डिव्हाइस अनलॉक करून पुन्हा कनेक्ट करावे लागू शकते"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text" msgid="5538918232374470393">"फास्ट चार्जिंगसाठी डिव्हाइस अनलॉक करा"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text" msgid="4301626745704703517">"फास्ट चार्जिंगसाठी तुम्हाला तुमचे डिव्हाइस अनलॉक करून पुन्हा कनेक्ट करावे लागू शकते"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text" msgid="5495539757631669634">"सायलंट करा"</string>
+    <string name="usb_apm_usb_notification_silenced_title" msgid="7883902869771699533">"नोटिफिकेशन सायलंट केले आहे"</string>
+    <string name="usb_apm_usb_notification_silenced_text" msgid="7154391495952217529">"तुम्ही तुमचे डिव्हाइस रीस्टार्ट करेपर्यंत सायलंट केले जाईल"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_title" msgid="3461195995882871461">"संशयास्पद USB ॲक्टिव्हिटी"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_text" msgid="6537085605929303187">"USB डेटा सिग्नल बंद करण्यात आला आहे."</string>
     <string name="fingerprint_frr_notification_title" msgid="3668331918920659093">"फिंगरप्रिंट अनलॉक यासंबंधित समस्या येत आहे का?"</string>

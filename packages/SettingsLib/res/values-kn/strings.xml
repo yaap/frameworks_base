@@ -361,7 +361,7 @@
     <string name="dev_settings_warning_title" msgid="8251234890169074553">"ಅಭಿವೃದ್ಧಿಯ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಅನುಮತಿಸುವುದೇ?"</string>
     <string name="dev_settings_warning_message" msgid="37741686486073668">"ಈ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಅಭಿವೃದ್ಧಿಯ ಬಳಕೆಗೆ ಮಾತ್ರ. ಅವುಗಳು ನಿಮ್ಮ ಸಾಧನ ಮತ್ತು ಅಪ್ಲಿಕೇಶನ್‌‌ಗಳಿಗೆ ಧಕ್ಕೆ ಮಾಡಬಹುದು ಅಥವಾ ಅವು ಸರಿಯಾಗಿ ಕಾರ್ಯನಿರ್ವಹಿಸದಿರುವಂತೆ ಮಾಡಬಹುದು."</string>
     <string name="verify_apps_over_usb_title" msgid="6031809675604442636">"USB ಮೂಲಕ ಆ್ಯಪ್‌ ಪರಿಶೀಲಿಸಿ"</string>
-    <string name="verify_apps_over_usb_summary" msgid="1317933737581167839">"ಹಾನಿಮಾಡುವಂತಹ ವರ್ತನೆಗಾಗಿ ADB/ADT ಮೂಲಕ ಸ್ಥಾಪಿಸಲಾದ ಅಪ್ಲಿಕೇಶನ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ."</string>
+    <string name="verify_apps_over_usb_summary" msgid="1317933737581167839">"ಹಾನಿಮಾಡುವಂತಹ ವರ್ತನೆಗೆ ADB/ADT ಮೂಲಕ ಸ್ಥಾಪಿಸಲಾದ ಆ್ಯಪ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ."</string>
     <string name="bluetooth_show_devices_without_names_summary" msgid="780964354377854507">"ಹೆಸರುಗಳಿಲ್ಲದ (ಕೇವಲ MAC ವಿಳಾಸಗಳು ಮಾತ್ರ) ಬ್ಲೂಟೂತ್ ಸಾಧನಗಳನ್ನು ಪ್ರದರ್ಶಿಸಲಾಗುತ್ತದೆ"</string>
     <string name="bluetooth_disable_absolute_volume_summary" msgid="2006309932135547681">"ರಿಮೋಟ್ ಸಾಧನಗಳಲ್ಲಿ ಕಂಡುಬರುವ ಸ್ವೀಕಾರಾರ್ಹವಲ್ಲದ ಜೋರಾದ ವಾಲ್ಯೂಮ್ ಅಥವಾ ನಿಯಂತ್ರಣದ ಕೊರತೆಯಂತಹ ವಾಲ್ಯೂಮ್ ಸಮಸ್ಯೆಗಳಂತಹ ಸಂದರ್ಭದಲ್ಲಿ ಬ್ಲೂಟೂತ್‍ನ ನಿಚ್ಚಳ ವಾಲ್ಯೂಮ್ ವೈಶಿಷ್ಟ್ಯವನ್ನು ನಿಷ್ಕ್ರಿಯಗೊಳಿಸುತ್ತದೆ."</string>
     <string name="bluetooth_enable_gabeldorsche_summary" msgid="2054730331770712629">"ಬ್ಲೂಟೂತ್ Gabeldorsche ವೈಶಿಷ್ಟ್ಯದ ಸ್ಟ್ಯಾಕ್‌ ಅನ್ನು ಸಕ್ರಿಯಗೊಳಿಸುತ್ತದೆ."</string>
@@ -478,7 +478,7 @@
     <string name="transcode_disable_cache" msgid="3160069309377467045">"ಟ್ರಾನ್ಸ್‌ಕೋಡಿಂಗ್ ಕ್ಯಾಷ್ ಅನ್ನು ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಿ"</string>
     <string name="runningservices_settings_title" msgid="6460099290493086515">"ರನ್‌ ಆಗುತ್ತಿರುವ ಸೇವೆಗಳು"</string>
     <string name="runningservices_settings_summary" msgid="1046080643262665743">"ಈಗ ರನ್‌ ಆಗುತ್ತಿರುವ ಸೇವೆಗಳನ್ನು ವೀಕ್ಷಿಸಿ ಮತ್ತು ನಿಯಂತ್ರಿಸಿ"</string>
-    <string name="select_webview_provider_title" msgid="3917815648099445503">"WebView ಹೊಂದಿಸಿ"</string>
+    <string name="select_webview_provider_title" msgid="3917815648099445503">"WebView ಅನುಷ್ಠಾನಗೊಳಿಸಿ"</string>
     <string name="select_webview_provider_dialog_title" msgid="2444261109877277714">"WebView ಅನುಷ್ಠಾನಗೊಳಿಸುವಿಕೆಯನ್ನು ಸೆಟ್ ಮಾಡಿ"</string>
     <string name="select_webview_provider_toast_text" msgid="8512254949169359848">"ಈ ಆಯ್ಕೆಯು ಇನ್ನು ಮುಂದೆ ಮಾನ್ಯವಾಗಿರುವುದಿಲ್ಲ. ಮತ್ತೊಮ್ಮೆ ಪ್ರಯತ್ನಿಸಿ."</string>
     <string name="webview_launch_devtools_title" msgid="8009687433555367112">"WebView DevTools"</string>
@@ -507,7 +507,7 @@
     <string name="power_discharge_by_only_enhanced" msgid="3268796172652988877">"ನಿಮ್ಮ ಬಳಕೆ ಆಧರಿಸಿ <xliff:g id="TIME">%1$s</xliff:g> ವರೆಗೆ ರನ್ ಆಗಲಿದೆ"</string>
     <string name="power_discharge_by" msgid="4113180890060388350">"<xliff:g id="TIME">%1$s</xliff:g> (<xliff:g id="LEVEL">%2$s</xliff:g>) ಸಮಯದವರೆಗೆ ರನ್ ಆಗಲಿದೆ"</string>
     <string name="power_discharge_by_only" msgid="92545648425937000">"<xliff:g id="TIME">%1$s</xliff:g> ಸಮಯದವರೆಗೆ ರನ್ ಆಗಲಿದೆ"</string>
-    <string name="power_discharge_by_only_short" msgid="5883041507426914446">"<xliff:g id="TIME">%1$s</xliff:g> ವರೆಗೆ ಇರುತ್ತದೆ"</string>
+    <string name="power_discharge_by_only_short" msgid="5883041507426914446">"<xliff:g id="TIME">%1$s</xliff:g> ವರೆಗೆ"</string>
     <string name="power_suggestion_battery_run_out" msgid="6332089307827787087">"<xliff:g id="TIME">%1$s</xliff:g> ಗಳಲ್ಲಿ ಬ್ಯಾಟರಿ ಮುಕ್ತಾಯವಾಗಬಹುದು"</string>
     <string name="power_remaining_less_than_duration_only" msgid="8956656616031395152">"<xliff:g id="THRESHOLD">%1$s</xliff:g> ಕ್ಕಿಂತ ಕಡಿಮೆ ಸಮಯ ಉಳಿದಿದೆ"</string>
     <string name="power_remaining_less_than_duration" msgid="318215464914990578">"<xliff:g id="THRESHOLD">%1$s</xliff:g> ಕ್ಕಿಂತ ಕಡಿಮೆ ಸಮಯ ಉಳಿದಿದೆ (<xliff:g id="LEVEL">%2$s</xliff:g>)"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> ಹಿಂದೆ"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> ಉಳಿದಿದೆ"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"ಅತಿ ಚಿಕ್ಕದು"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"ಚಿಕ್ಕದು"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"ಸಣ್ಣದು"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"ಡಿಫಾಲ್ಟ್"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"ದೊಡ್ಡದು"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"ಸ್ವಲ್ಪ ದೊಡ್ಡ"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"ದೊಡ್ಡ"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"ದೊಡ್ಡದು"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"ಅತ್ಯಂತ ದೊಡ್ಡದು"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"ತುಂಬಾ ದೊಡ್ಡದು"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"ಅತಿ ದೊಡ್ಡದು"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"ಕಸ್ಟಮ್ (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"ಮೆನು"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"ಫ್ಯಾಕ್ಟರಿ ರಿಸೆಟ್‌ಗೆ ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{1 ಸಾಧನವನ್ನು ಕನೆಕ್ಟ್ ಮಾಡಲಾಗಿದೆ}one{# ಸಾಧನಗಳನ್ನು ಕನೆಕ್ಟ್ ಮಾಡಲಾಗಿದೆ}other{# ಸಾಧನಗಳನ್ನು ಕನೆಕ್ಟ್ ಮಾಡಲಾಗಿದೆ}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"ಹೆಚ್ಚು ಸಮಯ."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"ಕಡಿಮೆ ಸಮಯ."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"ಹಿಗ್ಗಿಸುವಿಕೆ"</string>
     <string name="cancel" msgid="5665114069455378395">"ರದ್ದುಮಾಡಿ"</string>
     <string name="next" msgid="2699398661093607009">"ಮುಂದಿನದು"</string>
     <string name="back" msgid="5554327870352703710">"ಹಿಂದಕ್ಕೆ"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"ನೀವು <xliff:g id="SWITCHAPP">%1$s</xliff:g> ಅನ್ನು ಪ್ರಸಾರ ಮಾಡಿದರೆ ಅಥವಾ ಔಟ್‌ಪುಟ್ ಅನ್ನು ಬದಲಾಯಿಸಿದರೆ, ನಿಮ್ಮ ಪ್ರಸ್ತುತ ಪ್ರಸಾರವು ಸ್ಥಗಿತಗೊಳ್ಳುತ್ತದೆ"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"<xliff:g id="SWITCHAPP">%1$s</xliff:g> ಅನ್ನು ಪ್ರಸಾರ ಮಾಡಿ"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"ಔಟ್‌ಪುಟ್ ಅನ್ನು ಬದಲಾಯಿಸಿ"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"ಮುನ್ಸೂಚಕ ಬ್ಯಾಕ್ ಆ್ಯನಿಮೇಶನ್‌ಗಳು"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"ಮುನ್ಸೂಚಕ ಬ್ಯಾಕ್ ಗೆಸ್ಚರ್‌ಗಾಗಿ ಸಿಸ್ಟಂ ಆ್ಯನಿಮೇಶನ್‌ಗಳನ್ನು ಸಕ್ರಿಯಗೊಳಿಸಿ."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"ಮುನ್ನೋಟದ ಗೆಸ್ಚರ್ ಆ್ಯನಿಮೇಶನ್‌ಗಾಗಿ ಸಿಸ್ಟಂ ಆ್ಯನಿಮೇಶನ್‌ಗಳನ್ನು ಈ ಸೆಟ್ಟಿಂಗ್ ಸಕ್ರಿಯಗೊಳಿಸುತ್ತವೆ. ಇದನ್ನು ಮಾಡಲು, ಪ್ರತಿ ಆ್ಯಪ್‌ನ ಮ್ಯಾನಿಫೆಸ್ಟ್ ಫೈಲ್‌ನಲ್ಲಿರುವ enableOnBackInvokedCallback ಪ್ಯಾರಾಮೀಟರ್ ಅನ್ನು ಸರಿ ಎಂದು ಹೊಂದಿಸಬೇಕು."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="not_specified" msgid="5423502443185110328">"ನಿರ್ದಿಷ್ಟಪಡಿಸಲಾಗಿಲ್ಲ"</string>
     <string name="neuter" msgid="2075249330106127310">"ನಪುಂಸಕ"</string>

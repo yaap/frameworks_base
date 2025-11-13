@@ -18,7 +18,8 @@ package com.android.wm.shell.compatui.letterbox
 
 import android.view.SurfaceControl
 import android.view.SurfaceControl.Transaction
-import com.android.wm.shell.common.transition.SurfaceBuilderSupplier
+import android.window.TaskConstants
+import com.android.wm.shell.common.suppliers.SurfaceBuilderSupplier
 import com.android.wm.shell.dagger.WMSingleton
 import javax.inject.Inject
 
@@ -29,15 +30,6 @@ import javax.inject.Inject
 class LetterboxInputSurfaceBuilder @Inject constructor(
     private val surfaceBuilderSupplier: SurfaceBuilderSupplier
 ) {
-
-    companion object {
-        /*
-         * Letterbox spy surfaces need to stay above the activity layer which is 0.
-         */
-        // TODO(b/378673153): Consider adding this to [TaskConstants].
-        @JvmStatic
-        private val TASK_CHILD_LAYER_LETTERBOX_SPY = 1000
-    }
 
     fun createInputSurface(
         tx: Transaction,
@@ -50,7 +42,7 @@ class LetterboxInputSurfaceBuilder @Inject constructor(
         .setParent(parentLeash)
         .setCallsite(callSite)
         .build().apply {
-            tx.setLayer(this, TASK_CHILD_LAYER_LETTERBOX_SPY)
+            tx.setLayer(this, TaskConstants.TASK_CHILD_SHELL_LAYER_LETTERBOX_SPY)
                 .setTrustedOverlay(this, true)
                 .show(this)
                 .apply()

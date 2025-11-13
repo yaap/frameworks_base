@@ -247,6 +247,16 @@ enum DebugLevel {
 
 #define PROPERTY_EARLY_PRELOAD_GL_CONTEXT "debug.hwui.early_preload_gl_context"
 
+/**
+ * Property for font reading library.
+ */
+#define PROPERTY_SKTYPEFACE_BACKEND "debug.hwui.text.backend"
+
+enum class SkTypefaceBackend {
+    kAuto = 0,
+    kFreeType = 1,
+    kFontation = 2,
+};
 ///////////////////////////////////////////////////////////////////////////////
 // Misc
 ///////////////////////////////////////////////////////////////////////////////
@@ -350,13 +360,13 @@ public:
     static bool isHighEndGfx;
     static bool isLowRam;
     static bool isSystemOrPersistent;
+    static bool isForceInvertEnabled;
 
     static float maxHdrHeadroomOn8bit;
 
     static bool clipSurfaceViews;
     static bool hdr10bitPlus;
     static bool skipTelemetry;
-    static bool queryGlobalPriority;
 
     static int timeoutMultiplier;
 
@@ -387,6 +397,10 @@ public:
         stretchEffectBehavior = behavior;
     }
 
+    static void setIsForceInvertEnabled(bool forceInvertEnabled) {
+        Properties::isForceInvertEnabled = forceInvertEnabled;
+    }
+
     // Represents if drawing is enabled. Should only be Off in headless testing environments
     static DrawingEnabled drawingEnabled;
     static bool isDrawingEnabled();
@@ -395,7 +409,6 @@ public:
     static bool initializeGlAlways();
     static bool resampleGainmapRegions();
     static bool earlyPreloadGlContext();
-    static bool calcWorkloadOrigDeadline();
 
 private:
     static StretchEffectBehavior stretchEffectBehavior;

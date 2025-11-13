@@ -17,12 +17,12 @@
 package com.android.systemui.shared.clocks
 
 import android.graphics.Rect
+import android.icu.util.TimeZone
+import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Interpolator
 import android.widget.RelativeLayout
-import androidx.annotation.VisibleForTesting
 import com.android.systemui.animation.TextAnimator
-import com.android.systemui.customization.R
 import com.android.systemui.log.core.Logger
 import com.android.systemui.plugins.clocks.AlarmData
 import com.android.systemui.plugins.clocks.ClockAnimations
@@ -30,14 +30,16 @@ import com.android.systemui.plugins.clocks.ClockAxisStyle
 import com.android.systemui.plugins.clocks.ClockEvents
 import com.android.systemui.plugins.clocks.ClockFaceConfig
 import com.android.systemui.plugins.clocks.ClockFaceEvents
+import com.android.systemui.plugins.clocks.ClockPositionAnimationArgs
+import com.android.systemui.plugins.clocks.ClockViewIds
 import com.android.systemui.plugins.clocks.ThemeConfig
+import com.android.systemui.plugins.clocks.TimeFormatKind
 import com.android.systemui.plugins.clocks.WeatherData
 import com.android.systemui.plugins.clocks.ZenData
 import com.android.systemui.shared.clocks.view.HorizontalAlignment
 import com.android.systemui.shared.clocks.view.SimpleDigitalClockTextView
 import com.android.systemui.shared.clocks.view.VerticalAlignment
 import java.util.Locale
-import java.util.TimeZone
 
 private val TAG = SimpleDigitalHandLayerController::class.simpleName!!
 
@@ -47,16 +49,8 @@ data class LayerConfig(
     val aodStyle: FontTextStyle,
     val alignment: DigitalAlignment,
     val timespec: DigitalTimespec,
-    val dateTimeFormat: String,
-) {
-    fun generateDigitalLayerIdString(): String {
-        return when {
-            timespec == DigitalTimespec.TIME_FULL_FORMAT -> "$timespec"
-            "h" in dateTimeFormat -> "HOUR_$timespec"
-            else -> "MINUTE_$timespec"
-        }
-    }
-}
+    val timeFormatter: DigitalTimeFormatter?,
+)
 
 data class DigitalAlignment(
     val horizontalAlignment: HorizontalAlignment?,
@@ -70,13 +64,6 @@ data class FontTextStyle(
     val transitionInterpolator: Interpolator? = null,
 )
 
-enum class DigitalTimespec {
-    TIME_FULL_FORMAT,
-    DIGIT_PAIR,
-    FIRST_DIGIT,
-    SECOND_DIGIT,
-}
-
 open class SimpleDigitalHandLayerController(
     private val clockCtx: ClockContext,
     private val layerCfg: LayerConfig,
@@ -84,15 +71,8 @@ open class SimpleDigitalHandLayerController(
 ) : SimpleClockLayerController {
     override val view = SimpleDigitalClockTextView(clockCtx, isLargeClock)
     private val logger = Logger(clockCtx.messageBuffer, TAG)
-    val timespec = DigitalTimespecHandler(layerCfg.timespec, layerCfg.dateTimeFormat)
+    private val timespec = DigitalTimespecHandler(layerCfg.timespec, layerCfg.timeFormatter!!)
     override var onViewBoundsChanged by view::onViewBoundsChanged
-
-    @VisibleForTesting
-    override var fakeTimeMills: Long?
-        get() = timespec.fakeTimeMills
-        set(value) {
-            timespec.fakeTimeMills = value
-        }
 
     override val config = ClockFaceConfig()
     var dozeState: DefaultClockController.AnimationState? = null
@@ -106,17 +86,11 @@ open class SimpleDigitalHandLayerController(
         layerCfg.alignment.verticalAlignment?.let { view.verticalAlignment = it }
         layerCfg.alignment.horizontalAlignment?.let { view.horizontalAlignment = it }
         view.applyStyles(layerCfg.style, layerCfg.aodStyle)
-        view.id =
-            clockCtx.resources.getIdentifier(
-                layerCfg.generateDigitalLayerIdString(),
-                "id",
-                clockCtx.context.getPackageName(),
-            )
+        view.id = timespec.getViewId()
     }
 
     fun refreshTime() {
-        timespec.updateTime()
-        val text = timespec.getDigitString()
+        val text = timespec.getText()
         if (view.text != text) {
             view.text = text
             view.refreshTime()
@@ -130,13 +104,13 @@ open class SimpleDigitalHandLayerController(
             val lp = view.layoutParams as RelativeLayout.LayoutParams
             lp.addRule(RelativeLayout.TEXT_ALIGNMENT_CENTER)
             when (view.id) {
-                R.id.HOUR_DIGIT_PAIR -> {
+                ClockViewIds.HOUR_DIGIT_PAIR -> {
                     lp.addRule(RelativeLayout.CENTER_VERTICAL)
                     lp.addRule(RelativeLayout.ALIGN_PARENT_START)
                 }
-                R.id.MINUTE_DIGIT_PAIR -> {
+                ClockViewIds.MINUTE_DIGIT_PAIR -> {
                     lp.addRule(RelativeLayout.CENTER_VERTICAL)
-                    lp.addRule(RelativeLayout.END_OF, R.id.HOUR_DIGIT_PAIR)
+                    lp.addRule(RelativeLayout.END_OF, ClockViewIds.HOUR_DIGIT_PAIR)
                 }
                 else -> {
                     throw Exception("cannot apply two pairs layout to view ${view.id}")
@@ -151,18 +125,17 @@ open class SimpleDigitalHandLayerController(
             override var isReactiveTouchInteractionEnabled = false
 
             override fun onLocaleChanged(locale: Locale) {
-                timespec.updateLocale(locale)
+                timespec.formatter.locale = locale
                 refreshTime()
             }
 
-            /** Call whenever the text time format changes (12hr vs 24hr) */
-            override fun onTimeFormatChanged(is24Hr: Boolean) {
-                timespec.is24Hr = is24Hr
+            override fun onTimeFormatChanged(formatKind: TimeFormatKind) {
+                timespec.formatter.formatKind = formatKind
                 refreshTime()
             }
 
             override fun onTimeZoneChanged(timeZone: TimeZone) {
-                timespec.timeZone = timeZone
+                timespec.formatter.timeKeeper.timeZone = timeZone
                 refreshTime()
             }
 
@@ -209,9 +182,7 @@ open class SimpleDigitalHandLayerController(
 
             override fun onPickerCarouselSwiping(swipingFraction: Float) {}
 
-            override fun onPositionUpdated(fromLeft: Int, direction: Int, fraction: Float) {}
-
-            override fun onPositionUpdated(distance: Float, fraction: Float) {}
+            override fun onPositionAnimated(args: ClockPositionAnimationArgs) {}
 
             override fun onFidgetTap(x: Float, y: Float) {
                 view.animateFidget(x, y)
@@ -222,9 +193,14 @@ open class SimpleDigitalHandLayerController(
         object : ClockFaceEvents {
             override fun onTimeTick() {
                 refreshTime()
-                if (layerCfg.timespec == DigitalTimespec.TIME_FULL_FORMAT) {
-                    view.contentDescription = timespec.getContentDescription()
-                }
+
+                view.contentDescription = timespec.getContentDescription()
+                view.importantForAccessibility =
+                    if (view.contentDescription == null) {
+                        View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    } else {
+                        View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                    }
             }
 
             override fun onFontSettingChanged(fontSizePx: Float) {
@@ -232,7 +208,10 @@ open class SimpleDigitalHandLayerController(
             }
 
             override fun onThemeChanged(theme: ThemeConfig) {
-                view.updateColor(theme.getDefaultColor(clockCtx.context))
+                view.updateColor(
+                    lockscreenColor = theme.getDefaultColor(clockCtx.context),
+                    aodColor = theme.getAodColor(clockCtx.context),
+                )
                 refreshTime()
             }
 

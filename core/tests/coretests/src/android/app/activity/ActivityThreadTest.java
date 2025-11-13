@@ -25,8 +25,6 @@ import static android.platform.test.flag.junit.SetFlagsRule.DefaultInitValueType
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.INVALID_DISPLAY;
 
-import static com.android.window.flags.Flags.FLAG_SUPPORT_WIDGET_INTENTS_ON_CONNECTED_DISPLAY;
-
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
@@ -77,6 +75,7 @@ import android.hardware.display.VirtualDisplay;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.RemoteCallback;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
@@ -88,6 +87,10 @@ import android.util.MergedConfiguration;
 import android.view.Display;
 import android.view.Surface;
 import android.view.View;
+import android.view.autofill.AutofillId;
+import android.view.autofill.AutofillManager;
+import android.view.autofill.AutofillValue;
+import android.widget.EditText;
 import android.window.ActivityWindowInfo;
 import android.window.WindowContextInfo;
 import android.window.WindowTokenClientController;
@@ -185,6 +188,34 @@ public class ActivityThreadTest {
         appThread.scheduleTransaction(newRelaunchResumeTransaction(activity));
         appThread.scheduleTransaction(newRelaunchResumeTransaction(activity));
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+    }
+
+    @Test
+    public void testPerformDirectAction_remoteAutofill() throws Exception {
+        final TestActivity activity = mActivityTestRule.launchActivity(new Intent());
+        final IApplicationThread appThread = activity.getActivityThread().getApplicationThread();
+
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+
+        EditText editText = activity.mEditText;
+        AutofillId autofillId = editText.getAutofillId();
+        AutofillValue autofillValue = AutofillValue.forText("test");
+
+        Bundle bundle = new Bundle();
+        bundle.putParcelable(AutofillManager.EXTRA_REMOTE_AUTOFILL_ID, autofillId);
+        bundle.putParcelable(AutofillManager.EXTRA_REMOTE_AUTOFILL_VALUE, autofillValue);
+        final RemoteCallback remoteCallback = new RemoteCallback((unused) -> {});
+        appThread.performDirectAction(
+                activity.getActivityToken(),
+                AutofillManager.DIRECT_ACTION_ID_REMOTE_AUTOFILL,
+                bundle,
+                null,
+                remoteCallback);
+
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+
+        assertEquals("test", editText.getText().toString());
+        assertTrue("edit text should be focused", editText.isFocused());
     }
 
     @Test
@@ -1011,7 +1042,6 @@ public class ActivityThreadTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_SUPPORT_WIDGET_INTENTS_ON_CONNECTED_DISPLAY)
     public void tesScheduleReceiver_withLaunchDisplayId_receivesDisplayContext() {
         final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         final Display virtualDisplay = createVirtualDisplay(context, 100 /* w */, 100 /* h */);
@@ -1031,7 +1061,6 @@ public class ActivityThreadTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_SUPPORT_WIDGET_INTENTS_ON_CONNECTED_DISPLAY)
     public void tesScheduleReceiver_withNotExistDisplayId_receivesNoneUiContext() {
         final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         final Display virtualDisplay = createVirtualDisplay(context, 100 /* w */, 100 /* h */);
@@ -1048,7 +1077,6 @@ public class ActivityThreadTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_SUPPORT_WIDGET_INTENTS_ON_CONNECTED_DISPLAY)
     public void tesScheduleReceiver_withInvalidDisplay_receivesNoneUiContext() {
         final Context context = mock(Context.class);
         final ActivityOptions activityOptions =
@@ -1063,7 +1091,6 @@ public class ActivityThreadTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_SUPPORT_WIDGET_INTENTS_ON_CONNECTED_DISPLAY)
     public void tesScheduleReceiver_withoutDisplayManagerService_receivesNoneUiContext() {
         final Context context = mock(Context.class);
         when(context.getSystemService(DisplayManager.class)).thenReturn(null);
@@ -1269,12 +1296,16 @@ public class ActivityThreadTest {
          */
         volatile CountDownLatch mPipUiStateLatch;
 
+        private EditText mEditText;
+
         @Override
         protected void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             getWindow().getDecorView().setKeepScreenOn(true);
             setShowWhenLocked(true);
             setTurnScreenOn(true);
+            mEditText = new EditText(this);
+            setContentView(mEditText);
         }
 
         @Override

@@ -17,6 +17,9 @@
 package android.view;
 
 import static android.content.res.Resources.ID_NULL;
+import static android.os.VibrationAttributes.USAGE_UNKNOWN;
+import static android.os.VibrationAttributes.USAGE_CLASS_FEEDBACK;
+import static android.os.VibrationAttributes.USAGE_CLASS_MASK;
 import static android.os.Trace.TRACE_TAG_APP;
 import static android.os.Trace.TRACE_TAG_VIEW;
 import static android.service.autofill.Flags.FLAG_AUTOFILL_CREDMAN_DEV_INTEGRATION;
@@ -30,7 +33,9 @@ import static android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE;
 import static android.view.Surface.FRAME_RATE_COMPATIBILITY_AT_LEAST;
 import static android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD;
 import static android.view.accessibility.AccessibilityEvent.CONTENT_CHANGE_TYPE_UNDEFINED;
+import static android.view.accessibility.Flags.a11ySequentialFocusStartingPoint;
 import static android.view.accessibility.Flags.FLAG_DEPRECATE_ACCESSIBILITY_ANNOUNCEMENT_APIS;
+import static android.view.accessibility.Flags.FLAG_REQUEST_RECTANGLE_WITH_SOURCE;
 import static android.view.accessibility.Flags.FLAG_SUPPLEMENTAL_DESCRIPTION;
 import static android.view.accessibility.Flags.removeChildHoverCheckForTouchExploration;
 import static android.view.accessibility.Flags.supplementalDescription;
@@ -44,17 +49,12 @@ import static android.view.displayhash.DisplayHashResultCallback.EXTRA_DISPLAY_H
 import static android.view.flags.Flags.FLAG_SENSITIVE_CONTENT_APP_PROTECTION_API;
 import static android.view.flags.Flags.FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY;
 import static android.view.flags.Flags.FLAG_VIEW_VELOCITY_API;
-import static android.view.flags.Flags.calculateBoundsInParentFromBoundsInScreen;
 import static android.view.flags.Flags.enableUseMeasureCacheDuringForceLayout;
 import static android.view.flags.Flags.sensitiveContentAppProtection;
-import static android.view.flags.Flags.toolkitFrameRateAnimationBugfix25q1;
 import static android.view.flags.Flags.toolkitFrameRateBySizeReadOnly;
-import static android.view.flags.Flags.toolkitFrameRateDefaultNormalReadOnly;
-import static android.view.flags.Flags.toolkitFrameRateSmallUsesPercentReadOnly;
-import static android.view.flags.Flags.toolkitFrameRateVelocityMappingReadOnly;
-import static android.view.flags.Flags.toolkitFrameRateViewEnablingReadOnly;
 import static android.view.flags.Flags.toolkitMetricsForFrameRateDecision;
 import static android.view.flags.Flags.toolkitSetFrameRateReadOnly;
+import static android.view.flags.Flags.toolkitVelocityMapSysprop;
 import static android.view.flags.Flags.toolkitViewgroupSetRequestedFrameRateApi;
 import static android.view.flags.Flags.viewVelocityApi;
 import static android.view.inputmethod.Flags.FLAG_HOME_SCREEN_HANDWRITING_DELEGATOR;
@@ -95,6 +95,7 @@ import android.annotation.UiThread;
 import android.app.PendingIntent;
 import android.app.jank.AppJankStats;
 import android.app.jank.JankTracker;
+import android.companion.virtualdevice.flags.Flags;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.AutofillOptions;
 import android.content.ClipData;
@@ -152,8 +153,11 @@ import android.os.RemoteCallback;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.Trace;
+import android.os.VibrationAttributes;
+import android.os.vibrator.HapticFeedbackRequest;
 import android.service.credentials.CredentialProviderService;
 import android.sysprop.DisplayProperties;
+import android.sysprop.ViewProperties;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.ArraySet;
@@ -219,6 +223,7 @@ import android.widget.ScrollBarDrawable;
 import android.window.OnBackInvokedDispatcher;
 
 import com.android.internal.R;
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.ArrayUtils;
 import com.android.internal.util.FrameworkStatsLog;
 import com.android.internal.util.Preconditions;
@@ -244,6 +249,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -976,13 +982,6 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * Ignore an optimization that skips unnecessary EXACTLY layout passes.
      */
     private static boolean sAlwaysRemeasureExactly = false;
-
-    /**
-     * When true calculates the bounds in parent from bounds in screen relative to its parents.
-     * This addresses the deprecated API (setBoundsInParent) in Compose, which causes empty
-     * getBoundsInParent call for Compose apps.
-     */
-    private static boolean sCalculateBoundsInParentFromBoundsInScreenFlagValue = false;
 
     /**
      * When true makes it possible to use onMeasure caches also when the force layout flag is
@@ -2473,20 +2472,117 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      */
     protected static boolean sToolkitSetFrameRateReadOnlyFlagValue;
     private static boolean sToolkitMetricsForFrameRateDecisionFlagValue;
-    private static final boolean sToolkitFrameRateDefaultNormalReadOnlyFlagValue =
-            toolkitFrameRateDefaultNormalReadOnly();
     private static final boolean sToolkitFrameRateBySizeReadOnlyFlagValue =
             toolkitFrameRateBySizeReadOnly();
-    private static final boolean sToolkitFrameRateSmallUsesPercentReadOnlyFlagValue =
-            toolkitFrameRateSmallUsesPercentReadOnly();
-    private static final boolean sToolkitFrameRateViewEnablingReadOnlyFlagValue =
-            toolkitFrameRateViewEnablingReadOnly();
-    private static boolean sToolkitFrameRateVelocityMappingReadOnlyFlagValue =
-            toolkitFrameRateVelocityMappingReadOnly();
-    private static boolean sToolkitFrameRateAnimationBugfix25q1FlagValue =
-            toolkitFrameRateAnimationBugfix25q1();
     private static boolean sToolkitViewGroupFrameRateApiFlagValue =
             toolkitViewgroupSetRequestedFrameRateApi();
+
+    // The read-write flag toolkitVelocityMapSysprop() cannot be initialized at Zygote. To prevent
+    // this, initialize inside this class with special name NoPreloadHolder which prevents
+    // initialization at Zygote.
+    /** @hide */
+    @VisibleForTesting
+    static final class NoPreloadHolder {
+        private static boolean sToolkitVelocityMapSyspropFlagValue = toolkitVelocityMapSysprop();
+        private static String sFrameRateSysProp =
+                ViewProperties.vrr_velocity_threshold().orElse("");
+
+        static {
+            if (sToolkitVelocityMapSyspropFlagValue && !sFrameRateSysProp.isEmpty()) {
+                sFrameRateMappings = parseFrameRateMapping(sFrameRateSysProp);
+            }
+        }
+
+        /**
+         * For parsing the frame rate mapping string.
+         *
+         * @hide
+         */
+        @VisibleForTesting
+        static int[][] parseFrameRateMapping(String mappings) {
+            if (mappings.isEmpty()) {
+                return null;
+            }
+
+            int columnCount = 0;
+            int atCount = 0;
+            int pairCount = 0;
+            int startIndex = 0;
+            int endIndex = mappings.length() - 1;
+
+            // Find the first non column character
+            while (startIndex <= endIndex && mappings.charAt(startIndex) == ':') {
+                startIndex++;
+            }
+            // Find the last non column character
+            while (startIndex <= endIndex && mappings.charAt(endIndex) == ':') {
+                endIndex--;
+            }
+            if (startIndex >= endIndex) {
+                return null;
+            }
+
+            // First pass: Count the number of mappings
+            for (int i = startIndex; i <= endIndex; i++) {
+                if (mappings.charAt(i) == ':') {
+                    if (((i > 0) && mappings.charAt(i - 1) == ':')) {
+                        continue;
+                    }
+                    pairCount++;
+                }
+            }
+            pairCount++; // Add 1 for the last mapping
+
+            int[][] mappingArray = new int[pairCount][2];
+            int currentIndex = startIndex;
+            try {
+                for (int i = startIndex; i <= endIndex; i++) {
+                    if (mappings.charAt(i) == ':') {
+                        // handle consecutive columns
+                        if (((i > 0) && mappings.charAt(i - 1) == ':')) {
+                            currentIndex++;
+                            continue;
+                        }
+                        // assign velocity threshold value
+                        mappingArray[columnCount][0] =
+                                Integer.parseInt(mappings.substring(currentIndex, i).trim());
+                        columnCount++;
+                        if (columnCount != atCount) {
+                            throw new IllegalArgumentException();
+                        }
+                        currentIndex = i + 1;
+                    } else if (mappings.charAt(i) == '@') {
+                        // handle consecutive @
+                        if ((i > 0) && mappings.charAt(i - 1) == '@') {
+                            currentIndex++;
+                            continue;
+                        }
+                        // assign frame rate value
+                        mappingArray[columnCount][1] =
+                                Integer.parseInt(mappings.substring(currentIndex, i).trim());
+                        atCount++;
+                        if (atCount != columnCount + 1) {
+                            throw new IllegalArgumentException();
+                        }
+                        currentIndex = i + 1;
+                    }
+                }
+
+                if (atCount != columnCount + 1 || atCount != pairCount
+                        || currentIndex == mappings.length()) {
+                    throw new IllegalArgumentException();
+                }
+                // the last velocity threshold value
+                mappingArray[columnCount][0] =
+                        Integer.parseInt(mappings.substring(currentIndex, endIndex + 1).trim());
+            } catch (IllegalArgumentException e) {
+                Log.e(VIEW_LOG_TAG, "Format should be frameRate1@threshold1:frameRate2@threshold2");
+            }
+
+            Arrays.sort(mappingArray, Comparator.comparingInt(pair -> -pair[0]));
+            return mappingArray;
+        }
+    }
 
     // Used to set frame rate compatibility.
     @Surface.FrameRateCompatibility int mFrameRateCompatibility =
@@ -2576,8 +2672,6 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         sToolkitSetFrameRateReadOnlyFlagValue = toolkitSetFrameRateReadOnly();
         sToolkitMetricsForFrameRateDecisionFlagValue = toolkitMetricsForFrameRateDecision();
-        sCalculateBoundsInParentFromBoundsInScreenFlagValue =
-                calculateBoundsInParentFromBoundsInScreen();
         sUseMeasureCacheDuringForceLayoutFlagValue = enableUseMeasureCacheDuringForceLayout();
     }
 
@@ -5431,6 +5525,11 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     private int mTouchSlop;
 
     /**
+     * Cache the tap timeout from the context that created the view.
+     */
+    private int mTapTimeoutMillis;
+
+    /**
      * Cache the ambiguous gesture multiplier from the context that created the view.
      */
     private float mAmbiguousGestureMultiplier;
@@ -5825,6 +5924,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      */
     private static final float FRAME_RATE_SIZE_PERCENTAGE_THRESHOLD = 0.07f;
 
+    private static int[][] sFrameRateMappings;
+
     static final float MAX_FRAME_RATE = 120;
 
     // The preferred frame rate of the view that is mainly used for
@@ -5847,6 +5948,50 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     private int mSizeBasedFrameRateCategoryAndReason;
 
     /**
+     * @hide
+     */
+    @IntDef(prefix = { "RECTANGLE_ON_SCREEN_REQUEST_SOURCE_" }, value = {
+            RECTANGLE_ON_SCREEN_REQUEST_SOURCE_UNDEFINED,
+            RECTANGLE_ON_SCREEN_REQUEST_SOURCE_SCROLL_ONLY,
+            RECTANGLE_ON_SCREEN_REQUEST_SOURCE_TEXT_CURSOR,
+            RECTANGLE_ON_SCREEN_REQUEST_SOURCE_INPUT_FOCUS,
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface RectangleOnScreenRequestSource {}
+
+    /**
+     * Represents that the user interaction that is requesting a rectangle on screen is
+     * doing so via the original {@link #requestRectangleOnScreen(Rect)} or
+     * {@link #requestRectangleOnScreen(Rect, boolean)} APIs that do not define the source.
+     * RECTANGLE_ON_SCREEN_REQUEST_SOURCE_UNDEFINED should be reserved for backward
+     * compatibility and should only be provided from calls to the original API.
+     */
+    @FlaggedApi(FLAG_REQUEST_RECTANGLE_WITH_SOURCE)
+    public static final int RECTANGLE_ON_SCREEN_REQUEST_SOURCE_UNDEFINED = 0x00000000;
+
+    /**
+     * Represents that the user interaction that is requesting a rectangle on screen is doing so
+     * only to scroll the View on screen, and the rectangle is not associated with a text cursor or
+     * keyboard focus.
+     */
+    @FlaggedApi(FLAG_REQUEST_RECTANGLE_WITH_SOURCE)
+    public static final int RECTANGLE_ON_SCREEN_REQUEST_SOURCE_SCROLL_ONLY = 0x00000001;
+
+    /**
+     * Represents that the user interaction that is requesting a rectangle on screen is
+     * doing so because the View contains a text cursor (caret).
+     */
+    @FlaggedApi(FLAG_REQUEST_RECTANGLE_WITH_SOURCE)
+    public static final int RECTANGLE_ON_SCREEN_REQUEST_SOURCE_TEXT_CURSOR = 0x00000002;
+
+    /**
+     * Represents that the user interaction that is requesting a rectangle on screen is
+     * doing so because the View has input/keyboard focus.
+     */
+    @FlaggedApi(FLAG_REQUEST_RECTANGLE_WITH_SOURCE)
+    public static final int RECTANGLE_ON_SCREEN_REQUEST_SOURCE_INPUT_FOCUS = 0x00000003;
+
+    /**
      * Simple constructor to use when creating a view from code.
      *
      * @param context The Context the view is running in, through which it can
@@ -5867,6 +6012,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         final ViewConfiguration configuration = ViewConfiguration.get(context);
         mTouchSlop = configuration.getScaledTouchSlop();
+        mTapTimeoutMillis = Flags.viewconfigurationApis()
+                ? configuration.getTapTimeoutMillis() : ViewConfiguration.getTapTimeout();
         mAmbiguousGestureMultiplier = configuration.getScaledAmbiguousGestureMultiplier();
 
         setOverScrollMode(OVER_SCROLL_IF_CONTENT_SCROLLS);
@@ -7361,14 +7508,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
         scrollabilityCache.fadeScrollBars = fadeScrollbars;
 
-
         scrollabilityCache.scrollBarFadeDuration = a.getInt(
                 R.styleable.View_scrollbarFadeDuration, ViewConfiguration
                         .getScrollBarFadeDuration());
         scrollabilityCache.scrollBarDefaultDelayBeforeFade = a.getInt(
                 R.styleable.View_scrollbarDefaultDelayBeforeFade,
                 ViewConfiguration.getScrollDefaultDelay());
-
 
         scrollabilityCache.scrollBarSize = a.getDimensionPixelSize(
                 com.android.internal.R.styleable.View_scrollbarSize,
@@ -8523,6 +8668,42 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * @return Whether any parent scrolled.
      */
     public boolean requestRectangleOnScreen(Rect rectangle, boolean immediate) {
+        return requestRectangleOnScreen(rectangle, immediate,
+                RECTANGLE_ON_SCREEN_REQUEST_SOURCE_UNDEFINED);
+    }
+
+    /**
+     * Request that a rectangle of this view be visible on the screen,
+     * scrolling if necessary just enough.
+     *
+     * <p>A View should call this if it maintains some notion of which part
+     * of its content is interesting.  For example, a text editing view
+     * should call this when its cursor moves.
+     * <p>The Rectangle passed into this method should be in the View's content coordinate space.
+     * It should not be affected by which part of the View is currently visible or its scroll
+     * position.
+     * <p>When <code>immediate</code> is set to true, scrolling will not be
+     * animated.
+     * <p> The <code>source</code> parameter is used to differentiate behaviors of certain
+     * system features, like focus-following with display magnification, based on user
+     * preferences and the source of requests to show content on-screen. Callers are
+     * encouraged to provide one of the following request sources, when applicable,
+     * instead of using {@link #requestRectangleOnScreen(Rect)} or
+     * {@link #requestRectangleOnScreen(Rect, boolean)}:
+     * <ol>
+     *   <li>{@link #RECTANGLE_ON_SCREEN_REQUEST_SOURCE_SCROLL_ONLY}</li>
+     *   <li>{@link #RECTANGLE_ON_SCREEN_REQUEST_SOURCE_TEXT_CURSOR}</li>
+     *   <li>{@link #RECTANGLE_ON_SCREEN_REQUEST_SOURCE_INPUT_FOCUS}</li>
+     * </ol>
+     *
+     * @param rectangle The rectangle in the View's content coordinate space
+     * @param immediate True to forbid animated scrolling, false otherwise
+     * @param source The type of user interaction that requested this rectangle
+     * @return Whether any parent scrolled.
+     */
+    @FlaggedApi(FLAG_REQUEST_RECTANGLE_WITH_SOURCE)
+    public boolean requestRectangleOnScreen(@NonNull Rect rectangle, boolean immediate,
+            @RectangleOnScreenRequestSource int source) {
         if (mParent == null) {
             return false;
         }
@@ -8537,8 +8718,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         while (parent != null) {
             rectangle.set((int) position.left, (int) position.top,
                     (int) position.right, (int) position.bottom);
-
-            scrolled |= parent.requestChildRectangleOnScreen(child, rectangle, immediate);
+            scrolled |= parent.requestChildRectangleOnScreen(child, rectangle, immediate, source);
 
             if (!(parent instanceof View)) {
                 break;
@@ -8570,7 +8750,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             System.out.println(this + " clearFocus()");
         }
 
-        final boolean refocus = sAlwaysAssignFocus || !isInTouchMode();
+        ViewRootImpl viewRoot = getViewRootImpl();
+        final boolean accessibilityFocusPresent = a11ySequentialFocusStartingPoint()
+                && viewRoot != null
+                && viewRoot.getAccessibilityFocusedHost() != null;
+        final boolean refocus = sAlwaysAssignFocus
+                                || (!isInTouchMode() && !accessibilityFocusPresent);
         clearFocusInternal(null, true, refocus);
     }
 
@@ -8761,6 +8946,15 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     viewRoot.getHandwritingInitiator().onDelegateViewFocused(this);
                 } else if (initiationWithoutInputConnection() && onCheckIsTextEditor()) {
                     viewRoot.getHandwritingInitiator().onEditorFocused(this);
+                }
+            }
+
+            if (android.view.accessibility.Flags.requestRectangleWithSource()) {
+                if (mAttachInfo != null) {
+                    final Rect r = mAttachInfo.mTmpInvalRect;
+                    getLocalVisibleRect(r);
+                    requestRectangleOnScreen(r, false,
+                            RECTANGLE_ON_SCREEN_REQUEST_SOURCE_INPUT_FOCUS);
                 }
             }
         }
@@ -11132,11 +11326,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         // deprecated, and only setBoundsInScreen is called.
         // The bounds in parent can be calculated by diff'ing the child view's bounds in screen with
         // the parent's.
-        if (sCalculateBoundsInParentFromBoundsInScreenFlagValue) {
-            getBoundsInParent(info, parentInfo, rect);
-        } else {
-            info.getBoundsInParent(rect);
-        }
+        getBoundsInParent(info, parentInfo, rect);
         structure.setDimens(rect.left, rect.top, 0, 0, rect.width(), rect.height());
         structure.setVisibility(VISIBLE);
         structure.setEnabled(info.isEnabled());
@@ -18214,7 +18404,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                         }
                         mPendingCheckForTap.x = event.getX();
                         mPendingCheckForTap.y = event.getY();
-                        postDelayed(mPendingCheckForTap, ViewConfiguration.getTapTimeout());
+                        postDelayed(mPendingCheckForTap, mTapTimeoutMillis);
                     } else {
                         // Not inside a scrolling container, so show the feedback right away
                         setPressed(true, x, y);
@@ -20930,7 +21120,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      *        should start; when the delay is 0, the animation starts
      *        immediately
      *
-     * @param invalidate Whether this method should call invalidate
+     * @param invalidate Whether this method should call invalidate if an animation
+     *        is scheduled
      *
      * @return true if the animation is played, false otherwise
      *
@@ -20975,10 +21166,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             scrollCache.fadeStartTime = fadeStartTime;
             scrollCache.state = ScrollabilityCache.ON;
 
-            // Schedule our fader to run, unscheduling any old ones first
-            if (mAttachInfo != null) {
-                mAttachInfo.mHandler.removeCallbacks(scrollCache);
-                mAttachInfo.mHandler.postAtTime(scrollCache, fadeStartTime);
+            // Schedule our fader to run if it's not already scheduled
+            if (!scrollCache.fadeScrollBarsScheduled && mAttachInfo != null) {
+                final Handler handler = mAttachInfo.mHandler;
+                scrollCache.handler = handler;
+                scrollCache.fadeScrollBarsScheduled = true;
+                handler.postAtTime(scrollCache, fadeStartTime);
             }
 
             return true;
@@ -23938,8 +24131,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     }
 
                     // For VRR to vote the preferred frame rate
-                    if (sToolkitSetFrameRateReadOnlyFlagValue
-                            && sToolkitFrameRateViewEnablingReadOnlyFlagValue) {
+                    if (sToolkitSetFrameRateReadOnlyFlagValue) {
                         votePreferredFrameRate();
                     }
                 }
@@ -23951,8 +24143,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             if ((mPrivateFlags4 & PFLAG4_HAS_VIEW_PROPERTY_INVALIDATION)
                     == PFLAG4_HAS_VIEW_PROPERTY_INVALIDATION) {
                 // For VRR to vote the preferred frame rate
-                if (sToolkitSetFrameRateReadOnlyFlagValue
-                        && sToolkitFrameRateViewEnablingReadOnlyFlagValue) {
+                if (sToolkitSetFrameRateReadOnlyFlagValue) {
                     votePreferredFrameRate();
                 }
                 mPrivateFlags4 &= ~PFLAG4_HAS_VIEW_PROPERTY_INVALIDATION;
@@ -24640,8 +24831,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
 
         // Increase the frame rate if there is a transformation that applies a matrix.
-        if (sToolkitFrameRateAnimationBugfix25q1FlagValue
-                && ((t.getTransformationType() & Transformation.TYPE_MATRIX) != 0)) {
+        if ((t.getTransformationType() & Transformation.TYPE_MATRIX) != 0) {
             mPrivateFlags4 |= PFLAG4_HAS_VIEW_PROPERTY_INVALIDATION;
             mPrivateFlags4 |= PFLAG4_HAS_MOVED;
         }
@@ -25814,26 +26004,18 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     private void sizeChange(int newWidth, int newHeight, int oldWidth, int oldHeight) {
-        if (mAttachInfo != null && sToolkitFrameRateViewEnablingReadOnlyFlagValue) {
+        if (mAttachInfo != null) {
             boolean isSmall;
-            if (sToolkitFrameRateSmallUsesPercentReadOnlyFlagValue) {
-                int size = newWidth * newHeight;
-                float percent = size / mAttachInfo.mDisplayPixelCount;
-                isSmall = percent <= FRAME_RATE_SIZE_PERCENTAGE_THRESHOLD;
-            } else {
-                float density = mAttachInfo.mDensity;
-                int narrowSize = (int) (density * FRAME_RATE_NARROW_SIZE_DP);
-                int smallSize = (int) (density * FRAME_RATE_SQUARE_SMALL_SIZE_DP);
-                isSmall = newWidth <= narrowSize || newHeight <= narrowSize
-                        || (newWidth <= smallSize && newHeight <= smallSize);
-            }
+            int size = newWidth * newHeight;
+            float percent = size / mAttachInfo.mDisplayPixelCount;
+            isSmall = percent <= FRAME_RATE_SIZE_PERCENTAGE_THRESHOLD;
+
             if (isSmall) {
                 int category = sToolkitFrameRateBySizeReadOnlyFlagValue
                         ? FRAME_RATE_CATEGORY_LOW : FRAME_RATE_CATEGORY_NORMAL;
                 mSizeBasedFrameRateCategoryAndReason = category | FRAME_RATE_CATEGORY_REASON_SMALL;
             } else {
-                int category = sToolkitFrameRateDefaultNormalReadOnlyFlagValue
-                        ? FRAME_RATE_CATEGORY_NORMAL : FRAME_RATE_CATEGORY_HIGH;
+                int category = FRAME_RATE_CATEGORY_NORMAL;
                 mSizeBasedFrameRateCategoryAndReason = category | FRAME_RATE_CATEGORY_REASON_LARGE;
             }
             mPrivateFlags4 |= PFLAG4_HAS_MOVED;
@@ -28915,7 +29097,61 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
 
         int privFlags = computeHapticFeedbackPrivateFlags();
-        return mAttachInfo.mRootCallbacks.performHapticFeedback(feedbackConstant, flags, privFlags);
+        return mAttachInfo.mRootCallbacks.performHapticFeedback(
+                feedbackConstant, USAGE_UNKNOWN, flags, privFlags);
+    }
+
+    /**
+     * <p>Like {@link #performHapticFeedback(int, int)}, but takes a {@link HapticFeedbackRequest}.
+     *
+     * <p>Using a {@link HapticFeedbackRequest} allows you to make more elaborate haptic feedback
+     * requests, including setting the usage type for the requested feedback.
+     *
+     * <p>Specifying the usage type for your feedback allows the system to understand the context of
+     * the feedback better, and tune the haptic accordingly. When not specifying the usage type for
+     * the feedback request, or when using the other performHapticFeedback APIs, the system will do
+     * a best guess of the vibration usage based on the constant.
+     *
+     * <p>See {@link VibrationAttributes} to learn more about vibration usages. The usage provided
+     * for this API must be of {@link VibrationAttributes#USAGE_CLASS_FEEDBACK}, or
+     * {@link VibrationAttributes#USAGE_UNKNOWN}. Otherwise, the haptic feedback will not be played.
+     * If {@link VibrationAttributes#USAGE_UNKNOWN} is used, the system will do a best guess of the
+     * vibration usage based on the constant.
+     *
+     * <p>Note that, if you will be calling this API repeatedly and your
+     * {@link HapticFeedbackRequest} does not change across these repeated calls, it is recommended
+     * that you create, cache, and reuse the request object to avoid the costs of repeated object
+     * creation and garbage collection.
+     *
+     * @param request the {@link HapticFeedbackRequest} encapsulating the request for haptic.
+     * @return {@code false} if {@link #isHapticFeedbackEnabled()} is {@code false}, or this View is
+     *      not attached to a visible window, or the vibration usage in the provided request is not
+     *      valid (i.e. neither has {@link VibrationAttributes#USAGE_CLASS_FEEDBACK} nor is
+     *      {@link VibrationAttributes#USAGE_UNKNOWN}); otherwise, {@code true}, indicating
+     *      that the haptic feedback request has been sent to the system. Note that {@code true}
+     *      could be returned but no vibration may be produced if the service decides that the
+     *      device's states do not allow for this haptic feedback (for example, the user disabled
+     *      vibrations for this usage).
+     *
+     * @see VibrationAttributes#getUsage()
+     * @see VibrationAttributes#getUsageClass()
+     */
+    @FlaggedApi(android.os.vibrator.Flags.FLAG_HAPTIC_FEEDBACK_WITH_CUSTOM_USAGE)
+    public boolean performHapticFeedback(@NonNull HapticFeedbackRequest request) {
+        final int feedbackConstant = request.getFeedbackConstant();
+        final int usage = request.getUsage();
+        final int flags = request.getFlags();
+        if (usage != USAGE_UNKNOWN && (usage & USAGE_CLASS_MASK) != USAGE_CLASS_FEEDBACK) {
+            return false;
+        }
+
+        if (isPerformHapticFeedbackSuppressed(feedbackConstant, flags)) {
+            return false;
+        }
+
+        int privFlags = computeHapticFeedbackPrivateFlags();
+        return mAttachInfo.mRootCallbacks.performHapticFeedback(
+                feedbackConstant, usage, flags, privFlags);
     }
 
     /**
@@ -31537,7 +31773,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             mPrivateFlags &= ~PFLAG_PREPRESSED;
             setPressed(true, x, y);
             final long delay =
-                    ViewConfiguration.getLongPressTimeout() - ViewConfiguration.getTapTimeout();
+                    (long) ViewConfiguration.getLongPressTimeout() - mTapTimeoutMillis;
             checkForLongClick(delay, x, y, TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS);
         }
     }
@@ -31996,6 +32232,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             void playSoundEffect(int effectId);
 
             boolean performHapticFeedback(int effectId,
+                    @VibrationAttributes.Usage int usage,
                     @HapticFeedbackConstants.Flags int flags,
                     @HapticFeedbackConstants.PrivateFlags int privFlags);
 
@@ -32143,13 +32380,6 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
          * Current caption insets to the display coordinate.
          */
         final Rect mCaptionInsets = new Rect();
-
-        /**
-         * In multi-window we force show the system bars. Because we don't want that the surface
-         * size changes in this mode, we instead have a flag whether the system bars sizes should
-         * always be consumed, so the app is treated like there are no virtual system bars at all.
-         */
-        boolean mAlwaysConsumeSystemBars;
 
         /**
          * The internal insets given by this window.  This value is
@@ -32615,6 +32845,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         public static final int FADING = 2;
 
         public boolean fadeScrollBars;
+        public boolean fadeScrollBarsScheduled;
 
         public int fadingEdgeLength;
         public int scrollBarDefaultDelayBeforeFade;
@@ -32643,6 +32874,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
          */
         public long fadeStartTime;
 
+        /**
+         * Handler used for scheduling fade animations.
+         */
+        Handler handler;
 
         /**
          * The current state of the scrollbars: ON, OFF, or FADING
@@ -32701,6 +32936,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         public void run() {
             long now = AnimationUtils.currentAnimationTimeMillis();
             if (now >= fadeStartTime) {
+                fadeScrollBarsScheduled = false;
+                handler = null;
 
                 // the animation fades the scrollbars out by changing
                 // the opacity (alpha) from fully opaque to fully
@@ -32721,6 +32958,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
                 // Kick off the fade animation
                 host.invalidate(true);
+            } else if (handler != null) {
+                // Reschedule the fade animation
+                handler.postAtTime(this, fadeStartTime);
             }
         }
     }
@@ -34323,9 +34563,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                                     | FRAME_RATE_CATEGORY_REASON_REQUESTED;
                     default -> {
                         // invalid frame rate, use default
-                        int category = sToolkitFrameRateDefaultNormalReadOnlyFlagValue
-                                ? FRAME_RATE_CATEGORY_NORMAL : FRAME_RATE_CATEGORY_HIGH;
-                        frameRateCategory = category
+                        frameRateCategory = FRAME_RATE_CATEGORY_NORMAL
                                 | FRAME_RATE_CATEGORY_REASON_INVALID;
                     }
                 }
@@ -34352,6 +34590,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     private float convertVelocityToFrameRate(float velocityPps) {
+        if (NoPreloadHolder.sToolkitVelocityMapSyspropFlagValue && sFrameRateMappings != null
+                && sFrameRateMappings.length > 0) {
+            return getFrameRateByVelocity(sFrameRateMappings, (int) velocityPps);
+        }
         // Internal testing has shown that this gives a premium experience:
         // above 300dp/s => 120fps
         // between 300dp/s and 125fps => 80fps
@@ -34510,4 +34752,27 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
         return rootView.getJankTracker();
     }
+
+    private int getFrameRateByVelocity(int[][] mappings, int velocity) {
+        if (mappings == null || mappings.length == 0) {
+            return 0;
+        }
+
+        int frameRate = 0; // Default return if no matching pair is found
+        // pair[0] is the threshold value and pair[1] is the frame rate
+        for (int index = 0; index < mappings.length; index++) {
+            if (velocity >= mappings[index][0]) {
+                frameRate = mappings[index][1];
+                break; // Found the first matching pair, no need to continue
+            }
+        }
+
+        // If no match found, the last value is returned
+        if (frameRate == 0 && mappings.length > 0) {
+            frameRate = mappings[mappings.length - 1][1];
+        }
+
+        return frameRate;
+    }
+
 }

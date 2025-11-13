@@ -16,9 +16,13 @@
 
 package com.android.systemui.keyguard.ui.viewmodel
 
+import android.content.res.Configuration
+import android.platform.test.annotations.DisableFlags
+import android.platform.test.annotations.EnableFlags
 import android.platform.test.flag.junit.FlagsParameterization
 import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.common.ui.data.repository.fakeConfigurationRepository
 import com.android.systemui.coroutines.collectLastValue
 import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.flags.EnableSceneContainer
@@ -64,6 +68,8 @@ class KeyguardClockViewModelTest(flags: FlagsParameterization) : SysuiTestCase()
     @Mock private lateinit var largeClock: ClockFaceController
     @Mock private lateinit var smallClock: ClockFaceController
 
+    @Mock private lateinit var mockConfiguration: Configuration
+
     private var config = ClockConfig("TEST", "Test", "")
     private var faceConfig = ClockFaceConfig()
 
@@ -80,6 +86,7 @@ class KeyguardClockViewModelTest(flags: FlagsParameterization) : SysuiTestCase()
         whenever(clockController.config).thenAnswer { config }
         whenever(largeClock.config).thenAnswer { faceConfig }
         whenever(smallClock.config).thenAnswer { faceConfig }
+        kosmos.fakeConfigurationRepository.onConfigurationChange(mockConfiguration)
     }
 
     @Test
@@ -266,6 +273,189 @@ class KeyguardClockViewModelTest(flags: FlagsParameterization) : SysuiTestCase()
                 res.getDimensionPixelSize(R.dimen.keyguard_clock_top_margin) +
                     KEYGUARD_STATUS_BAR_HEIGHT
             assertThat(underTest.getSmallClockTopMargin()).isEqualTo(expected)
+        }
+
+    @Test
+    @DisableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowSmallClock_smartspacelayoutflag_off_true() =
+        testScope.runTest {
+            val result by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+
+            assertThat(result).isTrue()
+        }
+
+    @Test
+    @DisableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowLargeClock_smartspacelayoutflag_off_false() =
+        testScope.runTest {
+            val result by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+
+            assertThat(result).isFalse()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowSmallClock_defaultFontAndDisplaySize_shadeLayoutNotWide_false() =
+        testScope.runTest {
+            kosmos.shadeRepository.setShadeLayoutWide(false)
+            val fontScale = 1.0f
+            val screenWidthDp = 347
+            mockConfiguration.fontScale = fontScale
+            mockConfiguration.screenWidthDp = screenWidthDp
+
+            val result by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+
+            assertThat(result).isFalse()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowLargeClock_variousFontAndDisplaySize_true() =
+        testScope.runTest {
+            mockConfiguration.fontScale = 1.0f
+            mockConfiguration.screenWidthDp = 347
+            val result1 by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+            assertThat(result1).isTrue()
+
+            mockConfiguration.fontScale = 1.2f
+            mockConfiguration.screenWidthDp = 347
+            val result2 by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+            assertThat(result2).isTrue()
+
+            mockConfiguration.fontScale = 1.7f
+            mockConfiguration.screenWidthDp = 412
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+            assertThat(result3).isTrue()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowLargeClock_variousFontAndDisplaySize_false() =
+        testScope.runTest {
+            kosmos.shadeRepository.setShadeLayoutWide(false)
+            mockConfiguration.fontScale = 1.0f
+            mockConfiguration.screenWidthDp = 310
+            val result1 by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+            assertThat(result1).isFalse()
+
+            mockConfiguration.fontScale = 1.5f
+            mockConfiguration.screenWidthDp = 347
+            val result2 by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+            assertThat(result2).isFalse()
+
+            mockConfiguration.fontScale = 2.0f
+            mockConfiguration.screenWidthDp = 411
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+            assertThat(result3).isFalse()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowSmallClock_numberOverlapClock_variousFontAndDisplaySize_true() =
+        testScope.runTest {
+            config = ClockConfig("DIGITAL_CLOCK_NUMBEROVERLAP", "Test", "")
+            kosmos.fakeKeyguardClockRepository.setCurrentClock(clockController)
+            kosmos.shadeRepository.setShadeLayoutWide(false)
+            mockConfiguration.fontScale = 0.85f
+            mockConfiguration.screenWidthDp = 376
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result3).isTrue()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowLargeClock_metroClock_variousFontAndDisplaySize_false() =
+        testScope.runTest {
+            config = ClockConfig("DIGITAL_CLOCK_METRO", "Test", "")
+            kosmos.fakeKeyguardClockRepository.setCurrentClock(clockController)
+            mockConfiguration.fontScale = 0.85f
+            mockConfiguration.screenWidthDp = 375
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowLargeClock)
+            assertThat(result3).isFalse()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowSmallClock_variousFontAndDisplaySize_shadeLayoutNotWide_false() =
+        testScope.runTest {
+            kosmos.shadeRepository.setShadeLayoutWide(false)
+            mockConfiguration.fontScale = 1.0f
+            mockConfiguration.screenWidthDp = 347
+            val result1 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result1).isFalse()
+
+            mockConfiguration.fontScale = 1.2f
+            mockConfiguration.screenWidthDp = 347
+            val result2 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result2).isFalse()
+
+            mockConfiguration.fontScale = 1.7f
+            mockConfiguration.screenWidthDp = 412
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result3).isFalse()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowSmallClock_variousFontAndDisplaySize_shadeLayoutWide_false() =
+        testScope.runTest {
+            kosmos.shadeRepository.setShadeLayoutWide(true)
+            mockConfiguration.fontScale = 1.0f
+            mockConfiguration.screenWidthDp = 694
+            val result1 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result1).isFalse()
+
+            mockConfiguration.fontScale = 1.2f
+            mockConfiguration.screenWidthDp = 694
+            val result2 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result2).isFalse()
+
+            mockConfiguration.fontScale = 1.7f
+            mockConfiguration.screenWidthDp = 824
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result3).isFalse()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowSmallClock_variousFontAndDisplaySize_shadeLayoutNotWide_true() =
+        testScope.runTest {
+            kosmos.shadeRepository.setShadeLayoutWide(false)
+            mockConfiguration.fontScale = 1.0f
+            mockConfiguration.screenWidthDp = 310
+            val result1 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result1).isTrue()
+
+            mockConfiguration.fontScale = 1.5f
+            mockConfiguration.screenWidthDp = 347
+            val result2 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result2).isTrue()
+
+            mockConfiguration.fontScale = 2.0f
+            mockConfiguration.screenWidthDp = 411
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result3).isTrue()
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
+    fun dateWeatherBelowSmallClock_variousFontAndDisplaySize_shadeLayoutWide_true() =
+        testScope.runTest {
+            kosmos.shadeRepository.setShadeLayoutWide(true)
+            mockConfiguration.fontScale = 1.0f
+            mockConfiguration.screenWidthDp = 620
+            val result1 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result1).isTrue()
+
+            mockConfiguration.fontScale = 1.5f
+            mockConfiguration.screenWidthDp = 694
+            val result2 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result2).isTrue()
+
+            mockConfiguration.fontScale = 2.0f
+            mockConfiguration.screenWidthDp = 822
+            val result3 by collectLastValue(underTest.shouldDateWeatherBeBelowSmallClock)
+            assertThat(result3).isTrue()
         }
 
     companion object {

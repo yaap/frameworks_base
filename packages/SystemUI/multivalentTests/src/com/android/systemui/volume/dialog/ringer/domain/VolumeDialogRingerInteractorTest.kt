@@ -38,6 +38,7 @@ import org.junit.runner.RunWith
 @SmallTest
 @RunWith(AndroidJUnit4::class)
 @TestableLooper.RunWithLooper
+@android.platform.test.annotations.EnabledOnRavenwood
 class VolumeDialogRingerInteractorTest : SysuiTestCase() {
 
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
@@ -48,7 +49,7 @@ class VolumeDialogRingerInteractorTest : SysuiTestCase() {
     @Before
     fun setUp() {
         underTest = kosmos.volumeDialogRingerInteractor
-        controller.setStreamVolume(STREAM_RING, 50)
+        controller.setStreamVolume(STREAM_RING, 50, true)
     }
 
     @Test

@@ -18,7 +18,6 @@ package com.android.systemui.statusbar;
 
 import static android.app.admin.DevicePolicyManager.DEVICE_OWNER_TYPE_DEFAULT;
 
-import static com.android.systemui.flags.Flags.KEYGUARD_TALKBACK_FIX;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_TRANSIENT;
 import static com.android.systemui.keyguard.ScreenLifecycle.SCREEN_ON;
 
@@ -69,6 +68,7 @@ import com.android.systemui.bouncer.domain.interactor.AlternateBouncerInteractor
 import com.android.systemui.bouncer.domain.interactor.BouncerMessageInteractor;
 import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.deviceentry.domain.interactor.BiometricMessageInteractor;
+import com.android.systemui.deviceentry.domain.interactor.DeviceEntryBiometricSettingsInteractor;
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFaceAuthInteractor;
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFingerprintAuthInteractor;
 import com.android.systemui.dock.DockManager;
@@ -170,6 +170,9 @@ public class KeyguardIndicationControllerBaseTest extends SysuiTestCase {
     protected AlarmManager mAlarmManager;
     @Mock
     protected UserTracker mUserTracker;
+    @Mock
+    protected DeviceEntryBiometricSettingsInteractor mDeviceEntryBiometricSettingsInteractor;
+
     @Captor
     protected ArgumentCaptor<DockManager.AlignmentStateListener> mAlignmentListener;
     @Captor
@@ -257,6 +260,9 @@ public class KeyguardIndicationControllerBaseTest extends SysuiTestCase {
 
         mIndicationHelper = new IndicationHelper(mKeyguardUpdateMonitor);
 
+        when(mDeviceEntryBiometricSettingsInteractor.getAuthenticationFlags())
+                .thenReturn(mock(StateFlow.class));
+
         mWakeLock = new WakeLockFake();
         mWakeLockBuilder = new WakeLockFake.Builder(mContext);
         mWakeLockBuilder.setWakeLock(mWakeLock);
@@ -279,7 +285,6 @@ public class KeyguardIndicationControllerBaseTest extends SysuiTestCase {
         }
 
         mFlags = new FakeFeatureFlags();
-        mFlags.set(KEYGUARD_TALKBACK_FIX, true);
         mController = new KeyguardIndicationController(
                 mContext,
                 mTestableLooper.getLooper(),
@@ -294,8 +299,8 @@ public class KeyguardIndicationControllerBaseTest extends SysuiTestCase {
                 mAlarmManager,
                 mUserTracker,
                 mock(BouncerMessageInteractor.class),
-                mFlags,
                 mIndicationHelper,
+                mDeviceEntryBiometricSettingsInteractor,
                 KeyguardInteractorFactory.create(mFlags).getKeyguardInteractor(),
                 mBiometricMessageInteractor,
                 mDeviceEntryFingerprintAuthInteractor,

@@ -20,10 +20,7 @@ import android.graphics.Rect
 import android.util.ArraySet
 import android.view.View
 import android.view.View.OnAttachStateChangeListener
-import com.android.systemui.Flags.mediaControlsUmoInflationInBackground
 import com.android.systemui.media.controls.domain.pipeline.MediaDataManager
-import com.android.systemui.media.controls.shared.model.MediaData
-import com.android.systemui.media.controls.shared.model.SmartspaceMediaData
 import com.android.systemui.media.controls.ui.controller.MediaCarouselController
 import com.android.systemui.media.controls.ui.controller.MediaCarouselControllerLogger
 import com.android.systemui.media.controls.ui.controller.MediaHierarchyManager
@@ -88,37 +85,8 @@ class MediaHost(
 
     private val listener =
         object : MediaDataManager.Listener {
-            override fun onMediaDataLoaded(
-                key: String,
-                oldKey: String?,
-                data: MediaData,
-                immediately: Boolean,
-                receivedSmartspaceCardLatency: Int,
-                isSsReactivated: Boolean,
-            ) {
-                if (mediaControlsUmoInflationInBackground()) return
-
-                if (immediately) {
-                    updateViewVisibility()
-                }
-            }
-
-            override fun onSmartspaceMediaDataLoaded(
-                key: String,
-                data: SmartspaceMediaData,
-                shouldPrioritize: Boolean,
-            ) {
-                updateViewVisibility()
-            }
-
             override fun onMediaDataRemoved(key: String, userInitiated: Boolean) {
                 updateViewVisibility()
-            }
-
-            override fun onSmartspaceMediaDataRemoved(key: String, immediately: Boolean) {
-                if (immediately) {
-                    updateViewVisibility()
-                }
             }
         }
 
@@ -213,9 +181,9 @@ class MediaHost(
             if (mediaCarouselController.isLockedAndHidden()) {
                 false
             } else if (showsOnlyActiveMedia) {
-                mediaDataManager.hasActiveMediaOrRecommendation()
+                mediaDataManager.hasActiveMedia()
             } else {
-                mediaDataManager.hasAnyMediaOrRecommendation()
+                mediaDataManager.hasAnyMedia()
             }
         val newVisibility = if (visible) View.VISIBLE else View.GONE
         if (oldState != state.visible || newVisibility != hostView.visibility) {

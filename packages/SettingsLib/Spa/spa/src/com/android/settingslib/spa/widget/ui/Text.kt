@@ -84,6 +84,7 @@ fun SettingsListItem(text: String, enabled: Boolean = true) {
     )
 }
 
+/** Settings body text displayed in secondary style. */
 @Composable
 fun SettingsBody(
     body: String,
@@ -96,6 +97,25 @@ fun SettingsBody(
             modifier = Modifier.contentDescription(contentDescription),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
+            overflow = TextOverflow.Ellipsis,
+            maxLines = maxLines,
+        )
+    }
+}
+
+/** Settings introduction text. */
+@Composable
+fun SettingsIntro(
+    text: String,
+    contentDescription: String? = null,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    if (text.isNotEmpty()) {
+        Text(
+            text = text,
+            modifier = Modifier.contentDescription(contentDescription),
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyLarge,
             overflow = TextOverflow.Ellipsis,
             maxLines = maxLines,
         )

@@ -78,6 +78,7 @@ import androidx.annotation.UiThread;
 import androidx.core.math.MathUtils;
 
 import com.android.internal.accessibility.common.MagnificationConstants;
+import com.android.internal.accessibility.util.AccessibilityUtils;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.systemui.Flags;
 import com.android.systemui.model.SysUiState;
@@ -169,6 +170,11 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
      */
     private SurfaceControlViewHost mSurfaceControlViewHost;
 
+    /**
+     * The SurfaceControl provided by SurfaceControlViewHost.
+     */
+    private SurfaceControl mMirrorViewLeash;
+
     // The root of the mirrored content
     private SurfaceControl mMirrorSurface;
 
@@ -232,6 +238,8 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
             Math.tan(Math.toRadians(MAX_HORIZONTAL_MOVE_ANGLE));
 
     private boolean mAllowDiagonalScrolling = false;
+    private boolean mAllowMagnifyTyping = false;
+    private boolean mAllowMagnifyKeyboard = false;
     private boolean mEditSizeEnable = false;
     private boolean mSettingsPanelVisibility = false;
     @VisibleForTesting
@@ -277,6 +285,15 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
         mAllowDiagonalScrolling = secureSettings.getIntForUser(
                 Settings.Secure.ACCESSIBILITY_ALLOW_DIAGONAL_SCROLLING, 1,
                 UserHandle.USER_CURRENT) == 1;
+        if (com.android.server.accessibility.Flags.enableMagnificationMagnifyNavBarAndIme()) {
+            mAllowMagnifyTyping = secureSettings.getIntForUser(
+                    Settings.Secure.ACCESSIBILITY_MAGNIFICATION_FOLLOW_TYPING_ENABLED, 1,
+                    UserHandle.USER_CURRENT) == 1;
+            mAllowMagnifyKeyboard = secureSettings.getIntForUser(
+                    Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MAGNIFY_NAV_AND_IME,
+                    AccessibilityUtils.getMagnificationMagnifyKeyboardDefaultValue(mContext),
+                    UserHandle.USER_CURRENT) == 1;
+        }
 
         setupMagnificationSizeScaleOptions();
 
@@ -424,6 +441,14 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
         mAllowDiagonalScrolling = enable;
     }
 
+    void setMagnifyTyping(boolean enable) {
+        mAllowMagnifyTyping = enable;
+    }
+
+    void setMagnifyKeyboard(boolean enable) {
+        mAllowMagnifyKeyboard = enable;
+    }
+
     /**
      * Wraps {@link WindowMagnificationController#deleteWindowMagnification()}} with transition
      * animation. If the window magnification is enabling, it runs the animation in reverse.
@@ -467,6 +492,12 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
         if (mSurfaceControlViewHost != null) {
             mSurfaceControlViewHost.release();
             mSurfaceControlViewHost = null;
+        }
+
+        if (mMirrorViewLeash != null) {
+            mTransaction.reparent(mMirrorViewLeash, null).apply();
+            mMirrorViewLeash.release();
+            mMirrorViewLeash = null;
         }
 
         mMirrorViewBounds.setEmpty();
@@ -659,23 +690,22 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
 
         mSurfaceControlViewHost = mScvhSupplier.get();
         mSurfaceControlViewHost.setView(mMirrorView, params);
-        SurfaceControl surfaceControl = mSurfaceControlViewHost
-                .getSurfacePackage().getSurfaceControl();
+        mMirrorViewLeash = mSurfaceControlViewHost.getSurfacePackage().getSurfaceControl();
 
         int x = mMagnificationFrame.left - mMirrorSurfaceMargin;
         int y = mMagnificationFrame.top - mMirrorSurfaceMargin;
         mTransaction
-                .setCrop(surfaceControl, new Rect(0, 0, windowWidth, windowHeight))
-                .setPosition(surfaceControl, x, y)
-                .setLayer(surfaceControl, Integer.MAX_VALUE)
-                .show(surfaceControl)
+                .setCrop(mMirrorViewLeash, new Rect(0, 0, windowWidth, windowHeight))
+                .setPosition(mMirrorViewLeash, x, y)
+                .setLayer(mMirrorViewLeash, Integer.MAX_VALUE)
+                .show(mMirrorViewLeash)
                 .apply();
 
         mMirrorViewBounds.set(x, y, x + windowWidth, y + windowHeight);
 
         AccessibilityManager accessibilityManager = mContext
                 .getSystemService(AccessibilityManager.class);
-        accessibilityManager.attachAccessibilityOverlayToDisplay(mDisplayId, surfaceControl);
+        accessibilityManager.attachAccessibilityOverlayToDisplay(mDisplayId, mMirrorViewLeash);
 
         SurfaceHolder holder = mMirrorSurfaceView.getHolder();
         holder.addCallback(this);
@@ -964,13 +994,11 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
             params.width = width;
             params.height = height;
             mSurfaceControlViewHost.relayout(params);
-            mTransaction.setCrop(mSurfaceControlViewHost.getSurfacePackage().getSurfaceControl(),
-                    new Rect(0, 0, width, height));
+            mTransaction.setCrop(mMirrorViewLeash, new Rect(0, 0, width, height));
         }
 
         mMirrorViewBounds.set(x, y, x + width, y + height);
-        mTransaction.setPosition(
-                mSurfaceControlViewHost.getSurfacePackage().getSurfaceControl(), x, y);
+        mTransaction.setPosition(mMirrorViewLeash, x, y);
         if (computeWindowSize) {
             mSurfaceControlViewHost.getRootSurfaceControl().applyTransactionOnDraw(mTransaction);
         } else {
@@ -1371,6 +1399,16 @@ class WindowMagnificationController implements View.OnTouchListener, SurfaceHold
     @VisibleForTesting
     boolean isDiagonalScrollingEnabled() {
         return mAllowDiagonalScrolling;
+    }
+
+    @VisibleForTesting
+    boolean isMagnifyTypingEnabled() {
+        return mAllowMagnifyTyping;
+    }
+
+    @VisibleForTesting
+    boolean isMagnifyKeyboardEnabled() {
+        return mAllowMagnifyKeyboard;
     }
 
     private CharSequence formatStateDescription(float scale) {

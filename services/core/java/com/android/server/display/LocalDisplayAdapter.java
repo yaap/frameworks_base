@@ -33,6 +33,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.os.Trace;
 import android.util.DisplayMetrics;
@@ -236,6 +237,8 @@ final class LocalDisplayAdapter extends DisplayAdapter {
         private int mActiveSfDisplayModeAtStartId = INVALID_MODE_ID;
         private Display.Mode mUserPreferredMode;
         private int mActiveModeId = INVALID_MODE_ID;
+        private long mAppVsyncOffsetNanos;
+        private long mPresentationDeadlineNanos;
         private boolean mDisplayModeSpecsInvalid;
         private int mActiveColorMode;
         private boolean mHasArrSupport;
@@ -322,6 +325,8 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                 SurfaceControl.DesiredDisplayModeSpecs modeSpecs) {
             mSfDisplayModes = Arrays.copyOf(displayModes, displayModes.length);
             mActiveSfDisplayMode = getModeById(displayModes, activeSfDisplayModeId);
+            mAppVsyncOffsetNanos = mActiveSfDisplayMode.appVsyncOffsetNanos;
+            mPresentationDeadlineNanos = mActiveSfDisplayMode.presentationDeadlineNanos;
             SurfaceControl.DisplayMode preferredSfDisplayMode =
                         getModeById(displayModes, preferredSfDisplayModeId);
 
@@ -512,6 +517,20 @@ final class LocalDisplayAdapter extends DisplayAdapter {
             return mUserPreferredModeId != INVALID_MODE_ID
                     ? mUserPreferredModeId
                     : mDefaultModeId;
+        }
+
+        private long getAppVsyncOffsetNanos(long defaultValue) {
+            if (getFeatureFlags().isDispatchDisplayModeWithVsyncOffsetsEnabled()) {
+                return mAppVsyncOffsetNanos;
+            }
+            return defaultValue;
+        }
+
+        private long getPresentationDeadlineNanos(long defaultValue) {
+            if (getFeatureFlags().isDispatchDisplayModeWithVsyncOffsetsEnabled()) {
+                return mPresentationDeadlineNanos;
+            }
+            return defaultValue;
         }
 
         private int getLogicalDensity() {
@@ -734,8 +753,11 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                 mInfo.hasArrSupport = mHasArrSupport;
                 mInfo.frameRateCategoryRate = mFrameRateCategoryRate;
                 mInfo.supportedRefreshRates = mSupportedRefreshRates;
-                mInfo.appVsyncOffsetNanos = mActiveSfDisplayMode.appVsyncOffsetNanos;
-                mInfo.presentationDeadlineNanos = mActiveSfDisplayMode.presentationDeadlineNanos;
+                mInfo.appVsyncOffsetNanos =
+                        getAppVsyncOffsetNanos(mActiveSfDisplayMode.appVsyncOffsetNanos);
+                mInfo.presentationDeadlineNanos =
+                        getPresentationDeadlineNanos(
+                                mActiveSfDisplayMode.presentationDeadlineNanos);
                 mInfo.state = mState;
                 mInfo.committedState = mCommittedState;
                 mInfo.uniqueId = getUniqueId();
@@ -826,7 +848,10 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                     mInfo.type = Display.TYPE_EXTERNAL;
                     mInfo.touch = DisplayDeviceInfo.TOUCH_EXTERNAL;
                     mInfo.flags |= DisplayDeviceInfo.FLAG_PRESENTATION;
-                    if (mInfo.name == null) {
+                    if (mInfo.name == null && mStaticDisplayInfo.deviceProductInfo != null) {
+                        mInfo.name = mStaticDisplayInfo.deviceProductInfo.getName();
+                    }
+                    if (mInfo.name == null || mInfo.name.isBlank()) {
                         mInfo.name = getContext().getResources().getString(
                                 R.string.display_manager_hdmi_display_name);
                     }
@@ -945,7 +970,10 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                                 + "id=" + physicalDisplayId
                                 + ", state=" + Display.stateToString(state) + ")");
                         try {
+                            final long start = SystemClock.uptimeMillis();
                             mSurfaceControlProxy.setDisplayPowerMode(token, mode);
+                            final long end = SystemClock.uptimeMillis();
+                            Slog.i(TAG, "SF.setDisplayPowerMode took " + (end - start) + "ms");
                             Trace.traceCounter(Trace.TRACE_TAG_POWER, "DisplayPowerMode", mode);
                         } finally {
                             Trace.traceEnd(Trace.TRACE_TAG_POWER);
@@ -1074,10 +1102,9 @@ final class LocalDisplayAdapter extends DisplayAdapter {
 
                         final float minHardwareNits = backlightToNits(brightnessToBacklight(
                                 mDisplayDeviceConfig.getEvenDimmerTransitionPoint()));
-                        final float requestedNits =
-                                backlightToNits(brightnessToBacklight(brightnessState));
-                        mNitsToEvenDimmerStrength =
-                                mCdsi.fetchEvenDimmerSpline(minHardwareNits);
+                        final float backlight = brightnessToBacklight(brightnessState);
+                        final float requestedNits = backlightToNits(backlight);
+                        mNitsToEvenDimmerStrength = mCdsi.fetchEvenDimmerSpline(minHardwareNits);
 
                         if (mNitsToEvenDimmerStrength == null) {
                             return;
@@ -1087,9 +1114,12 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                         int strength = Math.round(mNitsToEvenDimmerStrength
                                 .interpolate(requestedNits));
                         boolean enabled = strength > 0.0f;
-                        if (mEvenDimmerEnabled != enabled) {
+                        if (mEvenDimmerEnabled != enabled || (DEBUG && enabled)) {
                             Slog.i(TAG, "Setting Extra Dim; strength: " + strength
-                                    + ", " + (enabled ? "enabled" : "disabled"));
+                                    + ", " + (enabled ? "enabled" : "disabled")
+                                    + ", requestedNits: " + requestedNits
+                                    + ", brightnessState: " + brightnessState
+                                    + ", backlight: " + backlight);
                         }
                         if (mEvenDimmerStrength != strength || mEvenDimmerEnabled != enabled) {
                             mEvenDimmerEnabled = enabled;
@@ -1213,8 +1243,10 @@ final class LocalDisplayAdapter extends DisplayAdapter {
             updateDeviceInfoLocked();
         }
 
-        public void onActiveDisplayModeChangedLocked(int sfModeId, float renderFrameRate) {
-            if (updateActiveModeLocked(sfModeId, renderFrameRate)) {
+        public void onActiveDisplayModeChangedLocked(int sfModeId, float renderFrameRate,
+                long appVsyncOffsetNanos, long presentationDeadlineNanos) {
+            if (updateActiveModeLocked(sfModeId, renderFrameRate, appVsyncOffsetNanos,
+                    presentationDeadlineNanos)) {
                 updateDeviceInfoLocked();
             }
         }
@@ -1232,9 +1264,12 @@ final class LocalDisplayAdapter extends DisplayAdapter {
             }
         }
 
-        public boolean updateActiveModeLocked(int activeSfModeId, float renderFrameRate) {
+        public boolean updateActiveModeLocked(int activeSfModeId, float renderFrameRate,
+                long appVsyncOffsetNanos, long presentationDeadlineNanos) {
             if (mActiveSfDisplayMode.id == activeSfModeId
-                    && mActiveRenderFrameRate == renderFrameRate) {
+                    && mActiveRenderFrameRate == renderFrameRate
+                    && mAppVsyncOffsetNanos == appVsyncOffsetNanos
+                    && mPresentationDeadlineNanos == presentationDeadlineNanos) {
                 return false;
             }
             mActiveSfDisplayMode = getModeById(mSfDisplayModes, activeSfModeId);
@@ -1244,6 +1279,8 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                         + ", activeModeId=" + activeSfModeId);
             }
             mActiveRenderFrameRate = renderFrameRate;
+            mAppVsyncOffsetNanos = appVsyncOffsetNanos;
+            mPresentationDeadlineNanos = presentationDeadlineNanos;
             return true;
         }
 
@@ -1359,6 +1396,8 @@ final class LocalDisplayAdapter extends DisplayAdapter {
             }
             pw.println("mActiveSfDisplayMode=" + mActiveSfDisplayMode);
             pw.println("mActiveRenderFrameRate=" + mActiveRenderFrameRate);
+            pw.println("mAppVsyncOffsetNanos=" + mAppVsyncOffsetNanos);
+            pw.println("mPresentationDeadlineNanos=" + mPresentationDeadlineNanos);
             pw.println("mSupportedModes=");
             for (int i = 0; i < mSupportedModes.size(); i++) {
                 pw.println("  " + mSupportedModes.valueAt(i));
@@ -1574,9 +1613,12 @@ final class LocalDisplayAdapter extends DisplayAdapter {
         void onHotplug(long timestampNanos, long physicalDisplayId, boolean connected);
         void onHotplugConnectionError(long timestampNanos, int connectionError);
         void onModeChanged(long timestampNanos, long physicalDisplayId, int modeId,
-                long renderPeriod);
+                long renderPeriod, long appVsyncOffsetNanos, long presentationDeadlineNanos);
         void onFrameRateOverridesChanged(long timestampNanos, long physicalDisplayId,
                 DisplayEventReceiver.FrameRateOverride[] overrides);
+        void onModeAndFrameRateOverridesChanged(long timestampNanos, long physicalDisplayId,
+                int modeId,  long renderPeriod, long appVsyncOffsetNanos,
+                long presentationDeadlineNanos, DisplayEventReceiver.FrameRateOverride[] overrides);
         void onHdcpLevelsChanged(long physicalDisplayId, int connectedLevel, int maxLevel);
 
     }
@@ -1602,8 +1644,17 @@ final class LocalDisplayAdapter extends DisplayAdapter {
 
         @Override
         public void onModeChanged(long timestampNanos, long physicalDisplayId, int modeId,
-                long renderPeriod) {
-            mListener.onModeChanged(timestampNanos, physicalDisplayId, modeId, renderPeriod);
+                long renderPeriod, long appVsyncOffsetNanos, long presentationDeadlineNanos) {
+            mListener.onModeChanged(timestampNanos, physicalDisplayId, modeId,
+                    renderPeriod, appVsyncOffsetNanos, presentationDeadlineNanos);
+        }
+
+        public void onModeAndFrameRateOverridesChanged(long timestampNanos, long physicalDisplayId,
+                int modeId,  long renderPeriod, long appVsyncOffsetNanos,
+                long presentationDeadlineNanos,
+                DisplayEventReceiver.FrameRateOverride[] overrides) {
+            mListener.onModeAndFrameRateOverridesChanged(timestampNanos, physicalDisplayId, modeId,
+                    renderPeriod, appVsyncOffsetNanos, presentationDeadlineNanos, overrides);
         }
 
         @Override
@@ -1643,13 +1694,15 @@ final class LocalDisplayAdapter extends DisplayAdapter {
 
         @Override
         public void onModeChanged(long timestampNanos, long physicalDisplayId, int modeId,
-                long renderPeriod) {
+                long renderPeriod, long appVsyncOffsetNanos, long presentationDealineNanos) {
             if (DEBUG) {
                 Slog.d(TAG, "onModeChanged("
                         + "timestampNanos=" + timestampNanos
                         + ", physicalDisplayId=" + physicalDisplayId
                         + ", modeId=" + modeId
-                        + ", renderPeriod=" + renderPeriod + ")");
+                        + ", renderPeriod=" + renderPeriod
+                        + ", appVsyncOffsetNanos=" + appVsyncOffsetNanos
+                        + ", presentationDealineNanos=" + presentationDealineNanos + ")");
             }
             synchronized (getSyncRoot()) {
                 LocalDisplayDevice device = mDevices.get(physicalDisplayId);
@@ -1661,7 +1714,8 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                     return;
                 }
                 float renderFrameRate = 1e9f / renderPeriod;
-                device.onActiveDisplayModeChangedLocked(modeId, renderFrameRate);
+                device.onActiveDisplayModeChangedLocked(modeId, renderFrameRate,
+                        appVsyncOffsetNanos, presentationDealineNanos);
             }
         }
 
@@ -1684,6 +1738,21 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                 }
                 device.onFrameRateOverridesChanged(overrides);
             }
+        }
+
+        @Override
+        public void onModeAndFrameRateOverridesChanged(long timestampNanos, long physicalDisplayId,
+                int modeId, long renderPeriod, long appVsyncOffsetNanos,
+                long presentationDeadlineNanos,
+                DisplayEventReceiver.FrameRateOverride[] overrides) {
+            if (DEBUG) {
+                Slog.d(TAG, "onModeAndFrameRateOverridesChanged");
+            }
+            //TODO(b/415850294) App should not get two callbacks when
+            // onModeAndFrameRateOverridesChanged is executed.
+            onModeChanged(timestampNanos, physicalDisplayId, modeId, renderPeriod,
+                    appVsyncOffsetNanos, presentationDeadlineNanos);
+            onFrameRateOverridesChanged(timestampNanos, physicalDisplayId, overrides);
         }
 
         @Override

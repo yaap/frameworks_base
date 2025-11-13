@@ -28,6 +28,7 @@ import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_O
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_QUICK_SETTINGS_EXPANDED;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_STATUS_BAR_KEYGUARD_SHOWING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_STATUS_BAR_KEYGUARD_SHOWING_OCCLUDED;
+import static com.android.wm.shell.sysui.ShellController.FIX_MISSING_USER_CHANGE_CALLBACKS_FLAG;
 
 import android.content.Context;
 import android.content.pm.UserInfo;
@@ -104,7 +105,7 @@ import javax.inject.Inject;
 public final class WMShell implements
         CoreStartable,
         CommandQueue.Callbacks {
-    private static final String TAG = WMShell.class.getName();
+    private static final String TAG = WMShell.class.getSimpleName();
     private static final long INVALID_SYSUI_STATE_MASK =
             SYSUI_STATE_DIALOG_SHOWING
                     | SYSUI_STATE_STATUS_BAR_KEYGUARD_SHOWING
@@ -256,6 +257,11 @@ public final class WMShell implements
 
         // Subscribe to user changes
         mUserTracker.addCallback(mUserChangedCallback, mContext.getMainExecutor());
+        if (FIX_MISSING_USER_CHANGE_CALLBACKS_FLAG.isTrue()) {
+            mUserChangedCallback.onUserChanged(mUserTracker.getUserId(),
+                    mContext.createContextAsUser(mUserTracker.getUserHandle(), 0 /* flags */));
+            mUserChangedCallback.onProfilesChanged(mUserTracker.getUserProfiles());
+        }
 
         mCommandQueue.addCallback(this);
         mCommandRegistry.registerCommand("wmshell-passthrough", () -> mShellCommand);
@@ -281,14 +287,16 @@ public final class WMShell implements
                 new PipTransitionController.PipTransitionCallback() {
                     @Override
                     public void onPipTransitionStarted(int direction, Rect pipBounds) {
+                        Log.d(TAG, "Set disable_gesture_pip_animating on transition start");
                         mSysUiState.setFlag(SYSUI_STATE_DISABLE_GESTURE_PIP_ANIMATING, true)
-                                .commitUpdate(mDisplayTracker.getDefaultDisplayId());
+                                .commitUpdate();
                     }
 
                     @Override
                     public void onPipTransitionFinished(int direction) {
+                        Log.d(TAG, "Reset disable_gesture_pip_animating on transition finish");
                         mSysUiState.setFlag(SYSUI_STATE_DISABLE_GESTURE_PIP_ANIMATING, false)
-                                .commitUpdate(mDisplayTracker.getDefaultDisplayId());
+                                .commitUpdate();
                     }
 
                     @Override
@@ -298,8 +306,9 @@ public final class WMShell implements
                 }, mSysUiMainExecutor);
         pip.addOnIsInPipStateChangedListener((isInPip) -> {
             if (!isInPip) {
+                Log.d(TAG, "Reset disable_gesture_pip_animating on pip exit");
                 mSysUiState.setFlag(SYSUI_STATE_DISABLE_GESTURE_PIP_ANIMATING, false)
-                        .commitUpdate(mDisplayTracker.getDefaultDisplayId());
+                        .commitUpdate();
             }
         });
         mSysUiState.addCallback((sysUiStateFlag, displayId) -> {

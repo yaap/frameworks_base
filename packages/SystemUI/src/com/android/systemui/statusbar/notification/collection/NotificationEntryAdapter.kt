@@ -20,8 +20,10 @@ import android.content.Context
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import com.android.internal.logging.MetricsLogger
 import com.android.systemui.statusbar.notification.NotificationActivityStarter
+import com.android.systemui.statusbar.notification.collection.coordinator.BundleCoordinator.Companion.debugBundleAppName
 import com.android.systemui.statusbar.notification.collection.coordinator.VisualStabilityCoordinator
 import com.android.systemui.statusbar.notification.collection.notifcollection.NotifLifetimeExtender
 import com.android.systemui.statusbar.notification.collection.provider.HighPriorityProvider
@@ -29,7 +31,11 @@ import com.android.systemui.statusbar.notification.headsup.HeadsUpManager
 import com.android.systemui.statusbar.notification.icon.IconPack
 import com.android.systemui.statusbar.notification.people.PeopleNotificationIdentifier
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow
+import com.android.systemui.statusbar.notification.row.NotifBindPipeline
 import com.android.systemui.statusbar.notification.row.NotificationActionClickManager
+import com.android.systemui.statusbar.notification.row.OnUserInteractionCallback
+import com.android.systemui.statusbar.notification.row.RowContentBindParams
+import com.android.systemui.statusbar.notification.row.RowContentBindStage
 import com.android.systemui.statusbar.notification.row.icon.NotificationIconStyleProvider
 import kotlinx.coroutines.flow.StateFlow
 
@@ -42,6 +48,7 @@ class NotificationEntryAdapter(
     private val notificationActionClickManager: NotificationActionClickManager,
     private val highPriorityProvider: HighPriorityProvider,
     private val headsUpManager: HeadsUpManager,
+    private val onUserInteractionCallback: OnUserInteractionCallback,
     private val entry: NotificationEntry,
 ) : EntryAdapter {
     override fun getBackingHashCode(): Int {
@@ -53,8 +60,7 @@ class NotificationEntryAdapter(
     }
 
     override fun isTopLevelEntry(): Boolean {
-        return parent != null &&
-            (parent === GroupEntry.ROOT_ENTRY || BundleEntry.ROOT_BUNDLES.contains(parent))
+        return parent != null && (parent === GroupEntry.ROOT_ENTRY || parent is BundleEntry)
     }
 
     override fun getKey(): String {
@@ -113,7 +119,7 @@ class NotificationEntryAdapter(
     }
 
     override fun isColorized(): Boolean {
-        return entry.sbn.notification.isColorized
+        return entry.sbn?.notification?.isColorized ?: false
     }
 
     override fun getSbn(): StatusBarNotification {
@@ -135,8 +141,8 @@ class NotificationEntryAdapter(
         visualStabilityCoordinator.temporarilyAllowSectionChanges(entry, SystemClock.uptimeMillis())
     }
 
-    override fun markForUserTriggeredMovement() {
-        entry.markForUserTriggeredMovement(true)
+    override fun markForUserTriggeredMovement(marked: Boolean) {
+        entry.markForUserTriggeredMovement(marked)
     }
 
     override fun isMarkedForUserTriggeredMovement(): Boolean {
@@ -206,11 +212,97 @@ class NotificationEntryAdapter(
         notificationActionClickManager.onNotificationActionClicked(entry)
     }
 
-    override fun getDismissState(): NotificationEntry.DismissState {
-        return entry.dismissState
+    override fun isParentDismissed(): Boolean {
+        return entry.dismissState == NotificationEntry.DismissState.PARENT_DISMISSED
     }
 
     override fun onEntryClicked(row: ExpandableNotificationRow) {
         notificationActivityStarter.onNotificationClicked(entry, row)
     }
+
+    override fun getRemoteInputEntryAdapter(): RemoteInputEntryAdapter {
+        return entry.getRemoteInputEntryAdapter()
+    }
+
+    override fun addOnSensitivityChangedListener(
+        listener: PipelineEntry.OnSensitivityChangedListener
+    ) {
+        entry.addOnSensitivityChangedListener(listener)
+    }
+
+    override fun removeOnSensitivityChangedListener(
+        listener: PipelineEntry.OnSensitivityChangedListener
+    ) {
+        entry.removeOnSensitivityChangedListener(listener)
+    }
+
+    override fun setSeenInShade(seen: Boolean) {
+        entry.isSeenInShade = seen
+    }
+
+    override fun isSeenInShade(): Boolean {
+        return entry.isSeenInShade
+    }
+
+    override fun onEntryAnimatingAwayEnded() {
+        headsUpManager.onEntryAnimatingAwayEnded(entry)
+    }
+
+    override fun registerFutureDismissal(): Runnable {
+        return onUserInteractionCallback.registerFutureDismissal(
+            entry,
+            NotificationListenerService.REASON_CANCEL,
+        )
+    }
+
+    override fun markForReinflation(stage: RowContentBindStage) {
+        val params: RowContentBindParams = stage.getStageParams(entry)
+        params.setNeedsReinflation(true)
+    }
+
+    override fun isViewBacked(): Boolean {
+        return true
+    }
+
+    override fun requestRebind(
+        stage: RowContentBindStage,
+        callback: NotifBindPipeline.BindCallback,
+    ) {
+        stage.requestRebind(entry, callback)
+    }
+
+    override fun isBundled(): Boolean {
+        return entry.isBundled || (!debugBundleAppName.isNullOrEmpty() && hasBundleParent())
+    }
+
+    private fun hasBundleParent(): Boolean {
+        var parent: PipelineEntry? = entry.parent
+        while (parent != null) {
+            if (parent is BundleEntry) {
+                return true
+            }
+            parent = parent.parent
+        }
+        return false
+    }
+
+    override fun isBundle(): Boolean {
+        return false
+    }
+
+    override fun onBundleDisabled() {
+        markForUserTriggeredMovement(true)
+        onImportanceChanged()
+
+        if (isGroupRoot()) {
+            row.attachedChildren?.forEach { it.entryAdapter.onBundleDisabled() }
+        }
+    }
+
+    override fun getBundleType(): Int {
+        Log.wtf(TAG, "getBundleType() called on non-bundle entry")
+        return -1
+    }
 }
+
+private const val TAG = "NotifEntryAdapter"

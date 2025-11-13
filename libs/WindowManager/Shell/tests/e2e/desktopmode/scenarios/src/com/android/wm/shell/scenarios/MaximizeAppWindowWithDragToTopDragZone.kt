@@ -18,6 +18,7 @@ package com.android.wm.shell.scenarios
 
 import android.app.Instrumentation
 import android.tools.NavBar
+import android.tools.PlatformConsts.DEFAULT_DISPLAY
 import android.tools.Rotation
 import android.tools.flicker.rules.ChangeDisplayOrientationRule
 import android.tools.traces.parsers.WindowManagerStateHelper
@@ -28,7 +29,8 @@ import com.android.server.wm.flicker.helpers.DesktopModeAppHelper
 import com.android.server.wm.flicker.helpers.SimpleAppHelper
 import com.android.window.flags.Flags
 import com.android.wm.shell.Utils
-import com.android.wm.shell.shared.desktopmode.DesktopModeStatus
+import com.android.wm.shell.shared.desktopmode.DesktopConfig
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import org.junit.After
 import org.junit.Assume
 import org.junit.Before
@@ -40,8 +42,9 @@ import org.junit.Test
  * Base scenario test for maximizing a desktop app window by dragging it to the top drag zone.
  */
 @Ignore("Test Base Class")
-abstract class MaximizeAppWindowWithDragToTopDragZone
-constructor(private val rotation: Rotation = Rotation.ROTATION_0) {
+abstract class MaximizeAppWindowWithDragToTopDragZone(
+    private val rotation: Rotation = Rotation.ROTATION_0
+) : TestScenarioBase() {
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
     private val tapl = LauncherInstrumentation()
     private val wmHelper = WindowManagerStateHelper(instrumentation)
@@ -52,10 +55,13 @@ constructor(private val rotation: Rotation = Rotation.ROTATION_0) {
 
     @Before
     fun setup() {
-        Assume.assumeTrue(Flags.enableDesktopWindowingMode() && tapl.isTablet)
-        // Skip the test when the drag-to-maximize is disabled on this device.
+        val desktopConfig = DesktopConfig.fromContext(instrumentation.context)
         Assume.assumeTrue(
-            DesktopModeStatus.shouldMaximizeWhenDragToTopEdge(instrumentation.context))
+            DesktopState.fromContext(instrumentation.context)
+                .isDesktopModeSupportedOnDisplay(DEFAULT_DISPLAY)
+        )
+        // Skip the test when the drag-to-maximize is disabled on this device.
+        Assume.assumeTrue(desktopConfig.shouldMaximizeWhenDragToTopEdge)
         tapl.setEnableRotation(true)
         tapl.setExpectedRotation(rotation.value)
         ChangeDisplayOrientationRule.setRotation(rotation)

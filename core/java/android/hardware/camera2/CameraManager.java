@@ -20,6 +20,8 @@ import static android.companion.virtual.VirtualDeviceParams.DEVICE_POLICY_DEFAUL
 import static android.companion.virtual.VirtualDeviceParams.POLICY_TYPE_CAMERA;
 import static android.content.Context.DEVICE_ID_DEFAULT;
 import static android.content.Context.DEVICE_ID_INVALID;
+import static android.view.Surface.ROTATION_270;
+import static android.view.Surface.ROTATION_90;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.FlaggedApi;
@@ -80,6 +82,7 @@ import android.util.Log;
 import android.util.Pair;
 import android.util.Size;
 import android.view.Display;
+import android.view.Surface;
 import android.window.DesktopModeFlags;
 
 import com.android.internal.camera.flags.Flags;
@@ -211,6 +214,16 @@ public final class CameraManager {
     @FlaggedApi(com.android.window.flags.Flags.FLAG_ENABLE_CAMERA_COMPAT_FOR_DESKTOP_WINDOWING)
     public static final int ROTATION_OVERRIDE_ROTATION_ONLY =
             ICameraService.ROTATION_OVERRIDE_ROTATION_ONLY;
+
+    /**
+     * Crops and rotates landscape camera feed to portrait counterclockwise, but doesn't change
+     * sensor orientation.
+     *
+     * @hide
+     */
+    // TODO(b/414347702): Revisit data structure.
+    static final int ROTATION_OVERRIDE_ROTATION_ONLY_REVERSE =
+            ICameraService.ROTATION_OVERRIDE_ROTATION_ONLY_REVERSE;
 
     /**
      * Enable physical camera availability callbacks when the logical camera is unavailable
@@ -911,7 +924,6 @@ public final class CameraManager {
      * @see #openCamera
      */
     @NonNull
-    @FlaggedApi(Flags.FLAG_CAMERA_DEVICE_SETUP)
     public CameraDevice.CameraDeviceSetup getCameraDeviceSetup(@NonNull String cameraId)
             throws CameraAccessException {
         // isCameraDeviceSetup does all the error checking we need.
@@ -959,7 +971,6 @@ public final class CameraManager {
      * @see #getCameraDeviceSetup(String)
      * @see #getCameraIdList()
      */
-    @FlaggedApi(Flags.FLAG_CAMERA_DEVICE_SETUP)
     public boolean isCameraDeviceSetupSupported(@NonNull String cameraId)
             throws CameraAccessException {
         if (cameraId == null) {
@@ -1036,7 +1047,7 @@ public final class CameraManager {
         AttributionSourceState contextAttributionSourceState =
                 contextAttributionSource.asState();
 
-        if (Flags.dataDeliveryPermissionChecks() && useContextAttributionSource) {
+        if (useContextAttributionSource) {
             return contextAttributionSourceState;
         } else {
             AttributionSourceState clientAttribution =
@@ -1103,8 +1114,7 @@ public final class CameraManager {
         synchronized (mLock) {
             ICameraDeviceUser cameraUser = null;
             CameraDevice.CameraDeviceSetup cameraDeviceSetup = null;
-            if (Flags.cameraDeviceSetup()
-                    && CameraDeviceSetupImpl.isCameraDeviceSetupSupported(characteristics)) {
+            if (CameraDeviceSetupImpl.isCameraDeviceSetupSupported(characteristics)) {
                 cameraDeviceSetup = getCameraDeviceSetupUnsafe(cameraId);
             }
 
@@ -1723,7 +1733,8 @@ public final class CameraManager {
                             && taskInfo.topActivity != null
                             && taskInfo.topActivity.getPackageName().equals(packageName)) {
                         // WindowManager has requested rotation override.
-                        return getRotationOverrideForCompatFreeform(freeformCameraCompatMode);
+                        return getRotationOverrideForCompatFreeform(freeformCameraCompatMode,
+                                taskInfo.appCompatTaskInfo.cameraCompatTaskInfo.displayRotation);
                     }
                 }
             }
@@ -1753,13 +1764,36 @@ public final class CameraManager {
     }
 
     private static int getRotationOverrideForCompatFreeform(
-            @CameraCompatTaskInfo.FreeformCameraCompatMode int freeformCameraCompatMode) {
+            @CameraCompatTaskInfo.FreeformCameraCompatMode int freeformCameraCompatMode,
+            @Surface.Rotation int displayRotation) {
         // Only rotate-and-crop if the app and device orientations do not match.
         if (freeformCameraCompatMode
                 == CameraCompatTaskInfo.CAMERA_COMPAT_FREEFORM_LANDSCAPE_DEVICE_IN_PORTRAIT
                 || freeformCameraCompatMode
                     == CameraCompatTaskInfo.CAMERA_COMPAT_FREEFORM_PORTRAIT_DEVICE_IN_LANDSCAPE) {
-            return ICameraService.ROTATION_OVERRIDE_ROTATION_ONLY;
+            // Rotate-and-crop compensates for changes in camera preview calculations (sandboxing).
+            // Recommended calculation of camera preview is:
+            // rotation = (sensorOrientationDegrees - deviceOrientationDegrees * sign + 360) % 360
+            // (camera-facing - sign - is accounted for later).
+            // If any of the parameters above are changed, rotate-and-crop should be applied to
+            // equal the changed amount.
+            // For example, with real display rotation 90 sandboxed to 0, rotate-and-crop by 270
+            // degrees (-90) for back camera, and 90 for front camera.
+            // Use `displayRotation` param, sent by WindowManager, as the display rotation in the
+            // app process might be sandboxed.
+            if (displayRotation == ROTATION_90 && com.android.window.flags.Flags
+                    .enableCameraCompatCheckDeviceRotationBugfix()) {
+                // back camera: 270 degrees, front camera: 90 degrees
+                return ICameraService.ROTATION_OVERRIDE_ROTATION_ONLY_REVERSE;
+            } else if (displayRotation == ROTATION_270) {
+                // back camera: 90 degrees, front camera: 270 degrees
+                return ICameraService.ROTATION_OVERRIDE_ROTATION_ONLY;
+            } else {
+                // TODO(b/390183440): differentiate between LANDSCAPE and REVERSE_LANDSCAPE
+                //  requested orientation for landscape apps. 'displayRotation` is 0 or 180 (rare)
+                //  in either case.
+                return ICameraService.ROTATION_OVERRIDE_ROTATION_ONLY;
+            }
         } else {
             return ICameraService.ROTATION_OVERRIDE_NONE;
         }

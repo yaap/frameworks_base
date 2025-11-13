@@ -16,17 +16,21 @@
 
 package com.android.systemui.statusbar.notification.stack
 
-import android.os.testableLooper
+import android.os.VibrationEffect
+import android.platform.test.annotations.DisableFlags
+import android.platform.test.annotations.EnableFlags
 import android.testing.TestableLooper.RunWithLooper
 import androidx.dynamicanimation.animation.SpringForce
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
+import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
-import com.android.systemui.flags.FakeFeatureFlagsClassic
+import com.android.systemui.haptics.fakeVibratorHelper
 import com.android.systemui.haptics.msdl.fakeMSDLPlayer
+import com.android.systemui.haptics.vibratorHelper
 import com.android.systemui.kosmos.testScope
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow
-import com.android.systemui.statusbar.notification.row.NotificationTestHelper
+import com.android.systemui.statusbar.notification.row.createRowGroup
 import com.android.systemui.statusbar.notification.stack.MagneticNotificationRowManagerImpl.State
 import com.android.systemui.testKosmos
 import com.google.android.msdl.data.model.MSDLToken
@@ -43,27 +47,24 @@ import org.mockito.kotlin.mock
 @RunWithLooper
 class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
 
-    private val featureFlags = FakeFeatureFlagsClassic()
     private val kosmos = testKosmos()
     private val childrenNumber = 5
     private val stackScrollLayout = mock<NotificationStackScrollLayout>()
     private val sectionsManager = mock<NotificationSectionsManager>()
     private val msdlPlayer = kosmos.fakeMSDLPlayer
+    private val vibratorHelper = kosmos.fakeVibratorHelper
     private var canRowBeDismissed = true
     private var magneticAnimationsCancelled = MutableList(childrenNumber) { false }
 
     private val underTest = kosmos.magneticNotificationRowManagerImpl
 
-    private lateinit var notificationTestHelper: NotificationTestHelper
     private lateinit var children: NotificationChildrenContainer
     private lateinit var swipedRow: ExpandableNotificationRow
 
     @Before
     fun setUp() {
         allowTestableLooperAsMainThread()
-        notificationTestHelper =
-            NotificationTestHelper(mContext, mDependency, kosmos.testableLooper, featureFlags)
-        children = notificationTestHelper.createGroup(childrenNumber).childrenContainer
+        children = kosmos.createRowGroup(childrenNumber).childrenContainer
         swipedRow = children.attachedChildren[childrenNumber / 2]
         children.attachedChildren.forEachIndexed { index, row ->
             row.magneticRowListener = row.magneticRowListener.asTestableListener(index)
@@ -241,7 +242,7 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
             underTest.setMagneticRowTranslation(swipedRow, translation = 100f)
 
             // WHEN the interaction ends on the row
-            underTest.onMagneticInteractionEnd(swipedRow, velocity = null)
+            underTest.onMagneticInteractionEnd(swipedRow, dismissing = false, velocity = null)
 
             // THEN the state resets
             assertThat(underTest.currentState).isEqualTo(State.IDLE)
@@ -254,7 +255,7 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
             setTargets()
 
             // WHEN the interaction ends on the row
-            underTest.onMagneticInteractionEnd(swipedRow, velocity = null)
+            underTest.onMagneticInteractionEnd(swipedRow, dismissing = false, velocity = null)
 
             // THEN the state resets
             assertThat(underTest.currentState).isEqualTo(State.IDLE)
@@ -267,7 +268,7 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
             setDetachedState()
 
             // WHEN the interaction ends on the row
-            underTest.onMagneticInteractionEnd(swipedRow, velocity = null)
+            underTest.onMagneticInteractionEnd(swipedRow, dismissing = false, velocity = null)
 
             // THEN the state resets
             assertThat(underTest.currentState).isEqualTo(State.IDLE)
@@ -280,7 +281,7 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
             setDetachedState()
 
             // WHEN the interaction ends on the row
-            underTest.onMagneticInteractionEnd(swipedRow, velocity = null)
+            underTest.onMagneticInteractionEnd(swipedRow, dismissing = false, velocity = null)
 
             // THEN magnetic animations are cancelled
             assertThat(magneticAnimationsCancelled[childrenNumber / 2]).isTrue()
@@ -296,10 +297,56 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
             setTargets()
 
             // WHEN the interactionEnd is called on a target different from the swiped row
-            underTest.onMagneticInteractionEnd(neighborRow, null)
+            underTest.onMagneticInteractionEnd(neighborRow, dismissing = false, velocity = null)
 
             // THEN magnetic animations are cancelled
             assertThat(magneticAnimationsCancelled[neighborIndex]).isTrue()
+        }
+
+    @Test
+    @EnableFlags(Flags.FLAG_MSDL_FEEDBACK)
+    fun onMagneticInteractionEnd_whenPulling_fromDismiss_playsMSDLThresholdHaptics() =
+        kosmos.testScope.runTest {
+            // GIVEN a threshold of 100 px
+            val threshold = 100f
+            underTest.onDensityChange(
+                threshold / MagneticNotificationRowManager.MAGNETIC_DETACH_THRESHOLD_DP
+            )
+
+            // GIVEN that targets are set and the swiped row is being pulled
+            setTargets()
+            underTest.setMagneticRowTranslation(swipedRow, translation = 100f)
+
+            // WHEN the interaction ends on the row because it was dismissed
+            underTest.onMagneticInteractionEnd(swipedRow, dismissing = true, velocity = null)
+
+            // THEN threshold haptics play to indicate the dismissal
+            assertThat(msdlPlayer.latestTokenPlayed).isEqualTo(MSDLToken.SWIPE_THRESHOLD_INDICATOR)
+        }
+
+    @Test
+    @DisableFlags(Flags.FLAG_MSDL_FEEDBACK)
+    fun onMagneticInteractionEnd_whenPulling_fromDismiss_playsThresholdVibration() =
+        kosmos.testScope.runTest {
+            // GIVEN a threshold of 100 px
+            val threshold = 100f
+            underTest.onDensityChange(
+                threshold / MagneticNotificationRowManager.MAGNETIC_DETACH_THRESHOLD_DP
+            )
+
+            // GIVEN that targets are set and the swiped row is being pulled
+            setTargets()
+            underTest.setMagneticRowTranslation(swipedRow, translation = 100f)
+
+            // WHEN the interaction ends on the row because it was dismissed
+            underTest.onMagneticInteractionEnd(swipedRow, dismissing = true, velocity = null)
+
+            // THEN threshold haptics play to indicate the dismissal
+            val composition =
+                VibrationEffect.startComposition()
+                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.7f)
+                    .compose()
+            assertThat(vibratorHelper.hasVibratedWithEffects(composition)).isTrue()
         }
 
     @Test
@@ -381,13 +428,97 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
             assertThat(underTest.currentState).isEqualTo(State.PULLING)
         }
 
+    @Test
+    fun getDetachDirection_whilePulling_returnsZero() =
+        kosmos.testScope.runTest {
+            // GIVEN a detach threshold
+            val threshold = 100f
+            underTest.onDensityChange(
+                threshold / MagneticNotificationRowManager.MAGNETIC_DETACH_THRESHOLD_DP
+            )
+
+            // GIVEN the swiped row is being pulled
+            setTargets()
+            underTest.setMagneticRowTranslation(swipedRow, translation = 100f)
+
+            // THEN the detach direction is zero
+            val detachDirection = underTest.getDetachDirection(swipedRow)
+            assertThat(detachDirection).isEqualTo(0)
+        }
+
+    @Test
+    fun getDetachDirection_withoutSwipedRow_returnsZero() =
+        kosmos.testScope.runTest {
+            // GIVEN a detach threshold
+            val threshold = 100f
+            underTest.onDensityChange(
+                threshold / MagneticNotificationRowManager.MAGNETIC_DETACH_THRESHOLD_DP
+            )
+
+            // GIVEN the swiped row is being pulled
+            setTargets()
+            underTest.setMagneticRowTranslation(swipedRow, translation = 100f)
+
+            // THEN the detach direction for a non-swiped row is zero
+            val neighborIndex = childrenNumber / 2 - 1
+            val neighborRow = children.attachedChildren[neighborIndex]
+            val detachDirection = underTest.getDetachDirection(neighborRow)
+            assertThat(detachDirection).isEqualTo(0)
+        }
+
+    @Test
+    fun getDetachDirection_whenDetachedToTheRight_returnsCorrectDirection() =
+        kosmos.testScope.runTest {
+            // GIVEN that the swiped row is detached to the right
+            setDetachedState()
+
+            // THEN the detach direction is 1
+            val detachDirection = underTest.getDetachDirection(swipedRow)
+            assertThat(detachDirection).isEqualTo(1)
+        }
+
+    @Test
+    fun getDetachDirection_whenDetachedToTheLeft_returnsCorrectDirection() =
+        kosmos.testScope.runTest {
+            // GIVEN that the swiped row is detached to the left
+            setDetachedState(direction = -1)
+
+            // THEN the detach direction is -1
+            val detachDirection = underTest.getDetachDirection(swipedRow)
+            assertThat(detachDirection).isEqualTo(-1)
+        }
+
+    @Test
+    fun getDetachDirection_afterADismissal_returnsCorrectDirection() =
+        kosmos.testScope.runTest {
+            // GIVEN that the swiped row is detached to the right
+            setDetachedState()
+            assertThat(underTest.getDetachDirection(swipedRow)).isEqualTo(1)
+
+            // GIVEN that the notification is dismissed
+            underTest.onMagneticInteractionEnd(swipedRow, dismissing = true, velocity = 5000f)
+
+            // WHEN we begin interacting with another row
+            swipedRow = children.attachedChildren.first()
+            setTargets()
+            underTest.setMagneticRowTranslation(swipedRow, translation = 100f)
+
+            // THEN the detach direction is 0
+            assertThat(underTest.getDetachDirection(swipedRow)).isEqualTo(0)
+        }
+
     @After
     fun tearDown() {
         // We reset the manager so that all MagneticRowListener can cancel all animations
         underTest.reset()
     }
 
-    private fun setDetachedState() {
+    /**
+     * Set the detached state towards a specific direction:
+     *
+     * 1 -> detached to the right, -1 -> detached to the left
+     */
+    private fun setDetachedState(direction: Int = 1) {
         val threshold = 100f
         underTest.onDensityChange(
             threshold / MagneticNotificationRowManager.MAGNETIC_DETACH_THRESHOLD_DP
@@ -395,10 +526,10 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
 
         // Set the pulling state
         setTargets()
-        underTest.setMagneticRowTranslation(swipedRow, translation = 100f)
+        underTest.setMagneticRowTranslation(swipedRow, translation = direction * 100f)
 
         // Set a translation that will fall above the threshold
-        val translation = 150f
+        val translation = direction * 150f
         underTest.setMagneticRowTranslation(swipedRow, translation)
 
         assertThat(underTest.currentState).isEqualTo(State.DETACHED)
@@ -416,8 +547,8 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
     private fun MagneticRowListener.asTestableListener(rowIndex: Int): MagneticRowListener {
         val delegate = this
         return object : MagneticRowListener {
-            override fun setMagneticTranslation(translation: Float, trackEagerly: Boolean) {
-                delegate.setMagneticTranslation(translation, trackEagerly)
+            override fun setMagneticTranslation(translation: Float) {
+                delegate.setMagneticTranslation(translation)
             }
 
             override fun triggerMagneticForce(
@@ -440,6 +571,8 @@ class MagneticNotificationRowManagerImplTest : SysuiTestCase() {
             override fun canRowBeDismissed(): Boolean {
                 return canRowBeDismissed
             }
+
+            override fun getRowLoggingKey(): String = "testable listener"
         }
     }
 }

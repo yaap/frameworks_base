@@ -115,6 +115,7 @@ import com.android.server.utils.quota.Categorizer;
 import com.android.server.utils.quota.Category;
 import com.android.server.utils.quota.CountQuotaTracker;
 import com.android.server.vr.VrManagerInternal;
+import com.android.window.flags.Flags;
 
 /**
  * Server side implementation for the client activity to interact with system.
@@ -130,7 +131,8 @@ class ActivityClientController extends IActivityClientController.Stub {
     private final Context mContext;
 
     // Prevent malicious app abusing the Activity#setPictureInPictureParams API
-    @VisibleForTesting CountQuotaTracker mSetPipAspectRatioQuotaTracker;
+    @VisibleForTesting
+    CountQuotaTracker mSetPipAspectRatioQuotaTracker;
     // Limit to 60 times / minute
     private static final int SET_PIP_ASPECT_RATIO_LIMIT = 60;
     // The timeWindowMs here can not be smaller than QuotaTracker#MIN_WINDOW_SIZE_MS
@@ -324,6 +326,49 @@ class ActivityClientController extends IActivityClientController.Stub {
             final ActivityRecord r = ActivityRecord.forTokenLocked(token);
             if (r != null) {
                 r.finishRelaunching();
+            }
+        }
+        Binder.restoreCallingIdentity(origId);
+    }
+
+    @Override
+    public boolean isHandoffEnabled(IBinder token) {
+        final long origId = Binder.clearCallingIdentity();
+        boolean isHandoffEnabled = false;
+        synchronized (mGlobalLock) {
+            final ActivityRecord r = ActivityRecord.forTokenLocked(token);
+            if (r != null) {
+                isHandoffEnabled = r.isHandoffEnabled();
+            }
+        }
+        Binder.restoreCallingIdentity(origId);
+        return isHandoffEnabled;
+    }
+
+    @Override
+    public boolean isHandoffFullTaskRecreationAllowed(IBinder token) {
+        final long origId = Binder.clearCallingIdentity();
+        boolean isHandoffFullTaskRecreationAllowed = false;
+        synchronized (mGlobalLock) {
+            final ActivityRecord r = ActivityRecord.forTokenLocked(token);
+            if (r != null) {
+                isHandoffFullTaskRecreationAllowed = r.isHandoffFullTaskRecreationAllowed();
+            }
+        }
+        Binder.restoreCallingIdentity(origId);
+        return isHandoffFullTaskRecreationAllowed;
+    }
+
+    @Override
+    public void setHandoffEnabled(
+            IBinder token,
+            boolean handoffEnabled,
+            boolean allowFullTaskRecreation) {
+        final long origId = Binder.clearCallingIdentity();
+        synchronized (mGlobalLock) {
+            final ActivityRecord r = ActivityRecord.forTokenLocked(token);
+            if (r != null) {
+                r.setHandoffEnabled(handoffEnabled, allowFullTaskRecreation);
             }
         }
         Binder.restoreCallingIdentity(origId);
@@ -644,7 +689,7 @@ class ActivityClientController extends IActivityClientController.Stub {
             }
             final Task task = r.getTask();
             if (onlyRoot) {
-                return task.getRootActivity() == r ? task.mTaskId : INVALID_TASK_ID;
+                return r.isRootOfTask() ? task.mTaskId : INVALID_TASK_ID;
             }
             return task.mTaskId;
         }
@@ -764,7 +809,7 @@ class ActivityClientController extends IActivityClientController.Stub {
     }
 
     /**
-     * @param uri This uri must NOT contain an embedded userId.
+     * @param uri    This uri must NOT contain an embedded userId.
      * @param userId The userId in which the uri is to be resolved.
      */
     @Override
@@ -825,6 +870,15 @@ class ActivityClientController extends IActivityClientController.Stub {
 
     @Override
     public void setRequestedOrientation(IBinder token, int requestedOrientation) {
+        if (Flags.enableTransitionOnActivitySetRequestedOrientation()) {
+            setRequestedOrientationWithTransition(token, requestedOrientation);
+        } else {
+            setRequestedOrientationLegacy(token, requestedOrientation);
+        }
+    }
+
+    // TODO(b/375339716): Clean up and remove legacy code.
+    private void setRequestedOrientationLegacy(IBinder token, int requestedOrientation) {
         final long origId = Binder.clearCallingIdentity();
         try {
             synchronized (mGlobalLock) {
@@ -833,6 +887,41 @@ class ActivityClientController extends IActivityClientController.Stub {
                     EventLogTags.writeWmSetRequestedOrientation(requestedOrientation,
                             r.shortComponentName);
                     r.setRequestedOrientation(requestedOrientation);
+                }
+            }
+        } finally {
+            Binder.restoreCallingIdentity(origId);
+        }
+    }
+
+    private void setRequestedOrientationWithTransition(IBinder token, int requestedOrientation) {
+        final long origId = Binder.clearCallingIdentity();
+        try {
+            synchronized (mGlobalLock) {
+                final ActivityRecord r = ActivityRecord.isInRootTaskLocked(token);
+                if (r == null) {
+                    return;
+                }
+                // A new Transition need to be started in case the orientation update
+                // won't make the Display to rotate.
+                Transition transition = null;
+                final int orientation = r.getRequestedConfigurationOrientation(false,
+                        requestedOrientation);
+                if (!r.handlesOrientationChangeFromDescendant(orientation)) {
+                    transition = r.mTransitionController.isShellTransitionsEnabled()
+                            && !r.mTransitionController.isCollecting()
+                            ? r.mTransitionController.createTransition(TRANSIT_CHANGE) : null;
+                }
+
+                r.mTransitionController.collect(r);
+
+                r.setRequestedOrientation(requestedOrientation);
+
+                if (transition != null) {
+                    r.mTransitionController.requestStartTransition(transition,
+                            null /*startTask */, null /* remoteTransition */,
+                            null /* displayChange */);
+                    r.mTransitionController.setReady(r.getDisplayContent());
                 }
             }
         } finally {
@@ -859,13 +948,17 @@ class ActivityClientController extends IActivityClientController.Stub {
                 if (r == null) {
                     return false;
                 }
+                final ActionChain chain = mService.mChainTracker.startTransit("fromTransluce");
                 // Create a transition if the activity is playing in case the below activity didn't
                 // commit invisible. That's because if any activity below this one has changed its
                 // visibility while playing transition, there won't able to commit visibility until
                 // the running transition finish.
                 final Transition transition = r.mTransitionController.isShellTransitionsEnabled()
-                        && !r.mTransitionController.isCollecting()
+                        && !chain.isCollecting()
                         ? r.mTransitionController.createTransition(TRANSIT_TO_BACK) : null;
+                if (transition != null) {
+                    chain.attachTransition(transition);
+                }
                 final boolean changed = r.setOccludesParent(true);
                 if (transition != null) {
                     if (changed) {
@@ -881,6 +974,7 @@ class ActivityClientController extends IActivityClientController.Stub {
                         transition.abort();
                     }
                 }
+                mService.mChainTracker.end();
                 return changed;
             }
         } finally {
@@ -905,10 +999,14 @@ class ActivityClientController extends IActivityClientController.Stub {
                 if (under != null) {
                     under.returningOptions = safeOptions != null ? safeOptions.getOptions(r) : null;
                 }
+                final ActionChain chain = mService.mChainTracker.startTransit("toTransluce");
                 // Create a transition to make sure the activity change is collected.
                 final Transition transition = r.mTransitionController.isShellTransitionsEnabled()
-                        && !r.mTransitionController.isCollecting()
+                        && !chain.isCollecting()
                         ? r.mTransitionController.createTransition(TRANSIT_TO_FRONT) : null;
+                if (transition != null) {
+                    chain.attachTransition(transition);
+                }
                 final boolean changed = r.setOccludesParent(false);
                 if (transition != null) {
                     if (changed) {
@@ -918,7 +1016,7 @@ class ActivityClientController extends IActivityClientController.Stub {
                         r.mTransitionController.setReady(r.getDisplayContent());
                         if (under != null && under.returningOptions != null
                                 && under.returningOptions.getAnimationType()
-                                        == ANIM_SCENE_TRANSITION) {
+                                == ANIM_SCENE_TRANSITION) {
                             // Pass along the scene-transition animation-type
                             transition.setOverrideAnimation(TransitionInfo
                                             .AnimationOptions.makeSceneTransitionAnimOptions(), r,
@@ -928,6 +1026,7 @@ class ActivityClientController extends IActivityClientController.Stub {
                         transition.abort();
                     }
                 }
+                mService.mChainTracker.end();
                 return changed;
             }
         } finally {
@@ -1118,14 +1217,7 @@ class ActivityClientController extends IActivityClientController.Stub {
         }
 
         final EnterPipRequestedItem item = new EnterPipRequestedItem(r.token);
-        try {
-            return mService.getLifecycleManager().scheduleTransactionItem(r.app.getThread(), item);
-        } catch (RemoteException e) {
-            // TODO(b/323801078): remove Exception when cleanup
-            Slog.w(TAG, "Failed to send enter pip requested item: "
-                    + r.intent.getComponent(), e);
-            return false;
-        }
+        return mService.getLifecycleManager().scheduleTransactionItem(r.app.getThread(), item);
     }
 
     /**
@@ -1134,13 +1226,7 @@ class ActivityClientController extends IActivityClientController.Stub {
     void onPictureInPictureUiStateChanged(@NonNull ActivityRecord r,
             PictureInPictureUiState pipState) {
         final PipStateTransactionItem item = new PipStateTransactionItem(r.token, pipState);
-        try {
-            mService.getLifecycleManager().scheduleTransactionItem(r.app.getThread(), item);
-        } catch (RemoteException e) {
-            // TODO(b/323801078): remove Exception when cleanup
-            Slog.w(TAG, "Failed to send pip state transaction item: "
-                    + r.intent.getComponent(), e);
-        }
+        mService.getLifecycleManager().scheduleTransactionItem(r.app.getThread(), item);
     }
 
     @Override
@@ -1271,12 +1357,14 @@ class ActivityClientController extends IActivityClientController.Stub {
             transition.abort();
             return;
         }
+        final ActionChain chain = mService.mChainTracker.start("reqMWFS", transition);
         final Task requestingTask = r.getTask();
-        transition.collect(requestingTask);
+        chain.collect(requestingTask);
         executeMultiWindowFullscreenRequest(fullscreenRequest, requestingTask);
         r.mTransitionController.requestStartTransition(transition, requestingTask,
                 null /* remoteTransition */, null /* displayChange */);
         transition.setReady(requestingTask, true);
+        mService.mChainTracker.end();
     }
 
     private static void reportMultiwindowFullscreenRequestValidatingResult(IRemoteCallback callback,

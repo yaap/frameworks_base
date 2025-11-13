@@ -153,8 +153,8 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
                         continue; // Keyguard is always allowed
                     }
 
-                    if (Utils.isBackground(client.getOwnerString())
-                            && !client.isAlreadyDone()) {
+                    if (Utils.isBackground(ActivityTaskManager.getInstance(),
+                            client.getOwnerString()) && !client.isAlreadyDone()) {
                         Slog.e(getTag(), "Stopping background authentication,"
                                 + " currentClient: " + client);
                         mFingerprintSensors.valueAt(i).getScheduler()
@@ -447,7 +447,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
         mHandler.post(() -> {
             final InvalidationRequesterClient<Fingerprint> client =
                     new InvalidationRequesterClient<>(mContext, userId, sensorId,
-                            BiometricLogger.ofUnknown(mContext),
+                            BiometricLogger.ofUnknown(mContext, mHandler),
                             mBiometricContext,
                             mFingerprintSensors.get(sensorId).getFingerprintUtilsInstance());
             scheduleForSensor(sensorId, client);
@@ -705,7 +705,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
 
     private BiometricLogger createLogger(int statsAction, int statsClient,
             AuthenticationStatsCollector authenticationStatsCollector) {
-        return new BiometricLogger(mContext, BiometricsProtoEnums.MODALITY_FINGERPRINT,
+        return new BiometricLogger(mContext, mHandler, BiometricsProtoEnums.MODALITY_FINGERPRINT,
                 statsAction, statsClient, authenticationStatsCollector);
     }
 
@@ -808,7 +808,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
 
     @Override
     public void setIgnoreDisplayTouches(long requestId, int sensorId, boolean ignoreTouches) {
-        if (Flags.setIgnoreSpeedUp()) {
+        mHandler.post(() -> {
             try {
                 mFingerprintSensors.get(
                         sensorId).getLazySession().get().getSession().setIgnoreDisplayTouches(
@@ -817,17 +817,7 @@ public class FingerprintProvider implements IBinder.DeathRecipient, ServiceProvi
             } catch (Exception e) {
                 Slog.w(getTag(), "setIgnore failed", e);
             }
-        } else {
-            mFingerprintSensors.get(sensorId).getScheduler().getCurrentClientIfMatches(
-                requestId, (client) -> {
-                    if (!(client instanceof Udfps)) {
-                        Slog.e(getTag(),
-                                "setIgnoreDisplayTouches received during client: " + client);
-                        return;
-                    }
-                    ((Udfps) client).setIgnoreDisplayTouches(ignoreTouches);
-                });
-        }
+        });
     }
 
     @Override

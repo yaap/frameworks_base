@@ -421,13 +421,11 @@ public class ZygoteInit {
                 null /*declaringPackage*/, null /*dependentPackages*/, null /*dependencies*/,
                 false /*isNative*/));
 
-        if (Flags.enableApacheHttpLegacyPreload()) {
-            libs.add(new SharedLibraryInfo(
-                    "/system/framework/org.apache.http.legacy.jar", null /*packageName*/,
-                    null /*codePaths*/, null /*name*/, 0 /*version*/,
-                    SharedLibraryInfo.TYPE_BUILTIN, null /*declaringPackage*/,
-                    null /*dependentPackages*/, null /*dependencies*/, false /*isNative*/));
-        }
+        libs.add(new SharedLibraryInfo(
+                "/system/framework/org.apache.http.legacy.jar", null /*packageName*/,
+                null /*codePaths*/, null /*name*/, 0 /*version*/,
+                SharedLibraryInfo.TYPE_BUILTIN, null /*declaringPackage*/,
+                null /*dependentPackages*/, null /*dependencies*/, false /*isNative*/));
 
         if (Flags.enableMediaAndLocationPreload()) {
             // As these libraries are technically optional and not necessarily inherited from
@@ -699,7 +697,6 @@ public class ZygoteInit {
                 (1L << OsConstants.CAP_NET_BIND_SERVICE) |
                 (1L << OsConstants.CAP_NET_BROADCAST) |
                 (1L << OsConstants.CAP_NET_RAW) |
-                (1L << OsConstants.CAP_SYS_MODULE) |
                 (1L << OsConstants.CAP_SYS_NICE) |
                 (1L << OsConstants.CAP_SYS_PTRACE) |
                 (1L << OsConstants.CAP_SYS_TIME) |

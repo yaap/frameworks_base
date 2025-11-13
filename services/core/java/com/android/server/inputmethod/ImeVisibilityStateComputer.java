@@ -30,8 +30,6 @@ import static android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFI
 import static android.view.WindowManager.LayoutParams.SoftInputModeFlags;
 
 import static com.android.internal.inputmethod.InputMethodDebug.softInputModeToString;
-import static com.android.internal.inputmethod.SoftInputShowHideReason.REMOVE_IME_SCREENSHOT_FROM_IMMS;
-import static com.android.internal.inputmethod.SoftInputShowHideReason.SHOW_IME_SCREENSHOT_FROM_IMMS;
 import static com.android.server.inputmethod.ImeProtoLogGroup.IME_VIS_STATE_COMPUTER_DEBUG;
 import static com.android.server.inputmethod.InputMethodManagerService.computeImeDisplayIdForTarget;
 
@@ -87,7 +85,7 @@ public final class ImeVisibilityStateComputer {
 
     /**
      * A map used to track the requested IME target window and its state. The key represents the
-     * token of the window and the value is the corresponding IME window state.
+     * token of the window and the value is the corresponding IME target window state.
      */
     @GuardedBy("ImfLock.class")
     private final WeakHashMap<IBinder, ImeTargetWindowState> mRequestWindowStateMap =
@@ -119,8 +117,7 @@ public final class ImeVisibilityStateComputer {
     private boolean mInputShown;
 
     /**
-     * Set if we called
-     * {@link com.android.server.wm.ImeTargetVisibilityPolicy#showImeScreenshot(IBinder, int)}.
+     * Set if we called {@link com.android.server.wm.ImeTargetVisibilityPolicy#showImeScreenshot}.
      */
     @GuardedBy("ImfLock.class")
     private boolean mRequestedImeScreenshot;
@@ -134,9 +131,9 @@ public final class ImeVisibilityStateComputer {
     private IBinder mCurVisibleImeInputTarget;
 
     /**
-     * The last window token that we confirmed that IME started talking to.  This is always updated
-     * upon reports from the input method.  If the window state is already changed before the report
-     * is handled, this field just keeps the last value.
+     * The token of the last window that we confirmed that IME started talking to. This is always
+     * updated upon reports from the input method. If the window state is already changed before
+     * the report is handled, this field just keeps the last value.
      */
     @GuardedBy("ImfLock.class")
     @Nullable
@@ -157,17 +154,11 @@ public final class ImeVisibilityStateComputer {
     /** State to handle showing the IME window with making the overlay window behind it.  */
     public static final int STATE_SHOW_IME_BEHIND_OVERLAY = 3;
 
-    /** State to handle showing an IME preview surface during the app was loosing the IME focus */
-    public static final int STATE_SHOW_IME_SNAPSHOT = 4;
+    public static final int STATE_HIDE_IME_EXPLICIT = 4;
 
-    public static final int STATE_HIDE_IME_EXPLICIT = 5;
+    public static final int STATE_HIDE_IME_NOT_ALWAYS = 5;
 
-    public static final int STATE_HIDE_IME_NOT_ALWAYS = 6;
-
-    public static final int STATE_SHOW_IME_IMPLICIT = 7;
-
-    /** State to handle removing an IME preview surface when necessary. */
-    public static final int STATE_REMOVE_IME_SNAPSHOT = 8;
+    public static final int STATE_SHOW_IME_IMPLICIT = 6;
 
     @IntDef({
             STATE_INVALID,
@@ -175,11 +166,9 @@ public final class ImeVisibilityStateComputer {
             STATE_SHOW_IME,
             STATE_SHOW_IME_ABOVE_OVERLAY,
             STATE_SHOW_IME_BEHIND_OVERLAY,
-            STATE_SHOW_IME_SNAPSHOT,
             STATE_HIDE_IME_EXPLICIT,
             STATE_HIDE_IME_NOT_ALWAYS,
             STATE_SHOW_IME_IMPLICIT,
-            STATE_REMOVE_IME_SNAPSHOT,
     })
     @interface VisibilityState {}
 
@@ -248,7 +237,7 @@ public final class ImeVisibilityStateComputer {
             final int reason = SoftInputShowHideReason.HIDE_WHEN_INPUT_TARGET_INVISIBLE;
             final var statsToken = ImeTracker.forLogging().onStart(ImeTracker.TYPE_HIDE,
                     ImeTracker.ORIGIN_SERVER, reason, false /* fromUser */);
-            mService.onApplyImeVisibilityFromComputerLocked(imeInputTarget, statsToken,
+            mService.onApplyImeVisibilityFromComputerLocked(statsToken,
                     new ImeVisibilityResult(STATE_HIDE_IME_EXPLICIT, reason), mUserId);
         }
         mCurVisibleImeInputTarget = null;
@@ -393,26 +382,26 @@ public final class ImeVisibilityStateComputer {
     ImeTargetWindowState getOrCreateWindowState(IBinder windowToken) {
         ImeTargetWindowState state = mRequestWindowStateMap.get(windowToken);
         if (state == null) {
-            state = new ImeTargetWindowState(SOFT_INPUT_STATE_UNSPECIFIED, 0, false, false, false);
+            state = new ImeTargetWindowState(SOFT_INPUT_STATE_UNSPECIFIED, 0 /* windowFlags */,
+                    false /* imeFocusChanged */, false /* hasFocusedEditor */,
+                    false /* isStartInputByWindowGainFocus */, TOOL_TYPE_UNKNOWN);
         }
         return state;
     }
 
     @GuardedBy("ImfLock.class")
-    ImeTargetWindowState getWindowStateOrNull(IBinder windowToken) {
-        ImeTargetWindowState state = mRequestWindowStateMap.get(windowToken);
-        return state;
+    @Nullable
+    ImeTargetWindowState getWindowStateOrNull(@Nullable IBinder windowToken) {
+        return mRequestWindowStateMap.get(windowToken);
     }
 
     @GuardedBy("ImfLock.class")
-    void setWindowState(IBinder windowToken, @NonNull ImeTargetWindowState newState) {
+    void setWindowState(@NonNull IBinder windowToken, @NonNull ImeTargetWindowState newState) {
         final ImeTargetWindowState state = mRequestWindowStateMap.get(windowToken);
-        if (state != null && newState.hasEditorFocused() && (
-                newState.mToolType != MotionEvent.TOOL_TYPE_STYLUS
-                        || Flags.refactorInsetsController())) {
+        if (state != null && newState.hasEditorFocused()) {
             // Inherit the last requested IME visible state when the target window is still
             // focused with an editor.
-            newState.setRequestedImeVisible(state.mRequestedImeVisible);
+            newState.setRequestedImeVisible(state.isRequestedImeVisible());
         }
         setWindowStateInner(windowToken, newState);
     }
@@ -442,11 +431,25 @@ public final class ImeVisibilityStateComputer {
         }
     }
 
+    /**
+     * Computes the IME visibility state from the given IME target window state.
+     *
+     * @param state               the state of the IME target window.
+     * @param allowVisible        whether the soft input modes
+     *                            {@link WindowManager.LayoutParams#SOFT_INPUT_STATE_VISIBLE} and
+     *                            {@link WindowManager.LayoutParams#SOFT_INPUT_STATE_ALWAYS_VISIBLE}
+     *                            are allowed.
+     * @param imeRequestedVisible whether the IME target window has the IME insets type in the
+     *                            requestedVisibleTypes (see
+     *                            {@link InputMethodManager#hasViewImeRequestedVisible}).
+     */
     @GuardedBy("ImfLock.class")
-    ImeVisibilityResult computeState(ImeTargetWindowState state, boolean allowVisible,
+    @Nullable
+    ImeVisibilityResult computeState(@NonNull ImeTargetWindowState state, boolean allowVisible,
             boolean imeRequestedVisible) {
         // TODO: Output the request IME visibility state according to the requested window state
-        final int softInputVisibility = state.mSoftInputModeState & SOFT_INPUT_MASK_STATE;
+        final var softInputMode = state.getSoftInputModeState();
+        final int softInputVisibility = softInputMode & SOFT_INPUT_MASK_STATE;
         // Should we auto-show the IME even if the caller has not
         // specified what should be done with it?
         // We only do this automatically if the window can resize
@@ -455,12 +458,12 @@ public final class ImeVisibilityStateComputer {
         // by the IME) or if running on a large screen where there
         // is more room for the target window + IME.
         final boolean doAutoShow =
-                (state.mSoftInputModeState & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST)
+                (softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST)
                         == WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                         || mService.mRes.getConfiguration().isLayoutSizeAtLeast(
                         Configuration.SCREENLAYOUT_SIZE_LARGE);
-        final boolean isForwardNavigation = (state.mSoftInputModeState
-                & WindowManager.LayoutParams.SOFT_INPUT_IS_FORWARD_NAVIGATION) != 0;
+        final boolean isForwardNavigation =
+                (softInputMode & WindowManager.LayoutParams.SOFT_INPUT_IS_FORWARD_NAVIGATION) != 0;
 
         // We shows the IME when the system allows the IME focused target window to restore the
         // IME visibility (e.g. switching to the app task when last time the IME is visible).
@@ -480,8 +483,7 @@ public final class ImeVisibilityStateComputer {
 
         switch (softInputVisibility) {
             case WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED:
-                if (state.hasImeFocusChanged() && (!state.hasEditorFocused() || (!doAutoShow
-                        && !Flags.refactorInsetsController()))) {
+                if (state.hasImeFocusChanged() && (!state.hasEditorFocused())) {
                     if (WindowManager.LayoutParams.mayUseInputMethod(state.getWindowFlags())) {
                         // There is no focus view, and this window will
                         // be behind any soft input window, so hide the
@@ -508,31 +510,16 @@ public final class ImeVisibilityStateComputer {
                 // Do nothing but preserving the last IME requested visibility state.
                 final ImeTargetWindowState lastState = getWindowStateOrNull(mLastImeTargetWindow);
                 if (lastState != null) {
-                    state.setRequestedImeVisible(lastState.mRequestedImeVisible);
+                    state.setRequestedImeVisible(lastState.isRequestedImeVisible());
                 }
                 break;
             case WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN:
-                if (Flags.refactorInsetsController()) {
-                    // In this case, we don't have to manipulate the requested visible types of
-                    // the WindowState, as they're already in the correct state
-                    break;
-                } else if (isForwardNavigation) {
-                    ProtoLog.v(IME_VIS_STATE_COMPUTER_DEBUG,
-                            "Window asks to hide input going forward");
-                    return new ImeVisibilityResult(STATE_HIDE_IME_EXPLICIT,
-                            SoftInputShowHideReason.HIDE_STATE_HIDDEN_FORWARD_NAV);
-                }
+                // In this case, we don't have to manipulate the requested visible types of
+                // the WindowState, as they're already in the correct state
                 break;
             case WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN:
-                if (Flags.refactorInsetsController()) {
-                    // In this case, we don't have to manipulate the requested visible types of
-                    // the WindowState, as they're already in the correct state
-                    break;
-                } else if (state.hasImeFocusChanged()) {
-                    ProtoLog.v(IME_VIS_STATE_COMPUTER_DEBUG, "Window asks to hide input");
-                    return new ImeVisibilityResult(STATE_HIDE_IME_EXPLICIT,
-                            SoftInputShowHideReason.HIDE_ALWAYS_HIDDEN_STATE);
-                }
+                // In this case, we don't have to manipulate the requested visible types of
+                // the WindowState, as they're already in the correct state
                 break;
             case WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE:
                 if (isForwardNavigation) {
@@ -570,15 +557,15 @@ public final class ImeVisibilityStateComputer {
             // to rely on this behavior to hide the IME when the editor no longer has focus
             // To maintain compatibility, we are now hiding the IME when we don't have
             // an editor upon refocusing a window.
-            if (state.isStartInputByGainFocus()) {
+            if (state.isStartInputByWindowGainFocus()) {
                 ProtoLog.v(IME_VIS_STATE_COMPUTER_DEBUG,
                         "Same window without editor will hide input");
                 return new ImeVisibilityResult(STATE_HIDE_IME_EXPLICIT,
                         SoftInputShowHideReason.HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR);
             }
         }
-        if (!state.hasEditorFocused() && (mInputShown || (Flags.refactorInsetsController()
-                && imeRequestedVisible)) && state.isStartInputByGainFocus()
+        if (!state.hasEditorFocused() && (mInputShown || imeRequestedVisible)
+                && state.isStartInputByWindowGainFocus()
                 && mService.mInputMethodDeviceConfigs.shouldHideImeWhenNoEditorFocus()) {
             // Hide the soft-keyboard when the system do nothing for softInputModeState
             // of the window being gained focus without an editor. This behavior benefits
@@ -588,26 +575,33 @@ public final class ImeVisibilityStateComputer {
             // 2) SOFT_INPUT_STATE_VISIBLE state without an editor
             // 3) SOFT_INPUT_STATE_ALWAYS_VISIBLE state without an editor
             ProtoLog.v(IME_VIS_STATE_COMPUTER_DEBUG, "Window without editor will hide input");
-            if (Flags.refactorInsetsController()) {
-                state.setRequestedImeVisible(false);
-            }
+            state.setRequestedImeVisible(false);
             return new ImeVisibilityResult(STATE_HIDE_IME_EXPLICIT,
                     SoftInputShowHideReason.HIDE_WINDOW_GAINED_FOCUS_WITHOUT_EDITOR);
         }
         return null;
     }
 
+    /**
+     * Checks if we should show or hide the IME screenshot, based on the given IME target window and
+     * the interactive state.
+     *
+     * @param windowToken the token of the {@link ImeTargetWindowState} to check.
+     * @param interactive whether the system is currently interactive.
+     * @return {@code true} if the screenshot should be shown, {@code false} if it should be hidden,
+     * or {@code null} if it should remain unchanged.
+     */
+    @Nullable
     @GuardedBy("ImfLock.class")
-    ImeVisibilityResult onInteractiveChanged(IBinder windowToken, boolean interactive) {
+    Boolean shouldShowImeScreenshot(IBinder windowToken, boolean interactive) {
         final ImeTargetWindowState state = getWindowStateOrNull(windowToken);
         if (state != null && state.isRequestedImeVisible() && mInputShown && !interactive) {
             mRequestedImeScreenshot = true;
-            return new ImeVisibilityResult(STATE_SHOW_IME_SNAPSHOT, SHOW_IME_SCREENSHOT_FROM_IMMS);
+            return true;
         }
         if (interactive && mRequestedImeScreenshot) {
             mRequestedImeScreenshot = false;
-            return new ImeVisibilityResult(STATE_REMOVE_IME_SNAPSHOT,
-                    REMOVE_IME_SCREENSHOT_FROM_IMMS);
+            return false;
         }
         return null;
     }
@@ -760,56 +754,59 @@ public final class ImeVisibilityStateComputer {
     }
 
     /**
-     * A class that represents the current state of the IME target window.
+     * State information about an IME target window (i.e. a window for which we started an
+     * input connection). One of the IME target windows is set as the current
+     * {@link com.android.server.wm.DisplayContent#mImeInputTarget}.
      */
     static class ImeTargetWindowState {
 
-        ImeTargetWindowState(@SoftInputModeFlags int softInputModeState, int windowFlags,
-                boolean imeFocusChanged, boolean hasFocusedEditor,
-                boolean isStartInputByGainFocus) {
-            this(softInputModeState, windowFlags, imeFocusChanged, hasFocusedEditor,
-                    isStartInputByGainFocus, TOOL_TYPE_UNKNOWN);
-        }
-
-        ImeTargetWindowState(@SoftInputModeFlags int softInputModeState, int windowFlags,
-                boolean imeFocusChanged, boolean hasFocusedEditor,
-                boolean isStartInputByGainFocus, @MotionEvent.ToolType int toolType) {
+        ImeTargetWindowState(@SoftInputModeFlags int softInputModeState,
+                @WindowManager.LayoutParams.Flags int windowFlags, boolean imeFocusChanged,
+                boolean hasFocusedEditor, boolean isStartInputByWindowGainFocus,
+                @MotionEvent.ToolType int toolType) {
             mSoftInputModeState = softInputModeState;
             mWindowFlags = windowFlags;
             mImeFocusChanged = imeFocusChanged;
             mHasFocusedEditor = hasFocusedEditor;
-            mIsStartInputByGainFocus = isStartInputByGainFocus;
+            mIsStartInputByWindowGainFocus = isStartInputByWindowGainFocus;
             mToolType = toolType;
         }
 
-        /**
-         * Visibility state for this window. By default no state has been specified.
-         */
-        private final @SoftInputModeFlags int mSoftInputModeState;
+        /** {@link WindowManager.LayoutParams#softInputMode} of the IME target window. */
+        @SoftInputModeFlags
+        private final int mSoftInputModeState;
 
+        /** Window flags of the IME target window. */
+        @WindowManager.LayoutParams.Flags
         private final int mWindowFlags;
 
-        /**
-         * {@link MotionEvent#getToolType(int)} that was used to click editor.
-         */
-        private final int mToolType;
-
-        /**
-         * {@code true} means the IME focus changed from the previous window, {@code false}
-         * otherwise.
-         */
+        /** Whether the IME focus changed from the previous window. */
         private final boolean mImeFocusChanged;
 
         /**
-         * {@code true} when the window has focused an editor, {@code false} otherwise.
+         * Whether the window has a focused view that is a text editor.
+         *
+         * @see android.view.View#onCheckIsTextEditor
          */
         private final boolean mHasFocusedEditor;
 
-        private final boolean mIsStartInputByGainFocus;
+        /**
+         * Whether this became the IME target (started an input connection) due to the window
+         * gaining input focus.
+         *
+         * @see com.android.internal.inputmethod.StartInputFlags#WINDOW_GAINED_FOCUS
+         */
+        private final boolean mIsStartInputByWindowGainFocus;
 
         /**
-         * Set if the client has asked for the input method to be shown.
+         * The type of tool that was used to click editor.
+         *
+         * @see MotionEvent#getToolType
          */
+        @MotionEvent.ToolType
+        private final int mToolType;
+
+        /** Whether the client of the window requested the IME to be visible. */
         @GuardedBy("ImfLock.class")
         private boolean mRequestedImeVisible;
 
@@ -827,6 +824,18 @@ public final class ImeVisibilityStateComputer {
         private int mImeDisplayId = DEFAULT_DISPLAY;
 
         @AnyThread
+        @SoftInputModeFlags
+        int getSoftInputModeState() {
+            return mSoftInputModeState;
+        }
+
+        @AnyThread
+        @WindowManager.LayoutParams.Flags
+        int getWindowFlags() {
+            return mWindowFlags;
+        }
+
+        @AnyThread
         boolean hasImeFocusChanged() {
             return mImeFocusChanged;
         }
@@ -837,33 +846,14 @@ public final class ImeVisibilityStateComputer {
         }
 
         @AnyThread
-        boolean isStartInputByGainFocus() {
-            return mIsStartInputByGainFocus;
+        boolean isStartInputByWindowGainFocus() {
+            return mIsStartInputByWindowGainFocus;
         }
 
         @AnyThread
-        int getSoftInputModeState() {
-            return mSoftInputModeState;
-        }
-
-        @AnyThread
-        int getWindowFlags() {
-            return mWindowFlags;
-        }
-
-        @AnyThread
+        @MotionEvent.ToolType
         int getToolType() {
             return mToolType;
-        }
-
-        @GuardedBy("ImfLock.class")
-        private void setImeDisplayId(int imeDisplayId) {
-            mImeDisplayId = imeDisplayId;
-        }
-
-        @GuardedBy("ImfLock.class")
-        int getImeDisplayId() {
-            return mImeDisplayId;
         }
 
         @GuardedBy("ImfLock.class")
@@ -877,7 +867,7 @@ public final class ImeVisibilityStateComputer {
         }
 
         @GuardedBy("ImfLock.class")
-        void setRequestImeToken(IBinder token) {
+        void setRequestImeToken(@NonNull IBinder token) {
             mRequestImeToken = token;
         }
 
@@ -886,15 +876,28 @@ public final class ImeVisibilityStateComputer {
             return mRequestImeToken;
         }
 
+        @GuardedBy("ImfLock.class")
+        private void setImeDisplayId(int imeDisplayId) {
+            mImeDisplayId = imeDisplayId;
+        }
+
+        @GuardedBy("ImfLock.class")
+        int getImeDisplayId() {
+            return mImeDisplayId;
+        }
+
         @Override
         public String toString() {
-            return "ImeTargetWindowState{ imeToken " + mRequestImeToken
-                    + " imeFocusChanged " + mImeFocusChanged
-                    + " hasEditorFocused " + mHasFocusedEditor
-                    + " requestedImeVisible " + mRequestedImeVisible
-                    + " imeDisplayId " + mImeDisplayId
+            return "ImeTargetWindowState{"
                     + " softInputModeState " + softInputModeToString(mSoftInputModeState)
-                    + " isStartInputByGainFocus " + mIsStartInputByGainFocus
+                    + " windowFlags: " + Integer.toHexString(mWindowFlags)
+                    + " imeFocusChanged " + mImeFocusChanged
+                    + " hasFocusedEditor " + mHasFocusedEditor
+                    + " isStartInputByWindowGainFocus " + mIsStartInputByWindowGainFocus
+                    + " toolType: " + mToolType
+                    + " requestedImeVisible " + mRequestedImeVisible
+                    + " requestImeToken " + mRequestImeToken
+                    + " imeDisplayId " + mImeDisplayId
                     + "}";
         }
     }

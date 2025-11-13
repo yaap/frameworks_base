@@ -20,12 +20,11 @@ import com.android.internal.util.ScreenshotRequest
 import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.display.data.repository.FakeDisplayRepository
-import com.android.systemui.display.data.repository.FakeFocusedDisplayRepository
 import com.android.systemui.display.data.repository.display
+import com.android.systemui.screenshot.proxy.ScreenshotProxy
 import com.android.systemui.util.mockito.any
 import com.android.systemui.util.mockito.eq
 import com.android.systemui.util.mockito.kotlinArgumentCaptor as ArgumentCaptor
-import com.android.systemui.util.mockito.mock
 import com.android.systemui.util.mockito.whenever
 import com.google.common.truth.Truth.assertThat
 import java.lang.IllegalStateException
@@ -41,12 +40,15 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoMoreInteractions
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.stub
 
 @RunWith(AndroidJUnit4::class)
 @SmallTest
 class TakeScreenshotExecutorTest : SysuiTestCase() {
 
-    private val controller = mock<LegacyScreenshotController>()
+    private val controller = mock<ScreenshotController>()
     private val notificationsController0 = mock<ScreenshotNotificationsController>()
     private val notificationsController1 = mock<ScreenshotNotificationsController>()
     private val controllerFactory = mock<InteractiveScreenshotHandler.Factory>()
@@ -56,10 +58,15 @@ class TakeScreenshotExecutorTest : SysuiTestCase() {
     private val fakeDisplayRepository = FakeDisplayRepository()
     private val requestProcessor = FakeRequestProcessor()
     private val topComponent = ComponentName(mContext, TakeScreenshotExecutorTest::class.java)
-    private val testScope = TestScope(UnconfinedTestDispatcher())
+    private val dispatcher = UnconfinedTestDispatcher()
+    private val testScope = TestScope(dispatcher)
     private val eventLogger = UiEventLoggerFake()
     private val headlessHandler = mock<HeadlessScreenshotHandler>()
-    private val focusedDisplayRepository = FakeFocusedDisplayRepository()
+
+    private val screenshotProxy =
+        mock<ScreenshotProxy> {
+            onBlocking { getFocusedDisplay() } doReturn Display.DEFAULT_DISPLAY
+        }
 
     private val screenshotExecutor =
         TakeScreenshotExecutorImpl(
@@ -70,7 +77,8 @@ class TakeScreenshotExecutorTest : SysuiTestCase() {
             eventLogger,
             notificationControllerFactory,
             headlessHandler,
-            focusedDisplayRepository,
+            screenshotProxy,
+            dispatcher,
         )
 
     @Before
@@ -318,7 +326,7 @@ class TakeScreenshotExecutorTest : SysuiTestCase() {
             val displayId = 1
             setDisplays(display(TYPE_INTERNAL, id = 0), display(TYPE_EXTERNAL, id = displayId))
             val onSaved = { _: Uri? -> }
-            focusedDisplayRepository.setDisplayId(displayId)
+            screenshotProxy.stub { onBlocking { getFocusedDisplay() } doReturn displayId }
 
             screenshotExecutor.executeScreenshots(
                 createScreenshotRequest(
@@ -345,7 +353,9 @@ class TakeScreenshotExecutorTest : SysuiTestCase() {
                 display(TYPE_INTERNAL, id = Display.DEFAULT_DISPLAY),
                 display(TYPE_EXTERNAL, id = 1),
             )
-            focusedDisplayRepository.setDisplayId(5) // invalid display
+            screenshotProxy.stub {
+                onBlocking { getFocusedDisplay() } doReturn 5 // invalid display
+            }
             val onSaved = { _: Uri? -> }
             screenshotExecutor.executeScreenshots(
                 createScreenshotRequest(
@@ -626,6 +636,48 @@ class TakeScreenshotExecutorTest : SysuiTestCase() {
 
             screenshotExecutor.executeScreenshots(createScreenshotRequest(), onSaved, callback)
             assertThat(onSavedCallCount).isEqualTo(1)
+
+            screenshotExecutor.onDestroy()
+        }
+
+    @Test
+    @EnableFlags(Flags.FLAG_SCREENSHOT_MULTIDISPLAY_FOCUS_CHANGE)
+    fun executeScreenshots_consecutiveRequestsOnDifferentDisplays() =
+        testScope.runTest {
+            val secondaryDisplay = display(TYPE_EXTERNAL, id = 1)
+            var focusedDisplay = Display.DEFAULT_DISPLAY
+            setDisplays(display(TYPE_INTERNAL, id = Display.DEFAULT_DISPLAY), secondaryDisplay)
+            screenshotProxy.stub {
+                onBlocking { getFocusedDisplay() }.thenAnswer { focusedDisplay }
+            }
+
+            val secondaryController = mock<ScreenshotController>()
+            whenever(controllerFactory.create(eq(secondaryDisplay))).thenReturn(secondaryController)
+
+            screenshotExecutor.executeScreenshots(
+                createScreenshotRequest(
+                    source = WindowManager.ScreenshotSource.SCREENSHOT_KEY_OTHER
+                ),
+                { _: Uri? -> },
+                callback,
+            )
+
+            verify(controller).handleScreenshot(any(), any(), any())
+            verify(secondaryController, never()).handleScreenshot(any(), any(), any())
+
+            // Now input focus moves to secondary display.
+            focusedDisplay = secondaryDisplay.displayId
+            screenshotExecutor.executeScreenshots(
+                createScreenshotRequest(
+                    source = WindowManager.ScreenshotSource.SCREENSHOT_KEY_OTHER
+                ),
+                { _: Uri? -> },
+                callback,
+            )
+
+            // Destroy the old controller, send screenshot to the secondary display one.
+            verify(controller).onDestroy()
+            verify(secondaryController).handleScreenshot(any(), any(), any())
 
             screenshotExecutor.onDestroy()
         }

@@ -31,9 +31,11 @@ import com.android.systemui.communal.posturing.data.model.PositionState
 import com.android.systemui.communal.posturing.data.repository.fake
 import com.android.systemui.communal.posturing.data.repository.posturingRepository
 import com.android.systemui.communal.posturing.domain.interactor.advanceTimeBySlidingWindowAndRun
+import com.android.systemui.communal.posturing.shared.model.ConfidenceLevel
 import com.android.systemui.dock.DockManager
 import com.android.systemui.dock.fakeDockManager
 import com.android.systemui.kosmos.Kosmos
+import com.android.systemui.kosmos.advanceTimeBy
 import com.android.systemui.kosmos.collectLastValue
 import com.android.systemui.kosmos.runTest
 import com.android.systemui.kosmos.useUnconfinedTestDispatcher
@@ -42,6 +44,7 @@ import com.android.systemui.user.data.repository.FakeUserRepository.Companion.MA
 import com.android.systemui.user.data.repository.fakeUserRepository
 import com.android.systemui.util.settings.fakeSettings
 import com.google.common.truth.Truth.assertThat
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
@@ -50,6 +53,7 @@ import org.junit.runner.RunWith
 @SmallTest
 @RunWith(AndroidJUnit4::class)
 @EnableFlags(FLAG_GLANCEABLE_HUB_V2)
+@android.platform.test.annotations.EnabledOnRavenwood
 class CommunalAutoOpenInteractorTest : SysuiTestCase() {
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
 
@@ -134,8 +138,8 @@ class CommunalAutoOpenInteractorTest : SysuiTestCase() {
             batteryRepository.fake.setDevicePluggedIn(true)
             posturingRepository.fake.emitPositionState(
                 PositionState(
-                    stationary = PositionState.StationaryState.Stationary(confidence = 1f),
-                    orientation = PositionState.OrientationState.NotPostured(confidence = 1f),
+                    stationary = ConfidenceLevel.Positive(confidence = 1f),
+                    orientation = ConfidenceLevel.Negative(confidence = 1f),
                 )
             )
 
@@ -145,10 +149,11 @@ class CommunalAutoOpenInteractorTest : SysuiTestCase() {
                     SuppressionReason.ReasonWhenToAutoShow(FEATURE_AUTO_OPEN or FEATURE_MANUAL_OPEN)
                 )
 
+            advanceTimeBy(1.milliseconds)
             posturingRepository.fake.emitPositionState(
                 PositionState(
-                    stationary = PositionState.StationaryState.Stationary(confidence = 1f),
-                    orientation = PositionState.OrientationState.Postured(confidence = 1f),
+                    stationary = ConfidenceLevel.Positive(confidence = 1f),
+                    orientation = ConfidenceLevel.Positive(confidence = 1f),
                 )
             )
             advanceTimeBySlidingWindowAndRun()

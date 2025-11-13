@@ -38,7 +38,6 @@ import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.app.tracing.traceSection
 import com.android.keyguard.KeyguardViewController
 import com.android.systemui.Dumpable
-import com.android.systemui.Flags.mediaControlsLockscreenShadeBugFix
 import com.android.systemui.communal.ui.viewmodel.CommunalTransitionViewModel
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
@@ -47,6 +46,8 @@ import com.android.systemui.dreams.DreamOverlayStateController
 import com.android.systemui.dump.DumpManager
 import com.android.systemui.keyguard.WakefulnessLifecycle
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
+import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
+import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.media.controls.domain.pipeline.MediaDataManager
 import com.android.systemui.media.controls.ui.view.MediaHost
 import com.android.systemui.media.dream.MediaDreamComplication
@@ -114,6 +115,7 @@ constructor(
     private val keyguardViewController: KeyguardViewController,
     private val dreamOverlayStateController: DreamOverlayStateController,
     private val keyguardInteractor: KeyguardInteractor,
+    private val keyguardTransitionInteractor: KeyguardTransitionInteractor,
     communalTransitionViewModel: CommunalTransitionViewModel,
     @ShadeDisplayAware configurationController: ConfigurationController,
     wakefulnessLifecycle: WakefulnessLifecycle,
@@ -260,9 +262,9 @@ constructor(
             desiredLocation == LOCATION_COMMUNAL_HUB ||
                 (previousLocation == LOCATION_COMMUNAL_HUB && desiredLocation == LOCATION_QS)
 
-    /** Is there any active media or recommendation in the carousel? */
-    private var hasActiveMediaOrRecommendation: Boolean = false
-        get() = mediaManager.hasActiveMediaOrRecommendation()
+    /** Is there any active media in the carousel? */
+    private var hasActiveMedia: Boolean = false
+        get() = mediaManager.hasActiveMedia()
 
     /** Are we currently waiting on an animation to start? */
     private var animationPending: Boolean = false
@@ -458,6 +460,9 @@ constructor(
     /** Is either shade or QS fully expanded */
     private var isAnyShadeFullyExpanded: Boolean = false
 
+    /** Is lockscreen visible */
+    private var isOnLockscreen: Boolean = false
+
     /** Is the communal UI showing and not dreaming */
     private var onCommunalNotDreaming: Boolean = false
 
@@ -494,6 +499,10 @@ constructor(
         } else {
             return (crossFadeProgress - 0.5f) / 0.5f
         }
+    }
+
+    fun onQsHeightUpdated() {
+        updateTargetState()
     }
 
     init {
@@ -609,19 +618,27 @@ constructor(
         }
 
         coroutineScope.launch {
+            keyguardTransitionInteractor.currentKeyguardState.collect {
+                val currentState = it == KeyguardState.LOCKSCREEN
+                if (isOnLockscreen != currentState) {
+                    isOnLockscreen = currentState
+                    updateUserVisibility()
+                }
+            }
+        }
+
+        coroutineScope.launch {
             keyguardInteractor.primaryBouncerShowing.collect {
                 isPrimaryBouncerShowing = it
                 updateUserVisibility()
             }
         }
 
-        if (mediaControlsLockscreenShadeBugFix()) {
-            coroutineScope.launch {
-                shadeInteractor.shadeExpansion.collect { expansion ->
-                    if (expansion >= 1f || expansion <= 0f) {
-                        // Shade has fully expanded or collapsed: force transition amount update
-                        setTransitionToFullShadeAmount(expansion)
-                    }
+        coroutineScope.launch {
+            shadeInteractor.shadeExpansion.collect { expansion ->
+                if (expansion >= 1f || expansion <= 0f) {
+                    // Shade has fully expanded or collapsed: force transition amount update
+                    setTransitionToFullShadeAmount(expansion)
                 }
             }
         }
@@ -1030,7 +1047,7 @@ constructor(
     fun isCurrentlyInGuidedTransformation(): Boolean {
         return hasValidStartAndEndLocations() &&
             getTransformationProgress() >= 0 &&
-            (areGuidedTransitionHostsVisible() || !hasActiveMediaOrRecommendation)
+            (areGuidedTransitionHostsVisible() || !hasActiveMedia)
     }
 
     private fun hasValidStartAndEndLocations(): Boolean {
@@ -1166,7 +1183,7 @@ constructor(
 
             var newLocation = resolveLocationForFading()
             // Don't use the overlay when fading or when we don't have active media
-            var canUseOverlay = !isCurrentlyFading() && hasActiveMediaOrRecommendation
+            var canUseOverlay = !isCurrentlyFading() && hasActiveMedia
             if (isCrossFadeAnimatorRunning) {
                 if (
                     getHost(newLocation)?.visible == true &&
@@ -1337,29 +1354,19 @@ constructor(
     private fun updateUserVisibility() {
         val shadeVisible =
             isLockScreenVisibleToUser() ||
-                isLockScreenShadeVisibleToUser() ||
                 isHomeScreenShadeVisibleToUser() ||
                 isGlanceableHubVisibleToUser()
-        val mediaVisible = qsExpanded || hasActiveMediaOrRecommendation
+        val mediaVisible = qsExpanded || hasActiveMedia
         logger.logUserVisibilityChange(shadeVisible, mediaVisible)
-        mediaCarouselController.mediaCarouselScrollHandler.visibleToUser =
-            shadeVisible && mediaVisible
+        val carouselVisible = shadeVisible && mediaVisible
+        mediaCarouselController.mediaCarouselScrollHandler.visibleToUser = carouselVisible
+        if (carouselVisible) {
+            mediaCarouselController.onCarouselVisibleToUser()
+        }
     }
 
     private fun isLockScreenVisibleToUser(): Boolean {
-        return !statusBarStateController.isDozing &&
-            !keyguardViewController.isBouncerShowing &&
-            statusBarStateController.state == StatusBarState.KEYGUARD &&
-            allowMediaPlayerOnLockScreen &&
-            statusBarStateController.isExpanded &&
-            !qsExpanded
-    }
-
-    private fun isLockScreenShadeVisibleToUser(): Boolean {
-        return !statusBarStateController.isDozing &&
-            !keyguardViewController.isBouncerShowing &&
-            (statusBarStateController.state == StatusBarState.SHADE_LOCKED ||
-                (statusBarStateController.state == StatusBarState.KEYGUARD && qsExpanded))
+        return isOnLockscreen && allowMediaPlayerOnLockScreen
     }
 
     private fun isHomeScreenShadeVisibleToUser(): Boolean {
@@ -1382,6 +1389,14 @@ constructor(
             println("previous location: $previousLocation")
             println("bounds: $currentBounds, target $targetBounds")
             println("clipping: $currentClipping, target $targetClipping")
+            println("qsExpansion: $qsExpansion")
+            println("Host bounds:")
+            mediaHosts.forEachIndexed { location, host ->
+                println(
+                    "\t$location: bounds ${host?.currentBounds}" +
+                        ", clipping ${host?.currentClipping}"
+                )
+            }
         }
     }
 

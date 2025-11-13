@@ -25,6 +25,8 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.PixelFormat;
 import android.os.Binder;
+import android.view.DragEvent;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.SurfaceControl;
 import android.view.SurfaceControlViewHost;
@@ -57,7 +59,24 @@ public class OffscreenTouchZone {
     private final Runnable mOnClickRunnable;
     private SurfaceControlViewHost mViewHost;
     private SurfaceControl mLeash;
-
+    private GestureDetector mGestureDetector;
+    private final GestureDetector.SimpleOnGestureListener mTapDetector =
+            new GestureDetector.SimpleOnGestureListener() {
+                @Override
+                public boolean onSingleTapUp(MotionEvent e) {
+                    mOnClickRunnable.run();
+                    return true;
+                }
+            };
+    private final View.OnDragListener mDragListener = new View.OnDragListener() {
+        @Override
+        public boolean onDrag(View view, DragEvent dragEvent) {
+            if (dragEvent.getAction() == DragEvent.ACTION_DRAG_ENTERED) {
+                mOnClickRunnable.run();
+            }
+            return false;
+        }
+    };
     /**
      * @param isTopLeft Whether the desired touch zone will be on the top/left or the bottom/right
      *                  screen edge.
@@ -72,6 +91,7 @@ public class OffscreenTouchZone {
     public void inflate(Context context, Configuration config, SyncTransactionQueue syncQueue,
             SurfaceControl stageRoot) {
         View touchableView = new View(context);
+        mGestureDetector = new GestureDetector(context, mTapDetector);
         touchableView.setOnTouchListener(new OffscreenTouchListener());
 
         // Set WM flags, tokens, and sizing on the touchable view. It will be the same size as its
@@ -89,6 +109,7 @@ public class OffscreenTouchZone {
         lp.setTitle(TAG);
         lp.privateFlags |= PRIVATE_FLAG_NO_MOVE_ANIMATION | PRIVATE_FLAG_TRUSTED_OVERLAY;
         touchableView.setLayoutParams(lp);
+        touchableView.setOnDragListener(mDragListener);
 
         // Create a new leash under our stage leash.
         final SurfaceControl.Builder builder = new SurfaceControl.Builder()
@@ -131,16 +152,11 @@ public class OffscreenTouchZone {
 
     /**
      * Listens for touch events.
-     * TODO (b/349828130): Update for mouse click events as well, and possibly keyboard?
      */
     private class OffscreenTouchListener implements View.OnTouchListener {
         @Override
         public boolean onTouch(View view, MotionEvent motionEvent) {
-            if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
-                mOnClickRunnable.run();
-                return true;
-            }
-            return false;
+            return mGestureDetector.onTouchEvent(motionEvent);
         }
     }
 

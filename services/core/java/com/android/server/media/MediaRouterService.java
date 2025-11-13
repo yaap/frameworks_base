@@ -50,6 +50,7 @@ import android.media.RouteDiscoveryPreference;
 import android.media.RouteListingPreference;
 import android.media.RoutingSessionInfo;
 import android.media.SuggestedDeviceInfo;
+import android.media.session.MediaSession;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
@@ -199,6 +200,7 @@ public final class MediaRouterService extends IMediaRouterService.Stub
                         },
                         TAG);
         updateRunningUserAndProfiles(ActivityManager.getCurrentUser());
+        mService2.systemRunning();
     }
 
     @Override
@@ -421,12 +423,22 @@ public final class MediaRouterService extends IMediaRouterService.Stub
     // Binder call
     @RequiresPermission(Manifest.permission.PACKAGE_USAGE_STATS)
     @Override
-    public boolean showMediaOutputSwitcherWithRouter2(@NonNull String packageName) {
+    public boolean showMediaOutputSwitcherWithRouter2(@NonNull String packageName,
+            @Nullable MediaSession.Token sessionToken) {
         int uid = Binder.getCallingUid();
         if (!validatePackageName(uid, packageName)) {
             throw new SecurityException("packageName must match the calling identity");
         }
-        return mService2.showMediaOutputSwitcherWithRouter2(packageName);
+        if (sessionToken != null) {
+            if (Flags.enableRouteVisibilityControlApi()) {
+                if (uid != sessionToken.getUid()) {
+                    throw new SecurityException("sessionToken uid must match the calling uid");
+                }
+            } else {
+                sessionToken = null;
+            }
+        }
+        return mService2.showMediaOutputSwitcherWithRouter2(packageName, sessionToken);
     }
 
     // Binder call
@@ -535,7 +547,7 @@ public final class MediaRouterService extends IMediaRouterService.Stub
 
     // Binder call
     @Override
-    @Nullable
+    @NonNull
     public Map<String, List<SuggestedDeviceInfo>> getDeviceSuggestionsWithRouter2(
             IMediaRouter2 router) {
         return mService2.getDeviceSuggestionsWithRouter2(router);
@@ -679,8 +691,11 @@ public final class MediaRouterService extends IMediaRouterService.Stub
     @RequiresPermission(Manifest.permission.PACKAGE_USAGE_STATS)
     @Override
     public boolean showMediaOutputSwitcherWithProxyRouter(
-            @NonNull IMediaRouter2Manager proxyRouter) {
-        return mService2.showMediaOutputSwitcherWithProxyRouter(proxyRouter);
+            @NonNull IMediaRouter2Manager proxyRouter, @Nullable MediaSession.Token sessionToken) {
+        if (!Flags.enableRouteVisibilityControlApi()) {
+            sessionToken = null;
+        }
+        return mService2.showMediaOutputSwitcherWithProxyRouter(proxyRouter, sessionToken);
     }
 
     // Binder call
@@ -693,10 +708,16 @@ public final class MediaRouterService extends IMediaRouterService.Stub
 
     // Binder call
     @Override
-    @Nullable
+    @NonNull
     public Map<String, List<SuggestedDeviceInfo>> getDeviceSuggestionsWithManager(
             IMediaRouter2Manager manager) {
         return mService2.getDeviceSuggestionsWithManager(manager);
+    }
+
+    // Binder call
+    @Override
+    public void onDeviceSuggestionRequestedWithManager(IMediaRouter2Manager manager) {
+        mService2.onDeviceSuggestionRequestedWithManager(manager);
     }
 
     void restoreBluetoothA2dp() {

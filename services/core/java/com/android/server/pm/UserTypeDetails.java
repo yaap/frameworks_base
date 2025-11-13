@@ -67,6 +67,8 @@ public final class UserTypeDetails {
     /**
      * Maximum number of this user type allowed on the device.
      * Use {@link #UNLIMITED_NUMBER_OF_USERS} to indicate that there is no hard limit.
+     * Note that all user types are also implicitly bound
+     * by {@link UserManager#getMaxSupportedUsers()}.
      */
     private final int mMaxAllowed;
 
@@ -229,6 +231,8 @@ public final class UserTypeDetails {
     /**
      * Returns the maximum number of this user type allowed on the device.
      * <p>Returns {@link #UNLIMITED_NUMBER_OF_USERS} to indicate that there is no hard limit.
+     * Note that all user types are also implicitly bound
+     * by {@link UserManager#getMaxSupportedUsers()}.
      */
     public int getMaxAllowed() {
         return mMaxAllowed;
@@ -439,7 +443,7 @@ public final class UserTypeDetails {
         private String mName; // This MUST be explicitly set.
         private int mBaseType; // This MUST be explicitly set.
         private int mMaxAllowed = UNLIMITED_NUMBER_OF_USERS;
-        private int mMaxAllowedPerParent = UNLIMITED_NUMBER_OF_USERS;
+        private int mMaxAllowedPerParent = 0;
         private int mDefaultUserInfoPropertyFlags = 0;
         private @Nullable Bundle mDefaultRestrictions = null;
         private @Nullable Bundle mDefaultSystemSettings = null;
@@ -589,16 +593,16 @@ public final class UserTypeDetails {
             Preconditions.checkArgument(mName != null,
                     "Cannot create a UserTypeDetails with no name.");
             Preconditions.checkArgument(hasValidBaseType(),
-                    "UserTypeDetails " + mName + " has invalid baseType: " + mBaseType);
+                    "UserTypeDetails %s has invalid baseType: %d", mName, mBaseType);
             Preconditions.checkArgument(hasValidPropertyFlags(),
-                    "UserTypeDetails " + mName + " has invalid flags: "
-                            + Integer.toHexString(mDefaultUserInfoPropertyFlags));
+                    "UserTypeDetails %s has invalid flags: %s", mName,
+                            Integer.toHexString(mDefaultUserInfoPropertyFlags));
             checkSystemAndMainUserPreconditions();
             if (hasBadge()) {
                 Preconditions.checkArgument(mBadgeLabels != null && mBadgeLabels.length != 0,
-                        "UserTypeDetails " + mName + " has badge but no badgeLabels.");
+                        "UserTypeDetails %s has badge but no badgeLabels.", mName);
                 Preconditions.checkArgument(mBadgeColors != null && mBadgeColors.length != 0,
-                        "UserTypeDetails " + mName + " has badge but no badgeColors.");
+                        "UserTypeDetails %s has badge but no badgeColors.", mName);
             }
             if (!isProfile()) {
                 Preconditions.checkArgument(mDefaultCrossProfileIntentFilters == null
@@ -664,11 +668,11 @@ public final class UserTypeDetails {
             Preconditions.checkArgument(
                     ((mBaseType & UserInfo.FLAG_SYSTEM) != 0) ==
                             ((mDefaultUserInfoPropertyFlags & UserInfo.FLAG_PRIMARY) != 0),
-                    "UserTypeDetails " + mName + " cannot be SYSTEM xor PRIMARY.");
+                    "UserTypeDetails %s cannot be SYSTEM xor PRIMARY.", mName);
             // At most one MainUser is ever allowed at a time.
             Preconditions.checkArgument(
                     ((mDefaultUserInfoPropertyFlags & UserInfo.FLAG_MAIN) == 0) || mMaxAllowed == 1,
-                    "UserTypeDetails " + mName + " must not sanction more than one MainUser.");
+                    "UserTypeDetails %s must not sanction more than one MainUser.", mName);
         }
     }
 

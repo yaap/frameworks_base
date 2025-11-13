@@ -80,6 +80,8 @@ import static android.view.WindowLayoutParamsProto.WINDOW_ANIMATIONS;
 import static android.view.WindowLayoutParamsProto.X;
 import static android.view.WindowLayoutParamsProto.Y;
 
+import static com.android.server.display.feature.flags.Flags.FLAG_ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT;
+
 import android.Manifest.permission;
 import android.annotation.CallbackExecutor;
 import android.annotation.FlaggedApi;
@@ -634,6 +636,14 @@ public interface WindowManager extends ViewManager {
     int TRANSIT_FLAG_AVOID_MOVE_TO_FRONT = (1 << 16); // 0x10000
 
     /**
+     * Transition flag: Indicates that the transition involves a display level change
+     * (i.e, disconnect).
+     * @hide
+     */
+    int TRANSIT_FLAG_DISPLAY_LEVEL_TRANSITION = (1 << 17); // 0x20000
+
+
+    /**
      * @hide
      */
     @IntDef(flag = true, prefix = { "TRANSIT_FLAG_" }, value = {
@@ -654,6 +664,7 @@ public interface WindowManager extends ViewManager {
             TRANSIT_FLAG_PHYSICAL_DISPLAY_SWITCH,
             TRANSIT_FLAG_AOD_APPEARING,
             TRANSIT_FLAG_AVOID_MOVE_TO_FRONT,
+            TRANSIT_FLAG_DISPLAY_LEVEL_TRANSITION
     })
     @Retention(RetentionPolicy.SOURCE)
     @interface TransitionFlags {}
@@ -1241,9 +1252,8 @@ public interface WindowManager extends ViewManager {
      * &lt;/application&gt;
      * </pre>
      *
-     * @hide
      */
-    //TODO(b/394590412): Make this property public.
+    @FlaggedApi(Flags.FLAG_ENABLE_CAMERA_COMPAT_FOR_DESKTOP_WINDOWING_OPT_OUT_API)
     String PROPERTY_CAMERA_COMPAT_ALLOW_SIMULATE_REQUESTED_ORIENTATION =
             "android.window.PROPERTY_CAMERA_COMPAT_ALLOW_SIMULATE_REQUESTED_ORIENTATION";
 
@@ -1493,7 +1503,7 @@ public interface WindowManager extends ViewManager {
      * <pre>
      * &lt;application&gt;
      *   &lt;property
-     *     android:name="android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE"
+     *     android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
      *     android:value="false"/&gt;
      * &lt;/application&gt;
      * </pre>or
@@ -1869,6 +1879,19 @@ public interface WindowManager extends ViewManager {
      */
     @TestApi
     default boolean shouldShowSystemDecors(int displayId) {
+        return false;
+    }
+
+    /**
+     * Indicates that the display is eligible for the desktop mode from WindowManager's perspective.
+     *
+     * @param displayId The id of the display.
+     * @return {@code true} if the display is eligible for the desktop mode from WindowManager's
+     * perspective.
+     * @hide
+     */
+    @FlaggedApi(FLAG_ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT)
+    default boolean isEligibleForDesktopMode(int displayId) {
         return false;
     }
 
@@ -2725,7 +2748,9 @@ public interface WindowManager extends ViewManager {
                 TYPE_APPLICATION_OVERLAY,
                 TYPE_ACCESSIBILITY_MAGNIFICATION_OVERLAY,
                 TYPE_NOTIFICATION_SHADE,
-                TYPE_STATUS_BAR_ADDITIONAL
+                TYPE_STATUS_BAR_ADDITIONAL,
+                // TODO(b/398759994): Rename to TYPE_INVALID
+                INVALID_WINDOW_TYPE,
         })
         @Retention(RetentionPolicy.SOURCE)
         public @interface WindowType {}
@@ -2748,6 +2773,16 @@ public interface WindowManager extends ViewManager {
                     return true;
             }
             return false;
+        }
+
+        /**
+         * Returns {@code true} if the given {@code type} is a sub-window type.
+         *
+         * @hide
+         */
+        public static boolean isSubWindowType(@WindowType int type) {
+            return (type >= FIRST_SUB_WINDOW && type <= LAST_SUB_WINDOW)
+                    || type == TYPE_STATUS_BAR_SUB_PANEL;
         }
 
         /** @deprecated this is ignored, this value is set automatically when needed. */
@@ -3569,9 +3604,8 @@ public interface WindowManager extends ViewManager {
         public static final int PRIVATE_FLAG_EXCLUDE_FROM_SCREEN_MAGNIFICATION = 1 << 21;
 
         /**
-         * Flag to prevent the window from being magnified by the accessibility magnifier.
+         * Flag to prevent the window from being magnified by the accessibility magnification.
          *
-         * TODO(b/190623172): This is a temporary solution and need to find out another way instead.
          * @hide
          */
         public static final int PRIVATE_FLAG_NOT_MAGNIFIABLE = 1 << 22;
@@ -3605,6 +3639,15 @@ public interface WindowManager extends ViewManager {
          * @hide
          */
         public static final int PRIVATE_FLAG_OPT_OUT_EDGE_TO_EDGE = 1 << 26;
+
+        /**
+         * Flag to indicate that this window is part of input method for being magnified by the
+         * accessibility magnification
+         *
+         * TODO(b/190623172): This is a temporary solution and need to find out another way instead.
+         * @hide
+         */
+        public static final int PRIVATE_FLAG_INPUT_METHOD_WINDOW = 1 << 27;
 
         /**
          * Flag to indicate that the window is controlling how it fits window insets on its own.
@@ -3676,6 +3719,7 @@ public interface WindowManager extends ViewManager {
                 SYSTEM_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS,
                 PRIVATE_FLAG_IS_ROUNDED_CORNERS_OVERLAY,
                 PRIVATE_FLAG_EXCLUDE_FROM_SCREEN_MAGNIFICATION,
+                PRIVATE_FLAG_INPUT_METHOD_WINDOW,
                 PRIVATE_FLAG_NOT_MAGNIFIABLE,
                 PRIVATE_FLAG_COLOR_SPACE_AGNOSTIC,
                 PRIVATE_FLAG_CONSUME_IME_INSETS,
@@ -3771,6 +3815,10 @@ public interface WindowManager extends ViewManager {
                         mask = PRIVATE_FLAG_EXCLUDE_FROM_SCREEN_MAGNIFICATION,
                         equals = PRIVATE_FLAG_EXCLUDE_FROM_SCREEN_MAGNIFICATION,
                         name = "EXCLUDE_FROM_SCREEN_MAGNIFICATION"),
+                @ViewDebug.FlagToString(
+                        mask = PRIVATE_FLAG_INPUT_METHOD_WINDOW,
+                        equals = PRIVATE_FLAG_INPUT_METHOD_WINDOW,
+                        name = "INPUT_METHOD_WINDOW"),
                 @ViewDebug.FlagToString(
                         mask = PRIVATE_FLAG_NOT_MAGNIFIABLE,
                         equals = PRIVATE_FLAG_NOT_MAGNIFIABLE,
@@ -4546,6 +4594,20 @@ public interface WindowManager extends ViewManager {
         public static final int INPUT_FEATURE_SENSITIVE_FOR_PRIVACY = 1 << 3;
 
         /**
+         * Input feature used to indicate that this window is display topology aware.
+         * <p>
+         * Using this flag will allow window to receive gestures that can cross display boundaries.
+         * Such windows can receive input event stream containing events with varying displayIds
+         * in the corresponding coordinate space when the cursor crosses display boundary.
+         * <p>
+         *
+         * @hide
+         */
+        @RequiresPermission(permission.MANAGE_DISPLAYS)
+        public static final int
+                INPUT_FEATURE_DISPLAY_TOPOLOGY_AWARE = 1 << 4;
+
+        /**
          * An internal annotation for flags that can be specified to {@link #inputFeatures}.
          *
          * NOTE: These are not the same as {@link android.os.InputConfig} flags.
@@ -4557,7 +4619,8 @@ public interface WindowManager extends ViewManager {
                 INPUT_FEATURE_NO_INPUT_CHANNEL,
                 INPUT_FEATURE_DISABLE_USER_ACTIVITY,
                 INPUT_FEATURE_SPY,
-                INPUT_FEATURE_SENSITIVE_FOR_PRIVACY
+                INPUT_FEATURE_SENSITIVE_FOR_PRIVACY,
+                INPUT_FEATURE_DISPLAY_TOPOLOGY_AWARE
         })
         public @interface InputFeatureFlags {
         }
@@ -5127,7 +5190,6 @@ public interface WindowManager extends ViewManager {
          * @param desiredHeadroom Desired amount of HDR headroom. Must be in the range of 1.0 (SDR)
          *                        to 10,000.0, or 0.0 to reset to default.
          */
-        @FlaggedApi(com.android.graphics.hwui.flags.Flags.FLAG_LIMITED_HDR)
         public void setDesiredHdrHeadroom(
                 @FloatRange(from = 0.0f, to = 10000.0f) float desiredHeadroom) {
             if (!Float.isFinite(desiredHeadroom)) {
@@ -5146,7 +5208,6 @@ public interface WindowManager extends ViewManager {
          * Get the desired amount of HDR headroom as set by {@link #setDesiredHdrHeadroom(float)}
          * @return The amount of HDR headroom set, or 0 for automatic/default behavior.
          */
-        @FlaggedApi(com.android.graphics.hwui.flags.Flags.FLAG_LIMITED_HDR)
         public float getDesiredHdrHeadroom() {
             return mDesiredHdrHeadroom;
         }
@@ -6247,6 +6308,10 @@ public interface WindowManager extends ViewManager {
                 inputFeatures &= ~INPUT_FEATURE_SPY;
                 features.add("INPUT_FEATURE_SPY");
             }
+            if ((inputFeatures & INPUT_FEATURE_DISPLAY_TOPOLOGY_AWARE) != 0) {
+                inputFeatures &= ~INPUT_FEATURE_DISPLAY_TOPOLOGY_AWARE;
+                features.add("INPUT_FEATURE_DISPLAY_TOPOLOGY_AWARE");
+            }
             if (inputFeatures != 0) {
                 features.add(Integer.toHexString(inputFeatures));
             }
@@ -6750,6 +6815,32 @@ public interface WindowManager extends ViewManager {
     @FlaggedApi(com.android.window.flags.Flags.FLAG_SCREEN_RECORDING_CALLBACKS)
     default void removeScreenRecordingCallback(
             @NonNull Consumer<@ScreenRecordingState Integer> callback) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Sets the parent window to this {@code WindowManager}.
+     * This is necessary to attach sub-windows.
+     *
+     * @param parentWindow the parent window to be attached.
+     *
+     * @see android.window.WindowContext#attachWindow(View)
+     *
+     * @hide
+     */
+    default void setParentWindow(@NonNull Window parentWindow) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Creates a new instance of {@link WindowManager} with {@code parentWindow} attached.
+     *
+     * @param parentWindow the parent window to be attached.
+     * @return a new instance of {@link WindowManager} with {@code parentWindow} attached
+     *
+     * @hide
+     */
+    default WindowManager createLocalWindowManager(@NonNull Window parentWindow) {
         throw new UnsupportedOperationException();
     }
 }

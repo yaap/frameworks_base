@@ -35,6 +35,7 @@ import static android.view.View.INVISIBLE;
 import static android.view.View.LAYOUT_DIRECTION_RTL;
 import static android.view.View.VISIBLE;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+
 import static com.android.internal.jank.InteractionJankMonitor.CUJ_VOLUME_CONTROL;
 import static com.android.internal.jank.InteractionJankMonitor.Configuration.Builder;
 import static com.android.settingslib.flags.Flags.audioSharingDeveloperOption;
@@ -151,7 +152,10 @@ import com.android.systemui.volume.domain.interactor.VolumeDialogInteractor;
 import com.android.systemui.volume.domain.interactor.VolumePanelNavigationInteractor;
 import com.android.systemui.volume.panel.shared.flag.VolumePanelFlag;
 import com.android.systemui.volume.ui.navigation.VolumeNavigator;
+
 import com.google.android.msdl.domain.MSDLPlayer;
+
+import dagger.Lazy;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -159,8 +163,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-
-import dagger.Lazy;
 
 /**
  * Visual presentation of the volume dialog.
@@ -1039,7 +1041,7 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             if (row.stream != AudioSystem.STREAM_ACCESSIBILITY) {
                 row.icon.setOnClickListener(v -> {
                     Events.writeEvent(Events.EVENT_ICON_CLICK, row.stream, row.iconState);
-                    mController.setActiveStream(row.stream);
+                    mController.setActiveStream(row.stream, false);
                     if (row.stream == AudioManager.STREAM_RING) {
                         final boolean hasVibrator = mController.hasVibrator();
                         if (mState.ringerModeInternal == AudioManager.RINGER_MODE_NORMAL) {
@@ -1048,19 +1050,19 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
                             } else {
                                 final boolean wasZero = row.ss.level == 0;
                                 mController.setStreamVolume(stream,
-                                        wasZero ? row.lastAudibleLevel : 0);
+                                        wasZero ? row.lastAudibleLevel : 0, false);
                             }
                         } else {
                             mController.setRingerMode(
                                     AudioManager.RINGER_MODE_NORMAL, false);
                             if (row.ss.level == 0) {
-                                mController.setStreamVolume(stream, 1);
+                                mController.setStreamVolume(stream, 1, false);
                             }
                         }
                     } else {
                         final boolean vmute = row.ss.level == row.ss.levelMin;
                         mController.setStreamVolume(stream,
-                                vmute ? row.lastAudibleLevel : row.ss.levelMin);
+                                vmute ? row.lastAudibleLevel : row.ss.levelMin, false);
                     }
                     row.userAttempt = 0;  // reset the grace period, slider updates immediately
                 });
@@ -1417,7 +1419,7 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
                 } else {
                     newRingerMode = AudioManager.RINGER_MODE_NORMAL;
                     if (ss.level == 0) {
-                        mController.setStreamVolume(AudioManager.STREAM_RING, 1);
+                        mController.setStreamVolume(AudioManager.STREAM_RING, 1, false);
                     }
                 }
 
@@ -1834,8 +1836,8 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             // Always show the stream for audio sharing if it exists.
             if ((volumeDialogAudioSharingFix() || audioSharingDeveloperOption())
                     && row.ss != null
-                    && mContext.getString(R.string.audio_sharing_description)
-                    .equals(row.ss.remoteLabel)) {
+                    && mContext.getString(R.string.volume_dialog_guest_device_volume_description)
+                            .equals(row.ss.remoteLabel)) {
                 return true;
             }
 
@@ -2043,8 +2045,9 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             mDynamic.put(stream, true);
             if (findRow(stream) == null) {
                 if ((volumeDialogAudioSharingFix() || audioSharingDeveloperOption())
-                        && (mContext.getString(R.string.audio_sharing_description)
-                        .equals(ss.remoteLabel))) {
+                        && (mContext.getString(
+                                        R.string.volume_dialog_guest_device_volume_description)
+                                .equals(ss.remoteLabel))) {
                     addRow(
                             stream,
                             R.drawable.ic_volume_media_bt,
@@ -2128,8 +2131,9 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
         }
 
         // update header text
-        Util.setText(row.header, getStreamLabelH(ss));
-        row.slider.setContentDescription(row.header.getText());
+        String label = getStreamLabelH(ss);
+        Util.setText(row.header, label);
+        row.slider.setContentDescription(label);
         mConfigurableTexts.add(row.header, ss.name);
 
         // update icon
@@ -2783,8 +2787,8 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             if (mRow.ss.level != userLevel || mRow.ss.muted && userLevel > 0) {
                 mRow.userAttempt = SystemClock.uptimeMillis();
                 if (mRow.requestedLevel != userLevel) {
-                    mController.setActiveStream(mRow.stream);
-                    mController.setStreamVolume(mRow.stream, userLevel);
+                    mController.setActiveStream(mRow.stream, false);
+                    mController.setStreamVolume(mRow.stream, userLevel, false);
                     mRow.requestedLevel = userLevel;
                     Events.writeEvent(Events.EVENT_TOUCH_LEVEL_CHANGED, mRow.stream,
                             userLevel);
@@ -2799,7 +2803,7 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             if (mRow.mHapticPlugin != null && mHapticsEnabled) {
                 mRow.mHapticPlugin.onStartTrackingTouch();
             }
-            mController.setActiveStream(mRow.stream);
+            mController.setActiveStream(mRow.stream, false);
             mRow.tracking = true;
         }
 

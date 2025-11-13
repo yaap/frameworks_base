@@ -24,8 +24,6 @@ import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_WALLPAPER;
 import static com.android.server.policy.WindowManagerPolicy.FINISH_LAYOUT_REDO_WALLPAPER;
-import static com.android.server.wm.WindowContainer.AnimationFlags.PARENTS;
-import static com.android.server.wm.WindowContainer.AnimationFlags.TRANSITION;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_SCREENSHOT;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_WALLPAPER;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WITH_CLASS_NAME;
@@ -153,7 +151,7 @@ class WallpaperController {
         } else if (mService.mFlags.mAodTransition
                 && mDisplayContent.isKeyguardLockedOrAodShowing()) {
             if (mService.mPolicy.isKeyguardHostWindow(w.mAttrs)
-                    && w.mTransitionController.isInAodAppearTransition()) {
+                    && w.mTransitionController.isInAodAppearTransition() && w.hasWallpaper()) {
                 if (DEBUG_WALLPAPER) Slog.v(TAG, "Found aod transition wallpaper target: " + w);
                 mFindResults.setWallpaperTarget(w);
                 return true;
@@ -169,12 +167,6 @@ class WallpaperController {
             if (DEBUG_WALLPAPER) Slog.v(TAG, "Found wallpaper target: " + w);
             mFindResults.setWallpaperTarget(w);
             mFindResults.setIsWallpaperTargetForLetterbox(w.hasWallpaperForLetterboxBackground());
-            if (w == mWallpaperTarget && w.isAnimating(TRANSITION | PARENTS)) {
-                // The current wallpaper target is animating, so we'll look behind it for
-                // another possible target and figure out what is going on later.
-                if (DEBUG_WALLPAPER) Slog.v(TAG,
-                        "Win " + w + ": token animating, looking behind.");
-            }
             // While the keyguard is going away, both notification shade and a normal activity such
             // as a launcher can satisfy criteria for a wallpaper target. In this case, we should
             // chose the normal activity, otherwise wallpaper becomes invisible when a new animation
@@ -274,15 +266,6 @@ class WallpaperController {
             if (mWallpaperTokens.get(i).isVisible()) return true;
         }
         return false;
-    }
-
-    void hideDeferredWallpapersIfNeededLegacy() {
-        for (int i = mWallpaperTokens.size() - 1; i >= 0; i--) {
-            final WallpaperWindowToken token = mWallpaperTokens.get(i);
-            if (!token.isVisibleRequested()) {
-                token.commitVisibility(false);
-            }
-        }
     }
 
     void hideWallpapers(final WindowState winGoingAway) {
@@ -736,19 +719,11 @@ class WallpaperController {
 
     void collectTopWallpapers(Transition transition) {
         if (mFindResults.hasTopShowWhenLockedWallpaper()) {
-            if (mService.mFlags.mEnsureWallpaperInTransitions) {
-                transition.collect(mFindResults.mTopWallpaper.mTopShowWhenLockedWallpaper.mToken);
-            } else {
-                transition.collect(mFindResults.mTopWallpaper.mTopShowWhenLockedWallpaper);
-            }
+            transition.collect(mFindResults.mTopWallpaper.mTopShowWhenLockedWallpaper.mToken);
 
         }
         if (mFindResults.hasTopHideWhenLockedWallpaper()) {
-            if (mService.mFlags.mEnsureWallpaperInTransitions) {
-                transition.collect(mFindResults.mTopWallpaper.mTopHideWhenLockedWallpaper.mToken);
-            } else {
-                transition.collect(mFindResults.mTopWallpaper.mTopHideWhenLockedWallpaper);
-            }
+            transition.collect(mFindResults.mTopWallpaper.mTopHideWhenLockedWallpaper.mToken);
         }
     }
 
@@ -874,10 +849,8 @@ class WallpaperController {
             }
         }
 
-        boolean visibleRequested = visible;
-        if (mDisplayContent.mWmService.mFlags.mEnsureWallpaperInTransitions) {
-            visibleRequested = mWallpaperTarget != null && mWallpaperTarget.isVisibleRequested();
-        }
+        final boolean visibleRequested =
+                mWallpaperTarget != null && mWallpaperTarget.isVisibleRequested();
         updateWallpaperTokens(visibleRequested,
                 mService.mFlags.mAodTransition
                         ? mDisplayContent.isKeyguardLockedOrAodShowing()

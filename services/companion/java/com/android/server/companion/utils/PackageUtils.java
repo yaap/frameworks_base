@@ -32,7 +32,6 @@ import android.annotation.UserIdInt;
 import android.app.AppOpsManager;
 import android.app.ecm.EnhancedConfirmationManager;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.FeatureInfo;
 import android.content.pm.PackageInfo;
@@ -55,6 +54,7 @@ import java.util.Set;
  */
 public final class PackageUtils {
 
+    public static final int PACKAGE_NOT_FOUND = -1;
     private static final String TAG = "CDM_PackageUtils";
 
     /**
@@ -193,6 +193,21 @@ public final class PackageUtils {
                     AppOpsManager.OP_ACCESS_RESTRICTED_SETTINGS, uid,
                     packageName, /* attributionTag= */ null, /* message= */ null);
             return mode == AppOpsManager.MODE_ALLOWED || mode == AppOpsManager.MODE_DEFAULT;
+        }
+    }
+
+    /**
+     * Get UID from a packageName. Return -1 if the package is not found.
+     */
+    public static int getUidFromPackageName(int userId, Context context, String packageName) {
+        PackageManager packageManager = context.getPackageManager();
+        try {
+            ApplicationInfo applicationInfo = packageManager.getApplicationInfoAsUser(
+                    packageName, 0, userId);
+            return applicationInfo.uid;
+        } catch (PackageManager.NameNotFoundException e) {
+            Slog.w(TAG, packageName + " is not found");
+            return PACKAGE_NOT_FOUND;
         }
     }
 }

@@ -23,11 +23,11 @@ import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.app.WindowConfiguration.WINDOWING_MODE_MULTI_WINDOW;
 import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
 import static android.app.WindowConfiguration.WINDOWING_MODE_UNDEFINED;
+import static android.view.Display.DEFAULT_DISPLAY;
 
 import static com.android.wm.shell.compatui.impl.CompatUIEventsKt.SIZE_COMPAT_RESTART_BUTTON_APPEARED;
 import static com.android.wm.shell.compatui.impl.CompatUIEventsKt.SIZE_COMPAT_RESTART_BUTTON_CLICKED;
 import static com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_TASK_ORG;
-import static com.android.wm.shell.transition.Transitions.ENABLE_SHELL_TRANSITIONS;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -39,9 +39,9 @@ import android.content.LocusId;
 import android.content.pm.ActivityInfo;
 import android.graphics.Rect;
 import android.os.Binder;
+import android.os.Debug;
 import android.os.IBinder;
 import android.util.ArrayMap;
-import android.util.ArraySet;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.SurfaceControl;
@@ -50,6 +50,8 @@ import android.window.StartingWindowInfo;
 import android.window.StartingWindowRemovalInfo;
 import android.window.TaskAppearedInfo;
 import android.window.TaskOrganizer;
+import android.window.WindowContainerTransaction;
+import android.window.WindowContainerTransactionCallback;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.protolog.ProtoLog;
@@ -72,6 +74,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Unified task organizer for all components in the shell.
@@ -100,10 +103,9 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     /**
      * Callbacks for when the tasks change in the system.
      */
-    public interface TaskListener {
-        default void onTaskAppeared(RunningTaskInfo taskInfo, SurfaceControl leash) {}
-        default void onTaskInfoChanged(RunningTaskInfo taskInfo) {}
-        default void onTaskVanished(RunningTaskInfo taskInfo) {}
+    public interface TaskListener extends TaskVanishedListener, TaskAppearedListener,
+            TaskInfoChangedListener {
+
         default void onBackPressedOnTaskRoot(RunningTaskInfo taskInfo) {}
         /** Whether this task listener supports compat UI. */
         default boolean supportCompatUI() {
@@ -130,7 +132,42 @@ public class ShellTaskOrganizer extends TaskOrganizer {
      * that is necessary.
      */
     public interface TaskVanishedListener {
+        /**
+         * Invoked when a Task is removed from Shell.
+         *
+         * @param taskInfo The RunningTaskInfo for the Task.
+         */
         default void onTaskVanished(RunningTaskInfo taskInfo) {}
+    }
+
+    /**
+     * Limited scope callback to notify when a task is added from the system. This signal is
+     * not synchronized with anything (or any transition), and should not be used in cases where
+     * that is necessary.
+     */
+    public interface TaskAppearedListener {
+        /**
+         * Invoked when a Task appears on Shell. Because the leash can be shared between different
+         * implementations, it's important to not apply changes in the related callback.
+         *
+         * @param taskInfo The RunningTaskInfo for the Task.
+         * @param leash    The leash for the Task which should not be changed through this callback.
+         */
+        default void onTaskAppeared(RunningTaskInfo taskInfo, SurfaceControl leash) {}
+    }
+
+    /**
+     * Limited scope callback to notify when a task has updated. This signal is
+     * not synchronized with anything (or any transition), and should not be used in cases where
+     * that is necessary.
+     */
+    public interface TaskInfoChangedListener {
+        /**
+         * Invoked when a Task is updated on Shell.
+         *
+         * @param taskInfo The RunningTaskInfo for the Task.
+         */
+        default void onTaskInfoChanged(RunningTaskInfo taskInfo) {}
     }
 
     /**
@@ -168,17 +205,31 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     /** @see #setPendingLaunchCookieListener */
     private final ArrayMap<IBinder, TaskListener> mLaunchCookieToListener = new ArrayMap<>();
 
+    /** @see #setPendingTaskListener(int, TaskListener)  */
+    private final ArrayMap<Integer, TaskListener> mPendingTaskToListener = new ArrayMap<>();
+
     // Keeps track of taskId's with visible locusIds. Used to notify any {@link LocusIdListener}s
     // that might be set.
     private final SparseArray<LocusId> mVisibleTasksWithLocusId = new SparseArray<>();
 
     /** @see #addLocusIdListener */
-    private final ArraySet<LocusIdListener> mLocusIdListeners = new ArraySet<>();
+    private final CopyOnWriteArrayList<LocusIdListener> mLocusIdListeners =
+            new CopyOnWriteArrayList<>();
 
-    private final ArraySet<FocusListener> mFocusListeners = new ArraySet<>();
+    private final CopyOnWriteArrayList<FocusListener> mFocusListeners =
+            new CopyOnWriteArrayList<>();
 
-    // Listeners that should be notified when a task is removed
-    private final ArraySet<TaskVanishedListener> mTaskVanishedListeners = new ArraySet<>();
+    // Listeners that should be notified when a task is vanished.
+    private final CopyOnWriteArrayList<TaskVanishedListener> mTaskVanishedListeners =
+            new CopyOnWriteArrayList<>();
+
+    // Listeners that should be notified when a task has appeared.
+    private final CopyOnWriteArrayList<TaskAppearedListener> mTaskAppearedListeners =
+            new CopyOnWriteArrayList<>();
+
+    // Listeners that should be notified when a task is updated
+    private final CopyOnWriteArrayList<TaskInfoChangedListener> mTaskInfoChangedListeners =
+            new CopyOnWriteArrayList<>();
 
     private final Object mLock = new Object();
     private StartingWindowController mStartingWindow;
@@ -291,14 +342,38 @@ public class ShellTaskOrganizer extends TaskOrganizer {
         }
     }
 
+    @Override
+    public void applyTransaction(@NonNull WindowContainerTransaction t) {
+        if (!t.isEmpty()) {
+            ProtoLog.v(WM_SHELL_TASK_ORG, "applyTransaction(): wct=%s caller=%s",
+                    t, Debug.getCallers(4));
+        }
+        super.applyTransaction(t);
+    }
+
+    @Override
+    public int applySyncTransaction(@NonNull WindowContainerTransaction t,
+            @NonNull WindowContainerTransactionCallback callback) {
+        if (!t.isEmpty()) {
+            ProtoLog.v(WM_SHELL_TASK_ORG, "applySyncTransaction(): wct=%s caller=%s",
+                    t, Debug.getCallers(4));
+        }
+        return super.applySyncTransaction(t, callback);
+    }
+
     /**
      * Creates a persistent root task in WM for a particular windowing-mode.
      * @param displayId The display to create the root task on.
      * @param windowingMode Windowing mode to put the root task in.
      * @param listener The listener to get the created task callback.
+     *
+     * @deprecated Use {@link #createRootTask(CreateRootTaskRequest, TaskListener)}
      */
     public void createRootTask(int displayId, int windowingMode, TaskListener listener) {
-        createRootTask(displayId, windowingMode, listener, false /* removeWithTaskOrganizer */);
+        createRootTask(new CreateRootTaskRequest()
+                        .setDisplayId(displayId)
+                        .setWindowingMode(windowingMode),
+                listener);
     }
 
     /**
@@ -307,14 +382,52 @@ public class ShellTaskOrganizer extends TaskOrganizer {
      * @param windowingMode Windowing mode to put the root task in.
      * @param listener The listener to get the created task callback.
      * @param removeWithTaskOrganizer True if this task should be removed when organizer destroyed.
+     *
+     * @deprecated Use {@link #createRootTask(CreateRootTaskRequest, TaskListener)}
      */
     public void createRootTask(int displayId, int windowingMode, TaskListener listener,
             boolean removeWithTaskOrganizer) {
+        createRootTask(new CreateRootTaskRequest()
+                        .setDisplayId(displayId)
+                        .setWindowingMode(windowingMode)
+                        .setRemoveWithTaskOrganizer(removeWithTaskOrganizer),
+                listener);
+    }
+
+    /**
+     * Creates a persistent root task in WM for a particular windowing-mode.
+     * @param displayId The display to create the root task on.
+     * @param windowingMode Windowing mode to put the root task in.
+     * @param listener The listener to get the created task callback.
+     * @param removeWithTaskOrganizer True if this task should be removed when organizer destroyed.
+     * @param reparentOnDisplayRemoval True if this task should be reparented on display removal.
+     *
+     * @deprecated Use {@link #createRootTask(CreateRootTaskRequest, TaskListener)}
+     */
+    public void createRootTask(int displayId, int windowingMode, TaskListener listener,
+            boolean removeWithTaskOrganizer, boolean reparentOnDisplayRemoval) {
+        createRootTask(new CreateRootTaskRequest()
+                        .setDisplayId(displayId)
+                        .setWindowingMode(windowingMode)
+                        .setRemoveWithTaskOrganizer(removeWithTaskOrganizer)
+                        .setReparentOnDisplayRemoval(reparentOnDisplayRemoval),
+                listener);
+    }
+
+    /**
+     * Creates a persistent root task in WM for a particular windowing-mode.
+     * @param request The data for this request
+     * @param listener The listener to get the created task callback.
+     *
+     * @hide
+     */
+    public void createRootTask(@NonNull CreateRootTaskRequest request, TaskListener listener) {
         ProtoLog.v(WM_SHELL_TASK_ORG, "createRootTask() displayId=%d winMode=%d listener=%s" ,
-                displayId, windowingMode, listener.toString());
+                request.displayId, request.windowingMode, listener.toString());
         final IBinder cookie = new Binder();
+        request.setLaunchCookie(cookie);
         setPendingLaunchCookieListener(cookie, listener);
-        super.createRootTask(displayId, windowingMode, cookie, removeWithTaskOrganizer);
+        super.createRootTask(request);
     }
 
     /**
@@ -325,19 +438,30 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     }
 
     /**
-     * Adds a listener for a specific task id.
+     * Adds a listener for a specific task id.  This only applies if
      */
     public void addListenerForTaskId(TaskListener listener, int taskId) {
         synchronized (mLock) {
             ProtoLog.v(WM_SHELL_TASK_ORG, "addListenerForTaskId taskId=%s", taskId);
-            if (mTaskListeners.get(taskId) != null) {
-                throw new IllegalArgumentException(
-                        "Listener for taskId=" + taskId + " already exists");
+            final TaskListener existingListener = mTaskListeners.get(taskId);
+            if (existingListener != null) {
+                if (existingListener == listener) {
+                    // Same listener already registered
+                    return;
+                } else {
+                    throw new IllegalArgumentException(
+                            "Listener for taskId=" + taskId + " already exists");
+                }
             }
 
             final TaskAppearedInfo info = mTasks.get(taskId);
             if (info == null) {
-                throw new IllegalArgumentException("addListenerForTaskId unknown taskId=" + taskId);
+                ProtoLog.v(WM_SHELL_TASK_ORG, "Queueing pending listener");
+                // The caller may have received a transition with the task before the organizer
+                // was notified of the task appearing, so set a pending task listener for the
+                // task to be retrieved when the task actually appears
+                mPendingTaskToListener.put(taskId, listener);
+                return;
             }
 
             final TaskListener oldListener = getTaskListener(info.getTaskInfo());
@@ -377,6 +501,14 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     public void removeListener(TaskListener listener) {
         synchronized (mLock) {
             ProtoLog.v(WM_SHELL_TASK_ORG, "Remove listener=%s", listener);
+
+            // Remove all occurrences of the pending listener
+            for (int i = mPendingTaskToListener.size() - 1; i >= 0; --i) {
+                if (mPendingTaskToListener.valueAt(i) == listener) {
+                    mPendingTaskToListener.removeAt(i);
+                }
+            }
+
             final int index = mTaskListeners.indexOfValue(listener);
             if (index == -1) {
                 Log.w(TAG, "No registered listener found");
@@ -392,7 +524,7 @@ public class ShellTaskOrganizer extends TaskOrganizer {
                 tasks.add(data);
             }
 
-            // Remove listener, there can be the multiple occurrences, so search the whole list.
+            // Remove occurrences of the listener
             for (int i = mTaskListeners.size() - 1; i >= 0; --i) {
                 if (mTaskListeners.valueAt(i) == listener) {
                     mTaskListeners.removeAt(i);
@@ -410,9 +542,11 @@ public class ShellTaskOrganizer extends TaskOrganizer {
 
     /**
      * Associated a listener to a pending launch cookie so we can route the task later once it
-     * appears.
+     * appears.  If both this and a pending task-id listener is set, then this will take priority.
      */
     public void setPendingLaunchCookieListener(IBinder cookie, TaskListener listener) {
+        ProtoLog.v(WM_SHELL_TASK_ORG, "setPendingLaunchCookieListener(): cookie=%s listener=%s",
+                cookie, listener);
         synchronized (mLock) {
             mLaunchCookieToListener.put(cookie, listener);
         }
@@ -480,6 +614,42 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     }
 
     /**
+     * Adds a listener to be notified when a task is appears.
+     */
+    public void addTaskAppearedListener(TaskAppearedListener listener) {
+        synchronized (mLock) {
+            mTaskAppearedListeners.add(listener);
+        }
+    }
+
+    /**
+     * Removes a task-appeared listener.
+     */
+    public void removeTaskAppearedListener(TaskAppearedListener listener) {
+        synchronized (mLock) {
+            mTaskAppearedListeners.remove(listener);
+        }
+    }
+
+    /**
+     * Adds a listener to be notified when a task is updated.
+     */
+    public void addTaskInfoChangedListener(TaskInfoChangedListener listener) {
+        synchronized (mLock) {
+            mTaskInfoChangedListeners.add(listener);
+        }
+    }
+
+    /**
+     * Removes a taskInfo-update listener.
+     */
+    public void removeTaskInfoChangedListener(TaskInfoChangedListener listener) {
+        synchronized (mLock) {
+            mTaskInfoChangedListeners.remove(listener);
+        }
+    }
+
+    /**
      * Returns a surface which can be used to attach overlays to the home root task
      */
     @NonNull
@@ -491,10 +661,11 @@ public class ShellTaskOrganizer extends TaskOrganizer {
      * Returns the home task surface, not for wide use.
      */
     @Nullable
-    public SurfaceControl getHomeTaskSurface() {
+    public SurfaceControl getHomeTaskSurface(int displayId) {
         for (int i = 0; i < mTasks.size(); i++) {
             final TaskAppearedInfo info = mTasks.valueAt(i);
-            if (info.getTaskInfo().getActivityType() == ACTIVITY_TYPE_HOME) {
+            if (info.getTaskInfo().getActivityType() == ACTIVITY_TYPE_HOME
+                    && info.getTaskInfo().displayId == displayId) {
                 return info.getLeash();
             }
         }
@@ -559,7 +730,7 @@ public class ShellTaskOrganizer extends TaskOrganizer {
             mUnfoldAnimationController.onTaskAppeared(info.getTaskInfo(), info.getLeash());
         }
 
-        if (info.getTaskInfo().getActivityType() == ACTIVITY_TYPE_HOME) {
+        if (isHomeTaskOnDefaultDisplay(info.getTaskInfo())) {
             ProtoLog.v(WM_SHELL_TASK_ORG, "Adding overlay to home task");
             final SurfaceControl.Transaction t = new SurfaceControl.Transaction();
             t.setLayer(mHomeTaskOverlayContainer, Integer.MAX_VALUE);
@@ -570,6 +741,9 @@ public class ShellTaskOrganizer extends TaskOrganizer {
         notifyLocusVisibilityIfNeeded(info.getTaskInfo());
         notifyCompatUI(info.getTaskInfo(), listener);
         mRecentTasks.ifPresent(recentTasks -> recentTasks.onTaskAdded(info.getTaskInfo()));
+        for (TaskAppearedListener l : mTaskAppearedListeners) {
+            l.onTaskAppeared(info.getTaskInfo(), info.getLeash());
+        }
     }
 
     @Override
@@ -583,7 +757,8 @@ public class ShellTaskOrganizer extends TaskOrganizer {
 
             final TaskAppearedInfo data = mTasks.get(taskInfo.taskId);
             final TaskListener oldListener = getTaskListener(data.getTaskInfo());
-            final TaskListener newListener = getTaskListener(taskInfo);
+            final TaskListener newListener = getTaskListener(taskInfo,
+                    true /* removeLaunchCookieIfNeeded */);
             mTasks.put(taskInfo.taskId, new TaskAppearedInfo(taskInfo, data.getLeash()));
             final boolean updated = updateTaskListenerIfNeeded(
                     taskInfo, data.getLeash(), oldListener, newListener);
@@ -611,10 +786,13 @@ public class ShellTaskOrganizer extends TaskOrganizer {
                     || mLastFocusedTaskInfo.getWindowingMode() != taskInfo.getWindowingMode())
                     && isFocusedOrHome;
             if (focusTaskChanged) {
-                for (int i = 0; i < mFocusListeners.size(); i++) {
-                    mFocusListeners.valueAt(i).onFocusTaskChanged(taskInfo);
+                for (FocusListener focusListener : mFocusListeners) {
+                    focusListener.onFocusTaskChanged(taskInfo);
                 }
                 mLastFocusedTaskInfo = taskInfo;
+            }
+            for (TaskInfoChangedListener l : mTaskInfoChangedListeners) {
+                l.onTaskInfoChanged(taskInfo);
             }
         }
     }
@@ -661,7 +839,7 @@ public class ShellTaskOrganizer extends TaskOrganizer {
             notifyCompatUI(taskInfo, null /* taskListener */);
             // Notify the recent tasks that a task has been removed
             mRecentTasks.ifPresent(recentTasks -> recentTasks.onTaskRemoved(taskInfo));
-            if (taskInfo.getActivityType() == ACTIVITY_TYPE_HOME) {
+            if (isHomeTaskOnDefaultDisplay(taskInfo)) {
                 SurfaceControl.Transaction t = new SurfaceControl.Transaction();
                 t.reparent(mHomeTaskOverlayContainer, null);
                 t.apply();
@@ -669,11 +847,6 @@ public class ShellTaskOrganizer extends TaskOrganizer {
             }
             for (TaskVanishedListener l : mTaskVanishedListeners) {
                 l.onTaskVanished(taskInfo);
-            }
-
-            if (!ENABLE_SHELL_TRANSITIONS && (appearedInfo.getLeash() != null)) {
-                // Preemptively clean up the leash only if shell transitions are not enabled
-                appearedInfo.getLeash().release();
             }
         }
     }
@@ -731,6 +904,8 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     private boolean updateTaskListenerIfNeeded(RunningTaskInfo taskInfo, SurfaceControl leash,
             TaskListener oldListener, TaskListener newListener) {
         if (oldListener == newListener) return false;
+        ProtoLog.v(WM_SHELL_TASK_ORG, "  Migrating from listener %s to %s",
+                oldListener, newListener);
         // TODO: We currently send vanished/appeared as the task moves between types, but
         //       we should consider adding a different mode-changed callback
         if (oldListener != null) {
@@ -770,8 +945,8 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     }
 
     private void notifyLocusIdChange(int taskId, LocusId locus, boolean visible) {
-        for (int i = 0; i < mLocusIdListeners.size(); i++) {
-            mLocusIdListeners.valueAt(i).onVisibilityChanged(taskId, locus, visible);
+        for (LocusIdListener l : mLocusIdListeners) {
+            l.onVisibilityChanged(taskId, locus, visible);
         }
     }
 
@@ -859,7 +1034,7 @@ public class ShellTaskOrganizer extends TaskOrganizer {
     }
 
     private TaskListener getTaskListener(RunningTaskInfo runningTaskInfo,
-            boolean removeLaunchCookieIfNeeded) {
+            boolean removePendingIfNeeded) {
 
         final int taskId = runningTaskInfo.taskId;
         TaskListener listener;
@@ -871,12 +1046,33 @@ public class ShellTaskOrganizer extends TaskOrganizer {
             listener = mLaunchCookieToListener.get(cookie);
             if (listener == null) continue;
 
-            if (removeLaunchCookieIfNeeded) {
+            if (removePendingIfNeeded) {
+                ProtoLog.v(WM_SHELL_TASK_ORG, "Migrating cookie listener to task: taskId=%d",
+                        taskId);
                 // Remove the cookie and add the listener.
                 mLaunchCookieToListener.remove(cookie);
+                if (mPendingTaskToListener.containsKey(taskId)
+                        && mPendingTaskToListener.get(taskId) != listener) {
+                    Log.w(TAG, "Conflicting pending task listeners reported for taskId=" + taskId);
+                }
+                mPendingTaskToListener.remove(taskId);
                 mTaskListeners.put(taskId, listener);
             }
             return listener;
+        }
+
+        // Next priority goes to the pending task id listener
+        if (mPendingTaskToListener.containsKey(taskId)) {
+            listener = mPendingTaskToListener.get(taskId);
+            if (listener != null) {
+                if (removePendingIfNeeded) {
+                    ProtoLog.v(WM_SHELL_TASK_ORG, "Migrating pending listener to task: taskId=%d",
+                            taskId);
+                    mPendingTaskToListener.remove(taskId);
+                    mTaskListeners.put(taskId, listener);
+                }
+                return listener;
+            }
         }
 
         // Next priority goes to taskId specific listeners.
@@ -892,6 +1088,11 @@ public class ShellTaskOrganizer extends TaskOrganizer {
         // Next we try type specific listeners.
         final int taskListenerType = taskInfoToTaskListenerType(runningTaskInfo);
         return mTaskListeners.get(taskListenerType);
+    }
+
+    @VisibleForTesting
+    boolean hasTaskListener(int taskId) {
+        return mTaskListeners.contains(taskId);
     }
 
     @VisibleForTesting
@@ -928,6 +1129,17 @@ public class ShellTaskOrganizer extends TaskOrganizer {
         }
     }
 
+    /**
+     * Return true if {@link RunningTaskInfo} is Home/Launcher activity type, plus it's the one on
+     * default display (rather than on external display). This is used to check if we need to
+     * reparent mHomeTaskOverlayContainer that is used for -1 screen on default display.
+     */
+    @VisibleForTesting
+    static boolean isHomeTaskOnDefaultDisplay(RunningTaskInfo taskInfo) {
+        return taskInfo.getActivityType() == ACTIVITY_TYPE_HOME
+                && taskInfo.displayId == DEFAULT_DISPLAY;
+    }
+
     public void dump(@NonNull PrintWriter pw, String prefix) {
         synchronized (mLock) {
             final String innerPrefix = prefix + "  ";
@@ -962,13 +1174,21 @@ public class ShellTaskOrganizer extends TaskOrganizer {
             }
 
             pw.println();
-            pw.println(innerPrefix + mLaunchCookieToListener.size() + " Launch Cookies");
+            pw.println(innerPrefix + mLaunchCookieToListener.size()
+                    + " Pending launch cookies listeners");
             for (int i = mLaunchCookieToListener.size() - 1; i >= 0; --i) {
                 final IBinder key = mLaunchCookieToListener.keyAt(i);
                 final TaskListener listener = mLaunchCookieToListener.valueAt(i);
                 pw.println(innerPrefix + "#" + i + " cookie=" + key + " listener=" + listener);
             }
 
+            pw.println();
+            pw.println(innerPrefix + mPendingTaskToListener.size() + " Pending task listeners");
+            for (int i = mPendingTaskToListener.size() - 1; i >= 0; --i) {
+                final int taskId = mPendingTaskToListener.keyAt(i);
+                final TaskListener listener = mPendingTaskToListener.valueAt(i);
+                pw.println(innerPrefix + "#" + i + " taskId=" + taskId + " listener=" + listener);
+            }
         }
     }
 }

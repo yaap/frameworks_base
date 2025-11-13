@@ -32,7 +32,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 import android.app.ActivityManagerInternal;
-import android.app.IApplicationThread;
 import android.app.usage.UsageStatsManagerInternal;
 import android.content.ComponentName;
 import android.content.Context;
@@ -62,7 +61,6 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.io.File;
 import java.util.Arrays;
 
 
@@ -160,8 +158,7 @@ public class AsyncProcessStartTest {
         }
 
         @Override
-        public AppOpsService getAppOpsService(File recentAccessesFile, File storageFile,
-                Handler handler) {
+        public AppOpsService getAppOpsService(Handler handler) {
             return mAppOpsService;
         }
 
@@ -212,8 +209,8 @@ public class AsyncProcessStartTest {
                 anyBoolean(), anyBoolean(), any(),
                 any(), any(), any(),
                 any(), any(),
+                any(), any(), any(), anyBoolean(),
                 any(), any(),
-                any(), any(), any(),
                 anyLong(), anyLong());
 
         final ProcessRecord r = spy(new ProcessRecord(mAms, ai, ai.processName, ai.uid));
@@ -277,7 +274,7 @@ public class AsyncProcessStartTest {
                 null, null,
                 null,
                 null, null, null,
-                null, null, null, null,
+                null, null, false, null, null,
                 0, 0);
 
         // Sleep until timeout should have triggered

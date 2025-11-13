@@ -21,6 +21,8 @@ import android.hardware.SensorEventListener
 import android.testing.AndroidTestingRunner
 import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.lowlight.AmbientLightModeMonitor
+import com.android.systemui.lowlight.AmbientLightModeMonitorImpl
 import com.android.systemui.util.sensors.AsyncSensorManager
 import java.util.Optional
 import javax.inject.Provider
@@ -51,7 +53,7 @@ class AmbientLightModeMonitorTest : SysuiTestCase() {
         MockitoAnnotations.initMocks(this)
 
         ambientLightModeMonitor =
-            AmbientLightModeMonitor(
+            AmbientLightModeMonitorImpl(
                 Optional.of(algorithm),
                 sensorManager,
                 Optional.of(Provider { sensor }),
@@ -98,7 +100,7 @@ class AmbientLightModeMonitorTest : SysuiTestCase() {
     @Test
     fun shouldNotRegisterForSensorUpdatesIfSensorNotAvailable() {
         val ambientLightModeMonitor =
-            AmbientLightModeMonitor(Optional.of(algorithm), sensorManager, Optional.empty())
+            AmbientLightModeMonitorImpl(Optional.of(algorithm), sensorManager, Optional.empty())
 
         val callback = mock(AmbientLightModeMonitor.Callback::class.java)
         ambientLightModeMonitor.start(callback)

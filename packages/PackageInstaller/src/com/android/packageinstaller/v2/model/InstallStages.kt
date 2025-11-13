@@ -44,10 +44,9 @@ data class InstallUserActionRequired(
     val actionReason: Int,
     val appSnippet: PackageUtil.AppSnippet? = null,
     val isAppUpdating: Boolean = false,
-    /**
-     * This holds either a package name or the app label of the install source.
-     */
-    val sourceApp: String? = null,
+    val existingUpdateOwnerLabel: CharSequence? = null,
+    val requestedUpdateOwnerLabel: CharSequence? = null,
+    val unknownSourcePackageName: String? = null,
 ) : InstallStage(STAGE_USER_ACTION_REQUIRED) {
 
     val appIcon: Drawable?
@@ -63,7 +62,9 @@ data class InstallUserActionRequired(
     }
 }
 
-data class InstallInstalling(val appSnippet: PackageUtil.AppSnippet) :
+data class InstallInstalling(
+    val appSnippet: PackageUtil.AppSnippet,
+    val isAppUpdating: Boolean = false) :
     InstallStage(STAGE_INSTALLING) {
 
     val appIcon: Drawable?
@@ -76,6 +77,7 @@ data class InstallInstalling(val appSnippet: PackageUtil.AppSnippet) :
 data class InstallSuccess(
     val appSnippet: PackageUtil.AppSnippet,
     val shouldReturnResult: Boolean = false,
+    val isAppUpdating: Boolean = false,
     /**
      *
      * * If the caller is requesting a result back, this will hold an Intent with

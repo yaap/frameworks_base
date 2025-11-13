@@ -16,26 +16,37 @@
 
 package android.content.theming;
 
+import static java.lang.annotation.ElementType.FIELD;
+import static java.lang.annotation.ElementType.LOCAL_VARIABLE;
+import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.ElementType.PARAMETER;
+import static java.lang.annotation.RetentionPolicy.SOURCE;
+
 import android.annotation.FlaggedApi;
 import android.annotation.StringDef;
 
 import androidx.annotation.Nullable;
 
 import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /** @hide */
 @FlaggedApi(android.server.Flags.FLAG_ENABLE_THEME_SERVICE)
 public class FieldColorSource extends ThemeSettingsField<String, String> {
+    public static final String VALUE_PRESET = "preset";
+    public static final String VALUE_HOME_WALLPAPER = "home_wallpaper";
+    public static final String VALUE_LOCK_WALLPAPER = "lock_wallpaper";
+
     public FieldColorSource(
             String key,
-            BiConsumer<ThemeSettingsUpdater, String> setter,
+            Function<ThemeSettingsUpdater, String> updaterGetter,
+            BiConsumer<ThemeSettingsUpdater, String> updaterSetter,
             Function<ThemeSettings, String> getter,
             ThemeSettings defaults
     ) {
-        super(key, setter, getter, defaults);
+        super(key, updaterGetter, updaterSetter, getter, defaults);
     }
 
     @Override
@@ -53,7 +64,7 @@ public class FieldColorSource extends ThemeSettingsField<String, String> {
     @Override
     public boolean validate(String value) {
         return switch (value) {
-            case "preset", "home_wallpaper", "lock_wallpaper" -> true;
+            case VALUE_PRESET, VALUE_HOME_WALLPAPER, VALUE_LOCK_WALLPAPER -> true;
             default -> false;
         };
     }
@@ -69,8 +80,9 @@ public class FieldColorSource extends ThemeSettingsField<String, String> {
     }
 
 
-    @StringDef({"preset", "home_wallpaper", "lock_wallpaper"})
-    @Retention(RetentionPolicy.SOURCE)
+    @StringDef({VALUE_PRESET, VALUE_HOME_WALLPAPER, VALUE_LOCK_WALLPAPER})
+    @Target({PARAMETER, METHOD, LOCAL_VARIABLE, FIELD})
+    @Retention(SOURCE)
     @interface Type {
     }
 }

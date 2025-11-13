@@ -56,6 +56,7 @@ import org.mockito.kotlin.whenever
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class WindowManagerLockscreenVisibilityManagerTest : SysuiTestCase() {
 
     @get:Rule val checkFlagsRule: CheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule()
@@ -265,12 +266,16 @@ class WindowManagerLockscreenVisibilityManagerTest : SysuiTestCase() {
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENSURE_KEYGUARD_DOES_TRANSITION_STARTING)
     fun setSurfaceBehindVisibility_falseSetsLockscreenVisibility_with_keyguard_shell_transitions() {
-        // Show the surface behind, then hide it.
         underTest.setLockscreenShown(true)
-        underTest.setSurfaceBehindVisibility(true)
-        underTest.setSurfaceBehindVisibility(false)
         uiBgExecutor.runAllReady()
         verify(keyguardTransitions).startKeyguardTransition(eq(true), any())
+
+        // Show the surface behind, then hide it.
+        underTest.setSurfaceBehindVisibility(true)
+        uiBgExecutor.runAllReady()
+        underTest.setSurfaceBehindVisibility(false)
+        uiBgExecutor.runAllReady()
+        verify(keyguardTransitions, times(2)).startKeyguardTransition(eq(true), any())
     }
 
     @Test

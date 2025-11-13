@@ -28,6 +28,7 @@ import android.provider.Settings
 import android.provider.Settings.ACTION_MEDIA_CONTROLS_SETTINGS
 import android.util.Log
 import android.util.MathUtils
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -44,7 +45,8 @@ import com.android.internal.logging.InstanceId
 import com.android.keyguard.KeyguardUpdateMonitor
 import com.android.keyguard.KeyguardUpdateMonitorCallback
 import com.android.systemui.Dumpable
-import com.android.systemui.Flags.mediaControlsUmoInflationInBackground
+import com.android.systemui.Flags
+import com.android.systemui.Flags.enableSuggestedDeviceUi
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Background
@@ -76,6 +78,7 @@ import com.android.systemui.qs.PageIndicator
 import com.android.systemui.res.R
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.scene.shared.model.Scenes
+import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.statusbar.featurepods.media.domain.interactor.MediaControlChipInteractor
 import com.android.systemui.statusbar.notification.collection.provider.OnReorderingAllowedListener
 import com.android.systemui.statusbar.notification.collection.provider.VisualStabilityProvider
@@ -83,6 +86,7 @@ import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.util.Utils
 import com.android.systemui.util.animation.UniqueObjectHostView
 import com.android.systemui.util.animation.requiresRemeasuring
+import com.android.systemui.util.boundsOnScreen
 import com.android.systemui.util.concurrency.DelayableExecutor
 import com.android.systemui.util.settings.GlobalSettings
 import com.android.systemui.util.settings.SecureSettings
@@ -121,7 +125,7 @@ class MediaCarouselController
 @Inject
 constructor(
     @Application applicationScope: CoroutineScope,
-    @Main private val context: Context,
+    @ShadeDisplayAware private val context: Context,
     private val mediaControlPanelFactory: Provider<MediaControlPanel>,
     private val visualStabilityProvider: VisualStabilityProvider,
     private val mediaHostStatesManager: MediaHostStatesManager,
@@ -132,7 +136,7 @@ constructor(
     @Background private val bgExecutor: Executor,
     @Background private val backgroundDispatcher: CoroutineDispatcher,
     private val mediaManager: MediaDataManager,
-    @Main configurationController: ConfigurationController,
+    @ShadeDisplayAware configurationController: ConfigurationController,
     private val falsingManager: FalsingManager,
     dumpManager: DumpManager,
     private val logger: MediaUiEventLogger,
@@ -196,7 +200,7 @@ constructor(
     val mediaFrame: ViewGroup
 
     @VisibleForTesting
-    lateinit var settingsButton: ImageView
+    lateinit var settingsButton: View
         private set
 
     private val mediaContent: ViewGroup
@@ -317,7 +321,7 @@ constructor(
         }
 
     private val isReorderingAllowed: Boolean
-        get() = visualStabilityProvider.isReorderingAllowed
+        get() = visualStabilityProvider.isReorderingAllowed && !isOnLockscreen()
 
     /** Size provided by the scene framework container */
     private var widthInSceneContainerPx = 0
@@ -336,6 +340,9 @@ constructor(
             .isInTransition(Edge.create(to = DOZING))
             .stateIn(applicationScope, SharingStarted.Eagerly, true)
 
+    private var mediaFrameHeight: Int = 0
+    private var mediaFrameWidth: Int = 0
+
     init {
         dumpManager.registerNormalDumpable(TAG, this)
         mediaFrame = inflateMediaCarousel()
@@ -351,6 +358,7 @@ constructor(
                 this::updateSeekbarListening,
                 this::closeGuts,
                 falsingManager,
+                this::onCarouselVisibleToUser,
                 logger,
             )
         carouselLocale = context.resources.configuration.locales.get(0)
@@ -376,6 +384,15 @@ constructor(
             visualStabilityProvider.addPersistentReorderingAllowedListener(visualStabilityCallback)
         }
         mediaFrame.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (mediaFrameHeight != mediaFrame.height || mediaFrameWidth != mediaFrame.width) {
+                mediaFrameHeight = mediaFrame.height
+                mediaFrameWidth = mediaFrame.width
+                debugLogger.logMediaBounds(
+                    reason = "layout change",
+                    rect = mediaFrame.boundsOnScreen,
+                    location = desiredLocation,
+                )
+            }
             // The pageIndicator is not laid out yet when we get the current state update,
             // Lets make sure we have the right dimensions
             updatePageIndicatorLocation()
@@ -396,7 +413,6 @@ constructor(
         keyguardUpdateMonitor.registerCallback(keyguardUpdateMonitorCallback)
         mediaCarousel.repeatWhenAttached {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                listenForAnyStateToGoneKeyguardTransition(this)
                 listenForAnyStateToLockscreenTransition(this)
                 listenForAnyStateToDozingTransition(this)
 
@@ -404,6 +420,7 @@ constructor(
                 listenForMediaItemsChanges(this)
             }
         }
+        listenForAnyStateToGoneKeyguardTransition(applicationScope)
         listenForLockscreenSettingChanges(applicationScope)
 
         // Notifies all active players about animation scale changes.
@@ -449,22 +466,14 @@ constructor(
                     oldKey: String?,
                     data: MediaData,
                     immediately: Boolean,
-                    receivedSmartspaceCardLatency: Int,
-                    isSsReactivated: Boolean,
                 ) {
                     debugLogger.logMediaLoaded(key, data.active)
-                    val onUiExecutionEnd =
-                        if (mediaControlsUmoInflationInBackground()) {
-                            Runnable {
-                                if (immediately) {
-                                    updateHostVisibility()
-                                }
-                            }
-                        } else {
-                            null
+                    val onUiExecutionEnd = Runnable {
+                        if (immediately) {
+                            updateHostVisibility()
                         }
+                    }
                     addOrUpdatePlayer(key, oldKey, data, onUiExecutionEnd)
-
                     val canRemove = data.isPlaying?.let { !it } ?: data.isClearable && !data.active
                     if (canRemove && !Utils.useMediaResumption(context)) {
                         // This media control is both paused and timed out, and the resumption
@@ -491,8 +500,14 @@ constructor(
 
     private fun inflateSettingsButton() {
         val settings =
-            LayoutInflater.from(context)
-                .inflate(R.layout.media_carousel_settings_button, mediaFrame, false) as ImageView
+            if (Flags.mediaControlsUiUpdate()) {
+                LayoutInflater.from(context)
+                    .inflate(R.layout.media_carousel_settings_button, mediaFrame, false)
+                    as ViewGroup
+            } else {
+                LayoutInflater.from(context)
+                    .inflate(R.layout.media_carousel_settings_button_legacy, mediaFrame, false)
+            }
         if (this::settingsButton.isInitialized) {
             mediaFrame.removeView(settingsButton)
         }
@@ -599,10 +614,7 @@ constructor(
                 setNewViewModelsList(it)
 
                 // Update host visibility when media changes.
-                merge(
-                        mediaCarouselViewModel.hasAnyMediaOrRecommendations,
-                        mediaCarouselViewModel.hasActiveMediaOrRecommendations,
-                    )
+                merge(mediaCarouselViewModel.hasAnyMedia, mediaCarouselViewModel.hasActiveMedia)
                     .collect { updateHostVisibility() }
             }
         }
@@ -726,14 +738,15 @@ constructor(
 
     /** Return true if the carousel should be hidden because device is locked. */
     fun isLockedAndHidden(): Boolean {
-        val isOnLockscreen =
-            if (SceneContainerFlag.isEnabled) {
-                !deviceEntryInteractor.isDeviceEntered.value
-            } else {
-                !isOnGone.value || isGoingToDozing.value
-            }
-        return !allowMediaPlayerOnLockScreen && isOnLockscreen
+        return !allowMediaPlayerOnLockScreen && isOnLockscreen()
     }
+
+    private fun isOnLockscreen() =
+        if (SceneContainerFlag.isEnabled) {
+            !deviceEntryInteractor.isDeviceEntered.value
+        } else {
+            !isOnGone.value || isGoingToDozing.value
+        }
 
     private fun reorderAllPlayers(
         previousVisiblePlayerKey: MediaPlayerData.MediaSortKey?,
@@ -769,7 +782,7 @@ constructor(
         key: String,
         oldKey: String?,
         data: MediaData,
-        onUiExecutionEnd: Runnable? = null,
+        onUiExecutionEnd: Runnable,
     ): Boolean =
         traceSection("MediaCarouselController#addOrUpdatePlayer") {
             MediaPlayerData.moveIfExists(oldKey, key)
@@ -777,47 +790,32 @@ constructor(
             val curVisibleMediaKey =
                 MediaPlayerData.visiblePlayerKeys()
                     .elementAtOrNull(mediaCarouselScrollHandler.visibleMediaIndex)
-            if (mediaControlsUmoInflationInBackground()) {
-                if (existingPlayer == null) {
-                    bgExecutor.execute {
-                        val mediaViewHolder = createMediaViewHolderInBg()
-                        // Add the new player in the main thread.
-                        uiExecutor.execute {
-                            setupNewPlayer(key, data, curVisibleMediaKey, mediaViewHolder)
-                            updatePageIndicator()
-                            mediaCarouselScrollHandler.onPlayersChanged()
-                            mediaControlChipInteractor.updateMediaControlChipModelLegacy(
-                                MediaPlayerData.getFirstActiveMediaData()
-                            )
-                            mediaFrame.requiresRemeasuring = true
-                            onUiExecutionEnd?.run()
-                        }
+            if (existingPlayer == null) {
+                bgExecutor.execute {
+                    val mediaViewHolder = createMediaViewHolderInBg()
+                    mediaViewHolder.titleText.gravity = if (isRtl) Gravity.RIGHT else Gravity.LEFT
+                    mediaViewHolder.artistText.gravity = if (isRtl) Gravity.RIGHT else Gravity.LEFT
+                    // Add the new player in the main thread.
+                    uiExecutor.execute {
+                        setupNewPlayer(key, data, curVisibleMediaKey, mediaViewHolder)
+                        updatePageIndicator()
+                        mediaCarouselScrollHandler.onPlayersChanged()
+                        mediaControlChipInteractor.updateMediaControlChipModelLegacy(
+                            MediaPlayerData.getFirstActiveMediaData()
+                        )
+                        mediaFrame.requiresRemeasuring = true
+                        onUiExecutionEnd.run()
                     }
-                } else {
-                    updatePlayer(key, data, curVisibleMediaKey, existingPlayer)
-                    updatePageIndicator()
-                    mediaCarouselScrollHandler.onPlayersChanged()
-                    mediaControlChipInteractor.updateMediaControlChipModelLegacy(
-                        MediaPlayerData.getFirstActiveMediaData()
-                    )
-                    mediaFrame.requiresRemeasuring = true
-                    onUiExecutionEnd?.run()
                 }
             } else {
-                if (existingPlayer == null) {
-                    val mediaViewHolder =
-                        MediaViewHolder.create(LayoutInflater.from(context), mediaContent)
-                    setupNewPlayer(key, data, curVisibleMediaKey, mediaViewHolder)
-                } else {
-                    updatePlayer(key, data, curVisibleMediaKey, existingPlayer)
-                }
+                updatePlayer(key, data, curVisibleMediaKey, existingPlayer)
                 updatePageIndicator()
                 mediaCarouselScrollHandler.onPlayersChanged()
                 mediaControlChipInteractor.updateMediaControlChipModelLegacy(
                     MediaPlayerData.getFirstActiveMediaData()
                 )
                 mediaFrame.requiresRemeasuring = true
-                onUiExecutionEnd?.run()
+                onUiExecutionEnd.run()
             }
             return existingPlayer == null
         }
@@ -1147,16 +1145,22 @@ constructor(
                 // communal for aesthetic and accessibility purposes since the background of
                 // Glanceable Hub is a dynamic color.
                 if (desiredLocation == MediaHierarchyManager.LOCATION_COMMUNAL_HUB) {
-                    settingsButton.setColorFilter(
-                        context.getColor(com.android.internal.R.color.materialColorOnPrimary)
-                    )
+                    settingsButton
+                        .requireViewById<ImageView>(R.id.settings_cog)
+                        .setColorFilter(
+                            context.getColor(com.android.internal.R.color.materialColorOnPrimary)
+                        )
                 } else {
-                    settingsButton.setColorFilter(context.getColor(R.color.notification_gear_color))
+                    settingsButton
+                        .requireViewById<ImageView>(R.id.settings_cog)
+                        .setColorFilter(
+                            context.getColor(com.android.internal.R.color.materialColorOnSurface)
+                        )
                 }
 
                 val shouldCloseGuts =
                     !currentlyExpanded &&
-                        !mediaManager.hasActiveMediaOrRecommendation() &&
+                        !mediaManager.hasActiveMedia() &&
                         desiredHostState.showsOnlyActiveMedia
 
                 if (!SceneContainerFlag.isEnabled) {
@@ -1234,6 +1238,17 @@ constructor(
             mediaCarousel.layout(0, 0, width, mediaCarousel.measuredHeight)
             // Update the padding after layout; view widths are used in RTL to calculate scrollX
             mediaCarouselScrollHandler.playerWidthPlusPadding = playerWidthPlusPadding
+        }
+    }
+
+    fun onCarouselVisibleToUser() {
+        if (!enableSuggestedDeviceUi() || !mediaCarouselScrollHandler.visibleToUser) {
+            return
+        }
+        val visibleMediaIndex = mediaCarouselScrollHandler.visibleMediaIndex
+        if (MediaPlayerData.players().size > visibleMediaIndex) {
+            val mediaControlPanel = MediaPlayerData.getMediaControlPanel(visibleMediaIndex)
+            mediaControlPanel?.onSuggestionSpaceVisible()
         }
     }
 

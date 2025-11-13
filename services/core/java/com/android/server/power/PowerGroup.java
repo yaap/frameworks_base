@@ -41,6 +41,7 @@ import android.os.PowerManagerInternal;
 import android.os.PowerSaveState;
 import android.os.Trace;
 import android.util.Slog;
+import android.util.TimeUtils;
 import android.view.Display;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -75,6 +76,8 @@ public class PowerGroup {
     private final int mGroupId;
     private final PowerManagerFlags mFeatureFlags;
 
+    private final boolean mIsDefaultGroupAdjacent;
+
     /** True if DisplayManagerService has applied all the latest display states that were requested
      *  for this group. */
     private boolean mReady;
@@ -106,7 +109,8 @@ public class PowerGroup {
 
     PowerGroup(int groupId, PowerGroupListener wakefulnessListener, Notifier notifier,
             DisplayManagerInternal displayManagerInternal, int wakefulness, boolean ready,
-            boolean supportsSandman, long eventTime, PowerManagerFlags featureFlags) {
+            boolean supportsSandman, long eventTime, PowerManagerFlags featureFlags,
+            boolean isDefaultGroupAdjacent) {
         mGroupId = groupId;
         mWakefulnessListener = wakefulnessListener;
         mNotifier = notifier;
@@ -117,6 +121,7 @@ public class PowerGroup {
         mLastWakeTime = eventTime;
         mLastSleepTime = eventTime;
         mFeatureFlags = featureFlags;
+        mIsDefaultGroupAdjacent = isDefaultGroupAdjacent;
 
         long dimDuration = INVALID_TIMEOUT;
         long screenOffTimeout = INVALID_TIMEOUT;
@@ -145,7 +150,7 @@ public class PowerGroup {
 
     PowerGroup(int wakefulness, PowerGroupListener wakefulnessListener, Notifier notifier,
             DisplayManagerInternal displayManagerInternal, long eventTime,
-            PowerManagerFlags featureFlags) {
+            PowerManagerFlags featureFlags, boolean isDefaultGroupAdjacent) {
         mGroupId = Display.DEFAULT_DISPLAY_GROUP;
         mWakefulnessListener = wakefulnessListener;
         mNotifier = notifier;
@@ -158,6 +163,7 @@ public class PowerGroup {
         mFeatureFlags = featureFlags;
         mDimDuration = INVALID_TIMEOUT;
         mScreenOffTimeout = INVALID_TIMEOUT;
+        mIsDefaultGroupAdjacent = isDefaultGroupAdjacent;
     }
 
     long getScreenOffTimeoutOverrideLocked(long defaultScreenOffTimeout) {
@@ -250,6 +256,11 @@ public class PowerGroup {
 
     boolean isPoweringOnLocked() {
         return mPoweringOn;
+    }
+
+    @VisibleForTesting
+    boolean isDefaultGroupAdjacent() {
+        return mIsDefaultGroupAdjacent;
     }
 
     void setIsPoweringOnLocked(boolean isPoweringOnNew) {
@@ -561,6 +572,23 @@ public class PowerGroup {
         mNotifier.onScreenPolicyUpdate(mGroupId, mDisplayPowerRequest.policy);
         return ready;
     }
+
+    @Override
+    public String toString() {
+        return "groupId: " + mGroupId
+                + "\nuserActivitySummary=0x" + Integer.toHexString(mUserActivitySummary)
+                + "\nmWakeLockSummary=0x" + Integer.toHexString(mWakeLockSummary)
+                + "\nlastUserActivityTime=" + TimeUtils.formatUptime(mLastUserActivityTime)
+                + "\nlastUserActivityTimeNoChangeLights="
+                    + TimeUtils.formatUptime(mLastUserActivityTimeNoChangeLights)
+                + "\nmLastWakeReason=" + mLastWakeReason
+                + "\nmLastSleepReason=" + mLastSleepReason
+                + "\nmDimDuration=" + mDimDuration
+                + "\nmWakefulness=" + mWakefulness
+                + "\nmIsDefaultGroupAdjacent=" + mIsDefaultGroupAdjacent
+                + "\nmScreenOffTimeout=" + mScreenOffTimeout;
+    }
+
 
     /** Determines the respective display state reason for a given PowerManager WakeReason. */
     private static int wakeReasonToDisplayStateReason(@PowerManager.WakeReason int wakeReason) {

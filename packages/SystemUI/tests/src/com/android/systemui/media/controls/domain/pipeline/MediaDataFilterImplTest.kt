@@ -33,7 +33,6 @@ import com.android.systemui.media.controls.ui.controller.MediaPlayerData
 import com.android.systemui.settings.UserTracker
 import com.android.systemui.statusbar.NotificationLockscreenUserManager
 import com.android.systemui.testKosmos
-import com.android.systemui.util.time.FakeSystemClock
 import com.google.common.truth.Truth.assertThat
 import java.util.concurrent.Executor
 import kotlinx.coroutines.test.TestScope
@@ -80,7 +79,6 @@ class MediaDataFilterImplTest : SysuiTestCase() {
     private lateinit var dataMain: MediaData
     private lateinit var dataGuest: MediaData
     private lateinit var dataPrivateProfile: MediaData
-    private val clock = FakeSystemClock()
     private val repository: MediaFilterRepository = with(kosmos) { mediaFilterRepository }
     private val mediaLogger = kosmos.mockMediaLogger
 
@@ -94,7 +92,6 @@ class MediaDataFilterImplTest : SysuiTestCase() {
                 userTracker,
                 lockscreenUserManager,
                 executor,
-                clock,
                 repository,
                 mediaLogger,
             )
@@ -142,8 +139,7 @@ class MediaDataFilterImplTest : SysuiTestCase() {
 
             mediaDataFilter.onMediaDataLoaded(KEY, null, dataMain)
 
-            verify(listener)
-                .onMediaDataLoaded(eq(KEY), eq(null), eq(dataMain), eq(true), eq(0), eq(false))
+            verify(listener).onMediaDataLoaded(eq(KEY), eq(null), eq(dataMain), eq(true))
             verify(mediaLogger)
                 .logMediaLoaded(eq(dataMain.instanceId), eq(dataMain.active), anyString())
             assertThat(currentMedia).containsExactly(mediaCommonModel)
@@ -158,8 +154,7 @@ class MediaDataFilterImplTest : SysuiTestCase() {
 
             mediaDataFilter.onMediaDataLoaded(KEY, null, dataGuest)
 
-            verify(listener, never())
-                .onMediaDataLoaded(any(), any(), any(), anyBoolean(), anyInt(), anyBoolean())
+            verify(listener, never()).onMediaDataLoaded(any(), any(), any(), anyBoolean())
             verify(mediaLogger, never()).logMediaLoaded(any(), anyBoolean(), anyString())
             assertThat(currentMedia).doesNotContain(mediaCommonModel)
         }
@@ -236,23 +231,14 @@ class MediaDataFilterImplTest : SysuiTestCase() {
             setUser(USER_GUEST)
 
             // THEN we should add back the guest user media
-            verify(listener)
-                .onMediaDataLoaded(eq(KEY_ALT), eq(null), eq(dataGuest), eq(true), eq(0), eq(false))
+            verify(listener).onMediaDataLoaded(eq(KEY_ALT), eq(null), eq(dataGuest), eq(true))
             verify(mediaLogger)
                 .logMediaLoaded(eq(dataGuest.instanceId), eq(dataGuest.active), anyString())
 
             reset(mediaLogger)
 
             // but not the main user's
-            verify(listener, never())
-                .onMediaDataLoaded(
-                    eq(KEY),
-                    any(),
-                    eq(dataMain),
-                    anyBoolean(),
-                    anyInt(),
-                    anyBoolean(),
-                )
+            verify(listener, never()).onMediaDataLoaded(eq(KEY), any(), eq(dataMain), anyBoolean())
             verify(mediaLogger, never())
                 .logMediaLoaded(eq(dataMain.instanceId), anyBoolean(), anyString())
             assertThat(currentMedia).containsExactly(MediaCommonModel(guestLoadedStatesModel))
@@ -281,63 +267,63 @@ class MediaDataFilterImplTest : SysuiTestCase() {
     @Test
     fun hasAnyMedia_mediaSet_returnsTrue() =
         testScope.runTest {
-            val selectedUserEntries by collectLastValue(repository.selectedUserEntries)
+            val currentUserEntries by collectLastValue(repository.currentUserEntries)
             mediaDataFilter.onMediaDataLoaded(KEY, oldKey = null, data = dataMain)
 
-            assertThat(hasAnyMedia(selectedUserEntries)).isTrue()
+            assertThat(hasAnyMedia(currentUserEntries)).isTrue()
         }
 
     @Test
     fun hasActiveMedia_inactiveMediaSet_returnsFalse() =
         testScope.runTest {
-            val selectedUserEntries by collectLastValue(repository.selectedUserEntries)
+            val currentUserEntries by collectLastValue(repository.currentUserEntries)
 
             val data = dataMain.copy(active = false)
             mediaDataFilter.onMediaDataLoaded(KEY, oldKey = null, data = data)
 
-            assertThat(hasActiveMedia(selectedUserEntries)).isFalse()
+            assertThat(hasActiveMedia(currentUserEntries)).isFalse()
         }
 
     @Test
     fun hasActiveMedia_activeMediaSet_returnsTrue() =
         testScope.runTest {
-            val selectedUserEntries by collectLastValue(repository.selectedUserEntries)
+            val currentUserEntries by collectLastValue(repository.currentUserEntries)
             val data = dataMain.copy(active = true)
             mediaDataFilter.onMediaDataLoaded(KEY, oldKey = null, data = data)
 
-            assertThat(hasActiveMedia(selectedUserEntries)).isTrue()
+            assertThat(hasActiveMedia(currentUserEntries)).isTrue()
         }
 
     @Test
     fun hasAnyMedia_onlyCurrentUser() =
         testScope.runTest {
-            val selectedUserEntries by collectLastValue(repository.selectedUserEntries)
-            assertThat(hasAnyMedia(selectedUserEntries)).isFalse()
+            val currentUserEntries by collectLastValue(repository.currentUserEntries)
+            assertThat(hasAnyMedia(currentUserEntries)).isFalse()
 
             mediaDataFilter.onMediaDataLoaded(KEY, oldKey = null, data = dataGuest)
-            assertThat(hasAnyMedia(selectedUserEntries)).isFalse()
+            assertThat(hasAnyMedia(currentUserEntries)).isFalse()
         }
 
     @Test
     fun hasActiveMedia_onlyCurrentUser() =
         testScope.runTest {
-            val selectedUserEntries by collectLastValue(repository.selectedUserEntries)
-            assertThat(hasActiveMedia(selectedUserEntries)).isFalse()
+            val currentUserEntries by collectLastValue(repository.currentUserEntries)
+            assertThat(hasActiveMedia(currentUserEntries)).isFalse()
             val data = dataGuest.copy(active = true)
 
             mediaDataFilter.onMediaDataLoaded(KEY, oldKey = null, data = data)
-            assertThat(hasActiveMedia(selectedUserEntries)).isFalse()
-            assertThat(hasAnyMedia(selectedUserEntries)).isFalse()
+            assertThat(hasActiveMedia(currentUserEntries)).isFalse()
+            assertThat(hasAnyMedia(currentUserEntries)).isFalse()
         }
 
     @Test
     fun onNotificationRemoved_doesNotHaveMedia() =
         testScope.runTest {
-            val selectedUserEntries by collectLastValue(repository.selectedUserEntries)
+            val currentUserEntries by collectLastValue(repository.currentUserEntries)
 
             mediaDataFilter.onMediaDataLoaded(KEY, oldKey = null, data = dataMain)
             mediaDataFilter.onMediaDataRemoved(KEY, false)
-            assertThat(hasAnyMedia(selectedUserEntries)).isFalse()
+            assertThat(hasAnyMedia(currentUserEntries)).isFalse()
         }
 
     @Test

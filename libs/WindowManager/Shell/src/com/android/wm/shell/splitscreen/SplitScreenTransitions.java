@@ -150,7 +150,7 @@ class SplitScreenTransitions {
 
             final int rootIdx = TransitionUtil.rootIndexFor(change, info);
             if (mode == TRANSIT_CHANGE) {
-                if (change.getParent() != null) {
+                if (change.getParent() != null && change.getTaskInfo() != null) {
                     // This is probably reparented, so we want the parent to be immediately visible
                     final TransitionInfo.Change parentChange = info.getChange(change.getParent());
                     t.show(parentChange.getLeash());
@@ -388,8 +388,7 @@ class SplitScreenTransitions {
         mPendingEnter = new EnterSession(
                 transition, remoteTransition, extraTransitType, resizeAnim, snapPosition);
 
-        ProtoLog.v(WM_SHELL_TRANSITIONS, "  splitTransition "
-                + " deduced Enter split screen");
+        ProtoLog.v(WM_SHELL_TRANSITIONS, "  splitTransition deduced Enter split screen");
         ProtoLog.d(WM_SHELL_SPLIT_SCREEN, "setEnterTransition: transitType=%d resize=%b",
                 extraTransitType, resizeAnim);
     }
@@ -502,7 +501,7 @@ class SplitScreenTransitions {
 
             mPendingEnter.onConsumed(aborted);
             mPendingEnter = null;
-            mStageCoordinator.notifySplitAnimationFinished();
+            mStageCoordinator.notifySplitAnimationStatus(false /*animationRunning*/);
             ProtoLog.d(WM_SHELL_SPLIT_SCREEN, "onTransitionConsumed for enter transition");
         } else if (isPendingDismiss(transition)) {
             mPendingDismiss.onConsumed(aborted);
@@ -681,6 +680,7 @@ class SplitScreenTransitions {
         final boolean mResizeAnim;
         /** The starting snap position we'll enter into with this transition. */
         final @SplitScreenConstants.PersistentSnapPosition int mEnteringPosition;
+        final boolean mRequireRootsInTransition;
 
         EnterSession(IBinder transition,
                 @Nullable RemoteTransition remoteTransition,
@@ -689,6 +689,7 @@ class SplitScreenTransitions {
                     remoteTransition, extraTransitType);
             this.mResizeAnim = resizeAnim;
             this.mEnteringPosition = snapPosition;
+            this.mRequireRootsInTransition = remoteTransition != null;
         }
     }
 

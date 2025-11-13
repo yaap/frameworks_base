@@ -19,6 +19,7 @@ package android.app;
 import static android.app.appfunctions.flags.Flags.enableAppFunctionManager;
 import static android.provider.flags.Flags.newStoragePublicApi;
 import static android.server.Flags.removeGameManagerServiceFromWear;
+import static android.service.chooser.Flags.interactiveChooser;
 
 import android.accounts.AccountManager;
 import android.accounts.IAccountManager;
@@ -71,6 +72,8 @@ import android.appwidget.AppWidgetManager;
 import android.bluetooth.BluetoothFrameworkInitializer;
 import android.companion.CompanionDeviceManager;
 import android.companion.ICompanionDeviceManager;
+import android.companion.datatransfer.continuity.ITaskContinuityManager;
+import android.companion.datatransfer.continuity.TaskContinuityManager;
 import android.companion.virtual.IVirtualDeviceManager;
 import android.companion.virtual.VirtualDeviceManager;
 import android.compat.Compatibility;
@@ -245,6 +248,7 @@ import android.security.authenticationpolicy.IAuthenticationPolicyService;
 import android.security.intrusiondetection.IIntrusionDetectionService;
 import android.security.intrusiondetection.IntrusionDetectionManager;
 import android.security.keystore.KeyStoreManager;
+import android.service.chooser.ChooserManager;
 import android.service.oemlock.IOemLockService;
 import android.service.oemlock.OemLockManager;
 import android.service.persistentdata.IPersistentDataBlockService;
@@ -272,6 +276,8 @@ import android.view.contentcapture.ContentCaptureManager;
 import android.view.contentcapture.IContentCaptureManager;
 import android.view.displayhash.DisplayHashManager;
 import android.view.inputmethod.InputMethodManager;
+import android.view.selectiontoolbar.ISelectionToolbarManager;
+import android.view.selectiontoolbar.SelectionToolbarManager;
 import android.view.textclassifier.TextClassificationManager;
 import android.view.textservice.TextServicesManager;
 import android.view.translation.ITranslationManager;
@@ -423,6 +429,17 @@ public final class SystemServiceRegistry {
             public TextClassificationManager createService(ContextImpl ctx) {
                 return new TextClassificationManager(ctx);
             }});
+
+        registerService(Context.SELECTION_TOOLBAR_SERVICE, SelectionToolbarManager.class,
+                new CachedServiceFetcher<SelectionToolbarManager>() {
+                    @Override
+                    public SelectionToolbarManager createService(ContextImpl ctx)
+                            throws ServiceNotFoundException {
+                        IBinder b = ServiceManager.getServiceOrThrow(
+                                Context.SELECTION_TOOLBAR_SERVICE);
+                        return new SelectionToolbarManager(
+                                ISelectionToolbarManager.Stub.asInterface(b));
+                    }});
 
         registerService(Context.FONT_SERVICE, FontManager.class,
                 new CachedServiceFetcher<FontManager>() {
@@ -1415,6 +1432,21 @@ public final class SystemServiceRegistry {
             }
         });
 
+        if (android.companion.Flags.enableTaskContinuity()) {
+            registerService(Context.TASK_CONTINUITY_SERVICE, TaskContinuityManager.class,
+                    new CachedServiceFetcher<TaskContinuityManager>() {
+                        @Override
+                        public TaskContinuityManager createService(ContextImpl ctx)
+                                throws ServiceNotFoundException {
+                            IBinder iBinder = ServiceManager.getServiceOrThrow(
+                                    Context.TASK_CONTINUITY_SERVICE);
+                            ITaskContinuityManager service =
+                                    ITaskContinuityManager.Stub.asInterface(iBinder);
+                            return new TaskContinuityManager(ctx, service);
+                        }
+                    });
+        }
+
         registerService(Context.CROSS_PROFILE_APPS_SERVICE, CrossProfileApps.class,
                 new CachedServiceFetcher<CrossProfileApps>() {
                     @Override
@@ -1822,6 +1854,16 @@ public final class SystemServiceRegistry {
                         return new IntrusionDetectionManager(service);
                     }
                 });
+
+        if (interactiveChooser()) {
+            registerService(Context.CHOOSER_SERVICE, ChooserManager.class,
+                    new StaticServiceFetcher<>() {
+                        @Override
+                        public ChooserManager createService() {
+                            return new ChooserManager();
+                        }
+                    });
+        }
 
         sInitializing = true;
         try {

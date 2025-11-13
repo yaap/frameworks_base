@@ -7,6 +7,9 @@ import android.os.Looper
 import android.os.UserManager
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
+import android.platform.test.annotations.RequiresFlagsDisabled
+import android.platform.test.annotations.RequiresFlagsEnabled
+import android.platform.test.flag.junit.DeviceFlagsValueProvider
 import android.platform.test.flag.junit.FlagsParameterization
 import android.platform.test.flag.junit.FlagsParameterization.allCombinationsOf
 import android.service.quicksettings.Tile
@@ -15,9 +18,12 @@ import android.testing.TestableLooper.RunWithLooper
 import androidx.test.filters.SmallTest
 import com.android.internal.logging.MetricsLogger
 import com.android.settingslib.Utils
+import com.android.settingslib.bluetooth.BatteryLevelsInfo
 import com.android.settingslib.bluetooth.CachedBluetoothDevice
+import com.android.settingslib.flags.Flags.FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY
+import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
-import com.android.systemui.bluetooth.qsdialog.BluetoothDetailsContentViewModel
+import com.android.systemui.bluetooth.ui.viewModel.BluetoothDetailsContentViewModel
 import com.android.systemui.classifier.FalsingManagerFake
 import com.android.systemui.flags.FeatureFlagsClassic
 import com.android.systemui.plugins.ActivityStarter
@@ -35,15 +41,13 @@ import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.tileimpl.QSTileImpl.DrawableIconWithRes
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.policy.BluetoothController
-import com.android.systemui.util.mockito.any
 import com.android.systemui.util.mockito.eq
-import com.android.systemui.util.mockito.mock
-import com.android.systemui.util.mockito.whenever
 import com.google.common.truth.Truth.assertThat
 import dagger.Lazy
 import kotlinx.coroutines.Job
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
@@ -51,6 +55,9 @@ import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.MockitoAnnotations
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import platform.test.runner.parameterized.ParameterizedAndroidJunit4
 import platform.test.runner.parameterized.Parameters
 
@@ -62,6 +69,8 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     init {
         mSetFlagsRule.setFlagsParameterization(flags)
     }
+
+    @get:Rule val checkFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule()
 
     @Mock private lateinit var qsLogger: QSLogger
     @Mock private lateinit var qsHost: QSHost
@@ -131,7 +140,8 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     }
 
     @Test
-    fun testIcon_whenDisconnected_isOffState() {
+    @RequiresFlagsDisabled(Flags.FLAG_ICON_REFRESH_2025)
+    fun testIcon_whenDisconnected_isOffState_iconRefreshDisabled() {
         val state = QSTile.BooleanState()
         enableBluetooth()
         setBluetoothDisconnected()
@@ -139,6 +149,19 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
         tile.handleUpdateState(state, /* arg= */ null)
 
         assertThat(state.icon).isEqualTo(createExpectedIcon(R.drawable.qs_bluetooth_icon_off))
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ICON_REFRESH_2025)
+    fun testIcon_whenDisconnected_isOffState_iconRefreshEnabled() {
+        val state = QSTile.BooleanState()
+        enableBluetooth()
+        setBluetoothDisconnected()
+
+        tile.handleUpdateState(state, /* arg= */ null)
+
+        assertThat(state.icon)
+            .isEqualTo(createExpectedIcon(R.drawable.qs_bluetooth_icon_disconnected))
     }
 
     @Test
@@ -164,6 +187,7 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     }
 
     @Test
+    @DisableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
     fun testSecondaryLabel_whenBatteryMetadataAvailable_isMetadataBatteryLevelState() {
         val cachedDevice = mock<CachedBluetoothDevice>()
         val state = QSTile.BooleanState()
@@ -182,6 +206,7 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     }
 
     @Test
+    @DisableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
     fun testSecondaryLabel_whenBatteryMetadataUnavailable_isBluetoothBatteryLevelState() {
         val state = QSTile.BooleanState()
         val cachedDevice = mock<CachedBluetoothDevice>()
@@ -204,6 +229,37 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
             )
         verify(bluetoothController, times(1))
             .removeOnMetadataChangedListener(eq(cachedDevice), any())
+    }
+
+    @Test
+    @EnableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
+    fun testSecondaryLabel_whenBatteryLevelsInfoAvailable_showBatteryLevelAndRegisterCallback() {
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        val state = QSTile.BooleanState()
+        listenToDeviceBatteryLevelsInfo(state, cachedDevice, 50)
+
+        tile.handleUpdateState(state, /* arg= */ null)
+
+        assertThat(state.secondaryLabel)
+            .isEqualTo(
+                mContext.getString(
+                    R.string.quick_settings_bluetooth_secondary_label_battery_level,
+                    Utils.formatPercentage(50),
+                )
+            )
+        verify(cachedDevice).registerCallback(any(), any())
+    }
+
+    @Test
+    @EnableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
+    fun testSecondaryLabel_whenBatteryLevelsInfoUnavailable_noBatteryLevel() {
+        val state = QSTile.BooleanState()
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        listenToDeviceBatteryLevelsInfo(state, cachedDevice, -1)
+
+        tile.handleUpdateState(state, /* arg= */ null)
+
+        assertThat(state.secondaryLabel).isEqualTo("")
     }
 
     @Test
@@ -235,6 +291,7 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     }
 
     @Test
+    @DisableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
     fun testMetadataListener_whenDisconnected_isUnregistered() {
         val state = QSTile.BooleanState()
         val cachedDevice = mock<CachedBluetoothDevice>()
@@ -248,6 +305,7 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     }
 
     @Test
+    @DisableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
     fun testMetadataListener_whenTileNotListening_isUnregistered() {
         val state = QSTile.BooleanState()
         val cachedDevice = mock<CachedBluetoothDevice>()
@@ -257,6 +315,31 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
 
         verify(bluetoothController, times(1))
             .removeOnMetadataChangedListener(eq(cachedDevice), any())
+    }
+
+    @Test
+    @EnableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
+    fun testCallbackRegister_whenDisconnected_isUnregistered() {
+        val state = QSTile.BooleanState()
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        listenToDeviceBatteryLevelsInfo(state, cachedDevice, 50)
+        disableBluetooth()
+
+        tile.handleUpdateState(state, null)
+
+        verify(cachedDevice, times(1)).unregisterCallback(any())
+    }
+
+    @Test
+    @EnableFlags(FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY)
+    fun testCallbackRegister_whenTileNotListening_isUnregistered() {
+        val state = QSTile.BooleanState()
+        val cachedDevice = mock<CachedBluetoothDevice>()
+        listenToDeviceBatteryLevelsInfo(state, cachedDevice, 50)
+
+        tile.handleSetListening(false)
+
+        verify(cachedDevice, times(1)).unregisterCallback(any())
     }
 
     @Test
@@ -372,6 +455,21 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
         whenever(cachedDevice.device).thenReturn(btDevice)
         whenever(btDevice.getMetadata(BluetoothDevice.METADATA_MAIN_BATTERY))
             .thenReturn(batteryLevel.toString().toByteArray())
+        enableBluetooth()
+        setBluetoothConnected()
+        addConnectedDevice(cachedDevice)
+        tile.handleUpdateState(state, /* arg= */ null)
+    }
+
+    private fun listenToDeviceBatteryLevelsInfo(
+        state: QSTile.BooleanState,
+        cachedDevice: CachedBluetoothDevice,
+        batteryLevel: Int,
+    ) {
+        val btDevice = mock<BluetoothDevice>()
+        whenever(cachedDevice.device).thenReturn(btDevice)
+        whenever(cachedDevice.batteryLevelsInfo)
+            .thenReturn(BatteryLevelsInfo(batteryLevel, batteryLevel, batteryLevel, batteryLevel))
         enableBluetooth()
         setBluetoothConnected()
         addConnectedDevice(cachedDevice)

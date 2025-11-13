@@ -80,7 +80,7 @@ public class UserManagerServiceShellCommand extends ShellCommand {
         pw.println("  help");
         pw.println("    Prints this help text.");
         pw.println();
-        pw.println("  list [-v | --verbose] [--all]");
+        pw.println("  list [-v | --verbose] [-V | --very-verbose] [--all]");
         pw.println("    Prints all users on the system.");
         pw.println();
         pw.println("  report-system-user-package-whitelist-problems [-v | --verbose] "
@@ -167,12 +167,19 @@ public class UserManagerServiceShellCommand extends ShellCommand {
         final PrintWriter pw = getOutPrintWriter();
         boolean all = false;
         boolean verbose = false;
+        boolean veryVerbose = false;
         String opt;
         while ((opt = getNextOption()) != null) {
             switch (opt) {
                 case "-v":
                 case "--verbose":
+                    // verbose is really the normal human-readable version; avoid clutter
                     verbose = true;
+                    break;
+                case "-V":
+                case "--very-verbose":
+                    verbose = true;
+                    veryVerbose = true;
                     break;
                 case "--all":
                     all = true;
@@ -183,8 +190,8 @@ public class UserManagerServiceShellCommand extends ShellCommand {
             }
         }
         final IActivityManager am = ActivityManager.getService();
-        final List<UserInfo> users = mService.getUsers(/* excludePartial= */ !all,
-                /* excludeDying= */ false, /* excludePreCreated= */ !all);
+        final List<UserInfo> users = mService.getUsersWithUnresolvedNames(
+                /* excludePartial= */ !all, /* excludeDying= */ false);
         if (users == null) {
             pw.println("Error: couldn't get users");
             return 1;
@@ -226,15 +233,26 @@ public class UserManagerServiceShellCommand extends ShellCommand {
                     final boolean hasParent = user.profileGroupId != user.id
                             && user.profileGroupId != UserInfo.NO_PROFILE_GROUP_ID;
                     final boolean visible = mService.isUserVisible(user.id);
-                    pw.printf("%d: id=%d, name=%s, type=%s, flags=%s%s%s%s%s%s%s%s%s%s\n",
+                    // If name is null, use the default (owner / guest)
+                    final String name = user.name != null ? user.name : mService.getName(user);
+                    String unresolvedName = "";
+                    if (veryVerbose) {
+                        unresolvedName = ", unresolvedName=" + user.name;
+                    }
+                    // verbose is the normal standard human-readable version;
+                    // therefore, avoid clutter unless veryVerbose
+                    pw.printf("%d: id=%d, name=%s%s, type=%s, "
+                            + "flags=%s%s%s%s%s%s%s%s%s%s%s\n",
                             i,
                             user.id,
-                            user.name,
+                            name,
+                            unresolvedName,
                             user.userType.replace("android.os.usertype.", ""),
                             UserInfo.flagsToString(user.flags),
                             hasParent ? " (parentId=" + user.profileGroupId + ")" : "",
                             running ? " (running)" : "",
                             user.partial ? " (partial)" : "",
+                            user.guestToRemove ? " (guestToRemove)" : "",
                             user.preCreated ? " (pre-created)" : "",
                             user.convertedFromPreCreated ? " (converted)" : "",
                             deviceOwner, profileOwner,
@@ -256,7 +274,7 @@ public class UserManagerServiceShellCommand extends ShellCommand {
         final PrintWriter pw = getOutPrintWriter();
         boolean verbose = false;
         boolean criticalOnly = false;
-        int mode = UserSystemPackageInstaller.USER_TYPE_PACKAGE_WHITELIST_MODE_NONE;
+        int mode = UserSystemPackageInstaller.USER_TYPE_PACKAGE_ALLOWLIST_MODE_NONE;
         String opt;
         while ((opt = getNextOption()) != null) {
             switch (opt) {
@@ -281,7 +299,7 @@ public class UserManagerServiceShellCommand extends ShellCommand {
                 + ", mode=" + UserSystemPackageInstaller.modeToString(mode));
 
         try (IndentingPrintWriter ipw = new IndentingPrintWriter(pw, "  ")) {
-            mSystemPackageInstaller.dumpPackageWhitelistProblems(ipw, mode, verbose,
+            mSystemPackageInstaller.dumpPackageAllowlistProblems(ipw, mode, verbose,
                     criticalOnly);
         }
         return 0;

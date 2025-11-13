@@ -63,7 +63,7 @@
     <string name="kg_bio_try_again_or_password" msgid="1473132729225398039">"Proovige uuesti või sisestage parool"</string>
     <string name="kg_bio_try_again_or_pattern" msgid="4867893307468801501">"Proovige uuesti või joonistage muster"</string>
     <string name="kg_bio_too_many_attempts_pin" msgid="5850845723433047605">"PIN-koodi nõutakse pärast liiga paljusid katseid."</string>
-    <string name="kg_bio_too_many_attempts_password" msgid="5551690347827728042">"Parool on nõutav pärast liiga paljusid katseid"</string>
+    <string name="kg_bio_too_many_attempts_password" msgid="5551690347827728042">"Parool on nõutav pärast liiga paljusid katseid."</string>
     <string name="kg_bio_too_many_attempts_pattern" msgid="736884689355181602">"Muster on nõutav pärast liiga paljusid katseid."</string>
     <string name="kg_unlock_with_pin_or_fp" msgid="5635161174698729890">"Avage PIN-koodi või sõrmejäljega"</string>
     <string name="kg_unlock_with_password_or_fp" msgid="2251295907826814237">"Avage parooli või sõrmejäljega"</string>
@@ -80,9 +80,9 @@
     <string name="kg_face_locked_out" msgid="2751559491287575">"Näoga ei saa avada. Liiga palju katseid."</string>
     <string name="kg_fp_locked_out" msgid="6228277682396768830">"Sõrmejäljega ei saa avada. Liiga palju katseid."</string>
     <string name="kg_trust_agent_disabled" msgid="5400691179958727891">"Usaldusväärne agent pole saadaval"</string>
-    <string name="kg_primary_auth_locked_out_pin" msgid="5492230176361601475">"Liiga palju vale PIN-koodiga katseid"</string>
-    <string name="kg_primary_auth_locked_out_pattern" msgid="8266214607346180952">"Liiga palju vale mustriga katseid"</string>
-    <string name="kg_primary_auth_locked_out_password" msgid="6170245108400198659">"Liiga palju vale parooliga katseid"</string>
+    <string name="kg_primary_auth_locked_out_pin" msgid="5492230176361601475">"Liiga palju vale PIN-koodiga katseid."</string>
+    <string name="kg_primary_auth_locked_out_pattern" msgid="8266214607346180952">"Liiga palju vale mustriga katseid."</string>
+    <string name="kg_primary_auth_locked_out_password" msgid="6170245108400198659">"Liiga palju vale parooliga katseid."</string>
     <string name="kg_too_many_failed_attempts_countdown" msgid="2038195171919795529">"{count,plural, =1{Proovige uuesti # sekundi pärast.}other{Proovige uuesti # sekundi pärast.}}"</string>
     <string name="kg_sim_pin_instructions" msgid="1942424305184242951">"Sisestage SIM-kaardi PIN-kood."</string>
     <string name="kg_sim_pin_instructions_multi" msgid="3639863309953109649">"Sisestage operaatori „<xliff:g id="CARRIER">%1$s</xliff:g>” SIM-kaardi PIN-kood."</string>

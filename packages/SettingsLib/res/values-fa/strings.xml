@@ -361,7 +361,7 @@
     <string name="dev_settings_warning_title" msgid="8251234890169074553">"تنظیمات برنامه‌نویسی مجاز باشد؟"</string>
     <string name="dev_settings_warning_message" msgid="37741686486073668">"این تنظیمات فقط برای برنامه‌نویسی در نظر گرفته شده است. ممکن است استفاده از این تنظیمات موجب خرابی یا عملکرد نادرست دستگاه یا برنامه‌های شما شود."</string>
     <string name="verify_apps_over_usb_title" msgid="6031809675604442636">"‏تأیید برنامه‌ها ازطریق USB"</string>
-    <string name="verify_apps_over_usb_summary" msgid="1317933737581167839">"‏برنامه‌های نصب‌شده ازطریق ADB/ADT را ازنظر رفتار مخاطره‌آمیز بررسی کنید."</string>
+    <string name="verify_apps_over_usb_summary" msgid="1317933737581167839">"‏برنامه‌های نصب‌شده ازطریق ADB/ADT ازنظر رفتار مخاطره‌آمیز بررسی شود."</string>
     <string name="bluetooth_show_devices_without_names_summary" msgid="780964354377854507">"‏دستگاه‌های بلوتوث بدون نام (فقط نشانی‌های MAC) نشان داده خواهند شد"</string>
     <string name="bluetooth_disable_absolute_volume_summary" msgid="2006309932135547681">"درصورت وجود مشکل در صدا با دستگاه‌های راه دور مثل صدای بلند ناخوشایند یا عدم کنترل صدا، ویژگی میزان صدای کامل بلوتوث را غیرفعال کنید."</string>
     <string name="bluetooth_enable_gabeldorsche_summary" msgid="2054730331770712629">"‏دسته ویژگی Gabeldorsche، بلوتوث را فعال می‌کند."</string>
@@ -387,7 +387,7 @@
     <string name="media_category" msgid="8122076702526144053">"رسانه"</string>
     <string name="debug_monitoring_category" msgid="1597387133765424994">"نظارت"</string>
     <string name="window_management_category" msgid="2015535427098365170">"مدیریت پنجره"</string>
-    <string name="strict_mode" msgid="889864762140862437">"حالت شدید فعال شد"</string>
+    <string name="strict_mode" msgid="889864762140862437">"حالت سخت‌گیرانه فعال شد"</string>
     <string name="strict_mode_summary" msgid="1838248687233554654">"چشمک زدن صفحه هنگام انجام عملیات طولانی توسط برنامه‌ها در رشته اصلی"</string>
     <string name="pointer_location" msgid="7516929526199520173">"محل اشاره‌گر"</string>
     <string name="pointer_location_summary" msgid="957120116989798464">"هم‌پوشانی صفحه‌نمایش با نمایش داده لمسی فعلی"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"‫<xliff:g id="ID_1">%1$s</xliff:g> پیش"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> باقی مانده است"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"کوچک‌ترین"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"کوچک‌تر"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"کوچک"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"پیش‌فرض"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"بزرگ"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"بزرگ‌تر"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"بزرگ‌ترین"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"بزرگ‌تر"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"خیلی بزرگ"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"بسیار بزرگ"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"بزرگ‌ترین"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"سفارشی (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"منو"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"برای انجام بازنشانی کارخانه‌ای در حالت نمایشی، گذرواژه را وارد کنید"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{‫۱ دستگاه متصل است}one{‫# دستگاه متصل است}other{‫# دستگاه متصل است}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"زمان بیشتر."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"زمان کمتر."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"درشت‌نمایی"</string>
     <string name="cancel" msgid="5665114069455378395">"لغو"</string>
     <string name="next" msgid="2699398661093607009">"بعدی"</string>
     <string name="back" msgid="5554327870352703710">"برگشتن"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"اگر <xliff:g id="SWITCHAPP">%1$s</xliff:g> را همه‌فرستی کنید یا خروجی را تغییر دهید، همه‌فرستی کنونی متوقف خواهد شد"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"همه‌فرستی <xliff:g id="SWITCHAPP">%1$s</xliff:g>"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"تغییر خروجی"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"پویانمایی‌های اشاره برگشت پیش‌گویانه"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"پویانمایی‌های سیستم را برای اشاره برگشت پیش‌گویانه فعال کنید."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"‏این تنظیم پویانمایی‌های سیستم را برای پویانمایی اشاره برگشت پیش‌بینانه فعال می‌کند. این تنظیم مستلزم تنظیم شدن enableOnBackInvokedCallback مربوط به هر برنامه روی صحیح در فایل مانیفست است."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"‎%%<xliff:g id="PERCENTAGE">%1$d</xliff:g>"</string>
     <string name="not_specified" msgid="5423502443185110328">"نامشخص"</string>
     <string name="neuter" msgid="2075249330106127310">"خنثی"</string>

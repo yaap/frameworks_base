@@ -48,6 +48,7 @@ class NotificationShadeWindowState(
     // TODO: forceUserActivity seems to be unused, delete?
     @JvmField var forceUserActivity: Boolean = false,
     @JvmField var launchingActivityFromNotification: Boolean = false,
+    @JvmField var forceHideAfterActivityLaunch: Boolean = false,
     @JvmField var mediaBackdropShowing: Boolean = false,
     @JvmField var windowNotTouchable: Boolean = false,
     @JvmField var componentsForcingTopUi: MutableSet<String> = mutableSetOf(),
@@ -61,6 +62,7 @@ class NotificationShadeWindowState(
     @JvmField var scrimsVisibility: Int = 0,
     @JvmField var backgroundBlurRadius: Int = 0,
     @JvmField var communalVisible: Boolean = false,
+    @JvmField var isOnOrGoingToDream: Boolean = false,
 ) {
 
     fun isKeyguardShowingAndNotOccluded(): Boolean {
@@ -104,6 +106,7 @@ class NotificationShadeWindowState(
             scrimsVisibility.toString(),
             backgroundBlurRadius.toString(),
             communalVisible.toString(),
+            isOnOrGoingToDream.toString(),
         )
     }
 
@@ -147,6 +150,7 @@ class NotificationShadeWindowState(
             scrimsVisibility: Int,
             backgroundBlurRadius: Int,
             communalVisible: Boolean,
+            isOnOrGoingToDream: Boolean,
         ) {
             buffer.advance().apply {
                 this.keyguardShowing = keyguardShowing
@@ -181,6 +185,7 @@ class NotificationShadeWindowState(
                 this.scrimsVisibility = scrimsVisibility
                 this.backgroundBlurRadius = backgroundBlurRadius
                 this.communalVisible = communalVisible
+                this.isOnOrGoingToDream = isOnOrGoingToDream
             }
         }
 
@@ -229,6 +234,7 @@ class NotificationShadeWindowState(
                 "scrimsVisibility",
                 "backgroundBlurRadius",
                 "communalVisible",
+                "isOnOrGoingToDream",
             )
     }
 }

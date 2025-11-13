@@ -60,10 +60,9 @@ constructor(
     private val mediaFilterRepository: MediaFilterRepository,
 ) : MediaDataManager, CoreStartable {
 
-    /** Are there any media notifications active, including the recommendations? */
-    // TODO(b/382680767): rename
-    val hasActiveMediaOrRecommendation: StateFlow<Boolean> =
-        mediaFilterRepository.selectedUserEntries
+    /** Are there any media notifications active? */
+    val hasActiveMedia: StateFlow<Boolean> =
+        mediaFilterRepository.currentUserEntries
             .map { entries -> entries.any { it.value.active } }
             .stateIn(
                 scope = applicationScope,
@@ -71,10 +70,9 @@ constructor(
                 initialValue = false,
             )
 
-    /** Are there any media entries we should display, including the recommendations? */
-    // TODO(b/382680767): rename
-    val hasAnyMediaOrRecommendation: StateFlow<Boolean> =
-        mediaFilterRepository.selectedUserEntries
+    /** Are there any media entries, including inactive ones? */
+    val hasAnyMedia: StateFlow<Boolean> =
+        mediaFilterRepository.currentUserEntries
             .map { entries -> entries.isNotEmpty() }
             .stateIn(
                 scope = applicationScope,
@@ -172,8 +170,6 @@ constructor(
         mediaDataProcessor.dismissMediaData(instanceId, delay, userInitiated = false)
     }
 
-    override fun dismissSmartspaceRecommendation(key: String, delay: Long) {}
-
     override fun onNotificationRemoved(key: String) {
         mediaDataProcessor.onNotificationRemoved(key)
     }
@@ -186,15 +182,9 @@ constructor(
         mediaDataFilter.onSwipeToDismiss()
     }
 
-    override fun hasActiveMediaOrRecommendation() = mediaFilterRepository.hasActiveMedia()
-
-    override fun hasAnyMediaOrRecommendation() = mediaFilterRepository.hasAnyMedia()
-
     override fun hasActiveMedia() = mediaFilterRepository.hasActiveMedia()
 
     override fun hasAnyMedia() = mediaFilterRepository.hasAnyMedia()
-
-    override fun isRecommendationActive() = false
 
     fun reorderMedia() {
         mediaFilterRepository.setOrderedMedia()

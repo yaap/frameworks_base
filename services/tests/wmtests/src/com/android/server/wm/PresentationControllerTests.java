@@ -18,21 +18,24 @@ package com.android.server.wm;
 
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.FLAG_PRESENTATION;
+import static android.view.Display.FLAG_PRIVATE;
 import static android.view.Display.FLAG_TRUSTED;
 import static android.view.WindowManager.TRANSIT_CLOSE;
 import static android.view.WindowManager.TRANSIT_OPEN;
 import static android.view.WindowManager.TRANSIT_WAKE;
+import static android.view.WindowManager.LayoutParams.TYPE_PRESENTATION;
+import static android.view.WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.window.flags.Flags.FLAG_ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 
 import android.annotation.NonNull;
-import android.graphics.Rect;
 import android.os.Binder;
 import android.os.UserHandle;
 import android.platform.test.annotations.DisableFlags;
@@ -40,12 +43,11 @@ import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.view.DisplayInfo;
 import android.view.IWindow;
-import android.view.InsetsSourceControl;
-import android.view.InsetsState;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowManagerGlobal;
+import android.view.WindowRelayoutResult;
 
 import androidx.test.filters.SmallTest;
 
@@ -173,6 +175,59 @@ public class PresentationControllerTests extends WindowTestsBase {
 
     @EnableFlags(FLAG_ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS)
     @Test
+    public void testInvisiblePresentationIsNotAllowed() {
+        final int uid = Binder.getCallingUid();
+        final Task task = createTask(mDefaultDisplay);
+        task.effectiveUid = uid;
+        final ActivityRecord activity = createActivityRecord(task);
+        assertTrue(activity.isVisible());
+
+        // Add a presentation window on a presentation display.
+        final DisplayContent presentationDisplay = createPresentationDisplay();
+        final WindowState window = addPresentationWindow(uid, presentationDisplay.getDisplayId());
+        window.setViewVisibility(View.VISIBLE);
+        final Transition addTransition = window.mTransitionController.getCollectingTransition();
+        completeTransition(addTransition, /*abortSync=*/ true);
+        assertTrue(window.isVisible());
+
+        // Making the presentation view invisible automatically removes it.
+        window.setViewVisibility(View.GONE);
+        assertTrue(window.isVisible());
+        waitHandlerIdle(window.mWmService.mAtmService.mH);
+        final Transition removeTransition = window.mTransitionController.getCollectingTransition();
+        assertEquals(TRANSIT_CLOSE, removeTransition.mType);
+        completeTransition(removeTransition, /*abortSync=*/ false);
+        assertFalse(window.isVisible());
+    }
+
+    @EnableFlags(FLAG_ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS)
+    @Test
+    public void testInvisiblePrivatePresentationIsAllowed() {
+        final int uid = Binder.getCallingUid();
+        final Task task = createTask(mDefaultDisplay);
+        task.effectiveUid = uid;
+        final ActivityRecord activity = createActivityRecord(task);
+        assertTrue(activity.isVisible());
+
+        // Add a private presentation window on a private presentation display.
+        final DisplayContent privateDisplay = createPrivatePresentationDisplay();
+        final WindowState window = addPrivatePresentationWindow(uid,
+                privateDisplay.getDisplayId());
+        window.setViewVisibility(View.VISIBLE);
+        final Transition addTransition = window.mTransitionController.getCollectingTransition();
+        completeTransition(addTransition, /*abortSync=*/ true);
+        assertTrue(window.isVisible());
+
+        // Making the private presentation view invisible is allowed, thus no close transition runs.
+        window.setViewVisibility(View.GONE);
+        assertTrue(window.isVisible());
+        waitHandlerIdle(window.mWmService.mAtmService.mH);
+        assertNull(window.mTransitionController.getCollectingTransition());
+        assertTrue(window.isVisible());
+    }
+
+    @EnableFlags(FLAG_ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS)
+    @Test
     public void testPresentationCannotLaunchOnNonPresentationDisplayWithoutHostHavingGlobalFocus() {
         final int uid = Binder.getCallingUid();
         // Adding a presentation window on an internal display requires a host task
@@ -228,16 +283,49 @@ public class PresentationControllerTests extends WindowTestsBase {
         assertFalse(window.isVisible());
     }
 
+    @EnableFlags(FLAG_ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS)
+    @Test
+    public void testNewPresentationCannotShowOnPresentingDesk() {
+        int uid = Binder.getCallingUid();
+        final DisplayContent presentationDisplay = createPresentationDisplay();
+
+        // Emulate the multi desk environment, where a desk task is created and have apps as child
+        // tasks.
+        final Task rootDeskTask = createTask(presentationDisplay);
+        rootDeskTask.effectiveUid = uid + 1;
+        final Task leafTask = createTaskInRootTask(rootDeskTask, uid);
+        leafTask.effectiveUid = uid;
+        final ActivityRecord activity = createActivityRecord(leafTask);
+        assertTrue(activity.isVisible());
+
+        // Adding a presentation window on the other display must succeed.
+        final WindowState window = addPresentationWindow(uid, DEFAULT_DISPLAY);
+        final Transition addTransition = window.mTransitionController.getCollectingTransition();
+        completeTransition(addTransition, /*abortSync=*/ true);
+        assertTrue(window.isVisible());
+
+        // Adding another presentation window over the presentation must fail.
+        assertAddPresentationWindowFails(uid, DEFAULT_DISPLAY);
+    }
+
     private WindowState addPresentationWindow(int uid, int displayId) {
+        return addPresentationWindowInner(uid, displayId, false /* isPrivatePresentation */);
+    }
+
+    private WindowState addPrivatePresentationWindow(int uid, int displayId) {
+        return addPresentationWindowInner(uid, displayId, true /* isPrivatePresentation */);
+    }
+
+    private WindowState addPresentationWindowInner(int uid, int displayId,
+            boolean isPrivatePresentation) {
         final Session session = createTestSession(mAtm, 1234 /* pid */, uid);
         final int userId = UserHandle.getUserId(uid);
         doReturn(true).when(mWm.mUmInternal).isUserVisible(eq(userId), eq(displayId));
         final WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.TYPE_PRESENTATION);
+                isPrivatePresentation ? TYPE_PRIVATE_PRESENTATION : TYPE_PRESENTATION);
         final IWindow clientWindow = new TestIWindow();
         final int res = mWm.addWindow(session, clientWindow, params, View.VISIBLE, displayId,
-                userId, WindowInsets.Type.defaultVisible(), null, new InsetsState(),
-                new InsetsSourceControl.Array(), new Rect(), new float[1]);
+                userId, WindowInsets.Type.defaultVisible(), null, new WindowRelayoutResult());
         assertTrue(res >= WindowManagerGlobal.ADD_OKAY);
         final WindowState window = mWm.windowForClientLocked(session, clientWindow, false);
         window.mHasSurface = true;
@@ -258,19 +346,38 @@ public class PresentationControllerTests extends WindowTestsBase {
         final WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.TYPE_PRESENTATION);
         return mWm.addWindow(session, clientWindow, params, View.VISIBLE, displayId, userId,
-                WindowInsets.Type.defaultVisible(), null, new InsetsState(),
-                new InsetsSourceControl.Array(), new Rect(), new float[1]);
+                WindowInsets.Type.defaultVisible(), null, new WindowRelayoutResult());
     }
 
     private DisplayContent createPresentationDisplay() {
+        return createPresentationDisplayInner(false /* isPrivateDisplay */);
+    }
+
+    private DisplayContent createPrivatePresentationDisplay() {
+        return createPresentationDisplayInner(true /* isPrivateDisplay */);
+    }
+
+    private DisplayContent createPresentationDisplayInner(boolean isPrivateDisplay) {
         final DisplayInfo displayInfo = new DisplayInfo();
         displayInfo.copyFrom(mDisplayInfo);
         displayInfo.flags = FLAG_PRESENTATION | FLAG_TRUSTED;
+        if (isPrivateDisplay) {
+            displayInfo.flags |= FLAG_PRIVATE;
+            displayInfo.ownerUid = Binder.getCallingUid();
+        }
         displayInfo.displayId = DEFAULT_DISPLAY + 1;
         final DisplayContent dc = createNewDisplay(displayInfo);
         final int displayId = dc.getDisplayId();
         doReturn(dc).when(mWm.mRoot).getDisplayContentOrCreate(displayId);
         return dc;
+    }
+
+    static ActivityRecord createActivityRecord(Task task) {
+        final ActivityRecord activity = createActivityRecord(task.getDisplayContent(), task);
+        // PresentationController finds a host task based on the top resumed activity, so make sure
+        // to set activity to be resumed in the parent task.
+        task.setResumedActivity(activity, "createActivityRecord");
+        return activity;
     }
 
     private void completeTransition(@NonNull Transition transition, boolean abortSync) {

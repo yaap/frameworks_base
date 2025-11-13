@@ -45,22 +45,39 @@ public final class HearingAidStatsLogUtils {
     private static final String TAG = "HearingAidStatsLogUtils";
     private static final boolean DEBUG = true;
     private static final String ACCESSIBILITY_PREFERENCE = "accessibility_prefs";
-    private static final String BT_HEARING_AIDS_PAIRED_HISTORY = "bt_hearing_aids_paired_history";
-    private static final String BT_HEARING_AIDS_CONNECTED_HISTORY =
+
+    private static final String BT_HEARING_DEVICES_PAIRED_HISTORY =
+            "bt_hearing_aids_paired_history";
+    private static final String BT_HEARING_DEVICES_CONNECTED_HISTORY =
             "bt_hearing_aids_connected_history";
+    private static final String BT_LE_HEARING_DEVICES_CONNECTED_HISTORY =
+            "bt_le_hearing_aids_connected_history";
+    // The values here actually represent Bluetooth hearable devices, but were mistyped
+    // as hearing devices in the string value previously. Keep the string values to ensure record
+    // persistence.
     private static final String BT_HEARABLE_DEVICES_PAIRED_HISTORY =
             "bt_hearing_devices_paired_history";
     private static final String BT_HEARABLE_DEVICES_CONNECTED_HISTORY =
             "bt_hearing_devices_connected_history";
+    private static final String BT_LE_HEARABLE_DEVICES_CONNECTED_HISTORY =
+            "bt_le_hearing_devices_connected_history";
+
     private static final String HISTORY_RECORD_DELIMITER = ",";
-    static final String CATEGORY_HEARING_AIDS = "A11yHearingAidsUser";
-    static final String CATEGORY_NEW_HEARING_AIDS = "A11yNewHearingAidsUser";
+
+    static final String CATEGORY_HEARING_DEVICES = "A11yHearingAidsUser";
+    static final String CATEGORY_NEW_HEARING_DEVICES = "A11yNewHearingAidsUser";
+    static final String CATEGORY_LE_HEARING_DEVICES = "A11yLeHearingAidsUser";
+    static final String CATEGORY_NEW_LE_HEARING_DEVICES = "A11yNewLeHearingAidsUser";
+    // The values here actually represent Bluetooth hearable devices, but were mistyped
+    // as hearing devices in the string value previously. Keep the string values to ensure record
+    // persistence.
     static final String CATEGORY_HEARABLE_DEVICES = "A11yHearingDevicesUser";
     static final String CATEGORY_NEW_HEARABLE_DEVICES = "A11yNewHearingDevicesUser";
+    static final String CATEGORY_LE_HEARABLE_DEVICES = "A11yLeHearingDevicesUser";
+    static final String CATEGORY_NEW_LE_HEARABLE_DEVICES = "A11yNewLeHearingDevicesUser";
 
     static final int PAIRED_HISTORY_EXPIRED_DAY = 30;
     static final int CONNECTED_HISTORY_EXPIRED_DAY = 7;
-    private static final int VALID_PAIRED_EVENT_COUNT = 1;
     private static final int VALID_CONNECTED_EVENT_COUNT = 7;
 
     /**
@@ -69,16 +86,21 @@ public final class HearingAidStatsLogUtils {
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
             HistoryType.TYPE_UNKNOWN,
-            HistoryType.TYPE_HEARING_AIDS_PAIRED,
-            HistoryType.TYPE_HEARING_AIDS_CONNECTED,
+            HistoryType.TYPE_HEARING_DEVICES_PAIRED,
+            HistoryType.TYPE_HEARING_DEVICES_CONNECTED,
             HistoryType.TYPE_HEARABLE_DEVICES_PAIRED,
-            HistoryType.TYPE_HEARABLE_DEVICES_CONNECTED})
+            HistoryType.TYPE_HEARABLE_DEVICES_CONNECTED,
+            HistoryType.TYPE_LE_HEARING_CONNECTED,
+            HistoryType.TYPE_LE_HEARABLE_CONNECTED,
+    })
     public @interface HistoryType {
         int TYPE_UNKNOWN = -1;
-        int TYPE_HEARING_AIDS_PAIRED = 0;
-        int TYPE_HEARING_AIDS_CONNECTED = 1;
+        int TYPE_HEARING_DEVICES_PAIRED = 0;
+        int TYPE_HEARING_DEVICES_CONNECTED = 1;
         int TYPE_HEARABLE_DEVICES_PAIRED = 2;
         int TYPE_HEARABLE_DEVICES_CONNECTED = 3;
+        int TYPE_LE_HEARING_CONNECTED = 4;
+        int TYPE_LE_HEARABLE_CONNECTED = 5;
     }
 
     private static final HashMap<String, Integer> sDeviceAddressToBondEntryMap = new HashMap<>();
@@ -137,75 +159,58 @@ public final class HearingAidStatsLogUtils {
             LocalBluetoothProfile profile, int profileState) {
 
         if (isJustBonded(cachedDevice.getAddress())) {
-            // Saves bonded timestamp as the source for judging whether to display
-            // the survey
-            if (cachedDevice.getProfiles().stream().anyMatch(
-                    p -> (p instanceof HearingAidProfile || p instanceof HapClientProfile))) {
-                HearingAidStatsLogUtils.addCurrentTimeToHistory(context,
-                        HearingAidStatsLogUtils.HistoryType.TYPE_HEARING_AIDS_PAIRED);
-            } else if (cachedDevice.getProfiles().stream().anyMatch(
-                    p -> (p instanceof A2dpSinkProfile || p instanceof HeadsetProfile))) {
-                HearingAidStatsLogUtils.addCurrentTimeToHistory(context,
-                        HearingAidStatsLogUtils.HistoryType.TYPE_HEARABLE_DEVICES_PAIRED);
+            // Saves bonded timestamp as the source for judging whether to display the survey
+            if (isHearingDevice(cachedDevice)) {
+                addCurrentTimeToHistory(context, HistoryType.TYPE_HEARING_DEVICES_PAIRED);
+            } else if (isHearableDevice(cachedDevice)) {
+                addCurrentTimeToHistory(context, HistoryType.TYPE_HEARABLE_DEVICES_PAIRED);
             }
             removeFromJustBonded(cachedDevice.getAddress());
         }
 
-        // Saves connected timestamp as the source for judging whether to display
-        // the survey
         if (profileState == BluetoothProfile.STATE_CONNECTED) {
-            if (profile instanceof HearingAidProfile || profile instanceof HapClientProfile) {
-                HearingAidStatsLogUtils.addCurrentTimeToHistory(context,
-                        HearingAidStatsLogUtils.HistoryType.TYPE_HEARING_AIDS_CONNECTED);
-            } else if (profile instanceof A2dpSinkProfile || profile instanceof HeadsetProfile) {
-                HearingAidStatsLogUtils.addCurrentTimeToHistory(context,
-                        HearingAidStatsLogUtils.HistoryType.TYPE_HEARABLE_DEVICES_CONNECTED);
+            // Saves connected timestamp as the source for judging whether to display the survey
+            if (profile instanceof LeAudioProfile) {
+                if (isHearingDevice(cachedDevice)) {
+                    addCurrentTimeToHistory(context, HistoryType.TYPE_LE_HEARING_CONNECTED);
+                } else {
+                    addCurrentTimeToHistory(context, HistoryType.TYPE_LE_HEARABLE_CONNECTED);
+                }
+            } else if (isHearingProfile(profile)) {
+                addCurrentTimeToHistory(context, HistoryType.TYPE_HEARING_DEVICES_CONNECTED);
+            } else if (isHearableProfile(profile)) {
+                addCurrentTimeToHistory(context, HistoryType.TYPE_HEARABLE_DEVICES_CONNECTED);
             }
         }
     }
 
     /**
-     * Returns the user category if the user is already categorized. Otherwise, checks the
-     * history and sees if the user is categorized as one of {@link #CATEGORY_HEARING_AIDS},
-     * {@link #CATEGORY_NEW_HEARING_AIDS}, {@link #CATEGORY_HEARABLE_DEVICES}, and
-     * {@link #CATEGORY_NEW_HEARABLE_DEVICES}.
+     * Returns the user category based on different histories.
      *
      * @param context the request context
      * @return the category which user belongs to
      */
     public static synchronized String getUserCategory(Context context) {
-        LinkedList<Long> hearingAidsConnectedHistory = getHistory(context,
-                HistoryType.TYPE_HEARING_AIDS_CONNECTED);
-        if (hearingAidsConnectedHistory != null
-                && hearingAidsConnectedHistory.size() >= VALID_CONNECTED_EVENT_COUNT) {
-            LinkedList<Long> hearingAidsPairedHistory = getHistory(context,
-                    HistoryType.TYPE_HEARING_AIDS_PAIRED);
-            // Since paired history will be cleared after 30 days. If there's any record within 30
-            // days, the user will be categorized as CATEGORY_NEW_HEARING_AIDS. Otherwise, the user
-            // will be categorized as CATEGORY_HEARING_AIDS.
-            if (hearingAidsPairedHistory != null
-                    && hearingAidsPairedHistory.size() >= VALID_PAIRED_EVENT_COUNT) {
-                return CATEGORY_NEW_HEARING_AIDS;
-            } else {
-                return CATEGORY_HEARING_AIDS;
-            }
-        }
+        boolean isNewPairedHearingUser = hasSufficientData(context,
+                HistoryType.TYPE_HEARING_DEVICES_PAIRED);
+        boolean isNewPairedHearableUser = hasSufficientData(context,
+                HistoryType.TYPE_HEARABLE_DEVICES_PAIRED);
 
-        LinkedList<Long> hearableDevicesConnectedHistory = getHistory(context,
-                HistoryType.TYPE_HEARABLE_DEVICES_CONNECTED);
-        if (hearableDevicesConnectedHistory != null
-                && hearableDevicesConnectedHistory.size() >= VALID_CONNECTED_EVENT_COUNT) {
-            LinkedList<Long> hearableDevicesPairedHistory = getHistory(context,
-                    HistoryType.TYPE_HEARABLE_DEVICES_PAIRED);
-            // Since paired history will be cleared after 30 days. If there's any record within 30
-            // days, the user will be categorized as CATEGORY_NEW_HEARABLE_DEVICES. Otherwise, the
-            // user will be categorized as CATEGORY_HEARABLE_DEVICES.
-            if (hearableDevicesPairedHistory != null
-                    && hearableDevicesPairedHistory.size() >= VALID_PAIRED_EVENT_COUNT) {
-                return CATEGORY_NEW_HEARABLE_DEVICES;
-            } else {
-                return CATEGORY_HEARABLE_DEVICES;
-            }
+        if (hasSufficientData(context, HistoryType.TYPE_LE_HEARING_CONNECTED)) {
+            return isNewPairedHearingUser ? CATEGORY_NEW_LE_HEARING_DEVICES
+                    : CATEGORY_LE_HEARING_DEVICES;
+        }
+        if (hasSufficientData(context, HistoryType.TYPE_HEARING_DEVICES_CONNECTED)) {
+            return isNewPairedHearingUser ? CATEGORY_NEW_HEARING_DEVICES
+                    : CATEGORY_HEARING_DEVICES;
+        }
+        if (hasSufficientData(context, HistoryType.TYPE_LE_HEARABLE_CONNECTED)) {
+            return isNewPairedHearableUser ? CATEGORY_NEW_LE_HEARABLE_DEVICES
+                    : CATEGORY_LE_HEARABLE_DEVICES;
+        }
+        if (hasSufficientData(context, HistoryType.TYPE_HEARABLE_DEVICES_CONNECTED)) {
+            return isNewPairedHearableUser ? CATEGORY_NEW_HEARABLE_DEVICES
+                    : CATEGORY_HEARABLE_DEVICES;
         }
         return "";
     }
@@ -258,7 +263,7 @@ public final class HearingAidStatsLogUtils {
         }
         if (history.peekLast() != null && isSameDay(timestamp, history.peekLast())) {
             if (DEBUG) {
-                Log.w(TAG, "Skip this record, it's same day record");
+                Log.w(TAG, "Skip record of history type=" + type + ", it's same day record");
             }
             return;
         }
@@ -271,14 +276,16 @@ public final class HearingAidStatsLogUtils {
     @Nullable
     static synchronized LinkedList<Long> getHistory(Context context, @HistoryType int type) {
         String spName = HISTORY_TYPE_TO_SP_NAME_MAPPING.get(type);
-        if (BT_HEARING_AIDS_PAIRED_HISTORY.equals(spName)
+        if (BT_HEARING_DEVICES_PAIRED_HISTORY.equals(spName)
                 || BT_HEARABLE_DEVICES_PAIRED_HISTORY.equals(spName)) {
             LinkedList<Long> history = convertToHistoryList(
                     getSharedPreferences(context).getString(spName, ""));
             removeRecordsBeforeDay(history, PAIRED_HISTORY_EXPIRED_DAY);
             return history;
-        } else if (BT_HEARING_AIDS_CONNECTED_HISTORY.equals(spName)
-                || BT_HEARABLE_DEVICES_CONNECTED_HISTORY.equals(spName)) {
+        } else if (BT_HEARING_DEVICES_CONNECTED_HISTORY.equals(spName)
+                || BT_HEARABLE_DEVICES_CONNECTED_HISTORY.equals(spName)
+                || BT_LE_HEARING_DEVICES_CONNECTED_HISTORY.equals(spName)
+                || BT_LE_HEARABLE_DEVICES_CONNECTED_HISTORY.equals(spName)) {
             LinkedList<Long> history = convertToHistoryList(
                     getSharedPreferences(context).getString(spName, ""));
             removeRecordsBeforeDay(history, CONNECTED_HISTORY_EXPIRED_DAY);
@@ -333,6 +340,37 @@ public final class HearingAidStatsLogUtils {
         return Math.abs(ChronoUnit.DAYS.between(date1, date2));
     }
 
+    private static boolean isHearingDevice(CachedBluetoothDevice device) {
+        return device.getProfiles().stream().anyMatch(HearingAidStatsLogUtils::isHearingProfile);
+    }
+
+    private static boolean isHearingProfile(LocalBluetoothProfile profile) {
+        return profile instanceof HearingAidProfile || profile instanceof HapClientProfile;
+    }
+
+    private static boolean isHearableDevice(CachedBluetoothDevice device) {
+        return device.getProfiles().stream().anyMatch(HearingAidStatsLogUtils::isHearableProfile);
+    }
+
+    private static boolean isHearableProfile(LocalBluetoothProfile profile) {
+        return profile instanceof A2dpProfile || profile instanceof HeadsetProfile
+                || profile instanceof LeAudioProfile;
+    }
+
+    private static boolean hasSufficientData(Context context, @HistoryType int historyType) {
+        LinkedList<Long> history = getHistory(context, historyType);
+        if (history == null) {
+            return false;
+        }
+
+        if (historyType == HistoryType.TYPE_HEARING_DEVICES_PAIRED
+                || historyType == HistoryType.TYPE_HEARABLE_DEVICES_PAIRED) {
+            return !history.isEmpty();
+        } else {
+            return history.size() >= VALID_CONNECTED_EVENT_COUNT;
+        }
+    }
+
     private static SharedPreferences getSharedPreferences(Context context) {
         return context.getSharedPreferences(ACCESSIBILITY_PREFERENCE, Context.MODE_PRIVATE);
     }
@@ -341,13 +379,18 @@ public final class HearingAidStatsLogUtils {
     static {
         HISTORY_TYPE_TO_SP_NAME_MAPPING = new HashMap<>();
         HISTORY_TYPE_TO_SP_NAME_MAPPING.put(
-                HistoryType.TYPE_HEARING_AIDS_PAIRED, BT_HEARING_AIDS_PAIRED_HISTORY);
+                HistoryType.TYPE_HEARING_DEVICES_PAIRED, BT_HEARING_DEVICES_PAIRED_HISTORY);
         HISTORY_TYPE_TO_SP_NAME_MAPPING.put(
-                HistoryType.TYPE_HEARING_AIDS_CONNECTED, BT_HEARING_AIDS_CONNECTED_HISTORY);
+                HistoryType.TYPE_HEARING_DEVICES_CONNECTED, BT_HEARING_DEVICES_CONNECTED_HISTORY);
         HISTORY_TYPE_TO_SP_NAME_MAPPING.put(
                 HistoryType.TYPE_HEARABLE_DEVICES_PAIRED, BT_HEARABLE_DEVICES_PAIRED_HISTORY);
         HISTORY_TYPE_TO_SP_NAME_MAPPING.put(
                 HistoryType.TYPE_HEARABLE_DEVICES_CONNECTED, BT_HEARABLE_DEVICES_CONNECTED_HISTORY);
+        HISTORY_TYPE_TO_SP_NAME_MAPPING.put(
+                HistoryType.TYPE_LE_HEARING_CONNECTED, BT_LE_HEARING_DEVICES_CONNECTED_HISTORY);
+        HISTORY_TYPE_TO_SP_NAME_MAPPING.put(
+                HistoryType.TYPE_LE_HEARABLE_CONNECTED, BT_LE_HEARABLE_DEVICES_CONNECTED_HISTORY);
     }
+
     private HearingAidStatsLogUtils() {}
 }

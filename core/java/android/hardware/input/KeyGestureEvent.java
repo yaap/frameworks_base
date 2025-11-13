@@ -115,7 +115,7 @@ public final class KeyGestureEvent {
     public static final int KEY_GESTURE_TYPE_ACCESSIBILITY_SHORTCUT = 60;
     public static final int KEY_GESTURE_TYPE_CLOSE_ALL_DIALOGS = 61;
     public static final int KEY_GESTURE_TYPE_MOVE_TO_NEXT_DISPLAY = 62;
-    public static final int KEY_GESTURE_TYPE_TOGGLE_TALKBACK = 63;
+    public static final int KEY_GESTURE_TYPE_TOGGLE_SCREEN_READER = 63;
     public static final int KEY_GESTURE_TYPE_TOGGLE_STICKY_KEYS = 64;
     public static final int KEY_GESTURE_TYPE_TOGGLE_BOUNCE_KEYS = 65;
     public static final int KEY_GESTURE_TYPE_TOGGLE_SLOW_KEYS = 66;
@@ -129,9 +129,12 @@ public final class KeyGestureEvent {
     public static final int KEY_GESTURE_TYPE_MAXIMIZE_FREEFORM_WINDOW = 74;
     public static final int KEY_GESTURE_TYPE_TOGGLE_DO_NOT_DISTURB = 75;
     public static final int KEY_GESTURE_TYPE_TOGGLE_VOICE_ACCESS = 76;
-    public static final int KEY_GESTURE_TYPE_VOLUME_UP_DOWN_MUTE = 77;
+    public static final int KEY_GESTURE_TYPE_SWITCH_TO_PREVIOUS_DESK = 77;
+    public static final int KEY_GESTURE_TYPE_SWITCH_TO_NEXT_DESK = 78;
+    public static final int KEY_GESTURE_TYPE_VOLUME_UP_DOWN_MUTE = 79;
 
-    public static final int FLAG_CANCELLED = 1;
+    public static final int FLAG_CANCELLED = 1 << 0;
+    public static final int FLAG_LONG_PRESS = 1 << 1;
 
     // NOTE: Valid KeyGestureEvent streams:
     //       - GESTURE_START -> GESTURE_CANCEL
@@ -206,7 +209,7 @@ public final class KeyGestureEvent {
             KEY_GESTURE_TYPE_ACCESSIBILITY_SHORTCUT,
             KEY_GESTURE_TYPE_CLOSE_ALL_DIALOGS,
             KEY_GESTURE_TYPE_MOVE_TO_NEXT_DISPLAY,
-            KEY_GESTURE_TYPE_TOGGLE_TALKBACK,
+            KEY_GESTURE_TYPE_TOGGLE_SCREEN_READER,
             KEY_GESTURE_TYPE_TOGGLE_STICKY_KEYS,
             KEY_GESTURE_TYPE_TOGGLE_BOUNCE_KEYS,
             KEY_GESTURE_TYPE_TOGGLE_SLOW_KEYS,
@@ -220,6 +223,8 @@ public final class KeyGestureEvent {
             KEY_GESTURE_TYPE_MAXIMIZE_FREEFORM_WINDOW,
             KEY_GESTURE_TYPE_TOGGLE_DO_NOT_DISTURB,
             KEY_GESTURE_TYPE_TOGGLE_VOICE_ACCESS,
+            KEY_GESTURE_TYPE_SWITCH_TO_PREVIOUS_DESK,
+            KEY_GESTURE_TYPE_SWITCH_TO_NEXT_DESK,
             KEY_GESTURE_TYPE_VOLUME_UP_DOWN_MUTE,
     })
     @Retention(RetentionPolicy.SOURCE)
@@ -402,6 +407,10 @@ public final class KeyGestureEvent {
         return (mKeyGestureEvent.flags & FLAG_CANCELLED) != 0;
     }
 
+    public boolean isLongPress() {
+        return (mKeyGestureEvent.flags & FLAG_LONG_PRESS) != 0;
+    }
+
     public int getLogEvent() {
         if (getKeyGestureType() == KEY_GESTURE_TYPE_LAUNCH_APPLICATION) {
             return getLogEventFromLaunchAppData(getAppLaunchData());
@@ -430,9 +439,9 @@ public final class KeyGestureEvent {
                 + "keycodes = " + java.util.Arrays.toString(mKeyGestureEvent.keycodes) + ", "
                 + "modifierState = " + mKeyGestureEvent.modifierState + ", "
                 + "keyGestureType = " + keyGestureTypeToString(mKeyGestureEvent.gestureType) + ", "
-                + "action = " + mKeyGestureEvent.action + ", "
+                + "action = " + actionToString(mKeyGestureEvent.action) + ", "
                 + "displayId = " + mKeyGestureEvent.displayId + ", "
-                + "flags = " + mKeyGestureEvent.flags + ", "
+                + "flags = " + flagsToString(mKeyGestureEvent.flags) + ", "
                 + "appLaunchData = " + getAppLaunchData()
                 + " }";
     }
@@ -781,8 +790,8 @@ public final class KeyGestureEvent {
                 return "KEY_GESTURE_TYPE_ACCESSIBILITY_SHORTCUT";
             case KEY_GESTURE_TYPE_CLOSE_ALL_DIALOGS:
                 return "KEY_GESTURE_TYPE_CLOSE_ALL_DIALOGS";
-            case KEY_GESTURE_TYPE_TOGGLE_TALKBACK:
-                return "KEY_GESTURE_TYPE_TOGGLE_TALKBACK";
+            case KEY_GESTURE_TYPE_TOGGLE_SCREEN_READER:
+                return "KEY_GESTURE_TYPE_TOGGLE_SCREEN_READER";
             case KEY_GESTURE_TYPE_TOGGLE_STICKY_KEYS:
                 return "KEY_GESTURE_TYPE_TOGGLE_STICKY_KEYS";
             case KEY_GESTURE_TYPE_TOGGLE_BOUNCE_KEYS:
@@ -809,10 +818,32 @@ public final class KeyGestureEvent {
                 return "KEY_GESTURE_TYPE_TOGGLE_DO_NOT_DISTURB";
             case KEY_GESTURE_TYPE_TOGGLE_VOICE_ACCESS:
                 return "KEY_GESTURE_TYPE_TOGGLE_VOICE_ACCESS";
+            case KEY_GESTURE_TYPE_SWITCH_TO_PREVIOUS_DESK:
+                return "KEY_GESTURE_TYPE_SWITCH_TO_PREVIOUS_DESK";
+            case KEY_GESTURE_TYPE_SWITCH_TO_NEXT_DESK:
+                return "KEY_GESTURE_TYPE_SWITCH_TO_NEXT_DESK";
             case KEY_GESTURE_TYPE_VOLUME_UP_DOWN_MUTE:
                 return "KEY_GESTURE_TYPE_VOLUME_UP_DOWN_MUTE";
             default:
                 return Integer.toHexString(value);
         }
+    }
+
+    private static String actionToString(int action) {
+        return action == ACTION_GESTURE_START ? "START" : "COMPLETE";
+    }
+
+    private static String flagsToString(int flags) {
+        StringBuilder res = new StringBuilder();
+        if ((flags & FLAG_CANCELLED) != 0) {
+            res.append("CANCELLED");
+        }
+        if ((flags & FLAG_LONG_PRESS) != 0) {
+            if (!res.isEmpty()) {
+                res.append(" | ");
+            }
+            res.append("LONG_PRESS");
+        }
+        return res.toString();
     }
 }

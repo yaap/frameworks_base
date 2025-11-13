@@ -4,19 +4,21 @@ container: "system"
 
 # keep-sorted start block=yes newline_separated=yes
 flag {
-     # Holdback study for concurrent MessageQueue.
-     # Do not promote beyond trunkfood.
-     namespace: "system_performance"
-     name: "message_queue_force_legacy"
-     description: "Whether to holdback concurrent MessageQueue (force legacy)."
-     bug: "336880969"
-}
-
-flag {
     name: "adpf_25q2_metrics"
     namespace: "game"
     description: "Add missing metrics for ADPF 25Q2 features."
     bug: "367803904"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "adpf_cap_max_batch_size"
+    namespace: "game"
+    description: "Caps the maximum batch size of work durations that can be sent in a report"
+    is_fixed_read_only: true
+    bug: "406377213"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -167,6 +169,14 @@ flag {
 }
 
 flag {
+    name: "async_trace_for_track"
+    is_exported: true
+    namespace: "perfetto"
+    description: "Enable async trace for track."
+    bug: "407831889"
+}
+
+flag {
     name: "battery_part_status_api"
     is_exported: true
     namespace: "phoenix"
@@ -200,6 +210,20 @@ flag {
 }
 
 flag {
+    name: "bugreport_multi_display_screenshot_enabled"
+    namespace: "crumpet"
+    description: "Enable a flag taking screenshots of all displays in bugreport."
+    bug: "364767133"
+}
+
+flag {
+    name: "count_class_instances_api"
+    namespace: "system_performance"
+    description: "Guards the new count instances of classes api"
+    bug: "337354084"
+}
+
+flag {
     name: "cpu_gpu_headrooms"
     namespace: "game"
     description: "Feature flag for adding CPU/GPU headroom API"
@@ -230,14 +254,6 @@ flag {
 }
 
 flag {
-     name: "force_concurrent_message_queue"
-     namespace: "system_performance"
-     is_exported: true
-     description: "Whether MessageQueue uses the new concurrent implementation"
-     bug: "336880969"
-}
-
-flag {
     name: "get_private_space_settings"
     namespace: "profile_experiences"
     description: "Guards a new Private Profile API in LauncherApps"
@@ -246,11 +262,28 @@ flag {
 }
 
 flag {
-     name: "ipc_data_cache_test_apis"
+     name: "ipc_data_cache_module_adservices"
      namespace: "system_performance"
-     description: "Expose IpcDataCache test apis to mainline modules."
+     description: "IpcDataCache module for AdServices."
+     is_fixed_read_only: true
+     bug: "415306020"
+     is_exported: true
+}
+
+flag {
+     name: "ipc_data_cache_testmode_apis"
+     namespace: "system_performance"
+     description: "Expose IpcDataCache testmode apis to mainline modules."
+     is_fixed_read_only: true
      bug: "396173886"
      is_exported: true
+}
+
+flag {
+    name: "low_light_dream_behavior"
+    namespace: "systemui"
+    description: "New low light dream behavior"
+    bug: "408229468"
 }
 
 flag {
@@ -273,6 +306,17 @@ flag {
 }
 
 flag {
+    name: "material_colors_2025_03"
+    namespace: "systemui"
+    description: "Adding new Material Tokens as of March 2025"
+    bug: "394371316"
+    is_exported: true
+    metadata {
+        purpose: PURPOSE_FEATURE
+    }
+}
+
+flag {
     name: "material_motion_tokens"
     namespace: "systemui"
     description: "Adding new Material Tokens for M3 Motion Spec"
@@ -286,14 +330,6 @@ flag {
     description: "Adding new Material Tokens for M3 Shape (corner radius) Spec"
     bug: "324928718"
     is_exported: true
-}
-
-flag {
-    name: "message_queue_tail_tracking"
-    namespace: "system_performance"
-    description: "track tail of message queue."
-    bug: "305311707"
-    is_fixed_read_only: true
 }
 
 flag {
@@ -371,6 +407,13 @@ flag {
 }
 
 flag {
+     name: "use_concurrent_message_queue_in_apps"
+     namespace: "system_performance"
+     description: "Whether MessageQueue can use the new concurrent implementation in any process"
+     bug: "418770969"
+}
+
+flag {
      namespace: "system_performance"
      name: "enable_has_binders"
      is_exported: true
@@ -409,6 +452,20 @@ flag {
      description: "Control framework initialization APIs of telemetry APIs feature."
      is_fixed_read_only: true
      bug: "324241334"
+}
+
+flag {
+    namespace: "system_performance"
+    name: "zygote_app_launch_latency_ablation"
+    description: "Fast is overrated. Let's make Android slower."
+    bug: "423047108"
+}
+
+flag {
+    namespace: "wear_services"
+    name: "bugreport_deferred_consent_screenshot_fix"
+    description: "Stops always taking a screenshot when consent is deferred."
+    bug: "385709501"
 }
 
 # keep-sorted end

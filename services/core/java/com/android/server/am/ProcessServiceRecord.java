@@ -132,7 +132,7 @@ final class ProcessServiceRecord {
     private final ArraySet<ServiceRecord> mExecutingServices = new ArraySet<>();
 
     /**
-     * All ConnectionRecord this process holds.
+     * All outgoing connections from this process.
      */
     private final ArraySet<ConnectionRecord> mConnections = new ArraySet<>();
 
@@ -393,7 +393,7 @@ final class ProcessServiceRecord {
                 adj = ProcessList.PERCEPTIBLE_APP_ADJ;
             } else if (adj < ProcessList.PERCEPTIBLE_LOW_APP_ADJ) {
                 adj = ProcessList.PERCEPTIBLE_LOW_APP_ADJ;
-            } else if (Flags.addModifyRawOomAdjServiceLevel() && adj < ProcessList.SERVICE_ADJ) {
+            } else if (adj < ProcessList.SERVICE_ADJ) {
                 adj = ProcessList.SERVICE_ADJ;
             } else if (adj < ProcessList.CACHED_APP_MIN_ADJ) {
                 adj = ProcessList.CACHED_APP_MIN_ADJ;

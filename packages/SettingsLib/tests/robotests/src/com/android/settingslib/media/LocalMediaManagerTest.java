@@ -39,6 +39,8 @@ import android.media.AudioManager;
 import android.media.AudioSystem;
 import android.media.MediaRoute2Info;
 import android.media.RoutingSessionInfo;
+import android.media.SuggestedDeviceInfo;
+import android.os.Handler;
 
 import com.android.settingslib.bluetooth.A2dpProfile;
 import com.android.settingslib.bluetooth.CachedBluetoothDevice;
@@ -93,6 +95,9 @@ public class LocalMediaManagerTest {
     private MediaRoute2Info mRouteInfo2;
     @Mock
     private AudioManager mAudioManager;
+    @Mock private Handler mConnectSuggestedDeviceHandler;
+    @Mock private InfoMediaManager.SuggestedDeviceState mSuggestedDeviceState;
+    @Mock private SuggestedDeviceInfo mSuggestedDeviceInfo;
 
     private Context mContext;
     private LocalMediaManager mLocalMediaManager;
@@ -115,6 +120,7 @@ public class LocalMediaManagerTest {
         when(mLocalBluetoothManager.getProfileManager()).thenReturn(mLocalProfileManager);
         when(mLocalProfileManager.getA2dpProfile()).thenReturn(mA2dpProfile);
         when(mLocalProfileManager.getHearingAidProfile()).thenReturn(mHapProfile);
+        when(mSuggestedDeviceState.getSuggestedDeviceInfo()).thenReturn(mSuggestedDeviceInfo);
 
         // Need to call constructor to initialize final fields.
         mInfoMediaManager =
@@ -135,12 +141,16 @@ public class LocalMediaManagerTest {
                 .when(mInfoMediaManager)
                 .getRoutingSessionsForPackage();
 
-        mInfoMediaDevice1 = spy(new InfoMediaDevice(mContext, mRouteInfo1, /* item */ null));
-        mInfoMediaDevice2 = new InfoMediaDevice(mContext, mRouteInfo2, /* item */ null);
+        mInfoMediaDevice1 = spy(
+                new InfoMediaDevice(mContext, mRouteInfo1, /* dynamicRouteAttributes= */
+                        null, /* item */ null));
+        mInfoMediaDevice2 = new InfoMediaDevice(mContext, mRouteInfo2, /* dynamicRouteAttributes= */
+                null, /* item */ null);
         mLocalMediaManager =
                 new LocalMediaManager(
                         mContext, mLocalBluetoothManager, mInfoMediaManager, TEST_PACKAGE_NAME);
         mLocalMediaManager.mAudioManager = mAudioManager;
+        mLocalMediaManager.mConnectSuggestedDeviceHandler = mConnectSuggestedDeviceHandler;
         mLocalMediaManager.registerCallback(mCallback);
         clearInvocations(mCallback);
     }
@@ -177,8 +187,9 @@ public class LocalMediaManagerTest {
 
         assertThat(mLocalMediaManager.connectDevice(mInfoMediaDevice2)).isTrue();
 
-        assertThat(mInfoMediaDevice2.getState()).isEqualTo(LocalMediaManager.MediaDeviceState
-                .STATE_CONNECTING);
+        verify(mInfoMediaManager)
+                .setDeviceState(
+                        mInfoMediaDevice2, LocalMediaManager.MediaDeviceState.STATE_CONNECTING);
     }
 
     @Test
@@ -379,8 +390,9 @@ public class LocalMediaManagerTest {
                 .STATE_DISCONNECTED);
         mLocalMediaManager.mMediaDeviceCallback.onConnectedDeviceChanged(TEST_DEVICE_ID_1);
 
-        assertThat(mInfoMediaDevice1.getState()).isEqualTo(LocalMediaManager.MediaDeviceState
-                .STATE_CONNECTED);
+        verify(mInfoMediaManager)
+                .setDeviceState(
+                        mInfoMediaDevice1, LocalMediaManager.MediaDeviceState.STATE_CONNECTED);
     }
 
     @Test
@@ -404,7 +416,8 @@ public class LocalMediaManagerTest {
         mLocalMediaManager.connectDevice(device);
 
         mLocalMediaManager.mDeviceAttributeChangeCallback.onDeviceAttributesChanged();
-        verify(device).setState(LocalMediaManager.MediaDeviceState.STATE_CONNECTING_FAILED);
+        verify(mInfoMediaManager)
+                .setDeviceState(device, LocalMediaManager.MediaDeviceState.STATE_CONNECTING_FAILED);
     }
 
     @Test
@@ -420,8 +433,10 @@ public class LocalMediaManagerTest {
                 .STATE_CONNECTED);
         mLocalMediaManager.mMediaDeviceCallback.onRequestFailed(REASON_UNKNOWN_ERROR);
 
-        assertThat(mInfoMediaDevice1.getState()).isEqualTo(LocalMediaManager.MediaDeviceState
-                .STATE_CONNECTING_FAILED);
+        verify(mInfoMediaManager)
+                .setDeviceState(
+                        mInfoMediaDevice1,
+                        LocalMediaManager.MediaDeviceState.STATE_CONNECTING_FAILED);
         assertThat(mInfoMediaDevice2.getState()).isEqualTo(LocalMediaManager.MediaDeviceState
                 .STATE_CONNECTED);
     }
@@ -483,6 +498,7 @@ public class LocalMediaManagerTest {
         mLocalMediaManager.mMediaDeviceCallback.onDeviceListAdded(devices);
 
         assertThat(mLocalMediaManager.mMediaDevices).hasSize(2);
+        assertThat(mLocalMediaManager.mMediaDevices.getLast().isMutingExpectedDevice()).isTrue();
         verify(mCallback).onDeviceListUpdate(any());
     }
 
@@ -606,5 +622,51 @@ public class LocalMediaManagerTest {
         mLocalMediaManager.mMediaDevices.add(device2);
 
         assertThat(mLocalMediaManager.updateCurrentConnectedDevice()).isEqualTo(phoneDevice);
+    }
+
+    @Test
+    public void connectSuggestedDevice_deviceIsDiscovered_immediatelyConnects() {
+        when(mInfoMediaManager.getSuggestedDevice()).thenReturn(mSuggestedDeviceState);
+        when(mSuggestedDeviceInfo.getRouteId()).thenReturn(TEST_DEVICE_ID_1);
+        mLocalMediaManager.mMediaDevices.add(mInfoMediaDevice1);
+
+        mLocalMediaManager.connectSuggestedDevice(mSuggestedDeviceState);
+
+        verify(mInfoMediaManager).connectToDevice(mInfoMediaDevice1);
+        verify(mInfoMediaManager, never()).startScan();
+    }
+
+    @Test
+    public void connectSuggestedDevice_deviceIsNotDiscovered_scanStarted() {
+        when(mInfoMediaManager.getSuggestedDevice()).thenReturn(mSuggestedDeviceState);
+        when(mSuggestedDeviceInfo.getRouteId()).thenReturn(TEST_DEVICE_ID_2);
+        mLocalMediaManager.mMediaDevices.add(mInfoMediaDevice1);
+
+        mLocalMediaManager.connectSuggestedDevice(mSuggestedDeviceState);
+
+        verify(mInfoMediaManager).startScan();
+        verify(mInfoMediaManager, never()).connectToDevice(mInfoMediaDevice1);
+    }
+
+    @Test
+    public void connectSuggestedDevice_deviceDiscoveredAfter_connects() {
+        when(mInfoMediaManager.getSuggestedDevice()).thenReturn(mSuggestedDeviceState);
+        when(mSuggestedDeviceInfo.getRouteId()).thenReturn(TEST_DEVICE_ID_1);
+        mLocalMediaManager.mMediaDevices.add(mInfoMediaDevice2);
+
+        mLocalMediaManager.connectSuggestedDevice(mSuggestedDeviceState);
+        mLocalMediaManager.mMediaDevices.add(mInfoMediaDevice1);
+        mLocalMediaManager.dispatchDeviceListUpdate();
+
+        verify(mInfoMediaManager).connectToDevice(mInfoMediaDevice1);
+        verify(mInfoMediaManager).startScan();
+    }
+
+    @Test
+    public void getSessionReleaseType_returnCorrectType() {
+        when(mInfoMediaManager.getSessionReleaseType())
+                .thenReturn(RoutingSessionInfo.RELEASE_TYPE_SHARING);
+        assertThat(mLocalMediaManager.getSessionReleaseType())
+                .isEqualTo(RoutingSessionInfo.RELEASE_TYPE_SHARING);
     }
 }

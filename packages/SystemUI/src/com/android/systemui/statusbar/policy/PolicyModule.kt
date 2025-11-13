@@ -16,12 +16,15 @@ package com.android.systemui.statusbar.policy
 
 import android.hardware.SensorPrivacyManager.Sensors.CAMERA
 import android.hardware.SensorPrivacyManager.Sensors.MICROPHONE
+import android.os.UserManager.DISALLOW_ADJUST_VOLUME
 import android.os.UserManager.DISALLOW_CAMERA_TOGGLE
 import android.os.UserManager.DISALLOW_CONFIG_LOCATION
 import android.os.UserManager.DISALLOW_MICROPHONE_TOGGLE
 import android.os.UserManager.DISALLOW_SHARE_LOCATION
 import com.android.systemui.Flags
-import com.android.systemui.modes.shared.ModesUi
+import com.android.systemui.flashlight.FlashlightModule
+import com.android.systemui.flashlight.flags.FlashlightStrength
+import com.android.systemui.flashlight.shared.model.FlashlightModel
 import com.android.systemui.qs.QsEventLogger
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.shared.model.TileCategory
@@ -31,8 +34,8 @@ import com.android.systemui.qs.tiles.AODTile
 import com.android.systemui.qs.tiles.CaffeineTile
 import com.android.systemui.qs.tiles.CameraToggleTile
 import com.android.systemui.qs.tiles.DcDimTile
-import com.android.systemui.qs.tiles.DndTile
 import com.android.systemui.qs.tiles.FlashlightTile
+import com.android.systemui.qs.tiles.FlashlightTileWithLevel
 import com.android.systemui.qs.tiles.FlashlightStrengthTile
 import com.android.systemui.qs.tiles.GamingModeTile
 import com.android.systemui.qs.tiles.HeadsUpTile
@@ -57,8 +60,7 @@ import com.android.systemui.qs.tiles.impl.alarm.domain.model.AlarmTileModel
 import com.android.systemui.qs.tiles.impl.alarm.ui.mapper.AlarmTileMapper
 import com.android.systemui.qs.tiles.impl.flashlight.domain.interactor.FlashlightTileDataInteractor
 import com.android.systemui.qs.tiles.impl.flashlight.domain.interactor.FlashlightTileUserActionInteractor
-import com.android.systemui.qs.tiles.impl.flashlight.domain.model.FlashlightTileModel
-import com.android.systemui.qs.tiles.impl.flashlight.ui.mapper.FlashlightMapper
+import com.android.systemui.qs.tiles.impl.flashlight.ui.mapper.FlashlightTileMapper
 import com.android.systemui.qs.tiles.impl.location.domain.interactor.LocationTileDataInteractor
 import com.android.systemui.qs.tiles.impl.location.domain.interactor.LocationTileUserActionInteractor
 import com.android.systemui.qs.tiles.impl.location.domain.model.LocationTileModel
@@ -92,7 +94,7 @@ import dagger.multibindings.IntoMap
 import dagger.multibindings.StringKey
 import javax.inject.Provider
 
-@Module
+@Module(includes = [FlashlightModule::class])
 interface PolicyModule {
 
     /** Inject WorkModeTile into tileMap in QSModule */
@@ -104,7 +106,7 @@ interface PolicyModule {
     @Binds
     @IntoMap
     @StringKey(FLASHLIGHT_TILE_SPEC)
-    fun provideAirplaneModeAvailabilityInteractor(
+    fun provideFlashlightAvailabilityInteractor(
         impl: FlashlightTileDataInteractor
     ): QSTileAvailabilityInteractor
 
@@ -144,21 +146,14 @@ interface PolicyModule {
         const val WORK_MODE_TILE_SPEC = "work"
         const val CAMERA_TOGGLE_TILE_SPEC = "cameratoggle"
         const val MIC_TOGGLE_TILE_SPEC = "mictoggle"
-        const val DND_TILE_SPEC = "dnd"
+        const val MODES_TILE_SPEC = "dnd" // Value is "DND" to replace the old DND tile.
         const val MODES_DND_TILE_SPEC = "modes_dnd"
 
-        /** Inject DndTile or ModesTile into tileMap in QSModule based on feature flag */
+        /** Inject ModesTile into tileMap in QSModule */
         @Provides
         @IntoMap
-        @StringKey(DND_TILE_SPEC)
-        fun bindDndOrModesTile(
-            // Using providers to make sure that the unused tile isn't initialised at all if the
-            // flag is off.
-            dndTile: Provider<DndTile>,
-            modesTile: Provider<ModesTile>,
-        ): QSTileImpl<*> {
-            return if (ModesUi.isEnabled) modesTile.get() else dndTile.get()
-        }
+        @StringKey(MODES_TILE_SPEC)
+        fun bindModesTile(tile: ModesTile): QSTileImpl<*> = tile
 
         /** Inject ModesDndTile into tileViewModelMap in QSModule */
         @Provides
@@ -187,8 +182,8 @@ interface PolicyModule {
         @IntoMap
         @StringKey(FLASHLIGHT_TILE_SPEC)
         fun provideFlashlightTileViewModel(
-            factory: QSTileViewModelFactory.Static<FlashlightTileModel>,
-            mapper: FlashlightMapper,
+            factory: QSTileViewModelFactory.Static<FlashlightModel>,
+            mapper: FlashlightTileMapper,
             stateInteractor: FlashlightTileDataInteractor,
             userActionInteractor: FlashlightTileUserActionInteractor,
         ): QSTileViewModel =
@@ -422,48 +417,36 @@ interface PolicyModule {
             return factory.create(MICROPHONE)
         }
 
-        /** Inject DND tile or Modes tile config based on feature flag */
+        /** Inject Modes tile config based on feature flag */
         @Provides
         @IntoMap
-        @StringKey(DND_TILE_SPEC)
-        fun provideDndOrModesTileConfig(uiEventLogger: QsEventLogger): QSTileConfig =
-            if (ModesUi.isEnabled) {
-                QSTileConfig(
-                    tileSpec = TileSpec.create(DND_TILE_SPEC),
-                    uiConfig =
-                        QSTileUIConfig.Resource(
-                            iconRes = com.android.internal.R.drawable.ic_zen_priority_modes,
-                            labelRes = R.string.quick_settings_modes_label,
-                        ),
-                    instanceId = uiEventLogger.getNewInstanceId(),
-                    category = TileCategory.CONNECTIVITY,
-                )
-            } else {
-                QSTileConfig(
-                    tileSpec = TileSpec.create(DND_TILE_SPEC),
-                    uiConfig =
-                        QSTileUIConfig.Resource(
-                            iconRes = R.drawable.qs_dnd_icon_off,
-                            labelRes = R.string.quick_settings_dnd_label,
-                        ),
-                    instanceId = uiEventLogger.getNewInstanceId(),
-                    category = TileCategory.CONNECTIVITY,
-                )
-            }
+        @StringKey(MODES_TILE_SPEC)
+        fun provideModesTileConfig(uiEventLogger: QsEventLogger): QSTileConfig =
+            QSTileConfig(
+                tileSpec = TileSpec.create(MODES_TILE_SPEC),
+                uiConfig =
+                    QSTileUIConfig.Resource(
+                        iconRes = com.android.internal.R.drawable.ic_zen_priority_modes,
+                        labelRes = R.string.quick_settings_modes_label,
+                    ),
+                instanceId = uiEventLogger.getNewInstanceId(),
+                policy = QSTilePolicy.Restricted(listOf(DISALLOW_ADJUST_VOLUME)),
+                category = TileCategory.UTILITIES,
+            )
 
         /** Inject ModesTile into tileViewModelMap in QSModule */
         @Provides
         @IntoMap
-        @StringKey(DND_TILE_SPEC)
+        @StringKey(MODES_TILE_SPEC)
         fun provideModesTileViewModel(
             factory: QSTileViewModelFactory.Static<ModesTileModel>,
             mapper: ModesTileMapper,
             stateInteractor: ModesTileDataInteractor,
             userActionInteractor: ModesTileUserActionInteractor,
         ): QSTileViewModel =
-            if (ModesUi.isEnabled && Flags.qsNewTilesFuture())
+            if (Flags.qsNewTilesFuture())
                 factory.create(
-                    TileSpec.create(DND_TILE_SPEC),
+                    TileSpec.create(MODES_TILE_SPEC),
                     userActionInteractor,
                     stateInteractor,
                     mapper,
@@ -482,7 +465,7 @@ interface PolicyModule {
                         labelRes = R.string.quick_settings_dnd_label,
                     ),
                 instanceId = uiEventLogger.getNewInstanceId(),
-                category = TileCategory.CONNECTIVITY,
+                category = TileCategory.UTILITIES,
             )
 
         @Provides
@@ -500,13 +483,20 @@ interface PolicyModule {
                 stateInteractor,
                 mapper,
             )
-    }
 
-    /** Inject FlashlightStrengthTile into tileMap in QSModule */
-    @Binds
-    @IntoMap
-    @StringKey(FlashlightStrengthTile.TILE_SPEC)
-    fun bindFlashlightTile(flashlightStrengthTile: FlashlightStrengthTile): QSTileImpl<*>
+        /**
+         * Inject FlashlightTile or FlashlightTileWithLevel into tileMap in QSModule based on flag
+         */
+        @Provides
+        @IntoMap
+        @StringKey(FlashlightTile.TILE_SPEC)
+        fun provideBinaryOrLevelOldFlashlightTile(
+            binaryTile: Provider<FlashlightTile>,
+            levelTile: Provider<FlashlightTileWithLevel>,
+        ): QSTileImpl<*> {
+            return if (FlashlightStrength.isEnabled) levelTile.get() else binaryTile.get()
+        }
+    }
 
     /** Inject LocationTile into tileMap in QSModule */
     @Binds

@@ -28,49 +28,10 @@ flag {
 }
 
 flag {
-    name: "modifier_shortcut_dump"
-    namespace: "input"
-    description: "Dump keyboard shortcuts in dumpsys window"
-    bug: "351963350"
-}
-
-flag {
-    name: "modifier_shortcut_manager_refactor"
-    namespace: "input"
-    description: "Refactor ModifierShortcutManager internal representation of shortcuts."
-    bug: "358603902"
-}
-
-flag {
-    name: "input_manager_lifecycle_support"
-    namespace: "input"
-    description: "Add support for Lifecycle support in input manager"
-    bug: "362473586"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     namespace: "input_native"
     name: "manage_key_gestures"
     description: "Manage key gestures through Input APIs"
     is_exported: true
-    bug: "358569822"
-}
-
-flag {
-    namespace: "input_native"
-    name: "use_key_gesture_event_handler"
-    description: "Use KeyGestureEvent handler APIs to control system shortcuts and key gestures"
-    bug: "358569822"
-}
-
-flag {
-    namespace: "input"
-    name: "use_key_gesture_event_handler_multi_key_gestures"
-    description: "Use KeyGestureEvent handler APIs to control multi key press gestures"
     bug: "358569822"
 }
 
@@ -228,4 +189,36 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "hid_bluetooth_wakeup"
+    namespace: "desktop_pnp"
+    description: "Allow Bluetooth HID profile connection to fully wake up the device."
+    bug: "385357349"
+}
+
+flag {
+    name: "create_virtual_keyboard_api"
+    namespace: "input"
+    is_exported: true
+    description: "Adds support for creating a virtual keyboard API"
+    bug: "416054433"
+}
+
+flag {
+    name: "fix_keyboard_interceptor_policy_call"
+    namespace: "input"
+    description: "Fixes keyboard interceptor calls to the policy"
+    bug: "358569822"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "mouse_to_touch_per_app_compat"
+    namespace: "lse_desktop_experience"
+    description: "Enables per-app overrides compatibility for mouse to touch"
+    bug: "413207127"
 }

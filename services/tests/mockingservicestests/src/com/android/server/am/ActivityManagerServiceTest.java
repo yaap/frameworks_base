@@ -43,7 +43,6 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.when;
 import static com.android.server.am.ActivityManagerInternalTest.CustomThread;
 import static com.android.server.am.ActivityManagerService.Injector;
-import static com.android.server.am.Flags.FLAG_AVOID_RESOLVING_TYPE;
 import static com.android.server.am.ProcessList.NETWORK_STATE_BLOCK;
 import static com.android.server.am.ProcessList.NETWORK_STATE_NO_CHANGE;
 import static com.android.server.am.ProcessList.NETWORK_STATE_UNBLOCK;
@@ -154,7 +153,6 @@ import org.mockito.MockitoSession;
 import org.mockito.quality.Strictness;
 import org.mockito.verification.VerificationMode;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -969,7 +967,6 @@ public class ActivityManagerServiceTest {
                         null));
     }
 
-    @RequiresFlagsEnabled(FLAG_AVOID_RESOLVING_TYPE)
     @Test
     @SuppressWarnings("GuardedBy")
     public void testBroadcastStickyIntent_verifyTypeNotResolved() throws Exception {
@@ -1716,8 +1713,7 @@ public class ActivityManagerServiceTest {
         }
 
         @Override
-        public AppOpsService getAppOpsService(File recentAccessesFile, File storageFile,
-                Handler handler) {
+        public AppOpsService getAppOpsService(Handler handler) {
             return mAppOpsService;
         }
 

@@ -301,12 +301,6 @@ public class AppProfiler {
     @GuardedBy("mProfilerLock")
     private boolean mMemWatchIsUserInitiated;
 
-    @GuardedBy("mService")
-    boolean mHasHomeProcess;
-
-    @GuardedBy("mService")
-    boolean mHasPreviousProcess;
-
     /**
      * Used to collect per-process CPU use for ANRs, battery stats, etc.
      * Must acquire this object's lock when accessing it.
@@ -2441,7 +2435,7 @@ public class AppProfiler {
                 }
             } else if (instr != null && instr.mProfileFile != null) {
                 profilerInfo = new ProfilerInfo(instr.mProfileFile, null, 0, false, false, null,
-                        false, 0, ProfilerInfo.OUTPUT_VERSION_DEFAULT);
+                        false, 0, ProfilerInfo.OUTPUT_VERSION_DEFAULT, false, 0);
             }
             if (mAppAgentMap != null && mAppAgentMap.containsKey(processName)) {
                 // We need to do a debuggable check here. See setAgentApp for why the check is
@@ -2452,7 +2446,7 @@ public class AppProfiler {
                     if (profilerInfo == null) {
                         profilerInfo = new ProfilerInfo(null, null, 0, false, false,
                                 mAppAgentMap.get(processName), true, 0,
-                                ProfilerInfo.OUTPUT_VERSION_DEFAULT);
+                                ProfilerInfo.OUTPUT_VERSION_DEFAULT, false, 0);
                     } else if (profilerInfo.agent == null) {
                         profilerInfo = profilerInfo.setAgent(mAppAgentMap.get(processName), true);
                     }

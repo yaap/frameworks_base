@@ -29,6 +29,7 @@ import static android.view.Display.FLAG_OWN_FOCUS;
 import static android.view.Display.INVALID_DISPLAY;
 import static android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
 import static android.view.WindowManager.LayoutParams.FLAG_SECURE;
+import static android.view.WindowManager.LayoutParams.INPUT_FEATURE_DISPLAY_TOPOLOGY_AWARE;
 import static android.view.WindowManager.LayoutParams.INPUT_FEATURE_SENSITIVE_FOR_PRIVACY;
 import static android.view.WindowManager.LayoutParams.INPUT_FEATURE_SPY;
 import static android.view.WindowManager.LayoutParams.INVALID_WINDOW_TYPE;
@@ -299,9 +300,9 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         final InsetsState outInsetsState = new InsetsState();
         final InsetsSourceControl.Array outControls = new InsetsSourceControl.Array();
         final WindowRelayoutResult outRelayoutResult = new WindowRelayoutResult(outFrames,
-                outConfig, outSurfaceControl, outInsetsState, outControls);
+                outConfig, outInsetsState, outControls);
         mWm.relayoutWindow(win.mSession, win.mClient, win.mAttrs, w, h, View.GONE, 0, 0, 0,
-                outRelayoutResult);
+                outRelayoutResult, outSurfaceControl);
         // The window is in transition, so its destruction is deferred.
         assertTrue(win.mAnimatingExit);
         assertFalse(win.mDestroying);
@@ -312,7 +313,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         win.mActivityRecord.setVisibleRequested(false);
         win.mActivityRecord.setVisible(false);
         mWm.relayoutWindow(win.mSession, win.mClient, win.mAttrs, w, h, View.GONE, 0, 0, 0,
-                outRelayoutResult);
+                outRelayoutResult, outSurfaceControl);
         // Because the window is already invisible, it doesn't need to apply exiting animation
         // and WMS#tryStartExitingAnimation() will destroy the surface directly.
         assertFalse(win.mAnimatingExit);
@@ -321,7 +322,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
 
         // Invisible requested activity should not get the last config even if its view is visible.
         mWm.relayoutWindow(win.mSession, win.mClient, win.mAttrs, w, h, View.VISIBLE, 0, 0, 0,
-                outRelayoutResult);
+                outRelayoutResult, outSurfaceControl);
         assertEquals(0, outConfig.getMergedConfiguration().densityDpi);
         // Non activity window can still get the last config.
         win.mActivityRecord = null;
@@ -431,7 +432,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
             seq = 2;
         }
         mWm.relayoutWindow(win.mSession, win.mClient, newParams, 100, 200, View.VISIBLE, 0, seq,
-                0, new WindowRelayoutResult());
+                0, new WindowRelayoutResult(), new SurfaceControl());
 
         ArgumentCaptor<Integer> changedFlags = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<Integer> changedPrivateFlags = ArgumentCaptor.forClass(Integer.class);
@@ -519,7 +520,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         mWm.attachWindowContextToWindowToken(mAppThread, new Binder(), windowToken.token);
 
         verify(mWm.mWindowContextListenerController, never()).registerWindowContainerListener(
-                any(), any(), any(), anyInt(), any(), anyBoolean());
+                any(), any(), any(), anyInt(), anyBoolean(), any(), anyBoolean());
     }
 
     @Test
@@ -536,7 +537,8 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         mWm.attachWindowContextToWindowToken(mAppThread, clientToken, windowToken.token);
         final WindowProcessController wpc = mAtm.getProcessController(mAppThread);
         verify(mWm.mWindowContextListenerController).registerWindowContainerListener(wpc,
-                clientToken, windowToken, TYPE_INPUT_METHOD, windowToken.mOptions,
+                clientToken, windowToken, TYPE_INPUT_METHOD,
+                true /* callerCanManageAppTokens */, windowToken.mOptions,
                 false /* shouldDispatchConfigWhenRegistering */);
     }
 
@@ -563,18 +565,18 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         doReturn(true).when(mWm.mUmInternal).isUserVisible(anyInt(), anyInt());
 
         mWm.addWindow(session, new TestIWindow(), params, View.VISIBLE, DEFAULT_DISPLAY,
-                UserHandle.USER_SYSTEM, WindowInsets.Type.defaultVisible(), null, new InsetsState(),
-                new InsetsSourceControl.Array(), new Rect(), new float[1]);
+                UserHandle.USER_SYSTEM, WindowInsets.Type.defaultVisible(), null,
+                new WindowRelayoutResult());
 
         verify(mWm.mWindowContextListenerController, never()).registerWindowContainerListener(any(),
-                any(), any(), anyInt(), any(), anyBoolean());
+                any(), any(), anyInt(), anyBoolean(), any(), anyBoolean());
 
         // Even if the given display id is INVALID_DISPLAY, the specified params.token should be
         // able to map the corresponding display.
         final int result = mWm.addWindow(
                 session, new TestIWindow(), params, View.VISIBLE, INVALID_DISPLAY,
-                UserHandle.USER_SYSTEM, WindowInsets.Type.defaultVisible(), null, new InsetsState(),
-                new InsetsSourceControl.Array(), new Rect(), new float[1]);
+                UserHandle.USER_SYSTEM, WindowInsets.Type.defaultVisible(), null,
+                new WindowRelayoutResult());
         assertThat(result).isAtLeast(WindowManagerGlobal.ADD_OKAY);
 
         assertTrue(parentWin.hasChild());
@@ -1129,6 +1131,24 @@ public class WindowManagerServiceTests extends WindowTestsBase {
     }
 
     @Test
+    public void testGrantInputChannel_sanitizeDisplayTopologyAwareForManageDisplaysPermission() {
+        final Session session = mock(Session.class);
+        final int callingUid = Process.FIRST_APPLICATION_UID;
+        final int callingPid = 1234;
+        final SurfaceControl surfaceControl = mock(SurfaceControl.class);
+        final IBinder window = new Binder();
+        final InputTransferToken inputTransferToken = mock(InputTransferToken.class);
+
+        final InputChannel inputChannel = new InputChannel();
+        assertThrows(SecurityException.class, () ->
+                mWm.grantInputChannel(session, callingUid, callingPid, DEFAULT_DISPLAY,
+                        surfaceControl, window, null /* hostInputToken */, 0 /* flags */,
+                        PRIVATE_FLAG_TRUSTED_OVERLAY, INPUT_FEATURE_DISPLAY_TOPOLOGY_AWARE,
+                        TYPE_APPLICATION, null /* windowToken */, inputTransferToken,
+                        "TestInputChannel", inputChannel));
+    }
+
+    @Test
     public void testUpdateInputChannel_sanitizeSpyWindowForApplications() {
         final Session session = mock(Session.class);
         final int callingUid = Process.FIRST_APPLICATION_UID;
@@ -1321,7 +1341,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         final InsetsState outInsetsState = new InsetsState();
         final InsetsSourceControl.Array outControls = new InsetsSourceControl.Array();
         final WindowRelayoutResult outRelayoutResult = new WindowRelayoutResult(outFrames,
-                outConfig, outSurfaceControl, outInsetsState, outControls);
+                outConfig, outInsetsState, outControls);
 
         final ActivityRecord activity = win.mActivityRecord;
         final ActivityWindowInfo expectedInfo = new ActivityWindowInfo();
@@ -1331,7 +1351,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         activity.setVisible(false);
 
         mWm.relayoutWindow(win.mSession, win.mClient, win.mAttrs, w, h, View.VISIBLE, 0, 0, 0,
-                outRelayoutResult);
+                outRelayoutResult, outSurfaceControl);
 
         // No latest reported value, so return empty when activity is invisible
         final ActivityWindowInfo activityWindowInfo = outRelayoutResult.activityWindowInfo;
@@ -1341,7 +1361,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         activity.setVisible(true);
 
         mWm.relayoutWindow(win.mSession, win.mClient, win.mAttrs, w, h, View.VISIBLE, 0, 0, 0,
-                outRelayoutResult);
+                outRelayoutResult, outSurfaceControl);
 
         // Report the latest when activity is visible.
         final ActivityWindowInfo activityWindowInfo2 = outRelayoutResult.activityWindowInfo;
@@ -1352,7 +1372,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         activity.setVisible(false);
 
         mWm.relayoutWindow(win.mSession, win.mClient, win.mAttrs, w, h, View.VISIBLE, 0, 0, 0,
-                outRelayoutResult);
+                outRelayoutResult, outSurfaceControl);
 
         // Report the last reported value when activity is invisible.
         final ActivityWindowInfo activityWindowInfo3 = outRelayoutResult.activityWindowInfo;
@@ -1372,8 +1392,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
                 LayoutParams.TYPE_APPLICATION_OVERLAY);
 
         int result = mWm.addWindow(session, new TestIWindow(), params, View.VISIBLE, displayId,
-                userId, WindowInsets.Type.defaultVisible(), null, new InsetsState(),
-                new InsetsSourceControl.Array(), new Rect(), new float[1]);
+                userId, WindowInsets.Type.defaultVisible(), null, new WindowRelayoutResult());
 
         assertThat(result).isEqualTo(WindowManagerGlobal.ADD_INVALID_DISPLAY);
     }
@@ -1414,6 +1433,7 @@ public class WindowManagerServiceTests extends WindowTestsBase {
     public void testUpdateOverlayWindows_multipleWindowsRequestHiding_hideOverlaysWithAnyUids() {
         WindowState overlayWindow = newWindowBuilder("overlay_window",
                 TYPE_APPLICATION_OVERLAY).build();
+        setFieldValue(overlayWindow.mSession, "mCanAddInternalSystemWindow", false);
         WindowState appWindow1 = newWindowBuilder("app_window_1", TYPE_APPLICATION).build();
         WindowState appWindow2 = newWindowBuilder("app_window_2", TYPE_APPLICATION).build();
         makeWindowVisible(appWindow1, appWindow2, overlayWindow);
@@ -1433,6 +1453,11 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         mWm.updateNonSystemOverlayWindowsVisibilityIfNeeded(appWindow2, true);
 
         verify(overlayWindow).setForceHideNonSystemOverlayWindowIfNeeded(true);
+        assertTrue(overlayWindow.isForceHiddenNonSystemOverlayWindow());
+        assertNotNull(overlayWindow.getAnimation());
+        assertEquals(mContext.getResources().getInteger(
+                com.android.internal.R.integer.config_shortAnimTime),
+                overlayWindow.getAnimation().getDurationHint());
     }
 
     @Test
@@ -1458,6 +1483,10 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         doReturn(true).when(app2).hideNonSystemOverlayWindowsWhenVisible();
 
         makeWindowVisible(saw, app1, app2);
+        spyOn(saw.mWinAnimator);
+        // Disable animation so visibility policy flag can be set immediately to verify.
+        doReturn(false).when(saw.mWinAnimator).applyAnimationLocked(
+                anyInt(), anyBoolean());
         assertThat(saw.isVisibleByPolicy()).isTrue();
 
         // Two hideNonSystemOverlayWindows windows: SAW is hidden.
@@ -1542,7 +1571,6 @@ public class WindowManagerServiceTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_CONDENSE_CONFIGURATION_CHANGE_FOR_SIMPLE_MODE)
     public void createImplFromParcel_invalidSettingType_throwsException() {
         final Parcelable.Creator<ConfigurationChangeSetting> creator =
                 new ConfigurationChangeSetting.CreatorImpl(true /* isSystem */);
@@ -1560,7 +1588,6 @@ public class WindowManagerServiceTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_CONDENSE_CONFIGURATION_CHANGE_FOR_SIMPLE_MODE)
     public void setConfigurationChangeSettingsForUser_createsFromParcel_callsSettingImpl()
             throws Settings.SettingNotFoundException {
         final int currentUserId = ActivityManager.getCurrentUser();
@@ -1581,16 +1608,6 @@ public class WindowManagerServiceTests extends WindowTestsBase {
         assertEquals(forcedFontScaleFactor, Settings.System.getFloat(
                 mContext.getContentResolver(), Settings.System.FONT_SCALE), 0.1f /* delta */);
         verify(mAtm).updateFontScaleIfNeeded(currentUserId);
-    }
-
-    @Test
-    @DisableFlags(Flags.FLAG_CONDENSE_CONFIGURATION_CHANGE_FOR_SIMPLE_MODE)
-    public void setConfigurationChangeSettingsForUser_flagDisabled_throwsException() {
-        final List<ConfigurationChangeSetting> settings = List.of();
-
-        assertThrows(IllegalStateException.class, () -> {
-            mWm.setConfigurationChangeSettingsForUser(settings, UserHandle.USER_CURRENT);
-        });
     }
 
     @Test
@@ -1626,6 +1643,26 @@ public class WindowManagerServiceTests extends WindowTestsBase {
 
         verify(mDisplayContent).setForcedDensityRatio(forcedDensityRatio,
                 currentUserId);
+    }
+
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_PERSISTING_DISPLAY_SIZE_FOR_CONNECTED_DISPLAYS)
+    public void setForcedDisplayDensity_forExternalDisplay_resetsRatio() {
+        final DisplayInfo displayInfo = new DisplayInfo(mDisplayInfo);
+        displayInfo.displayId = DEFAULT_DISPLAY + 1;
+        displayInfo.type = Display.TYPE_EXTERNAL;
+        displayInfo.logicalDensityDpi = 100;
+        mDisplayContent = createNewDisplay(displayInfo);
+        final int currentUserId = ActivityManager.getCurrentUser();
+        final float forcedDensityRatio = 2f;
+
+        mWm.setForcedDisplayDensityRatio(displayInfo.displayId, forcedDensityRatio,
+                currentUserId);
+        mWm.setForcedDisplayDensityForUser(displayInfo.displayId, 200,
+                currentUserId);
+
+        verify(mDisplayContent).clearForcedDensityRatio();
     }
 
     @Test

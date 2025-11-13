@@ -690,38 +690,11 @@ public class HdmiCecLocalDeviceTv extends HdmiCecLocalDevice {
 
     private boolean handleNewDeviceAtTheTailOfActivePath(int path) {
         // Seq #22
-        if (isTailOfActivePath(path, getActivePath())) {
+        if (HdmiUtils.isTailOfActivePath(path, getActivePath())) {
             int newPath = mService.portIdToPath(getActivePortId());
             setActivePath(newPath);
             startRoutingControl(getActivePath(), newPath, null);
             return true;
-        }
-        return false;
-    }
-
-    /**
-     * Whether the given path is located in the tail of current active path.
-     *
-     * @param path to be tested
-     * @param activePath current active path
-     * @return true if the given path is located in the tail of current active path; otherwise,
-     *         false
-     */
-    static boolean isTailOfActivePath(int path, int activePath) {
-        // If active routing path is internal source, return false.
-        if (activePath == 0) {
-            return false;
-        }
-        for (int i = 12; i >= 0; i -= 4) {
-            int curActivePath = (activePath >> i) & 0xF;
-            if (curActivePath == 0) {
-                return true;
-            } else {
-                int curPath = (path >> i) & 0xF;
-                if (curPath != curActivePath) {
-                    return false;
-                }
-            }
         }
         return false;
     }
@@ -852,8 +825,13 @@ public class HdmiCecLocalDeviceTv extends HdmiCecLocalDevice {
         }
         HdmiDeviceInfo avr = getAvrDeviceInfo();
         if (avr == null) {
-            setSystemAudioMode(false);
-            invokeCallback(callback, HdmiControlManager.RESULT_TARGET_NOT_AVAILABLE);
+          if(mService.earcBlocksArcConnection()) {
+                setSystemAudioMode(enabled);
+                invokeCallback(callback, HdmiControlManager.RESULT_SUCCESS);
+            } else {
+                setSystemAudioMode(false);
+                invokeCallback(callback, HdmiControlManager.RESULT_TARGET_NOT_AVAILABLE);
+            }
             return;
         }
 
@@ -1190,6 +1168,10 @@ public class HdmiCecLocalDeviceTv extends HdmiCecLocalDevice {
             if (!isConnectedToArcPort(avrDeviceInfo.getPhysicalAddress())) {
                 displayOsd(OSD_MESSAGE_ARC_CONNECTED_INVALID_PORT);
             }
+            if (isMessageForSystemAudio(message)) {
+                Slog.e(TAG, "Disable ARC since <Feature Abort> [Initiate ARC] is sent.");
+                disableArcIfExist();
+            }
             return Constants.ABORT_REFUSED;
         }
 
@@ -1391,7 +1373,7 @@ public class HdmiCecLocalDeviceTv extends HdmiCecLocalDevice {
     void handleRemoveActiveRoutingPath(int path) {
         assertRunOnServiceThread();
         // Seq #23
-        if (isTailOfActivePath(path, getActivePath())) {
+        if (HdmiUtils.isTailOfActivePath(path, getActivePath())) {
             int newPath = mService.portIdToPath(getActivePortId());
             startRoutingControl(getActivePath(), newPath, null);
         }
@@ -1436,22 +1418,15 @@ public class HdmiCecLocalDeviceTv extends HdmiCecLocalDevice {
             mService.getHdmiCecNetwork().removeCecSwitches(portId);
         }
 
-        if (!mService.isEarcEnabled() || !mService.isEarcSupported()) {
-            HdmiDeviceInfo avr = getAvrDeviceInfo();
-            if (avr != null
-                    && portId == avr.getPortId()
-                    && isConnectedToArcPort(avr.getPhysicalAddress())) {
-                HdmiLogger.debug("Port ID:%d, 5v=%b", portId, connected);
-                if (connected) {
-                    if (mArcEstablished) {
-                        enableAudioReturnChannel(true);
-                    } else {
-                        HdmiLogger.debug("Restart ARC again");
-                        onNewAvrAdded(getAvrDeviceInfo());
-                    }
-                } else {
-                    enableAudioReturnChannel(false);
-                }
+        // Turning System Audio Mode off when the AVR is unlugged or standby.
+        // When the device is not unplugged but reawaken from standby, we check if the System
+        // Audio Control Feature is enabled or not then decide if turning SAM on/off accordingly.
+        if (getAvrDeviceInfo() != null && portId == getAvrDeviceInfo().getPortId()) {
+            HdmiLogger.debug("Port ID:%d, 5v=%b", portId, connected);
+            if (!connected) {
+                setSystemAudioMode(false);
+            } else {
+                onNewAvrAdded(getAvrDeviceInfo());
             }
         }
 

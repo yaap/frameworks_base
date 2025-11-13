@@ -21,6 +21,7 @@ import android.testing.TestableLooper.RunWithLooper
 import android.view.View
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
+import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.notification.FakeShadowView
@@ -69,6 +70,9 @@ class ActivatableNotificationViewTest : SysuiTestCase() {
     fun testBackgroundBehaviors() {
         // Color starts with the normal color
         mView.updateBackgroundColors()
+        if (Flags.notificationRowTransparency()) {
+            mNormalColor = mView.currentBackgroundTint
+        }
         assertThat(mView.currentBackgroundTint).isEqualTo(mNormalColor)
 
         // Setting a tint changes the background to that color specifically
@@ -96,5 +100,14 @@ class ActivatableNotificationViewTest : SysuiTestCase() {
 
         assertThat(mView.topRoundness).isEqualTo(1f)
         assertThat(mView.roundableState.hashCode()).isEqualTo(roundableState.hashCode())
+    }
+
+    @Test
+    fun getBackgroundBottom_respects_clipBottomAmount() {
+        mView.actualHeight = 100
+        assertThat(mView.backgroundBottom).isEqualTo(100)
+
+        mView.clipBottomAmount = 10
+        assertThat(mView.backgroundBottom).isEqualTo(90)
     }
 }

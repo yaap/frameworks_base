@@ -19,6 +19,7 @@ package com.android.server.inputmethod;
 import static android.accessibilityservice.AccessibilityService.SHOW_MODE_HIDDEN;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.INVALID_DISPLAY;
+import static android.view.MotionEvent.TOOL_TYPE_UNKNOWN;
 import static android.view.WindowManager.DISPLAY_IME_POLICY_FALLBACK_DISPLAY;
 import static android.view.WindowManager.DISPLAY_IME_POLICY_HIDE;
 import static android.view.WindowManager.DISPLAY_IME_POLICY_LOCAL;
@@ -26,13 +27,9 @@ import static android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
 import static com.android.internal.inputmethod.SoftInputShowHideReason.HIDE_WHEN_INPUT_TARGET_INVISIBLE;
-import static com.android.internal.inputmethod.SoftInputShowHideReason.REMOVE_IME_SCREENSHOT_FROM_IMMS;
-import static com.android.internal.inputmethod.SoftInputShowHideReason.SHOW_IME_SCREENSHOT_FROM_IMMS;
 import static com.android.server.inputmethod.ImeVisibilityStateComputer.ImeTargetWindowState;
 import static com.android.server.inputmethod.ImeVisibilityStateComputer.ImeVisibilityResult;
 import static com.android.server.inputmethod.ImeVisibilityStateComputer.STATE_HIDE_IME_EXPLICIT;
-import static com.android.server.inputmethod.ImeVisibilityStateComputer.STATE_REMOVE_IME_SNAPSHOT;
-import static com.android.server.inputmethod.ImeVisibilityStateComputer.STATE_SHOW_IME_SNAPSHOT;
 import static com.android.server.inputmethod.InputMethodManagerService.FALLBACK_DISPLAY_ID;
 import static com.android.server.inputmethod.InputMethodManagerService.ImeDisplayValidator;
 
@@ -47,6 +44,7 @@ import android.os.RemoteException;
 import android.view.inputmethod.ImeTracker;
 import android.view.inputmethod.InputMethodManager;
 
+import androidx.annotation.NonNull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.internal.annotations.GuardedBy;
@@ -275,30 +273,27 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
     }
 
     @Test
-    public void testOnInteractiveChanged() {
+    public void testShouldShowImeScreenshot() {
         synchronized (ImfLock.class) {
             mComputer.getOrCreateWindowState(mWindowToken);
-            // Precondition: ensure IME has shown before hiding request.
+            // Precondition: ensure IME has shown before screenshot request.
             mComputer.requestImeVisibility(mWindowToken, true);
             mComputer.setInputShown(true);
 
-            // No need any visibility change When initially shows IME on the device was interactive.
-            ImeVisibilityStateComputer.ImeVisibilityResult result = mComputer.onInteractiveChanged(
-                    mWindowToken, true /* interactive */);
-            assertThat(result).isNull();
+            // No screenshot visibility change when IME initially shown while interactive.
+            Boolean shouldShow = mComputer.shouldShowImeScreenshot(mWindowToken,
+                    true /* interactive */);
+            assertThat(shouldShow).isNull();
 
-            // Show the IME screenshot to capture the last IME visible state when the device
-            // inactive.
-            result = mComputer.onInteractiveChanged(mWindowToken, false /* interactive */);
-            assertThat(result).isNotNull();
-            assertThat(result.getState()).isEqualTo(STATE_SHOW_IME_SNAPSHOT);
-            assertThat(result.getReason()).isEqualTo(SHOW_IME_SCREENSHOT_FROM_IMMS);
+            // Show the screenshot when the device became non-interactive.
+            shouldShow = mComputer.shouldShowImeScreenshot(mWindowToken, false /* interactive */);
+            assertThat(shouldShow).isNotNull();
+            assertThat(shouldShow).isTrue();
 
-            // Remove the IME screenshot when the device became interactive again.
-            result = mComputer.onInteractiveChanged(mWindowToken, true /* interactive */);
-            assertThat(result).isNotNull();
-            assertThat(result.getState()).isEqualTo(STATE_REMOVE_IME_SNAPSHOT);
-            assertThat(result.getReason()).isEqualTo(REMOVE_IME_SCREENSHOT_FROM_IMMS);
+            // Remove the screenshot when the device became interactive again.
+            shouldShow = mComputer.shouldShowImeScreenshot(mWindowToken, true /* interactive */);
+            assertThat(shouldShow).isNotNull();
+            assertThat(shouldShow).isFalse();
         }
     }
 
@@ -315,19 +310,15 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             mComputer.setHasVisibleImeLayeringOverlay(true /* visibleAndNotRemoved */);
             mComputer.onImeInputTargetVisibilityChanged(testImeInputTarget,
                     false /* visibleAndNotRemoved */);
-            final ArgumentCaptor<IBinder> targetCaptor = ArgumentCaptor.forClass(IBinder.class);
             final ArgumentCaptor<ImeVisibilityResult> resultCaptor = ArgumentCaptor.forClass(
                     ImeVisibilityResult.class);
             final ArgumentCaptor<Integer> userIdCaptor = ArgumentCaptor.forClass(Integer.class);
             verify(mInputMethodManagerService).onApplyImeVisibilityFromComputerLocked(
-                    targetCaptor.capture(), notNull() /* statsToken */, resultCaptor.capture(),
-                    userIdCaptor.capture());
-            final IBinder imeInputTarget = targetCaptor.getValue();
+                    notNull() /* statsToken */, resultCaptor.capture(), userIdCaptor.capture());
             final ImeVisibilityResult result = resultCaptor.getValue();
             final int userId = userIdCaptor.getValue();
 
             // Verify the computer will callback hiding IME state to IMMS.
-            assertThat(imeInputTarget).isEqualTo(testImeInputTarget);
             assertThat(result.getState()).isEqualTo(STATE_HIDE_IME_EXPLICIT);
             assertThat(result.getReason()).isEqualTo(HIDE_WHEN_INPUT_TARGET_INVISIBLE);
             assertThat(userId).isEqualTo(mUserId);
@@ -335,9 +326,11 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
     }
 
     @GuardedBy("ImfLock.class")
-    private ImeTargetWindowState initImeTargetWindowState(IBinder windowToken) {
-        final ImeTargetWindowState state = new ImeTargetWindowState(SOFT_INPUT_STATE_UNCHANGED,
-                0, true, true, true);
+    @NonNull
+    private ImeTargetWindowState initImeTargetWindowState(@NonNull IBinder windowToken) {
+        final var state = new ImeTargetWindowState(SOFT_INPUT_STATE_UNCHANGED,
+                0 /* windowFlags */, true /* imeFocusChanged */, true /* hasFocusedEditor */,
+                true /* isStartInputByWindowGainFocus */, TOOL_TYPE_UNKNOWN);
         mComputer.setWindowState(windowToken, state);
         return state;
     }

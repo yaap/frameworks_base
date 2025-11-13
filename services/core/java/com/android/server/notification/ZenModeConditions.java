@@ -73,12 +73,6 @@ public class ZenModeConditions implements ConditionProviders.Callback {
     public void evaluateConfig(ZenModeConfig config, ComponentName trigger,
             boolean processSubscriptions) {
         if (config == null) return;
-        if (!android.app.Flags.modesUi() && config.manualRule != null
-                && config.manualRule.condition != null
-                && !config.manualRule.isTrueOrUnknown()) {
-            if (DEBUG) Log.d(TAG, "evaluateConfig: clearing manual rule");
-            config.manualRule = null;
-        }
         final ArraySet<Pair<Uri, ComponentName>> current = new ArraySet<>();
         evaluateRule(config.manualRule, current, null, processSubscriptions, true);
         for (ZenRule automaticRule : config.automaticRules.values()) {
@@ -118,10 +112,6 @@ public class ZenModeConditions implements ConditionProviders.Callback {
         if (DEBUG) Log.d(TAG, "onConditionChanged " + id + " " + condition);
         ZenModeConfig config = mHelper.getConfig();
         if (config == null) return;
-        if (!Flags.fixCallingUidFromCps()) {
-            // Old behavior: overwrite with known-bad callingUid (always system_server).
-            callingUid = Binder.getCallingUid();
-        }
 
         // This change is known to be for UserHandle.CURRENT because ConditionProviders for
         // background users are not bound.

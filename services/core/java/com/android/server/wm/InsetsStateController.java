@@ -16,6 +16,8 @@
 
 package com.android.server.wm;
 
+import static android.internal.perfetto.protos.Windowmanagerservice.DisplayContentProto.IME_INSETS_SOURCE_PROVIDER;
+import static android.internal.perfetto.protos.Windowmanagerservice.DisplayContentProto.INSETS_SOURCE_PROVIDERS;
 import static android.os.Trace.TRACE_TAG_WINDOW_MANAGER;
 import static android.view.InsetsSource.FLAG_FORCE_CONSUMING;
 import static android.view.InsetsSource.ID_IME;
@@ -25,8 +27,6 @@ import static android.view.WindowInsets.Type.mandatorySystemGestures;
 import static android.view.WindowInsets.Type.systemGestures;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_IME;
-import static com.android.server.wm.DisplayContentProto.IME_INSETS_SOURCE_PROVIDER;
-import static com.android.server.wm.DisplayContentProto.INSETS_SOURCE_PROVIDERS;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -73,6 +73,11 @@ class InsetsStateController {
             w.notifyInsetsChanged();
         }
     };
+    /**
+     * Empty instance of the IME control target, to enable hiding the IME when there is no real
+     * control target.
+     */
+    @NonNull
     private final InsetsControlTarget mEmptyImeControlTarget = new InsetsControlTarget() {
         @Override
         public void notifyInsetsControlChanged(int displayId) {
@@ -174,7 +179,11 @@ class InsetsStateController {
         for (int i = mProviders.size() - 1; i >= 0; i--) {
             mProviders.valueAt(i).onPostLayout();
         }
-        if (!mLastState.equals(mState)) {
+        if (!mLastState.equals(
+                mState,
+                false /* excludesCaptionBar */,
+                false /* excludesInvisibleIme */,
+                true /* excludesInvalidSource */)) {
             mLastState.set(mState, true /* copySources */);
             notifyInsetsChanged();
         }
@@ -232,7 +241,7 @@ class InsetsStateController {
                         // Fake control target cannot change the client visibility, but it should
                         // change the insets with its newly requested visibility.
                         || (caller == provider.getFakeControlTarget());
-            } else if (isImeProvider && android.view.inputmethod.Flags.refactorInsetsController()) {
+            } else if (isImeProvider) {
                 ImeTracker.forLogging().onCancelled(statsToken,
                         ImeTracker.PHASE_WM_SET_REMOTE_TARGET_IME_VISIBILITY);
             }
@@ -257,14 +266,15 @@ class InsetsStateController {
         return types;
     }
 
-    void onImeControlTargetChanged(@Nullable InsetsControlTarget imeTarget) {
-
-        // Make sure that we always have a control target for the IME, even if the IME target is
-        // null. Otherwise there is no leash that will hide it and IME becomes "randomly" visible.
-        InsetsControlTarget target = imeTarget != null ? imeTarget : mEmptyImeControlTarget;
-        onControlTargetChanged(getImeSourceProvider(), target, false /* fake */);
+    void onImeControlTargetChanged(@Nullable InsetsControlTarget target) {
+        // Make sure that we always have a control target for the IME, even if the IME control
+        // target is null. Otherwise there is no leash that will hide it and IME becomes "randomly"
+        // visible.
+        final var realOrEmptyTarget = target != null ? target : mEmptyImeControlTarget;
+        onControlTargetChanged(getImeSourceProvider(), realOrEmptyTarget, false /* fake */);
         ProtoLog.d(WM_DEBUG_IME, "onImeControlTargetChanged %s",
-                target != null && target.getWindow() != null ? target.getWindow() : target);
+                realOrEmptyTarget.getWindow() != null ? realOrEmptyTarget.getWindow()
+                        : realOrEmptyTarget);
         notifyPendingInsetsControlChanged();
     }
 
@@ -303,6 +313,8 @@ class InsetsStateController {
     void notifyControlRevoked(@NonNull InsetsControlTarget previousControlTarget,
             InsetsSourceProvider provider) {
         removeFromControlMaps(previousControlTarget, provider, false /* fake */);
+        addToPendingControlMaps(previousControlTarget, provider);
+        notifyPendingInsetsControlChanged();
     }
 
     private void onControlTargetChanged(InsetsSourceProvider provider,
@@ -457,11 +469,6 @@ class InsetsStateController {
                         WindowInsets.Type.all(), null /* statsToken */);
             }
             newControlTargets.clear();
-            if (!android.view.inputmethod.Flags.refactorInsetsController()) {
-                // Check for and try to run the scheduled show IME request (if it exists), as we
-                // now applied the surface transaction and notified the target of the new control.
-                getImeSourceProvider().checkAndStartShowImePostLayout();
-            }
         });
     }
 

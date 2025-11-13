@@ -17,9 +17,11 @@
 package com.android.server.appfunctions;
 
 import android.annotation.NonNull;
+import android.app.appfunctions.AppFunctionAccessServiceInterface;
 import android.app.appfunctions.AppFunctionManagerConfiguration;
 import android.content.Context;
 import android.content.pm.PackageManagerInternal;
+import android.permission.flags.Flags;
 
 import com.android.server.LocalServices;
 import com.android.server.SystemService;
@@ -32,13 +34,21 @@ public class AppFunctionManagerService extends SystemService {
         super(context);
         mServiceImpl =
                 new AppFunctionManagerServiceImpl(
-                        context, LocalServices.getService(PackageManagerInternal.class));
+                        context, LocalServices.getService(PackageManagerInternal.class),
+                        LocalServices.getService(AppFunctionAccessServiceInterface.class));
     }
 
     @Override
     public void onStart() {
         if (AppFunctionManagerConfiguration.isSupported(getContext())) {
             publishBinderService(Context.APP_FUNCTION_SERVICE, mServiceImpl);
+        }
+    }
+
+    @Override
+    public void onBootPhase(int phase) {
+        if (Flags.appFunctionAccessServiceEnabled()) {
+            mServiceImpl.onBootPhase(phase);
         }
     }
 

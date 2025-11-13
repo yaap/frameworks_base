@@ -36,14 +36,17 @@ import android.app.AlarmManager;
 import android.content.Context;
 import android.content.res.Resources;
 import android.hardware.SensorPrivacyManager;
+import android.platform.test.annotations.EnableFlags;
 import android.provider.Settings;
 import android.testing.TestableLooper;
 import android.view.View;
 
+import androidx.compose.ui.platform.ComposeView;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
 import com.android.systemui.SysuiTestCase;
+import com.android.systemui.ambient.statusbar.shared.flag.OngoingActivityChipsOnDream;
 import com.android.systemui.dreams.DreamOverlayNotificationCountProvider;
 import com.android.systemui.dreams.DreamOverlayStateController;
 import com.android.systemui.dreams.DreamOverlayStatusBarItemsProvider;
@@ -55,12 +58,14 @@ import com.android.systemui.privacy.PrivacyItemController;
 import com.android.systemui.privacy.PrivacyType;
 import com.android.systemui.res.R;
 import com.android.systemui.settings.UserTracker;
+import com.android.systemui.statusbar.notification.icon.ui.viewbinder.ConnectedDisplaysStatusBarNotificationIconViewStore;
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.FakeWifiRepository;
 import com.android.systemui.statusbar.policy.IndividualSensorPrivacyController;
 import com.android.systemui.statusbar.policy.NextAlarmController;
 import com.android.systemui.statusbar.policy.ZenModeController;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.statusbar.window.StatusBarWindowStateListener;
+import com.android.systemui.touch.TouchInsetManager;
 import com.android.systemui.util.time.DateFormatUtil;
 
 import org.junit.Before;
@@ -84,6 +89,8 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
     private static final String NOTIFICATION_INDICATOR_FORMATTER_STRING =
             "{count, plural, =1 {# notification} other {# notifications}}";
 
+    @Mock
+    Context mContext;
     @Mock
     MockAmbientStatusBarView mView;
     @Mock
@@ -114,6 +121,12 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
     UserTracker mUserTracker;
     @Mock
     PrivacyItemController mPrivacyItemController;
+    @Mock
+    AmbientStatusBarViewModel.Factory mAmbientStatusBarViewModelFactory;
+    @Mock
+    ConnectedDisplaysStatusBarNotificationIconViewStore.Factory mIconViewStoreFactory;
+    @Mock
+    TouchInsetManager.TouchInsetSession mTouchInsetSession;
 
     LogBuffer mLogBuffer = FakeLogBuffer.Factory.Companion.create();
 
@@ -137,6 +150,7 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
         doCallRealMethod().when(mView).setVisibility(anyInt());
         doCallRealMethod().when(mView).getVisibility();
         when(mUserTracker.getUserId()).thenReturn(ActivityManager.getCurrentUser());
+        when(mView.getContext()).thenReturn(mContext);
 
         mController = new AmbientStatusBarViewController(
                 mView,
@@ -155,6 +169,9 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
                 mKosmos.getWifiInteractor(),
                 mPrivacyItemController,
                 mKosmos.getCommunalSceneInteractor(),
+                mAmbientStatusBarViewModelFactory,
+                mIconViewStoreFactory,
+                mTouchInsetSession,
                 mLogBuffer);
         mController.onInit();
     }
@@ -276,14 +293,16 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
     }
 
     @Test
-    public void testOnViewAttachedShowsMicCameraIconWhenDisabled() {
+    public void testOnViewAttachedShowsMicAndCameraIconWhenBothDisabled() {
         when(mSensorPrivacyController.isSensorBlocked(SensorPrivacyManager.Sensors.MICROPHONE))
                 .thenReturn(true);
         when(mSensorPrivacyController.isSensorBlocked(SensorPrivacyManager.Sensors.CAMERA))
                 .thenReturn(true);
         mController.onViewAttached();
         verify(mView).showIcon(
-                AmbientStatusBarView.STATUS_ICON_MIC_CAMERA_DISABLED, true, null);
+                AmbientStatusBarView.STATUS_ICON_MIC_DISABLED, true, null);
+        verify(mView).showIcon(
+                AmbientStatusBarView.STATUS_ICON_CAMERA_DISABLED, true, null);
     }
 
     @Test
@@ -331,6 +350,9 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
                 mKosmos.getWifiInteractor(),
                 mPrivacyItemController,
                 mKosmos.getCommunalSceneInteractor(),
+                mAmbientStatusBarViewModelFactory,
+                mIconViewStoreFactory,
+                mTouchInsetSession,
                 mLogBuffer);
         controller.onViewAttached();
         verify(mView, never()).showIcon(
@@ -399,7 +421,7 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
     }
 
     @Test
-    public void testMicCameraIconShownWhenSensorsBlocked() {
+    public void testMicAndCameraIconShownWhenSensorsBlocked() {
         mController.onViewAttached();
 
         when(mSensorPrivacyController.isSensorBlocked(SensorPrivacyManager.Sensors.MICROPHONE))
@@ -414,7 +436,9 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
                 SensorPrivacyManager.Sensors.MICROPHONE, true);
 
         verify(mView).showIcon(
-                AmbientStatusBarView.STATUS_ICON_MIC_CAMERA_DISABLED, true, null);
+                AmbientStatusBarView.STATUS_ICON_MIC_DISABLED, true, null);
+        verify(mView).showIcon(
+                AmbientStatusBarView.STATUS_ICON_CAMERA_DISABLED, true, null);
     }
 
     @Test
@@ -581,6 +605,20 @@ public class AmbientStatusBarViewControllerTest extends SysuiTestCase {
         verify(mStatusBarWindowStateController).addListener(listenerCaptor.capture());
         mController.destroy();
         verify(mStatusBarWindowStateController).removeListener(eq(listenerCaptor.getValue()));
+    }
+
+    @EnableFlags(OngoingActivityChipsOnDream.FLAG_NAME)
+    @Test
+    public void testAddAndRemoveOngoingActivityChipsViewFromTouchInsetSession() {
+        final ComposeView ongoingActivityChipsView = Mockito.mock(ComposeView.class);
+        when(mView.findViewById(R.id.dream_overlay_ongoing_activity_chips))
+                .thenReturn(ongoingActivityChipsView);
+
+        mController.onViewAttached();
+        verify(mTouchInsetSession).addViewToTracking(ongoingActivityChipsView);
+
+        mController.onViewDetached();
+        verify(mTouchInsetSession).removeViewFromTracking(ongoingActivityChipsView);
     }
 
     private StatusBarWindowStateListener updateStatusBarWindowState(boolean show) {

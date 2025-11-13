@@ -16,10 +16,20 @@
 
 package com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel
 
+import android.content.testableContext
 import com.android.systemui.kosmos.Kosmos
+import com.android.systemui.log.table.logcatTableLogBuffer
+import com.android.systemui.statusbar.connectivity.ui.mobileContextProvider
 
 var Kosmos.stackedMobileIconViewModel: StackedMobileIconViewModel by
     Kosmos.Fixture { stackedMobileIconViewModelImpl }
 
 val Kosmos.stackedMobileIconViewModelImpl by
-    Kosmos.Fixture { StackedMobileIconViewModelImpl(mobileIconsViewModel) }
+    Kosmos.Fixture {
+        StackedMobileIconViewModelImpl(
+            mobileIconsViewModel,
+            logcatTableLogBuffer(this, "stackedMobileIconTableLogger"),
+            testableContext,
+            mobileContextProvider,
+        )
+    }

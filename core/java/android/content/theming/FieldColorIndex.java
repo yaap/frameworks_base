@@ -24,13 +24,10 @@ import java.util.function.Function;
 /** @hide */
 @FlaggedApi(android.server.Flags.FLAG_ENABLE_THEME_SERVICE)
 public class FieldColorIndex extends ThemeSettingsField<Integer, String> {
-    public FieldColorIndex(
-            String key,
-            BiConsumer<ThemeSettingsUpdater, Integer> setter,
-            Function<ThemeSettings, Integer> getter,
-            ThemeSettings defaults
-    ) {
-        super(key, setter, getter, defaults);
+    public FieldColorIndex(String key, Function<ThemeSettingsUpdater, Integer> updaterGetter,
+            BiConsumer<ThemeSettingsUpdater, Integer> updaterSetter,
+            Function<ThemeSettings, Integer> getter, ThemeSettings defaults) {
+        super(key, updaterGetter, updaterSetter, getter, defaults);
     }
 
     @Override

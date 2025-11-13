@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -133,9 +134,7 @@ constructor(
             .map {
                 val userEnabled =
                     secureSettings.getInt(Settings.Secure.DOZE_ALWAYS_ON_WALLPAPER_ENABLED, 1) == 1
-                userEnabled &&
-                    context.resources.getBoolean(R.bool.config_dozeSupportsAodWallpaper) &&
-                    ambientAod()
+                userEnabled && configEnabled() && ambientAod()
             }
             .flowOn(bgDispatcher)
 
@@ -177,9 +176,17 @@ constructor(
 
     override val shouldSendFocalArea =
         lockscreenWallpaperInfo
+            .filterNotNull()
             .map {
                 val focalAreaTarget = context.resources.getString(SysUIR.string.focal_area_target)
                 val shouldSendNotificationLayout = it?.component?.className == focalAreaTarget
+                if (DEBUG) {
+                    Log.d(
+                        TAG,
+                        "shouldSendNotificationLayout:$shouldSendNotificationLayout " +
+                            "wallpaperInfo:${it?.component?.className}",
+                    )
+                }
                 shouldSendNotificationLayout
             }
             .stateIn(
@@ -187,6 +194,21 @@ constructor(
                 if (extendedWallpaperEffects()) SharingStarted.Eagerly else WhileSubscribed(),
                 initialValue = extendedWallpaperEffects(),
             )
+
+    private fun configEnabled(): Boolean {
+        // Some devices like foldables may only support AOD wallpaper on one screen. The override
+        // config adds the ability to specify general device support but allow per screen config
+        val sysuiOverride =
+            when (
+                context.resources.getInteger(SysUIR.integer.config_dozeSupportsAodWallpaperOverride)
+            ) {
+                0 -> false
+                1 -> true
+                else -> null
+            }
+        return if (sysuiOverride != null) sysuiOverride
+        else context.resources.getBoolean(R.bool.config_dozeSupportsAodWallpaper)
+    }
 
     private suspend fun getWallpaper(
         selectedUser: SelectedUserModel,

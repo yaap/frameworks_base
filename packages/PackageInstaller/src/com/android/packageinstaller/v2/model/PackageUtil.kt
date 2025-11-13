@@ -59,17 +59,25 @@ object PackageUtil {
     const val ARGS_APP_DATA_SIZE: String = "app_data_size"
     const val ARGS_APP_LABEL: String = "app_label"
     const val ARGS_APP_SNIPPET: String = "app_snippet"
+    const val ARGS_BUTTON_TEXT: String = "button_text"
     const val ARGS_ERROR_DIALOG_TYPE: String = "error_dialog_type"
+    const val ARGS_EXISTING_OWNER: String = "existing_owner"
+    const val ARGS_INSTALLER_LABEL: String = "installer_label"
+    const val ARGS_INSTALLER_PACKAGE: String = "installer_pkg"
     const val ARGS_IS_ARCHIVE: String = "is_archive"
     const val ARGS_IS_CLONE_USER: String = "clone_user"
     const val ARGS_IS_UPDATING: String = "is_updating"
     const val ARGS_LEGACY_CODE: String = "legacy_code"
     const val ARGS_MESSAGE: String = "message"
+    const val ARGS_NEW_OWNER: String = "new_owner"
+    const val ARGS_PENDING_INTENT: String = "pending_intent"
+    const val ARGS_REQUIRED_BYTES: String = "required_bytes"
     const val ARGS_RESULT_INTENT: String = "result_intent"
     const val ARGS_SHOULD_RETURN_RESULT: String = "should_return_result"
-    const val ARGS_SOURCE_APP: String = "source_app"
+    const val ARGS_SOURCE_PKG: String = "source_pkg"
     const val ARGS_STATUS_CODE: String = "status_code"
     const val ARGS_TITLE: String = "title"
+    const val ARGS_UNARCHIVAL_STATUS: String = "unarchival_status"
 
     /**
      * Determines if the UID belongs to the system downloads provider and returns the
@@ -79,7 +87,8 @@ object PackageUtil {
      * @return [ApplicationInfo] of the provider if a downloads provider exists, it is a
      * system app, and its UID matches with the passed UID, null otherwise.
      */
-    private fun getSystemDownloadsProviderInfo(pm: PackageManager, uid: Int): ApplicationInfo? {
+    @JvmStatic
+    fun getSystemDownloadsProviderInfo(pm: PackageManager, uid: Int): ApplicationInfo? {
         // Check if there are currently enabled downloads provider on the system.
         val providerInfo = pm.resolveContentProvider(DOWNLOADS_AUTHORITY, 0)
             ?: return null
@@ -160,13 +169,22 @@ object PackageUtil {
 
     /**
      * @param context the [Context] object
+     * @param callingUid the UID of the caller who's permission is being checked
+     * @return `true` if the callingUid is granted the documents permission
+     */
+    @JvmStatic
+    fun isDocumentsManager(context: Context, callingUid: Int): Boolean {
+        return isPermissionGranted(context, Manifest.permission.MANAGE_DOCUMENTS, callingUid)
+    }
+
+    /**
+     * @param context the [Context] object
      * @param callingUid the UID of the caller of Pia
      * @param isTrustedSource indicates whether install request is coming from a privileged app
      * that has passed EXTRA_NOT_UNKNOWN_SOURCE as `true` in the installation intent, or an app that
      * has the [INSTALL_PACKAGES][Manifest.permission.INSTALL_PACKAGES] permission granted.
      *
-     * @return `true` if the package is either a system downloads provider, a document manager,
-     * a trusted source, or has declared the
+     * @return `true` if the package is a trusted source, or has declared the
      * [REQUEST_INSTALL_PACKAGES][Manifest.permission.REQUEST_INSTALL_PACKAGES] in its manifest.
      */
     @JvmStatic
@@ -175,12 +193,7 @@ object PackageUtil {
         callingUid: Int,
         isTrustedSource: Boolean,
     ): Boolean {
-        val isDocumentsManager =
-            isPermissionGranted(context, Manifest.permission.MANAGE_DOCUMENTS, callingUid)
-        val isSystemDownloadsProvider =
-            getSystemDownloadsProviderInfo(context.packageManager, callingUid) != null
-
-        if (!isTrustedSource && !isSystemDownloadsProvider && !isDocumentsManager) {
+        if (!isTrustedSource) {
             val targetSdkVersion = getMaxTargetSdkVersionForUid(context, callingUid)
             if (targetSdkVersion < 0) {
                 // Invalid calling uid supplied. Abort install.
@@ -207,7 +220,7 @@ object PackageUtil {
      * @param permission the permission name to check
      * @return `true` if the caller is requesting the said permission in its Manifest
      */
-    private fun isUidRequestingPermission(
+    fun isUidRequestingPermission(
         pm: PackageManager,
         uid: Int,
         permission: String,
@@ -488,6 +501,16 @@ object PackageUtil {
             true
         } else userManager.getProfileParent(profileHandle) != null
             && userManager.getProfileParent(profileHandle) == userHandle
+    }
+
+    /**
+    * @return If the device supports the material design in the package installer
+     */
+    @JvmStatic
+    fun isMaterialDesignEnabled(context: Context): Boolean {
+        return android.content.pm.Flags.usePiaV2()
+                && context.resources.getBoolean(
+            android.R.bool.config_enableMaterialDesignInPackageInstaller)
     }
 
     /**

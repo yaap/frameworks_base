@@ -432,11 +432,7 @@ public class CameraDeviceImpl extends CameraDevice
         }
         mCameraId = cameraId;
         mDeviceCallback = new ClientStateCallback(executor, callback);
-        if (Flags.singleThreadExecutorNaming()) {
-            mDeviceExecutor = Executors.newSingleThreadExecutor(sThreadFactory);
-        } else {
-            mDeviceExecutor = Executors.newSingleThreadExecutor();
-        }
+        mDeviceExecutor = Executors.newSingleThreadExecutor(sThreadFactory);
         mCharacteristics = characteristics;
         mCameraManager = manager;
         mAppTargetSdkVersion = appTargetSdkVersion;
@@ -651,6 +647,9 @@ public class CameraDeviceImpl extends CameraDevice
                     "any output streams");
         }
 
+        if (!checkSurfaceSizesCompatible(outputs)) {
+            return false;
+        }
         checkInputConfiguration(inputConfig);
 
         boolean success = false;
@@ -1053,7 +1052,6 @@ public class CameraDeviceImpl extends CameraDevice
         synchronized (mInterfaceLock) {
             checkIfCameraClosedOrInError();
             if (CompatChanges.isChangeEnabled(CHECK_PARAMS_IN_IS_SESSION_CONFIGURATION_SUPPORTED)
-                    && Flags.cameraDeviceSetup()
                     && mCameraDeviceSetup != null) {
                 return mCameraDeviceSetup.isSessionConfigurationSupported(sessionConfig);
             }
@@ -1894,6 +1892,22 @@ public class CameraDeviceImpl extends CameraDevice
         return false;
     }
 
+    private boolean checkSurfaceSizesCompatible(List<OutputConfiguration> outputConfigs) {
+        for (OutputConfiguration outputConfig : outputConfigs) {
+            Size configuredSize = outputConfig.getConfiguredSize();
+            for (Surface surface : outputConfig.getSurfaces()) {
+                Size surfaceSize = SurfaceUtils.getSurfaceSize(surface);
+                if (!surfaceSize.equals(configuredSize)) {
+                    Log.e(TAG, "Surface size not compatible with " +
+                            " outputConfiguration, configured size " + configuredSize +
+                            " surface size " + surfaceSize);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private boolean checkPrivilegedAppList() {
         String packageName = ActivityThread.currentOpPackageName();
         String packageList = SystemProperties.get("persist.vendor.camera.privapp.list");
@@ -1942,7 +1956,7 @@ public class CameraDeviceImpl extends CameraDevice
             }
 
             // Allow RAW formats, even when not advertised.
-            if (Flags.multiResRawReprocessing() && isRawFormat(inputFormat)) {
+            if (isRawFormat(inputFormat)) {
                 return;
             }
 

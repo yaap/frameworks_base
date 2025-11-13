@@ -19,6 +19,7 @@ package com.android.wm.shell.compatui.letterbox
 import android.graphics.Rect
 import android.view.SurfaceControl
 import android.view.SurfaceControl.Transaction
+import android.window.WindowContainerToken
 
 /**
  * Creates a [LetterboxController] which is the composition of other two [LetterboxController].
@@ -28,10 +29,11 @@ infix fun LetterboxController.append(other: LetterboxController) = object : Lett
     override fun createLetterboxSurface(
         key: LetterboxKey,
         transaction: Transaction,
-        parentLeash: SurfaceControl
+        parentLeash: SurfaceControl,
+        token: WindowContainerToken?
     ) {
-        this@append.createLetterboxSurface(key, transaction, parentLeash)
-        other.createLetterboxSurface(key, transaction, parentLeash)
+        this@append.createLetterboxSurface(key, transaction, parentLeash, token)
+        other.createLetterboxSurface(key, transaction, parentLeash, token)
     }
 
     override fun destroyLetterboxSurface(
@@ -87,11 +89,25 @@ object LetterboxUtils {
             }
             return onMissed(key, this)
         }
+
+        /*
+        * Executes [onItem] on the [item] for the [key]s for a given [filter] predicate.
+        */
+        fun <V, K> MutableMap<K, V>.runOnFilteredItem(
+            filter: (K) -> Boolean,
+            onItem: (K, V) -> Unit = { _, _ -> },
+        ) {
+            this.forEach { k, v ->
+                if (filter(k)) {
+                    onItem(k, v)
+                }
+            }
+        }
     }
 
     // Utility methods about Transaction usage in Letterbox.
     object Transactions {
-        // Sets position and crops in one method.
+        // Sets position and crops in one method. The surface is hidden if the crop Rect is empty.
         fun Transaction.moveAndCrop(
             surface: SurfaceControl,
             rect: Rect
@@ -101,6 +117,8 @@ object LetterboxUtils {
                     surface,
                     rect.width(),
                     rect.height()
-                )
+                ).apply {
+                    setVisibility(surface, !rect.isEmpty)
+                }
     }
 }

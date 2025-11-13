@@ -42,9 +42,11 @@ import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_IME;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
 
+import android.Manifest;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.PendingIntent;
+import android.content.AttributionSource;
 import android.content.ClipData;
 import android.content.ClipDescription;
 import android.content.Intent;
@@ -61,6 +63,7 @@ import android.os.RemoteCallback;
 import android.os.RemoteException;
 import android.os.Trace;
 import android.os.UserHandle;
+import android.permission.PermissionManager;
 import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.Slog;
@@ -70,7 +73,6 @@ import android.view.IWindowSession;
 import android.view.IWindowSessionCallback;
 import android.view.InputChannel;
 import android.view.InsetsSourceControl;
-import android.view.InsetsState;
 import android.view.SurfaceControl;
 import android.view.View;
 import android.view.View.FocusDirection;
@@ -156,7 +158,13 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
                 || service.mContext.checkCallingOrSelfPermission(HIDE_OVERLAY_WINDOWS)
                 == PERMISSION_GRANTED;
         mCanCreateSystemApplicationOverlay =
-                service.mContext.checkCallingOrSelfPermission(SYSTEM_APPLICATION_OVERLAY)
+                com.android.media.projection.flags.Flags.recordingOverlay()
+                ? service.mContext.getSystemService(
+                        PermissionManager.class).checkPermissionForPreflight(
+                        Manifest.permission.SYSTEM_APPLICATION_OVERLAY,
+                        new AttributionSource(mUid, mPackageName, null))
+                        == PermissionManager.PERMISSION_GRANTED
+                : service.mContext.checkCallingOrSelfPermission(SYSTEM_APPLICATION_OVERLAY)
                         == PERMISSION_GRANTED;
         mCanStartTasksFromRecents = service.mContext.checkCallingOrSelfPermission(
                 START_TASKS_FROM_RECENTS) == PERMISSION_GRANTED;
@@ -236,33 +244,25 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     @Override
     public int addToDisplay(IWindow window, WindowManager.LayoutParams attrs,
             int viewVisibility, int displayId, @InsetsType int requestedVisibleTypes,
-            InputChannel outInputChannel, InsetsState outInsetsState,
-            InsetsSourceControl.Array outActiveControls, Rect outAttachedFrame,
-            float[] outSizeCompatScale) {
+            InputChannel outInputChannel, WindowRelayoutResult result) {
         return mService.addWindow(this, window, attrs, viewVisibility, displayId,
-                UserHandle.getUserId(mUid), requestedVisibleTypes, outInputChannel, outInsetsState,
-                outActiveControls, outAttachedFrame, outSizeCompatScale);
+                UserHandle.getUserId(mUid), requestedVisibleTypes, outInputChannel, result);
     }
 
     @Override
     public int addToDisplayAsUser(IWindow window, WindowManager.LayoutParams attrs,
             int viewVisibility, int displayId, int userId, @InsetsType int requestedVisibleTypes,
-            InputChannel outInputChannel, InsetsState outInsetsState,
-            InsetsSourceControl.Array outActiveControls, Rect outAttachedFrame,
-            float[] outSizeCompatScale) {
+            InputChannel outInputChannel, WindowRelayoutResult result) {
         return mService.addWindow(this, window, attrs, viewVisibility, displayId, userId,
-                requestedVisibleTypes, outInputChannel, outInsetsState, outActiveControls,
-                outAttachedFrame, outSizeCompatScale);
+                requestedVisibleTypes, outInputChannel, result);
     }
 
     @Override
     public int addToDisplayWithoutInputChannel(IWindow window, WindowManager.LayoutParams attrs,
-            int viewVisibility, int displayId, InsetsState outInsetsState, Rect outAttachedFrame,
-            float[] outSizeCompatScale) {
+            int viewVisibility, int displayId, WindowRelayoutResult result) {
         return mService.addWindow(this, window, attrs, viewVisibility, displayId,
                 UserHandle.getUserId(mUid), WindowInsets.Type.defaultVisible(),
-                null /* outInputChannel */, outInsetsState, mDummyControls, outAttachedFrame,
-                outSizeCompatScale);
+                null /* outInputChannel */, result);
     }
 
     @Override
@@ -271,17 +271,17 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     }
 
     @Override
-    public boolean cancelDraw(IWindow window) {
-        return mService.cancelDraw(this, window);
+    public boolean cancelDraw(IWindow window, int seqId) {
+        return mService.cancelDraw(this, window, seqId);
     }
 
     @Override
     public int relayout(IWindow window, WindowManager.LayoutParams attrs,
             int requestedWidth, int requestedHeight, int viewFlags, int flags, int seq,
-            int lastSyncSeqId, WindowRelayoutResult outRelayoutResult) {
+            int syncSeqId, WindowRelayoutResult outRelayoutResult, SurfaceControl outSurface) {
         Trace.traceBegin(TRACE_TAG_WINDOW_MANAGER, mRelayoutTag);
         int res = mService.relayoutWindow(this, window, attrs, requestedWidth,
-                requestedHeight, viewFlags, flags, seq, lastSyncSeqId, outRelayoutResult);
+                requestedHeight, viewFlags, flags, seq, syncSeqId, outRelayoutResult, outSurface);
         Trace.traceEnd(TRACE_TAG_WINDOW_MANAGER);
         return res;
     }
@@ -291,7 +291,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
             int requestedWidth, int requestedHeight, int viewFlags, int flags, int seq,
             int lastSyncSeqId) {
         relayout(window, attrs, requestedWidth, requestedHeight, viewFlags, flags, seq,
-                lastSyncSeqId, null /* outRelayoutResult */);
+                lastSyncSeqId, null /* outRelayoutResult */, null /* outSurface */);
     }
 
     @Override
@@ -657,11 +657,12 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     }
 
     @Override
-    public void onRectangleOnScreenRequested(IBinder token, Rect rectangle) {
+    public void onRectangleOnScreenRequested(IBinder token, Rect rectangle,
+            @View.RectangleOnScreenRequestSource int source) {
         synchronized (mService.mGlobalLock) {
             final long identity = Binder.clearCallingIdentity();
             try {
-                mService.onRectangleOnScreenRequested(token, rectangle);
+                mService.onRectangleOnScreenRequested(token, rectangle, source);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }
@@ -700,10 +701,8 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
             final WindowState win = mService.windowForClientLocked(this, window,
                     false /* throwOnError */);
             if (win != null) {
-                if (android.view.inputmethod.Flags.refactorInsetsController()) {
-                    ImeTracker.forLogging().onProgress(imeStatsToken,
-                            ImeTracker.PHASE_WM_UPDATE_REQUESTED_VISIBLE_TYPES);
-                }
+                ImeTracker.forLogging().onProgress(imeStatsToken,
+                        ImeTracker.PHASE_WM_UPDATE_REQUESTED_VISIBLE_TYPES);
                 final @InsetsType int changedTypes =
                         win.setRequestedVisibleTypes(requestedVisibleTypes);
                 win.getDisplayContent().getInsetsPolicy().onRequestedVisibleTypesChanged(win,
@@ -713,11 +712,8 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
                     task.dispatchTaskInfoChangedIfNeeded(/* forced= */ true);
                 }
             } else {
-                EmbeddedWindowController.EmbeddedWindow embeddedWindow = null;
-                if (android.view.inputmethod.Flags.refactorInsetsController()) {
-                    embeddedWindow = mService.mEmbeddedWindowController.getByWindowToken(
-                            window.asBinder());
-                }
+                EmbeddedWindowController.EmbeddedWindow embeddedWindow =
+                        mService.mEmbeddedWindowController.getByWindowToken(window.asBinder());
                 if (embeddedWindow != null) {
                     // If there is no WindowState for the IWindow, it could be still an
                     // EmbeddedWindow. Therefore, check the EmbeddedWindowController as well
@@ -916,10 +912,16 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
             int privateFlags, int inputFeatures, int type, IBinder windowToken,
             InputTransferToken inputTransferToken, String inputHandleName,
             InputChannel outInputChannel) {
-        if (hostInputTransferToken == null && !mCanAddInternalSystemWindow) {
-            // Callers without INTERNAL_SYSTEM_WINDOW permission cannot grant input channel to
-            // embedded windows without providing a host window input token
-            throw new SecurityException("Requires INTERNAL_SYSTEM_WINDOW permission");
+        if (!Flags.updateHostInputTransferToken()) {
+            // This is not a valid security check, callers can pass in a bogus token. If the
+            // token is not known to wm, then input APIs is request focus or transferTouchGesture
+            // will fail. Removing this check allows SCVH to be created before associating with a
+            // host window.
+            if (hostInputTransferToken == null && !mCanAddInternalSystemWindow) {
+                // Callers without INTERNAL_SYSTEM_WINDOW permission cannot grant input channel to
+                // embedded windows without providing a host window input token
+                throw new SecurityException("Requires INTERNAL_SYSTEM_WINDOW permission");
+            }
         }
 
         final long identity = Binder.clearCallingIdentity();
@@ -934,12 +936,14 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     }
 
     @Override
-    public void updateInputChannel(IBinder channelToken, int displayId, SurfaceControl surface,
+    public void updateInputChannel(IBinder channelToken,
+            @Nullable InputTransferToken hostInputTransferToken,
+            int displayId, SurfaceControl surface,
             int flags, int privateFlags, int inputFeatures, Region region) {
         final long identity = Binder.clearCallingIdentity();
         try {
-            mService.updateInputChannel(channelToken, displayId, surface, flags,
-                    mCanAddInternalSystemWindow ? privateFlags : 0, inputFeatures, region);
+            mService.updateInputChannel(channelToken, hostInputTransferToken, displayId, surface,
+                    flags, mCanAddInternalSystemWindow ? privateFlags : 0, inputFeatures, region);
         } finally {
             Binder.restoreCallingIdentity(identity);
         }

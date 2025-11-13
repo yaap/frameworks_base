@@ -47,7 +47,7 @@ class BatteryRepositoryTest : SysuiTestCase() {
 
     val Kosmos.underTest by
         Kosmos.Fixture {
-            BatteryRepository(
+            BatteryRepositoryImpl(
                 testableContext,
                 backgroundScope,
                 testDispatcher,
@@ -154,5 +154,19 @@ class BatteryRepositoryTest : SysuiTestCase() {
             testScope.advanceTimeBy(2.minutes)
 
             assertThat(latest).isEqualTo("test time remaining")
+        }
+
+    @Test
+    fun incompatibleCharging() =
+        kosmos.runTest {
+            batteryController.fake._isIncompatibleCharging = true
+
+            val latest by collectLastValue(underTest.isIncompatibleCharging)
+
+            assertThat(latest).isTrue()
+
+            batteryController.fake._isIncompatibleCharging = false
+
+            assertThat(latest).isFalse()
         }
 }

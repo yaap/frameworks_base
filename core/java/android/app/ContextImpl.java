@@ -26,6 +26,8 @@ import android.annotation.CallbackExecutor;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SpecialUsers.CanBeALL;
+import android.annotation.SpecialUsers.CanBeCURRENT;
 import android.annotation.SuppressLint;
 import android.annotation.UiContext;
 import android.companion.virtual.VirtualDeviceManager;
@@ -337,14 +339,6 @@ class ContextImpl extends Context {
 
     @ContextType
     private int mContextType;
-
-    /**
-     * {@code true} to indicate that the {@link Context} owns the {@link #getWindowContextToken()}
-     * and is responsible for detaching the token when the Context is released.
-     *
-     * @see #finalize()
-     */
-    private boolean mOwnsToken = false;
 
     private final Object mDatabasesDirLock = new Object();
     @GuardedBy("mDatabasesDirLock")
@@ -711,7 +705,7 @@ class ContextImpl extends Context {
                     res++;
                 }
             } catch (IOException e) {
-                Log.w(TAG, "Failed to migrate " + sourceFile + ": " + e);
+                Log.w(TAG, "Failed to migrate " + sourceFile, e);
                 res = -1;
             }
         }
@@ -827,7 +821,7 @@ class ContextImpl extends Context {
                 if (e.errno == OsConstants.EEXIST) {
                     // We must have raced with someone; that's okay
                 } else {
-                    Log.w(TAG, "Failed to ensure " + file + ": " + e.getMessage());
+                    Log.w(TAG, "Failed to ensure " + file, e);
                 }
             }
 
@@ -838,7 +832,7 @@ class ContextImpl extends Context {
                     Memory.pokeLong(value, 0, stat.st_ino, ByteOrder.nativeOrder());
                     Os.setxattr(file.getParentFile().getAbsolutePath(), xattr, value, 0);
                 } catch (ErrnoException e) {
-                    Log.w(TAG, "Failed to update " + xattr + ": " + e.getMessage());
+                    Log.w(TAG, "Failed to update " + xattr, e);
                 }
             }
         }
@@ -2827,7 +2821,8 @@ class ContextImpl extends Context {
     }
 
     @Override
-    public Context createContextAsUser(UserHandle user, @CreatePackageOptions int flags) {
+    public Context createContextAsUser(
+            @CanBeALL @CanBeCURRENT UserHandle user, @CreatePackageOptions int flags) {
         try {
             return createPackageContextAsUser(getPackageName(), flags, user);
         } catch (NameNotFoundException e) {
@@ -3420,19 +3415,6 @@ class ContextImpl extends Context {
         mContentCaptureOptions = options;
     }
 
-    @Override
-    protected void finalize() throws Throwable {
-        // If mToken is a WindowTokenClient, the Context is usually associated with a
-        // WindowContainer. We should detach from WindowContainer when the Context is finalized
-        // if this Context is not a WindowContext. WindowContext finalization is handled in
-        // WindowContext class.
-        if (mToken instanceof WindowTokenClient && mOwnsToken) {
-            WindowTokenClientController.getInstance().detachIfNeeded(
-                    (WindowTokenClient) mToken);
-        }
-        super.finalize();
-    }
-
     @UnsupportedAppUsage
     static ContextImpl createSystemContext(ActivityThread mainThread) {
         LoadedApk packageInfo = new LoadedApk(mainThread);
@@ -3460,20 +3442,13 @@ class ContextImpl extends Context {
 
         // Step 2. Create a SystemUiContext to wrap the ContextImpl, which enables to listen to
         // its config updates.
-        final Context systemUiContext;
-        if (com.android.window.flags.Flags.trackSystemUiContextBeforeWms()) {
-            systemUiContext = new SystemUiContext(context);
-            context.setOuterContext(systemUiContext);
-        } else {
-            systemUiContext = context;
-        }
+        final SystemUiContext systemUiContext = new SystemUiContext(context);
+        context.setOuterContext(systemUiContext);
         token.attachContext(systemUiContext);
 
         // Step 3. Associate the SystemUiContext with the display specified with ID.
         WindowTokenClientController.getInstance().attachToDisplayContent(token, displayId);
         context.mContextType = CONTEXT_TYPE_SYSTEM_OR_SYSTEM_UI;
-        context.mOwnsToken = true;
-
         return systemUiContext;
     }
 
@@ -3672,7 +3647,7 @@ class ContextImpl extends Context {
             if (android.content.res.Flags.defaultLocale()
                     && r.getConfiguration().getLocales().size() > 1) {
                 LocaleConfig lc = LocaleConfig.fromContextIgnoringOverride(this);
-                mResourcesManager.setLocaleConfig(lc);
+                mResources.setLocaleConfig(lc);
             }
         }
         updateResourceOverlayConstraints();
@@ -3793,7 +3768,7 @@ class ContextImpl extends Context {
                         }
                     }
                 } catch (Exception e) {
-                    Log.w(TAG, "Failed to ensure " + dir + ": " + e);
+                    Log.w(TAG, "Failed to ensure " + dir, e);
                     dir = null;
                 }
             }

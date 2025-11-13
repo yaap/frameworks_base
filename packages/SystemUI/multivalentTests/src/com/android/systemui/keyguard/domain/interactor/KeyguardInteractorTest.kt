@@ -28,6 +28,7 @@ import com.android.systemui.bouncer.data.repository.keyguardBouncerRepository
 import com.android.systemui.common.ui.data.repository.fakeConfigurationRepository
 import com.android.systemui.coroutines.collectLastValue
 import com.android.systemui.coroutines.collectValues
+import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.flags.EnableSceneContainer
 import com.android.systemui.keyguard.data.repository.fakeKeyguardRepository
 import com.android.systemui.keyguard.data.repository.fakeKeyguardTransitionRepository
@@ -38,7 +39,9 @@ import com.android.systemui.keyguard.shared.model.DozeTransitionModel
 import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.keyguard.shared.model.KeyguardState.AOD
 import com.android.systemui.keyguard.shared.model.KeyguardState.DOZING
+import com.android.systemui.keyguard.shared.model.KeyguardState.GONE
 import com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN
+import com.android.systemui.keyguard.shared.model.KeyguardState.OCCLUDED
 import com.android.systemui.keyguard.shared.model.StatusBarState
 import com.android.systemui.keyguard.shared.model.TransitionState
 import com.android.systemui.keyguard.shared.model.TransitionState.FINISHED
@@ -92,16 +95,28 @@ class KeyguardInteractorTest : SysuiTestCase() {
             val cameraLaunchSource = collectLastValue(flow)
             runCurrent()
 
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
             assertThat(cameraLaunchSource()!!.type).isEqualTo(CameraLaunchType.POWER_DOUBLE_TAP)
 
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_WIGGLE)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_WIGGLE,
+                isSecureCamera = true,
+            )
             assertThat(cameraLaunchSource()!!.type).isEqualTo(CameraLaunchType.WIGGLE)
 
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_LIFT_TRIGGER)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_LIFT_TRIGGER,
+                isSecureCamera = true,
+            )
             assertThat(cameraLaunchSource()!!.type).isEqualTo(CameraLaunchType.LIFT_TRIGGER)
 
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_QUICK_AFFORDANCE)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_QUICK_AFFORDANCE,
+                isSecureCamera = true,
+            )
             assertThat(cameraLaunchSource()!!.type).isEqualTo(CameraLaunchType.QUICK_AFFORDANCE)
         }
 
@@ -112,7 +127,10 @@ class KeyguardInteractorTest : SysuiTestCase() {
             val secureCameraActive = collectLastValue(underTest.isSecureCameraActive)
             runCurrent()
 
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
 
             assertThat(secureCameraActive()).isTrue()
 
@@ -133,7 +151,10 @@ class KeyguardInteractorTest : SysuiTestCase() {
             val secureCameraActive = collectLastValue(underTest.isSecureCameraActive)
             runCurrent()
 
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
             assertThat(secureCameraActive()).isTrue()
 
             // Keyguard is showing and not occluded
@@ -142,6 +163,50 @@ class KeyguardInteractorTest : SysuiTestCase() {
             assertThat(secureCameraActive()).isTrue()
 
             bouncerRepository.setPrimaryShow(true)
+            assertThat(secureCameraActive()).isFalse()
+        }
+
+    @Test
+    @DisableSceneContainer
+    fun testGoneStateResetsCameraActive() =
+        testScope.runTest {
+            val secureCameraActive = collectLastValue(underTest.isSecureCameraActive)
+            runCurrent()
+
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
+            assertThat(secureCameraActive()).isTrue()
+
+            keyguardTransitionRepository.sendTransitionSteps(from = OCCLUDED, to = GONE, testScope)
+            assertThat(secureCameraActive()).isFalse()
+        }
+
+    @Test
+    @EnableSceneContainer
+    fun testScenesGoneStateResetsCameraActive() =
+        testScope.runTest {
+            val secureCameraActive = collectLastValue(underTest.isSecureCameraActive)
+            runCurrent()
+
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
+            assertThat(secureCameraActive()).isTrue()
+
+            transitionState.value =
+                ObservableTransitionState.Transition(
+                    fromScene = Scenes.Lockscreen,
+                    toScene = Scenes.Gone,
+                    currentScene = flowOf(Scenes.Gone),
+                    progress = flowOf(1f),
+                    isInitiatedByUserInput = false,
+                    isUserInputOngoing = flowOf(false),
+                )
+            runCurrent()
+
             assertThat(secureCameraActive()).isFalse()
         }
 
@@ -154,7 +219,10 @@ class KeyguardInteractorTest : SysuiTestCase() {
             runCurrent()
 
             // Launch camera
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
             assertThat(secureCameraActive()).isTrue()
 
             // Go back to keyguard
@@ -178,7 +246,10 @@ class KeyguardInteractorTest : SysuiTestCase() {
             runCurrent()
 
             // Launch camera
-            underTest.onCameraLaunchDetected(StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP)
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
             assertThat(secureCameraActive()).isTrue()
 
             // Show bouncer
@@ -190,6 +261,25 @@ class KeyguardInteractorTest : SysuiTestCase() {
 
             // THEN we still show secure camera as *not* active
             assertThat(secureCameraActive()).isFalse()
+        }
+
+    @Test
+    fun secureCameraRemainFalseOnInsecureCameraLaunch() =
+        testScope.runTest {
+            val secureCameraActive = collectLastValue(underTest.isSecureCameraActive)
+            runCurrent()
+
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = false,
+            )
+            assertThat(secureCameraActive()).isFalse()
+
+            underTest.onCameraLaunchDetected(
+                StatusBarManager.CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
+            assertThat(secureCameraActive()).isTrue()
         }
 
     @Test
@@ -287,6 +377,7 @@ class KeyguardInteractorTest : SysuiTestCase() {
         }
 
     @Test
+    @DisableSceneContainer
     fun dismissAlpha_onGlanceableHub_doesNotEmitWhenShadeResets() =
         testScope.runTest {
             val dismissAlpha by collectValues(underTest.dismissAlpha)
@@ -409,6 +500,7 @@ class KeyguardInteractorTest : SysuiTestCase() {
         }
 
     @Test
+    @DisableSceneContainer
     fun keyguardTranslationY_whenTransitioningToGoneAndShadeIsExpandingEmitsNonZero() =
         testScope.runTest {
             val keyguardTranslationY by collectLastValue(underTest.keyguardTranslationY)
@@ -520,7 +612,6 @@ class KeyguardInteractorTest : SysuiTestCase() {
         }
 
     @Test
-    @EnableSceneContainer
     fun dozeAmount_updatedByAodTransitionWhenAodEnabled() =
         testScope.runTest {
             val dozeAmount by collectLastValue(underTest.dozeAmount)
@@ -547,7 +638,6 @@ class KeyguardInteractorTest : SysuiTestCase() {
         }
 
     @Test
-    @EnableSceneContainer
     fun dozeAmount_updatedByDozeTransitionWhenAodDisabled() =
         testScope.runTest {
             val dozeAmount by collectLastValue(underTest.dozeAmount)

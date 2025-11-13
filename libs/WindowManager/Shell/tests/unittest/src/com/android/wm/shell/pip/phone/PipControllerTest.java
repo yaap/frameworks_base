@@ -42,6 +42,7 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.RemoteException;
+import android.os.UserManager;
 import android.platform.test.annotations.DisableFlags;
 import android.testing.AndroidTestingRunner;
 import android.testing.TestableLooper;
@@ -120,6 +121,7 @@ public class PipControllerTest extends ShellTestCase {
     @Mock private DisplayInsetsController mMockDisplayInsetsController;
     @Mock private TabletopModeController mMockTabletopModeController;
     @Mock private Handler mMockHandler;
+    @Mock private UserManager mMockUserManager;
 
     @Mock private DisplayLayout mMockDisplayLayout1;
     @Mock private DisplayLayout mMockDisplayLayout2;
@@ -131,9 +133,9 @@ public class PipControllerTest extends ShellTestCase {
             ((Runnable) invocation.getArgument(0)).run();
             return null;
         }).when(mMockExecutor).execute(any());
-        mShellInit = spy(new ShellInit(mMockExecutor));
+        mShellInit = new ShellInit(mMockExecutor);
         mShellController = spy(new ShellController(mContext, mShellInit, mMockShellCommandHandler,
-                mMockDisplayInsetsController, mMockExecutor));
+                mMockDisplayInsetsController, mMockUserManager, mMockExecutor));
         mPipController = new PipController(mContext, mShellInit, mMockShellCommandHandler,
                 mShellController, mMockDisplayController, mMockPipAnimationController,
                 mMockPipAppOpsListener, mMockPipBoundsAlgorithm, mMockPipKeepClearAlgorithm,
@@ -144,14 +146,10 @@ public class PipControllerTest extends ShellTestCase {
                 mMockTaskStackListener, mMockPipParamsChangedForwarder,
                 mMockDisplayInsetsController, mMockTabletopModeController,
                 mMockOneHandedController, mMockExecutor, mMockHandler);
-        mShellInit.init();
         when(mMockPipBoundsAlgorithm.getSnapAlgorithm()).thenReturn(mMockPipSnapAlgorithm);
         when(mMockPipTouchHandler.getMotionHelper()).thenReturn(mMockPipMotionHelper);
-    }
-
-    @Test
-    public void instantiatePipController_addInitCallback() {
-        verify(mShellInit, times(1)).addInitCallback(any(), eq(mPipController));
+        // Directly init mPipController instead of using ShellInit
+        mPipController.onInit();
     }
 
     @Test

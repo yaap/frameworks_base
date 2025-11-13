@@ -24,10 +24,11 @@ import static android.content.Intent.FLAG_ACTIVITY_MULTIPLE_TASK;
 import static android.content.pm.ActivityInfo.LAUNCH_SINGLE_INSTANCE;
 import static android.content.pm.ActivityInfo.LAUNCH_SINGLE_INSTANCE_PER_TASK;
 import static android.content.pm.ActivityInfo.LAUNCH_SINGLE_TASK;
+import static android.window.DesktopExperienceFlags.ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS;
+import static android.window.DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND;
 
-import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_ATM;
-import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_WITH_CLASS_NAME;
 import static com.android.server.wm.DesktopModeHelper.canEnterDesktopMode;
+import static com.android.server.wm.LaunchParamsUtil.getPreferredLaunchTaskDisplayArea;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -35,27 +36,29 @@ import android.app.ActivityOptions;
 import android.app.WindowConfiguration;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
-import android.util.Slog;
+import android.window.DesktopExperienceFlags;
 import android.window.DesktopModeFlags;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.protolog.ProtoLog;
+import com.android.internal.protolog.WmProtoLogGroups;
 import com.android.server.wm.LaunchParamsController.LaunchParamsModifier;
+
+import java.util.Objects;
+
 /**
  * The class that defines default launch params for tasks in desktop mode
  */
 class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
-
-    private static final String TAG =
-            TAG_WITH_CLASS_NAME ? "DesktopModeLaunchParamsModifier" : TAG_ATM;
-
-    private static final boolean DEBUG = false;
-
     private StringBuilder mLogBuilder;
 
     @NonNull private final Context mContext;
+    @NonNull private final ActivityTaskSupervisor mSupervisor;
 
-    DesktopModeLaunchParamsModifier(@NonNull Context context) {
+    DesktopModeLaunchParamsModifier(@NonNull Context context,
+            @NonNull ActivityTaskSupervisor supervisor) {
         mContext = context;
+        mSupervisor = supervisor;
     }
 
     @Override
@@ -65,7 +68,7 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             @NonNull LaunchParamsController.LaunchParams currentParams,
             @NonNull LaunchParamsController.LaunchParams outParams) {
 
-        initLogBuilder(task, activity);
+        initLogBuilder(phase, task, activity);
         int result = calculate(task, layout, activity, source, options, request, phase,
                 currentParams, outParams);
         outputLog();
@@ -83,6 +86,33 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             return RESULT_SKIP;
         }
 
+        // Determine the suggested display area to launch the activity/task.
+        final TaskDisplayArea suggestedDisplayArea = getPreferredLaunchTaskDisplayArea(mSupervisor,
+                task, options, source, currentParams, activity, request, this::appendLog);
+        outParams.mPreferredTaskDisplayArea = suggestedDisplayArea;
+        final DisplayContent display = suggestedDisplayArea.mDisplayContent;
+        appendLog("display-id=" + display.getDisplayId()
+                + " task-display-area-windowing-mode=" + suggestedDisplayArea.getWindowingMode()
+                + " suggested-display-area=" + suggestedDisplayArea);
+
+        boolean hasLaunchWindowingMode = false;
+        final boolean inDesktopMode = suggestedDisplayArea.inFreeformWindowingMode()
+                || suggestedDisplayArea.getTopMostVisibleFreeformActivity() != null;
+        if (ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue() && task == null
+                && (isRequestingFreeformWindowMode(null, options, currentParams)
+                    || inDesktopMode)) {
+            if (options != null) {
+                final int windowingMode = options.getLaunchWindowingMode();
+                if (windowingMode == WINDOWING_MODE_FREEFORM) {
+                    // Launching freeform in desktop but not ready to resolve bounds since task is
+                    // null, return RESULT_DONE to prevent other modifiers from setting bounds.
+                    outParams.mWindowingMode = windowingMode;
+                    appendLog("launch-freeform");
+                    return RESULT_DONE;
+                }
+            }
+        }
+
         if (task == null || !task.isAttached()) {
             appendLog("task null, skipping");
             return RESULT_SKIP;
@@ -94,8 +124,24 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             return RESULT_SKIP;
         }
 
-        if (com.android.window.flags.Flags.fixLayoutExistingTask()
-                && task.getCreatedByOrganizerTask() != null) {
+        boolean requestFullscreen = options != null
+                && options.getLaunchWindowingMode() == WINDOWING_MODE_FULLSCREEN;
+        if (DesktopExperienceFlags.RESPECT_FULLSCREEN_ACTIVITY_OPTION_IN_DESKTOP_LAUNCH_PARAMS
+                .isTrue() && requestFullscreen) {
+            appendLog("respecting fullscreen activity option, skipping");
+            return RESULT_SKIP;
+        }
+
+        final Task organizerTask = task.getCreatedByOrganizerTask();
+        // If task is already launched, check if organizer task matches the target display.
+        final boolean inDesktopFirstContainer = ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue() && (
+                suggestedDisplayArea.inFreeformWindowingMode() || (
+                        ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue() && organizerTask != null
+                                && organizerTask.inFreeformWindowingMode()
+                                && organizerTask.getDisplayId() == display.getDisplayId()));
+        // In multiple desks, freeform tasks are always children of a root task controlled
+        // by DesksOrganizer, so don't skip resolving freeform bounds.
+        if (organizerTask != null && !inDesktopFirstContainer) {
             appendLog("has created-by-organizer-task, skipping");
             return RESULT_SKIP;
         }
@@ -104,20 +150,22 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             appendLog("not standard or undefined activity type, skipping");
             return RESULT_SKIP;
         }
-        if (phase < PHASE_WINDOWING_MODE) {
-            appendLog("not in windowing mode or bounds phase, skipping");
-            return RESULT_SKIP;
-        }
 
         // Copy over any values
         outParams.set(currentParams);
 
+        boolean isFullscreenInDeskTask = inDesktopFirstContainer && requestFullscreen;
         if (source != null && source.getTask() != null) {
             final Task sourceTask = source.getTask();
+            // Don't explicitly set to freeform if task is launching in full-screen in desktop-first
+            // container, as it should already inherit freeform by default if undefined.
+            requestFullscreen |= sourceTask.getWindowingMode() == WINDOWING_MODE_FULLSCREEN;
+            isFullscreenInDeskTask = inDesktopFirstContainer && requestFullscreen;
             if (DesktopModeFlags.DISABLE_DESKTOP_LAUNCH_PARAMS_OUTSIDE_DESKTOP_BUG_FIX.isTrue()
-                    && isEnteringDesktopMode(sourceTask, options, currentParams)) {
+                    && isEnteringDesktopMode(sourceTask, options, currentParams)
+                    && !isFullscreenInDeskTask) {
                 // If trampoline source is not freeform but we are entering or in desktop mode,
-                // ignore the source windowing mode and set the windowing mode to freeform
+                // ignore the source windowing mode and set the windowing mode to freeform.
                 outParams.mWindowingMode = WINDOWING_MODE_FREEFORM;
                 appendLog("freeform window mode applied to task trampoline");
             } else {
@@ -129,13 +177,24 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
                 outParams.mWindowingMode = sourceTask.getWindowingMode();
                 appendLog("inherit-from-source=" + outParams.mWindowingMode);
             }
+            hasLaunchWindowingMode = true;
+        }
+
+        if (isFullscreenInDeskTask) {
+            // Return early to prevent freeform bounds always being set in multi-desk mode for
+            // fullscreen tasks. Tasks should inherit from parent bounds.
+            appendLog("launch-in-fullscreen");
+            return RESULT_DONE;
         }
 
         if (phase == PHASE_WINDOWING_MODE) {
+            if (ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue()) {
+                return RESULT_DONE;
+            }
             return RESULT_CONTINUE;
         }
 
-        if (!currentParams.mBounds.isEmpty()) {
+        if (!currentParams.mBounds.isEmpty() && !inDesktopMode) {
             appendLog("currentParams has bounds set, not overriding");
             return RESULT_SKIP;
         }
@@ -144,6 +203,10 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             if (DesktopModeFlags.DISABLE_DESKTOP_LAUNCH_PARAMS_OUTSIDE_DESKTOP_BUG_FIX.isTrue()) {
                 // We are in desktop, return result done to prevent other modifiers from modifying
                 // exiting task bounds or resolved windowing mode.
+                if (ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue()) {
+                    outParams.mBounds.set(task.getRequestedOverrideBounds());
+                }
+                appendLog("task-has-override-bounds=%s", task.getRequestedOverrideBounds());
                 return RESULT_DONE;
             }
             appendLog("current task has bounds set, not overriding");
@@ -171,6 +234,10 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             // this modifier is now also responsible to respecting the options launch windowing
             // mode.
             outParams.mWindowingMode = options.getLaunchWindowingMode();
+            appendLog("inherit-options=" + options.getLaunchWindowingMode());
+            return RESULT_DONE;
+        }
+        if (ENABLE_FREEFORM_DISPLAY_LAUNCH_PARAMS.isTrue() && hasLaunchWindowingMode) {
             return RESULT_DONE;
         }
         return RESULT_CONTINUE;
@@ -196,13 +263,12 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
     }
 
     private boolean isRequestingFreeformWindowMode(
-            @NonNull Task task,
+            @Nullable Task task,
             @Nullable ActivityOptions options,
             @NonNull LaunchParamsController.LaunchParams currentParams) {
-        return task.inFreeformWindowingMode()
+        return (task != null && task.inFreeformWindowingMode())
                 || (options != null && options.getLaunchWindowingMode() == WINDOWING_MODE_FREEFORM)
-                || (currentParams.hasWindowingMode()
-                && currentParams.mWindowingMode == WINDOWING_MODE_FREEFORM);
+                || currentParams.mWindowingMode == WINDOWING_MODE_FREEFORM;
     }
 
     /**
@@ -240,7 +306,7 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             @Nullable ActivityRecord launchingActivity,
             @NonNull Task launchingTask) {
         if (existingTaskActivity == null || launchingActivity == null) return false;
-        return (existingTaskActivity.packageName == launchingActivity.packageName)
+        return (Objects.equals(existingTaskActivity.packageName, launchingActivity.packageName))
                 && isLaunchingNewSingleTask(launchingActivity.launchMode)
                 && isClosingExitingInstance(launchingTask.getBaseIntent().getFlags());
     }
@@ -264,18 +330,16 @@ class DesktopModeLaunchParamsModifier implements LaunchParamsModifier {
             || (intentFlags & FLAG_ACTIVITY_MULTIPLE_TASK) == 0;
     }
 
-    private void initLogBuilder(Task task, ActivityRecord activity) {
-        if (DEBUG) {
-            mLogBuilder = new StringBuilder(
-                    "DesktopModeLaunchParamsModifier: task=" + task + " activity=" + activity);
-        }
+    private void initLogBuilder(int phase, Task task, ActivityRecord activity) {
+        mLogBuilder = new StringBuilder("DesktopModeLaunchParamsModifier: phase= " + phase
+                + " task=" + task + " activity=" + activity);
     }
 
     private void appendLog(String format, Object... args) {
-        if (DEBUG) mLogBuilder.append(" ").append(String.format(format, args));
+        mLogBuilder.append(" ").append(String.format(format, args));
     }
 
     private void outputLog() {
-        if (DEBUG) Slog.d(TAG, mLogBuilder.toString());
+        ProtoLog.v(WmProtoLogGroups.WM_DEBUG_TASKS_LAUNCH_PARAMS, mLogBuilder.toString());
     }
 }

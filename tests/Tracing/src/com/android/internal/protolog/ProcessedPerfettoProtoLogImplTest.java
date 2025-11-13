@@ -17,6 +17,8 @@
 package com.android.internal.protolog;
 
 import static android.tools.traces.Utils.busyWaitForDataSourceRegistration;
+import static android.tools.traces.Utils.busyWaitTracingSessionDoesntExist;
+import static android.tools.traces.Utils.busyWaitTracingSessionExists;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -68,6 +70,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -291,12 +296,11 @@ public class ProcessedPerfettoProtoLogImplTest {
         final ResultReader reader = new ResultReader(mWriter.write(), mTraceConfig);
         final ProtoLogTrace protolog = reader.readProtoLogTrace();
 
-        Truth.assertThat(protolog.messages).hasSize(5);
+        Truth.assertThat(protolog.messages).hasSize(4);
         Truth.assertThat(protolog.messages.get(0).getLevel()).isEqualTo(LogLevel.DEBUG);
-        Truth.assertThat(protolog.messages.get(1).getLevel()).isEqualTo(LogLevel.VERBOSE);
-        Truth.assertThat(protolog.messages.get(2).getLevel()).isEqualTo(LogLevel.WARN);
-        Truth.assertThat(protolog.messages.get(3).getLevel()).isEqualTo(LogLevel.ERROR);
-        Truth.assertThat(protolog.messages.get(4).getLevel()).isEqualTo(LogLevel.WTF);
+        Truth.assertThat(protolog.messages.get(1).getLevel()).isEqualTo(LogLevel.WARN);
+        Truth.assertThat(protolog.messages.get(2).getLevel()).isEqualTo(LogLevel.ERROR);
+        Truth.assertThat(protolog.messages.get(3).getLevel()).isEqualTo(LogLevel.WTF);
     }
 
     @Test
@@ -702,7 +706,7 @@ public class ProcessedPerfettoProtoLogImplTest {
                 Truth.assertThat(sProtoLog.isEnabled(TestProtoLogGroup.TEST_GROUP, LogLevel.DEBUG))
                         .isTrue();
                 Truth.assertThat(sProtoLog.isEnabled(TestProtoLogGroup.TEST_GROUP,
-                        LogLevel.VERBOSE)).isTrue();
+                        LogLevel.VERBOSE)).isFalse();
                 Truth.assertThat(sProtoLog.isEnabled(TestProtoLogGroup.TEST_GROUP, LogLevel.INFO))
                         .isTrue();
                 Truth.assertThat(sProtoLog.isEnabled(TestProtoLogGroup.TEST_GROUP, LogLevel.WARN))
@@ -867,6 +871,61 @@ public class ProcessedPerfettoProtoLogImplTest {
     }
 
     @Test
+    public void verboseLowerThanDebugLogLevelDefaultLevel() throws IOException {
+        PerfettoTraceMonitor traceMonitor = PerfettoTraceMonitor.newBuilder()
+                .enableProtoLog(LogLevel.DEBUG, List.of(), TEST_PROTOLOG_DATASOURCE_NAME)
+                .build();
+        try {
+            traceMonitor.start();
+            sProtoLog.log(LogLevel.VERBOSE, TestProtoLogGroup.TEST_GROUP,
+                    "This message should not be logged");
+            sProtoLog.log(LogLevel.DEBUG, TestProtoLogGroup.TEST_GROUP,
+                    "This message should be logged %d", 123);
+        } finally {
+            traceMonitor.stop(mWriter);
+        }
+
+        final ResultReader reader = new ResultReader(mWriter.write(), mTraceConfig);
+        final ProtoLogTrace protolog = reader.readProtoLogTrace();
+
+        Truth.assertThat(protolog.messages).hasSize(1);
+
+        Truth.assertThat(protolog.messages.get(0).getLevel())
+                .isEqualTo(LogLevel.DEBUG);
+        Truth.assertThat(protolog.messages.get(0).getMessage())
+                .isEqualTo("This message should be logged 123");
+    }
+
+    @Test
+    public void verboseLowerThanDebugLogLevel() throws IOException {
+        PerfettoTraceMonitor traceMonitor = PerfettoTraceMonitor.newBuilder()
+                .enableProtoLog(LogLevel.VERBOSE, List.of(
+                        new PerfettoTraceMonitor.Builder.ProtoLogGroupOverride(
+                                TestProtoLogGroup.TEST_GROUP.name(), LogLevel.DEBUG, false)
+                ), TEST_PROTOLOG_DATASOURCE_NAME)
+                .build();
+        try {
+            traceMonitor.start();
+            sProtoLog.log(LogLevel.VERBOSE, TestProtoLogGroup.TEST_GROUP,
+                    "This message should not be logged");
+            sProtoLog.log(LogLevel.DEBUG, TestProtoLogGroup.TEST_GROUP,
+                    "This message should be logged %d", 123);
+        } finally {
+            traceMonitor.stop(mWriter);
+        }
+
+        final ResultReader reader = new ResultReader(mWriter.write(), mTraceConfig);
+        final ProtoLogTrace protolog = reader.readProtoLogTrace();
+
+        Truth.assertThat(protolog.messages).hasSize(1);
+
+        Truth.assertThat(protolog.messages.get(0).getLevel())
+                .isEqualTo(LogLevel.DEBUG);
+        Truth.assertThat(protolog.messages.get(0).getMessage())
+                .isEqualTo("This message should be logged 123");
+    }
+
+    @Test
     public void enablesLogGroupAfterLoadingConfig() {
         sProtoLog.stopLoggingToLogcat(
                 new String[] { TestProtoLogGroup.TEST_GROUP.name() }, (msg) -> {});
@@ -897,6 +956,211 @@ public class ProcessedPerfettoProtoLogImplTest {
         sProtoLog.stopLoggingToLogcat(
                 new String[] { TestProtoLogGroup.TEST_GROUP.name() }, (msg) -> {});
         Truth.assertThat(TestProtoLogGroup.TEST_GROUP.isLogToLogcat()).isFalse();
+    }
+
+    @Test
+    public void messagesLoggedWhenProtoDisabledAreNotTraced() throws IOException {
+        assertFalse("ProtoLog should be disabled before starting any trace",
+                sProtoLog.isProtoEnabled());
+
+        // Log a message when ProtoLog is disabled.
+        sProtoLog.log(LogLevel.DEBUG, TestProtoLogGroup.TEST_GROUP, 1,
+                LogDataType.BOOLEAN, new Object[]{false}); // "false" to distinguish
+
+        PerfettoTraceMonitor traceMonitor = PerfettoTraceMonitor.newBuilder()
+                .enableProtoLog(true, List.of(), TEST_PROTOLOG_DATASOURCE_NAME)
+                .build();
+        try {
+            traceMonitor.start();
+            assertTrue("ProtoLog should be enabled after starting the trace.",
+                    sProtoLog.isProtoEnabled());
+
+            // Log a message when ProtoLog is enabled.
+            sProtoLog.log(LogLevel.DEBUG, TestProtoLogGroup.TEST_GROUP, 1,
+                    LogDataType.BOOLEAN, new Object[]{true}); // "true" to distinguish
+        } finally {
+            traceMonitor.stop(mWriter);
+        }
+
+        final ResultReader reader = new ResultReader(mWriter.write(), mTraceConfig);
+        final ProtoLogTrace protolog = reader.readProtoLogTrace();
+
+        Truth.assertThat(protolog.messages).hasSize(1);
+        Truth.assertThat(protolog.messages.getFirst().getMessage())
+                .isEqualTo("My Test Debug Log Message true"); // Only the "true" message
+    }
+
+
+    @Test
+    public void messagesInQueueBeforeNewSessionActivationAreNotTracedInNewSession()
+            throws Exception {
+        final int numOldMessages = 2;
+        final int numNewMessages = 2;
+
+        final CountDownLatch executorBlockedLatch = new CountDownLatch(1);
+        final CountDownLatch releaseExecutorLatch = new CountDownLatch(1);
+
+        // Submit task to block the executor.
+        sProtoLog.mBackgroundHandler.post(() -> {
+            executorBlockedLatch.countDown();
+            try {
+                if (!releaseExecutorLatch.await(60, TimeUnit.SECONDS)) {
+                    Truth.assertWithMessage("Timeout waiting for releaseExecutorLatch").fail();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Task_Block interrupted: " + e.getMessage());
+            }
+        });
+        assertTrue("Executor did not block in time",
+                executorBlockedLatch.await(5, TimeUnit.SECONDS));
+
+        PerfettoTraceMonitor traceMonitor0 = PerfettoTraceMonitor.newBuilder()
+                .enableProtoLog(true, List.of(), TEST_PROTOLOG_DATASOURCE_NAME)
+                .setUniqueSessionName("test_session0")
+                .build();
+        traceMonitor0.start();
+        busyWaitTracingSessionExists("test_session0");
+
+        // Log "old" messages. These are queued before we start the second tracing session.
+        for (int i = 0; i < numOldMessages; i++) {
+            sProtoLog.log(LogLevel.WARN, TestProtoLogGroup.TEST_GROUP, 1,
+                    LogDataType.BOOLEAN, new Object[]{false}); // Task_LogOld_i
+        }
+
+        // At this point, queue on backgroundService is roughly:
+        // [Task_Block(paused), Task_Activate0, Task_LogOld1, ..., Task_Deactivate0]
+
+        // Start the actual trace session to inspect (traceMonitor1). Queues Task_Activate1.
+        PerfettoTraceMonitor traceMonitor1 = PerfettoTraceMonitor.newBuilder()
+                .enableProtoLog(true, List.of(), TEST_PROTOLOG_DATASOURCE_NAME)
+                .setUniqueSessionName("test_session1")
+                .build();
+        traceMonitor1.start();
+        busyWaitTracingSessionExists("test_session1");
+
+        // Log "new" messages. These are for traceMonitor1.
+        for (int i = 0; i < numNewMessages; i++) {
+            sProtoLog.log(LogLevel.DEBUG, TestProtoLogGroup.TEST_GROUP, 1,
+                    LogDataType.BOOLEAN, new Object[]{true});
+        }
+
+        // Unblock the executor.
+        releaseExecutorLatch.countDown();
+
+        var writer0 = new ResultWriter()
+                .forScenario(new ScenarioBuilder().forClass("scenario0").build())
+                .withOutputDir(mTracingDirectory).setRunComplete();
+        traceMonitor0.stop(writer0);
+
+        var writer1 = new ResultWriter()
+                .forScenario(new ScenarioBuilder().forClass("scenario1").build())
+                .withOutputDir(mTracingDirectory).setRunComplete();
+        traceMonitor1.stop(writer1);
+        busyWaitTracingSessionDoesntExist("test_session1");
+
+        final ResultReader reader0 = new ResultReader(writer0.write(), mTraceConfig);
+        final ProtoLogTrace protolog0 = reader0.readProtoLogTrace();
+
+        Truth.assertThat(protolog0.messages).hasSize(numOldMessages + numNewMessages);
+
+        final ResultReader reader1 = new ResultReader(writer1.write(), mTraceConfig);
+        final ProtoLogTrace protolog1 = reader1.readProtoLogTrace();
+
+        Truth.assertThat(protolog1.messages).hasSize(numNewMessages);
+        for (int i = 0; i < numNewMessages; i++) {
+            Truth.assertThat(protolog1.messages.get(i).getLevel()).isEqualTo(LogLevel.DEBUG);
+            Truth.assertThat(protolog1.messages.get(i).getMessage())
+                    .isEqualTo("My Test Debug Log Message true");
+        }
+        // Ensure no messages (from the "old" batch) are present.
+        for (var msg : protolog1.messages) {
+            Truth.assertThat(msg.getLevel()).isNotEqualTo(LogLevel.VERBOSE);
+        }
+    }
+
+    @Test
+    public void processesAllPendingMessagesBeforeTraceStop()
+            throws IOException, InterruptedException {
+        // large number of messages to log to stress the queue
+        final int numMessages = 1000;
+        final CountDownLatch processingHasStartedLatch = new CountDownLatch(1);
+        final CountDownLatch allowProcessingToContinueLatch = new CountDownLatch(1);
+        final AtomicBoolean blockingTaskStartedExecution = new AtomicBoolean(false);
+
+        // Configure trace monitor to enable all log levels for the test data source.
+        PerfettoTraceMonitor traceMonitor = PerfettoTraceMonitor.newBuilder()
+                .enableProtoLog(true, List.of(), TEST_PROTOLOG_DATASOURCE_NAME)
+                .build();
+        try {
+            traceMonitor.start();
+            assertTrue("ProtoLog should be enabled after starting the trace.",
+                    sProtoLog.isProtoEnabled());
+
+            // Submit a task that will block the executor queue.
+            sProtoLog.mBackgroundHandler.post(() -> {
+                try {
+                    blockingTaskStartedExecution.set(true);
+                    processingHasStartedLatch.countDown(); // Signal that this task has started
+                    // Wait until the main test thread signals to continue
+                    if (!allowProcessingToContinueLatch.await(60, TimeUnit.SECONDS)) {
+                        // Fail fast if timeout occurs, to avoid test hanging indefinitely
+                        Truth.assertWithMessage(
+                                "Timeout waiting for allowProcessingToContinueLatch")
+                                .fail();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Blocking task was interrupted: " + e.getMessage());
+                }
+            });
+
+            // Wait for the blocking task to actually start executing on the background thread.
+            // This ensures it's at the head of the executor's queue before we add more tasks.
+            assertTrue("Blocking task did not start execution in time.",
+                    processingHasStartedLatch.await(5, TimeUnit.SECONDS));
+
+            // Now, submit all the log messages. They will be queued behind the blocking task.
+            for (int i = 0; i < numMessages; i++) {
+                sProtoLog.log(LogLevel.DEBUG, TestProtoLogGroup.TEST_GROUP, 1,
+                        LogDataType.BOOLEAN, new Object[]{true});
+            }
+
+            // Assert that the blocking task is still active (i.e., waiting on the latch),
+            // which implies the subsequently submitted log messages are still queued.
+            assertTrue("Blocking task should have started execution.",
+                    blockingTaskStartedExecution.get());
+            Truth.assertWithMessage(
+                    "allowProcessingToContinueLatch should not have been counted down yet.")
+                    .that(allowProcessingToContinueLatch.getCount())
+                    .isEqualTo(1L);
+
+            // Allow the blocking task to complete. This will allow the executor
+            // to start processing the queued log messages.
+            allowProcessingToContinueLatch.countDown();
+
+            // Stop tracing immediately. The implementation should wait for the
+            // mBackgroundHandler to process all queued messages (including the
+            // now-unblocked first task and all subsequent log messages).
+        } finally {
+            // Ensure the latch is always counted down if an exception occurred before stop,
+            // or if the test is ending, to prevent the background thread from hanging.
+            if (allowProcessingToContinueLatch.getCount() > 0) {
+                allowProcessingToContinueLatch.countDown();
+            }
+            traceMonitor.stop(mWriter);
+        }
+
+        // Verify that all messages were written to the trace.
+        final ResultReader reader = new ResultReader(mWriter.write(), mTraceConfig);
+        final ProtoLogTrace protolog = reader.readProtoLogTrace();
+
+        Truth.assertThat(protolog.messages).hasSize(numMessages);
+        for (int i = 0; i < numMessages; i++) {
+            Truth.assertThat(protolog.messages.get(i).getLevel()).isEqualTo(LogLevel.DEBUG);
+            Truth.assertThat(protolog.messages.get(i).getMessage())
+                    .isEqualTo("My Test Debug Log Message true");
+        }
     }
 
     private enum TestProtoLogGroup implements IProtoLogGroup {

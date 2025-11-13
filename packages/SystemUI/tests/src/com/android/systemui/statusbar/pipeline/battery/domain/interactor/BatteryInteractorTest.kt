@@ -60,6 +60,10 @@ class BatteryInteractorTest : SysuiTestCase() {
             batteryController.fake._isPluggedIn = true
 
             assertThat(latest).isEqualTo(BatteryAttributionModel.Charging)
+
+            batteryController.fake._isStateUnknown = true
+
+            assertThat(latest).isEqualTo(BatteryAttributionModel.Unknown)
         }
 
     @Test
@@ -108,5 +112,52 @@ class BatteryInteractorTest : SysuiTestCase() {
             batteryController.fake._isPowerSave = false
 
             assertThat(latest).isEqualTo(BatteryAttributionModel.Charging)
+        }
+
+    @Test
+    fun incompatibleCharging_notConsideredCharging() =
+        kosmos.runTest {
+            val latest by collectLastValue(underTest.isCharging)
+
+            batteryController.fake._isPluggedIn = true
+            batteryController.fake._isIncompatibleCharging = true
+
+            assertThat(latest).isFalse()
+        }
+
+    @Test
+    fun stateUnknown_isTopPrioritizedState() =
+        kosmos.runTest {
+            val latest by collectLastValue(underTest.batteryAttributionType)
+
+            // Not a real scenario, but assume that every state is enabled
+            batteryController.fake._isStateUnknown = true
+            batteryController.fake._isPluggedIn = true
+            batteryController.fake._isPowerSave = true
+            batteryController.fake._isDefender = true
+
+            assertThat(latest).isEqualTo(BatteryAttributionModel.Unknown)
+        }
+
+    @Test
+    fun stateUnknown_levelIsNull() =
+        kosmos.runTest {
+            val latest by collectLastValue(underTest.level)
+
+            batteryController.fake._level = 50
+            batteryController.fake._isStateUnknown = true
+
+            assertThat(latest).isNull()
+        }
+
+    @Test
+    fun stateUnknown_isInCriticalRange_criticalIsFalse() =
+        kosmos.runTest {
+            val latest by collectLastValue(underTest.isCritical)
+
+            batteryController.fake._level = 5
+            batteryController.fake._isStateUnknown = true
+
+            assertThat(latest).isFalse()
         }
 }

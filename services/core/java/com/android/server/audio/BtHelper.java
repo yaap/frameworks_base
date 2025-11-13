@@ -399,7 +399,7 @@ public class BtHelper {
             }
             boolean deviceSwitch = optimizeBtDeviceSwitch()
                     && btDevice != null && mBluetoothHeadsetDevice != null;
-            onSetBtScoActiveDevice(btDevice, deviceSwitch);
+            mDeviceBroker.onSetBtScoActiveDevice(btDevice, deviceSwitch);
         } else if (action.equals(BluetoothHeadset.ACTION_AUDIO_STATE_CHANGED)) {
             int btState = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1);
             onScoAudioStateChanged(btState);
@@ -1298,7 +1298,8 @@ public class BtHelper {
         return 0; // 0 is not a valid profile
     }
 
-    /*package */ static int getTypeFromProfile(int profile, boolean isLeOutput) {
+    /*package */ static int getTypeFromProfile(
+            int profile, boolean isLeOutput, BluetoothDevice device) {
         switch (profile) {
             case BluetoothProfile.A2DP_SINK:
                 return AudioSystem.DEVICE_IN_BLUETOOTH_A2DP;
@@ -1315,7 +1316,7 @@ public class BtHelper {
             case BluetoothProfile.LE_AUDIO_BROADCAST:
                 return AudioSystem.DEVICE_OUT_BLE_BROADCAST;
             case BluetoothProfile.HEADSET:
-                return AudioSystem.DEVICE_OUT_BLUETOOTH_SCO;
+                return btHeadsetDeviceToAudioDevice(device).getInternalType();
             default:
                 throw new IllegalArgumentException("Invalid profile " + profile);
         }

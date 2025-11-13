@@ -19,12 +19,15 @@ package com.android.systemui.keyguard.domain.interactor
 
 import android.app.admin.DevicePolicyManager
 import android.os.UserHandle
-import android.view.accessibility.AccessibilityManager
+import android.platform.test.annotations.EnableFlags
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.internal.widget.LockPatternUtils
 import com.android.keyguard.logging.KeyguardQuickAffordancesLogger
+import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.accessibility.domain.interactor.AccessibilityInteractor
+import com.android.systemui.accessibility.domain.interactor.accessibilityInteractor
 import com.android.systemui.animation.DialogTransitionAnimator
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
@@ -32,8 +35,10 @@ import com.android.systemui.coroutines.collectLastValue
 import com.android.systemui.coroutines.collectValues
 import com.android.systemui.dock.DockManager
 import com.android.systemui.dock.DockManagerFake
+import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.flags.EnableSceneContainer
 import com.android.systemui.flags.FakeFeatureFlags
+import com.android.systemui.haptics.msdl.fakeMSDLPlayer
 import com.android.systemui.keyguard.data.quickaffordance.BuiltInKeyguardQuickAffordanceKeys
 import com.android.systemui.keyguard.data.quickaffordance.FakeKeyguardQuickAffordanceConfig
 import com.android.systemui.keyguard.data.quickaffordance.FakeKeyguardQuickAffordanceProviderClientFactory
@@ -65,6 +70,7 @@ import com.android.systemui.util.FakeSharedPreferences
 import com.android.systemui.util.mockito.mock
 import com.android.systemui.util.mockito.whenever
 import com.android.systemui.util.settings.fakeSettings
+import com.google.android.msdl.data.model.MSDLToken
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
@@ -84,6 +90,7 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
     private val kosmos = testKosmos()
     private val testScope = kosmos.testScope
     private val settings = kosmos.fakeSettings
+    private val msdlPlayer = kosmos.fakeMSDLPlayer
 
     @Mock private lateinit var lockPatternUtils: LockPatternUtils
     @Mock private lateinit var keyguardStateController: KeyguardStateController
@@ -94,7 +101,7 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
     @Mock private lateinit var shadeInteractor: ShadeInteractor
     @Mock private lateinit var logger: KeyguardQuickAffordancesLogger
     @Mock private lateinit var metricsLogger: KeyguardQuickAffordancesMetricsLogger
-    @Mock private lateinit var accessibilityManager: AccessibilityManager
+    @Mock private lateinit var accessibilityInteractor: AccessibilityInteractor
 
     private lateinit var underTest: KeyguardQuickAffordanceInteractor
 
@@ -196,13 +203,14 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
                 biometricSettingsRepository = biometricSettingsRepository,
                 backgroundDispatcher = kosmos.testDispatcher,
                 appContext = context,
-                accessibilityManager = accessibilityManager,
+                accessibilityInteractor = accessibilityInteractor,
                 sceneInteractor = { kosmos.sceneInteractor },
+                msdlPlayer = msdlPlayer,
             )
         kosmos.keyguardQuickAffordanceInteractor = underTest
 
         whenever(shadeInteractor.anyExpansion).thenReturn(MutableStateFlow(0f))
-        whenever(accessibilityManager.isEnabled()).thenReturn(false)
+        whenever(accessibilityInteractor.isEnabledFiltered).thenReturn(MutableStateFlow(false))
     }
 
     @Test
@@ -322,6 +330,7 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
         }
 
     @Test
+    @DisableSceneContainer
     fun quickAffordance_bottomStartAffordanceHiddenWhenLockscreenIsNotShowing() =
         testScope.runTest {
             repository.setKeyguardShowing(false)
@@ -673,7 +682,7 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
     @Test
     fun useLongPress_withA11yEnabled_isFalse() =
         testScope.runTest {
-            whenever(accessibilityManager.isEnabled()).thenReturn(true)
+            whenever(accessibilityInteractor.isEnabledFiltered).thenReturn(MutableStateFlow(true))
             val useLongPress by collectLastValue(underTest.useLongPress())
             assertThat(useLongPress).isFalse()
         }
@@ -681,7 +690,7 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
     @Test
     fun useLongPress_withA11yDisabled_isFalse() =
         testScope.runTest {
-            whenever(accessibilityManager.isEnabled()).thenReturn(false)
+            whenever(accessibilityInteractor.isEnabledFiltered).thenReturn(MutableStateFlow(false))
             val useLongPress by collectLastValue(underTest.useLongPress())
             assertThat(useLongPress).isTrue()
         }
@@ -782,8 +791,9 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
             assertThat(launchingAffordance).isFalse()
         }
 
+    @EnableFlags(Flags.FLAG_MSDL_FEEDBACK)
     @Test
-    fun onQuickAffordanceTriggered_updatesLaunchingFromTriggeredResult() =
+    fun onQuickAffordanceTriggered_onLaunched_playsMSDLLongPress() =
         testScope.runTest {
             // WHEN selecting and triggering a quick affordance at a slot
             val key = homeControls.key
@@ -796,12 +806,8 @@ class KeyguardQuickAffordanceInteractorTest : SysuiTestCase() {
             runCurrent()
             underTest.onQuickAffordanceTriggered(encodedKey, expandable = null, slot)
 
-            // THEN the latest triggered result shows that an action launched for the same key and
-            // slot
-            val launchingFromTriggeredResult by
-                collectLastValue(underTest.launchingFromTriggeredResult)
-            assertThat(launchingFromTriggeredResult?.launched).isEqualTo(actionLaunched)
-            assertThat(launchingFromTriggeredResult?.configKey).isEqualTo(encodedKey)
+            // THEN long-press token plays since the action launched.
+            assertThat(msdlPlayer.latestTokenPlayed).isEqualTo(MSDLToken.LONG_PRESS)
         }
 
     companion object {

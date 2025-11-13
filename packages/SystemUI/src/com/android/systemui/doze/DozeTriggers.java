@@ -18,6 +18,7 @@ package com.android.systemui.doze;
 
 import static android.app.StatusBarManager.SESSION_KEYGUARD;
 
+import static com.android.systemui.Flags.udfpsScreenOffUnlockFlicker;
 import static com.android.systemui.doze.DozeMachine.State.DOZE_SUSPEND_TRIGGERS;
 import static com.android.systemui.doze.DozeMachine.State.FINISH;
 import static com.android.systemui.doze.DozeMachine.State.UNINITIALIZED;
@@ -47,11 +48,13 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.logging.InstanceId;
 import com.android.internal.logging.UiEvent;
 import com.android.internal.logging.UiEventLogger;
+import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.systemui.biometrics.AuthController;
 import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.dock.DockManager;
 import com.android.systemui.doze.DozeMachine.State;
 import com.android.systemui.doze.dagger.DozeScope;
+import com.android.systemui.keyguard.shared.model.FingerprintAuthenticationStatus;
 import com.android.systemui.log.SessionTracker;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.statusbar.phone.DozeParameters;
@@ -126,6 +129,7 @@ public class DozeTriggers implements DozeMachine.Part {
     private boolean mWantTouchScreenSensors;
     private boolean mWantSensors;
     private boolean mInAod;
+    private final KeyguardUpdateMonitor mKeyguardUpdateMonitor;
 
     private final UserTracker.Callback mUserChangedCallback =
             new UserTracker.Callback() {
@@ -171,7 +175,10 @@ public class DozeTriggers implements DozeMachine.Part {
         DOZING_UPDATE_QUICK_PICKUP(708),
 
         @UiEvent(doc = "Dozing updated - sensor wakeup timed out (from quick pickup or presence)")
-        DOZING_UPDATE_WAKE_TIMEOUT(794);
+        DOZING_UPDATE_WAKE_TIMEOUT(794),
+
+        @UiEvent(doc = "Dozing updated due to minmode.")
+        DOZING_UPDATE_MINMODE(2221);
 
         private final int mId;
 
@@ -195,8 +202,9 @@ public class DozeTriggers implements DozeMachine.Part {
                 case 7: return DOZING_UPDATE_SENSOR_WAKEUP;
                 case 8: return DOZING_UPDATE_SENSOR_WAKE_LOCKSCREEN;
                 case 9: return DOZING_UPDATE_SENSOR_TAP;
-                case 10: return DOZING_UPDATE_AUTH_TRIGGERED;
+                case 10, 13: return DOZING_UPDATE_AUTH_TRIGGERED;
                 case 11: return DOZING_UPDATE_QUICK_PICKUP;
+                case 14: return DOZING_UPDATE_MINMODE;
                 default: return null;
             }
         }
@@ -216,7 +224,8 @@ public class DozeTriggers implements DozeMachine.Part {
             KeyguardStateController keyguardStateController,
             DevicePostureController devicePostureController,
             UserTracker userTracker,
-            SelectedUserInteractor selectedUserInteractor) {
+            SelectedUserInteractor selectedUserInteractor,
+            KeyguardUpdateMonitor keyguardUpdateMonitor) {
         mContext = context;
         mDozeHost = dozeHost;
         mConfig = config;
@@ -238,6 +247,7 @@ public class DozeTriggers implements DozeMachine.Part {
         mKeyguardStateController = keyguardStateController;
         mUserTracker = userTracker;
         mSelectedUserInteractor = selectedUserInteractor;
+        mKeyguardUpdateMonitor = keyguardUpdateMonitor;
         mVibrator = (Vibrator) mContext.getSystemService(Context.VIBRATOR_SERVICE);
         mTapDelay = mContext.getResources().getInteger(
                 com.android.internal.R.integer.config_singleTapDelay);
@@ -333,7 +343,7 @@ public class DozeTriggers implements DozeMachine.Part {
 
         if (isWakeOnPresence) {
             onWakeScreen(isWakeDisplayEvent,
-                    mMachine.isExecutingTransition() ? null : mMachine.getState(),
+                    mMachine.getState(),
                     pulseReason);
         } else if (isLongPress) {
             requestPulse(pulseReason, sensorPerformedProxCheck /* alreadyPerformedProxCheck */,
@@ -380,7 +390,9 @@ public class DozeTriggers implements DozeMachine.Part {
                         mDozeLog.d("udfpsLongPress - Not sending aodInterrupt. "
                                 + "Unsupported doze state.");
                     }
-                    requestPulse(DozeLog.REASON_SENSOR_UDFPS_LONG_PRESS, true, null);
+                    if (shouldRequestUdfpsLongPressPulseImmediately()) {
+                        requestPulse(DozeLog.REASON_SENSOR_UDFPS_LONG_PRESS, true, null);
+                    }
                 } else {
                     mDozeHost.extendPulse(pulseReason);
                 }
@@ -394,6 +406,18 @@ public class DozeTriggers implements DozeMachine.Part {
                     timeSinceNotification < mDozeParameters.getPickupVibrationThreshold();
             mDozeLog.tracePickupWakeUp(withinVibrationThreshold);
         }
+    }
+
+    private boolean shouldRequestUdfpsLongPressPulseImmediately() {
+        final boolean flagEnabled = udfpsScreenOffUnlockFlicker();
+        final boolean fpLockout = mKeyguardUpdateMonitor.isFingerprintLockedOut();
+        final boolean fpAllowed = mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowed();
+        final boolean collecting = mDozeHost.isCollectingUsUdfpsScreenOffPulseEvents();
+        final boolean screenOffUdfpsEnabled = mConfig.screenOffUdfpsEnabled(mContext.getUserId());
+        final boolean immediate = !flagEnabled || fpLockout || !fpAllowed || !collecting;
+        mDozeLog.traceShouldRequestUdfpsLongPressPulseImmediately(immediate, flagEnabled, fpLockout,
+                fpAllowed, collecting, screenOffUdfpsEnabled);
+        return immediate;
     }
 
     private boolean shouldDropPickupEvent() {
@@ -582,6 +606,10 @@ public class DozeTriggers implements DozeMachine.Part {
                 mWantProxSensor = false;
                 mWantTouchScreenSensors = false;
                 break;
+            case DOZE_AOD_MINMODE:
+                mWantProxSensor = false;
+                mWantTouchScreenSensors = false;
+                break;
             case DOZE_PULSE_DONE:
                 mDozeSensors.requestTemporaryDisable();
                 break;
@@ -638,9 +666,7 @@ public class DozeTriggers implements DozeMachine.Part {
         Assert.isMainThread();
         mDozeHost.extendPulse(reason);
 
-        // we can't determine the dozing state if we're currently transitioning
-        final DozeMachine.State dozeState =
-                mMachine.isExecutingTransition() ? null : mMachine.getState();
+        final DozeMachine.State dozeState = mMachine.getState();
 
         // When already pulsing we're allowed to show the wallpaper directly without
         // requesting a new pulse.
@@ -704,12 +730,16 @@ public class DozeTriggers implements DozeMachine.Part {
                 .ifPresent(uiEventEnum -> mUiEventLogger.log(uiEventEnum, getKeyguardSessionId()));
     }
 
-    private boolean canPulse(DozeMachine.State dozeState, boolean pulsePerformedProximityCheck) {
+    private boolean canPulse(
+            @Nullable DozeMachine.State dozeState,
+            boolean pulsePerformedProximityCheck
+    ) {
         final boolean dozePausedOrPausing = dozeState == State.DOZE_AOD_PAUSED
                 || dozeState == State.DOZE_AOD_PAUSING;
         return dozeState == DozeMachine.State.DOZE
                 || dozeState == DozeMachine.State.DOZE_AOD
                 || dozeState == DozeMachine.State.DOZE_AOD_DOCKED
+                || dozeState == DozeMachine.State.DOZE_AOD_MINMODE
                 || (dozePausedOrPausing && pulsePerformedProximityCheck);
     }
 
@@ -789,6 +819,13 @@ public class DozeTriggers implements DozeMachine.Part {
         @Override
         public void onSideFingerprintAcquisitionStarted() {
             DozeTriggers.this.onSideFingerprintAcquisitionStarted();
+        }
+
+        @Override
+        public void onUltrasonicUdfpsPulseWhileScreenOff(FingerprintAuthenticationStatus state) {
+            if (!udfpsScreenOffUnlockFlicker()) return;
+            mDozeLog.traceUltrasonicScreenOffPulseEvent(state);
+            requestPulse(DozeLog.REASON_USUDFPS_PULSE, true, null);
         }
     };
 }

@@ -16,10 +16,14 @@
 
 package com.android.systemui.keyguard.ui.viewmodel
 
+import com.android.systemui.keyguard.ui.glanceableHubBlurComponentFactory
 import com.android.systemui.keyguard.ui.keyguardTransitionAnimationFlow
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.Kosmos.Fixture
 
 var Kosmos.goneToGlanceableHubTransitionViewModel by Fixture {
-    GoneToGlanceableHubTransitionViewModel(animationFlow = keyguardTransitionAnimationFlow)
+    GoneToGlanceableHubTransitionViewModel(
+        animationFlow = keyguardTransitionAnimationFlow,
+        blurFactory = glanceableHubBlurComponentFactory,
+    )
 }

@@ -40,6 +40,7 @@ import com.android.wm.shell.common.DisplayController
 import com.android.wm.shell.common.DisplayImeController
 import com.android.wm.shell.common.DisplayInsetsController
 import com.android.wm.shell.common.FloatingContentCoordinator
+import com.android.wm.shell.common.HomeIntentProvider
 import com.android.wm.shell.common.SyncTransactionQueue
 import com.android.wm.shell.common.TaskStackListenerImpl
 import com.android.wm.shell.common.TestShellExecutor
@@ -48,11 +49,11 @@ import com.android.wm.shell.sysui.ShellCommandHandler
 import com.android.wm.shell.sysui.ShellController
 import com.android.wm.shell.sysui.ShellInit
 import com.android.wm.shell.taskview.TaskView
-import com.android.wm.shell.taskview.TaskViewRepository
 import com.android.wm.shell.taskview.TaskViewTransitions
 import com.android.wm.shell.transition.Transitions
 import com.google.common.truth.Truth.assertThat
 import com.google.common.util.concurrent.MoreExecutors.directExecutor
+import java.util.Optional
 import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
@@ -76,6 +77,7 @@ class BubbleViewInfoTaskTest {
     private lateinit var bubblePositioner: BubblePositioner
     private lateinit var bubbleLogger: BubbleLogger
     private lateinit var expandedViewManager: BubbleExpandedViewManager
+    private lateinit var appInfoProvider: FakeBubbleAppInfoProvider
 
     private val bubbleTaskViewFactory = BubbleTaskViewFactory {
         BubbleTaskView(mock<TaskView>(), directExecutor())
@@ -105,6 +107,7 @@ class BubbleViewInfoTaskTest {
                 shellInit,
                 shellCommandHandler,
                 mock<DisplayInsetsController>(),
+                mock<UserManager>(),
                 mainExecutor
             )
         bubblePositioner = BubblePositioner(context, windowManager)
@@ -129,6 +132,8 @@ class BubbleViewInfoTaskTest {
                 BubblePersistentRepository(context)
             )
 
+        appInfoProvider = FakeBubbleAppInfoProvider()
+
         bubbleController =
             BubbleController(
                 context,
@@ -139,6 +144,7 @@ class BubbleViewInfoTaskTest {
                 surfaceSynchronizer,
                 FloatingContentCoordinator(),
                 bubbleDataRepository,
+                mock<BubbleTransitions>(),
                 mock<IStatusBarService>(),
                 windowManager,
                 mock<DisplayInsetsController>(),
@@ -155,12 +161,14 @@ class BubbleViewInfoTaskTest {
                 mainExecutor,
                 mock<Handler>(),
                 bgExecutor,
-                mock<TaskViewRepository>(),
                 mock<TaskViewTransitions>(),
                 mock<Transitions>(),
                 SyncTransactionQueue(TransactionPool(), mainExecutor),
                 mock<IWindowManager>(),
-                BubbleResizabilityChecker()
+                BubbleResizabilityChecker(),
+                HomeIntentProvider(context),
+                appInfoProvider,
+                { Optional.empty() },
             )
 
         // TODO: (b/371829099) - when optional overflow is no longer flagged we can enable this
@@ -179,6 +187,8 @@ class BubbleViewInfoTaskTest {
 //            )
         bubbleStackView = mock<BubbleStackView>()
         whenever(bubbleStackView.generateLayoutParams(any()))
+            .thenReturn(FrameLayout.LayoutParams(1000, 1000))
+        whenever(bubbleStackView.generateLayoutParams(any(), any()))
             .thenReturn(FrameLayout.LayoutParams(1000, 1000))
         expandedViewManager = BubbleExpandedViewManager.fromBubbleController(bubbleController)
     }
@@ -330,6 +340,7 @@ class BubbleViewInfoTaskTest {
             bubbleStackView,
             null /* layerView */,
             iconFactory,
+            appInfoProvider,
             false /* skipInflation */,
             callback,
             mainExecutor,

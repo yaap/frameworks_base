@@ -18,6 +18,7 @@ package com.android.server.media;
 
 import static android.bluetooth.BluetoothAdapter.ACTIVE_DEVICE_AUDIO;
 
+import android.Manifest;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.bluetooth.BluetoothA2dp;
@@ -32,11 +33,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.MediaRoute2Info;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.UserHandle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Slog;
 import android.util.SparseBooleanArray;
+
+import androidx.annotation.RequiresPermission;
 
 import com.android.internal.R;
 import com.android.internal.annotations.VisibleForTesting;
@@ -65,6 +69,13 @@ import java.util.stream.Collectors;
     private static final String HEARING_AID_ROUTE_ID_PREFIX = "HEARING_AID_";
     private static final String LE_AUDIO_ROUTE_ID_PREFIX = "LE_AUDIO_";
 
+    /** Interface for receiving events about Bluetooth routes changes. */
+    interface BluetoothRoutesUpdatedListener {
+
+        /** Called when Bluetooth routes have changed. */
+        void onBluetoothRoutesUpdated();
+    }
+
     @NonNull
     private final AdapterStateChangedReceiver mAdapterStateChangedReceiver =
             new AdapterStateChangedReceiver();
@@ -80,21 +91,21 @@ import java.util.stream.Collectors;
     private final Context mContext;
     @NonNull private final Handler mHandler;
     @NonNull private final BluetoothAdapter mBluetoothAdapter;
-    @NonNull
-    private final BluetoothRouteController.BluetoothRoutesUpdatedListener mListener;
+    @NonNull private final BluetoothRoutesUpdatedListener mListener;
     @NonNull
     private final BluetoothProfileMonitor mBluetoothProfileMonitor;
 
     BluetoothDeviceRoutesManager(
             @NonNull Context context,
             @NonNull Handler handler,
+            @NonNull Looper looper,
             @NonNull BluetoothAdapter bluetoothAdapter,
-            @NonNull BluetoothRouteController.BluetoothRoutesUpdatedListener listener) {
+            @NonNull BluetoothRoutesUpdatedListener listener) {
         this(
                 context,
                 handler,
                 bluetoothAdapter,
-                new BluetoothProfileMonitor(context, bluetoothAdapter),
+                new BluetoothProfileMonitor(context, looper, bluetoothAdapter),
                 listener);
     }
 
@@ -104,7 +115,7 @@ import java.util.stream.Collectors;
             @NonNull Handler handler,
             @NonNull BluetoothAdapter bluetoothAdapter,
             @NonNull BluetoothProfileMonitor bluetoothProfileMonitor,
-            @NonNull BluetoothRouteController.BluetoothRoutesUpdatedListener listener) {
+            @NonNull BluetoothRoutesUpdatedListener listener) {
         mContext = Objects.requireNonNull(context);
         mHandler = handler;
         mBluetoothAdapter = Objects.requireNonNull(bluetoothAdapter);
@@ -213,6 +224,70 @@ import java.util.stream.Collectors;
             }
         }
         return routes;
+    }
+
+    /**
+     * Trigger {@link BluetoothProfileMonitor} to start broadcast.
+     *
+     * @param targetRouteIds routes ids that broadcast targeting to
+     */
+    protected void startBroadcast(List<String> targetRouteIds) {
+        if (targetRouteIds.size() <= 1) {
+            Log.e(TAG, "Unable to start broadcast, incorrect number of routes: " + targetRouteIds);
+            return;
+        }
+
+        // Filter the list to only contain items with matching route ids, then
+        // Map the list to BluetoothDevice list to start the broadcast.
+        List<BluetoothDevice> deviceListForBroadcast = new ArrayList<>();
+
+        // Check if routeInfo is in the target list, and prevent duplicated entries
+        for (BluetoothRouteInfo routeInfo : mBluetoothRoutes.values()) {
+            if (targetRouteIds.contains(routeInfo.mRoute.getId())
+                    && !deviceListForBroadcast.contains(routeInfo.mBtDevice)) {
+                deviceListForBroadcast.add(routeInfo.mBtDevice);
+            }
+        }
+
+        mBluetoothProfileMonitor.startBroadcast(deviceListForBroadcast);
+    }
+
+    /**
+     * Removes route from current broadcast.
+     *
+     * @param routeId route id that being removed from the broadcast.
+     */
+    protected void removeRouteFromBroadcast(String routeId) {
+        // TODO: b/414535608 - Handle PAS with 3+ devices
+        // With more than 2 devices in a broadcast, we will need to really remove it from
+        // Broadcast instead of just stopping the broadcast
+        mBluetoothProfileMonitor.stopBroadcast();
+    }
+
+    /** Trigger {@link BluetoothProfileMonitor} to stop broadcast. */
+    protected void stopBroadcast() {
+        mBluetoothProfileMonitor.stopBroadcast();
+    }
+
+    /**
+     * Obtains a list of selected bluetooth route infos.
+     *
+     * @return list of selected bluetooth route infos.
+     */
+    @RequiresPermission(
+            allOf = {
+                Manifest.permission.BLUETOOTH_PRIVILEGED,
+                Manifest.permission.BLUETOOTH_CONNECT
+            })
+    public List<MediaRoute2Info> getBroadcastingDeviceRoutes() {
+        // Use HashSet to check and avoid duplicates devices with same routeId
+        Set<String> routeIdSet = new HashSet<>();
+
+        // Convert List<BluetoothDevice> to List<MediaRoute2Info>
+        return mBluetoothProfileMonitor.getDevicesWithBroadcastSource().stream()
+                .map(device -> createBluetoothRoute(device).mRoute)
+                .filter(routeInfo -> routeIdSet.add(routeInfo.getId()))
+                .toList();
     }
 
     private void notifyBluetoothRoutesUpdated() {

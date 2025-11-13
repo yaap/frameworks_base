@@ -397,7 +397,7 @@
     <string name="show_key_presses_summary" msgid="725387457373015024">"Показывать визуальный отклик при нажатии клавиш"</string>
     <string name="touchpad_visualizer" msgid="3707916068870825115">"Показать входные данные сенсорной панели"</string>
     <string name="touchpad_visualizer_summary" msgid="4056080018119847449">"Экранный оверлей, на котором изображены входные данные сенсорной панели и распознанные жесты"</string>
-    <string name="show_screen_updates" msgid="2078782895825535494">"Показ. обнов. поверхности"</string>
+    <string name="show_screen_updates" msgid="2078782895825535494">"Показывать обновления поверхности"</string>
     <string name="show_screen_updates_summary" msgid="2126932969682087406">"Подсвечивать поверхности окон при обновлении"</string>
     <string name="show_hw_screen_updates" msgid="2021286231267747506">"Показывать обнов. экрана"</string>
     <string name="show_hw_screen_updates_summary" msgid="3539770072741435691">"Подсвечивать области экрана при отрисовке"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> назад"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"Осталось <xliff:g id="ID_1">%1$s</xliff:g>"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Самый мелкий"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Более мелкий"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Мелкий"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"По умолчанию"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Крупный"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Очень крупный"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Максимальный"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Более крупный"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Очень крупный"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Ещё более крупный"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Самый крупный"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Другой (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Меню"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Чтобы сбросить настройки в деморежиме, введите пароль."</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{Подключено 1 устройство}one{Подключено # устройство}few{Подключено # устройства}many{Подключено # устройств}other{Подключено # устройства}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Увеличить продолжительность"</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Уменьшить продолжительность"</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Увеличение"</string>
     <string name="cancel" msgid="5665114069455378395">"Отмена"</string>
     <string name="next" msgid="2699398661093607009">"Далее"</string>
     <string name="back" msgid="5554327870352703710">"Назад"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"Если вы начнете транслировать \"<xliff:g id="SWITCHAPP">%1$s</xliff:g>\" или смените целевое устройство, текущая трансляция прервется."</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"Транслировать \"<xliff:g id="SWITCHAPP">%1$s</xliff:g>\""</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Транслировать на другое устройство"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"Анимации подсказки для жеста \"Назад\""</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"Включить системную анимацию подсказки для жеста \"Назад\"."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"С помощью этого параметра можно включить системные анимации подсказок для жестов. Для этого нужно установить значение true для enableOnBackInvokedCallback в файле манифеста приложения."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="not_specified" msgid="5423502443185110328">"Не указан"</string>
     <string name="neuter" msgid="2075249330106127310">"Средний"</string>

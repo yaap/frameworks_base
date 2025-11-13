@@ -44,6 +44,7 @@ import java.util.List;
 
 @SmallTest
 @RunWith(AndroidJUnit4.class)
+@android.platform.test.annotations.EnabledOnRavenwood
 public class CallbackHandlerTest extends SysuiTestCase {
 
     private CallbackHandler mHandler;
@@ -179,7 +180,7 @@ public class CallbackHandlerTest extends SysuiTestCase {
     @Test
     public void testSignalCallback_setIsAirplaneMode() {
         IconState state =
-                new IconState(true, com.android.settingslib.R.drawable.stat_sys_airplane_mode, "Test Description");
+                new IconState(true, com.android.systemui.res.R.drawable.stat_sys_airplane_mode, "Test Description");
         mHandler.setIsAirplaneMode(state);
         waitForCallbacks();
 

@@ -19,6 +19,8 @@ package com.android.systemui.screenrecord;
 import static android.os.Process.myUid;
 
 import static com.android.systemui.log.LogBufferHelperKt.logcatLogBuffer;
+import static com.android.systemui.screenrecord.ScreenRecordUxController.EXTRA_STATE;
+import static com.android.systemui.screenrecord.ScreenRecordUxController.INTENT_UPDATE_STATE;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -70,7 +72,7 @@ public class RecordingControllerTest extends SysuiTestCase {
     private FakeSystemClock mFakeSystemClock = new FakeSystemClock();
     private FakeExecutor mMainExecutor = new FakeExecutor(mFakeSystemClock);
     @Mock
-    private RecordingController.RecordingStateChangeCallback mCallback;
+    private ScreenRecordUxController.StateChangeCallback mCallback;
     @Mock
     private BroadcastDispatcher mBroadcastDispatcher;
     @Mock
@@ -88,12 +90,12 @@ public class RecordingControllerTest extends SysuiTestCase {
     private ScreenRecordPermissionDialogDelegate.Factory
             mScreenRecordPermissionDialogDelegateFactory;
     @Mock
-    private ScreenRecordPermissionViewBinder.Factory
-            mScreenRecordPermissionViewBinderFactory;
+    private ScreenRecordPermissionContentManager.Factory
+            mScreenRecordPermissionContentManagerFactory;
     @Mock
     private ScreenRecordPermissionDialogDelegate mScreenRecordPermissionDialogDelegate;
     @Mock
-    private ScreenRecordPermissionViewBinder mScreenRecordPermissionViewBinder;
+    private ScreenRecordPermissionContentManager mScreenRecordPermissionContentManager;
     @Mock
     private SystemUIDialog mScreenRecordSystemUIDialog;
 
@@ -111,11 +113,11 @@ public class RecordingControllerTest extends SysuiTestCase {
                 .thenReturn(mScreenCaptureDisabledDialog);
         when(mScreenRecordPermissionDialogDelegateFactory.create(any(), any(), anyInt(), any()))
                 .thenReturn(mScreenRecordPermissionDialogDelegate);
-        when(mScreenRecordPermissionViewBinderFactory.create(any(), anyInt(), any(), any()))
-                .thenReturn(mScreenRecordPermissionViewBinder);
+        when(mScreenRecordPermissionContentManagerFactory.create(any(), anyInt(), any(), any()))
+                .thenReturn(mScreenRecordPermissionContentManager);
         when(mScreenRecordPermissionDialogDelegate.createDialog())
                 .thenReturn(mScreenRecordSystemUIDialog);
-        mController = new RecordingController(
+        ScreenRecordLegacyUxControllerImpl uxController = new ScreenRecordLegacyUxControllerImpl(
                 mMainExecutor,
                 mBroadcastDispatcher,
                 () -> mDevicePolicyResolver,
@@ -124,8 +126,9 @@ public class RecordingControllerTest extends SysuiTestCase {
                 mMediaProjectionMetricsLogger,
                 mScreenCaptureDisabledDialogDelegate,
                 mScreenRecordPermissionDialogDelegateFactory,
-                mScreenRecordPermissionViewBinderFactory
+                mScreenRecordPermissionContentManagerFactory
         );
+        mController = uxController.getRecordingController();
         mController.addCallback(mCallback);
     }
 
@@ -196,8 +199,8 @@ public class RecordingControllerTest extends SysuiTestCase {
                 any(), any(), any());
 
         // When the receiver gets an update
-        Intent intent = new Intent(RecordingController.INTENT_UPDATE_STATE);
-        intent.putExtra(RecordingController.EXTRA_STATE, false);
+        Intent intent = new Intent(INTENT_UPDATE_STATE);
+        intent.putExtra(EXTRA_STATE, false);
         mController.mStateChangeReceiver.onReceive(mContext, intent);
 
         // then the state is updated
@@ -246,11 +249,11 @@ public class RecordingControllerTest extends SysuiTestCase {
     }
 
     @Test
-    public void testCreateScreenRecordPermissionViewBinder() {
-        ScreenRecordPermissionViewBinder viewBinder =
-                mController.createScreenRecordPermissionViewBinder(
+    public void testCreateScreenRecordPermissionContentManager() {
+        ScreenRecordPermissionContentManager contentManager =
+                mController.createScreenRecordPermissionContentManager(
                         /* onStartRecordingClicked= */ null);
-        assertThat(viewBinder).isEqualTo(mScreenRecordPermissionViewBinder);
+        assertThat(contentManager).isEqualTo(mScreenRecordPermissionContentManager);
     }
 
     @Test

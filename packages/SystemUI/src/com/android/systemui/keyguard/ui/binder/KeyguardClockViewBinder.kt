@@ -16,6 +16,7 @@
 
 package com.android.systemui.keyguard.ui.binder
 
+import android.transition.AutoTransition
 import android.transition.TransitionManager
 import android.transition.TransitionSet
 import android.view.View.INVISIBLE
@@ -26,10 +27,12 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.viewpager2.widget.ViewPager2
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.systemui.keyguard.domain.interactor.KeyguardBlueprintInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardClockInteractor
 import com.android.systemui.keyguard.shared.model.ClockSize
+import com.android.systemui.keyguard.ui.view.layout.blueprints.transitions.IntraBlueprintTransition.Config
 import com.android.systemui.keyguard.ui.view.layout.blueprints.transitions.IntraBlueprintTransition.Type
 import com.android.systemui.keyguard.ui.view.layout.sections.ClockSection
 import com.android.systemui.keyguard.ui.viewmodel.AodBurnInViewModel
@@ -47,6 +50,7 @@ import kotlinx.coroutines.flow.map
 
 object KeyguardClockViewBinder {
     private val TAG = KeyguardClockViewBinder::class.simpleName!!
+    private val defaultTransition = AutoTransition().excludeTarget(ViewPager2::class.java, true)
 
     @JvmStatic
     fun bind(
@@ -72,25 +76,26 @@ object KeyguardClockViewBinder {
                     // When changing to new clock, we need to remove old views from burnInLayer
                     var lastClock: ClockController? = null
                     launch {
-                        viewModel.currentClock.collect { currentClock ->
-                            if (lastClock != currentClock) {
-                                cleanupClockViews(
-                                    lastClock,
-                                    keyguardRootView,
-                                    viewModel.burnInLayer,
-                                )
-                                lastClock = currentClock
-                            }
+                            viewModel.currentClock.collect { currentClock ->
+                                if (lastClock != currentClock) {
+                                    cleanupClockViews(
+                                        lastClock,
+                                        keyguardRootView,
+                                        viewModel.burnInLayer,
+                                    )
+                                    lastClock = currentClock
+                                }
 
-                            addClockViews(currentClock, keyguardRootView)
-                            updateBurnInLayer(
-                                keyguardRootView,
-                                viewModel,
-                                viewModel.clockSize.value,
-                            )
-                            applyConstraints(clockSection, keyguardRootView, true)
+                                addClockViews(currentClock, keyguardRootView)
+                                updateBurnInLayer(
+                                    keyguardRootView,
+                                    viewModel,
+                                    viewModel.clockSize.value,
+                                )
+                                applyConstraints(clockSection, keyguardRootView, true)
+                                currentClock?.apply { eventListeners.fire { onChangeComplete() } }
+                            }
                         }
-                    }
                         .invokeOnCompletion {
                             cleanupClockViews(lastClock, keyguardRootView, viewModel.burnInLayer)
                             lastClock = null
@@ -117,11 +122,11 @@ object KeyguardClockViewBinder {
 
                     launch {
                         combine(
-                            viewModel.hasAodIcons,
-                            rootViewModel.isNotifIconContainerVisible.map { it.value },
-                        ) { hasIcon, isVisible ->
-                            hasIcon && isVisible
-                        }
+                                viewModel.hasAodIcons,
+                                rootViewModel.isNotifIconContainerVisible.map { it.value },
+                            ) { hasIcon, isVisible ->
+                                hasIcon && isVisible
+                            }
                             .distinctUntilChanged()
                             .collect { _ ->
                                 viewModel.currentClock.value?.let {
@@ -155,6 +160,32 @@ object KeyguardClockViewBinder {
                                 ?.onFontSettingChanged(fontSizePx = fontSizePx.toFloat())
                         }
                     }
+
+                    if (com.android.systemui.shared.Flags.clockReactiveSmartspaceLayout()) {
+                        launch("$TAG#clockViewModel.shouldDateWeatherBeBelowSmallClock") {
+                            viewModel.shouldDateWeatherBeBelowSmallClock.collect {
+                                blueprintInteractor.refreshBlueprint(
+                                    Config(
+                                        Type.SmartspaceVisibility,
+                                        checkPriority = false,
+                                        terminatePrevious = false,
+                                    )
+                                )
+                            }
+                        }
+
+                        launch("$TAG#clockViewModel.shouldDateWeatherBeBelowLargeClock") {
+                            viewModel.shouldDateWeatherBeBelowLargeClock.collect {
+                                blueprintInteractor.refreshBlueprint(
+                                    Config(
+                                        Type.SmartspaceVisibility,
+                                        checkPriority = false,
+                                        terminatePrevious = false,
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -163,6 +194,7 @@ object KeyguardClockViewBinder {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     viewModel.currentClock.collect { currentClock ->
                         currentClock?.apply {
+                            // Reapply existing theme
                             smallClock.run { events.onThemeChanged(theme) }
                             largeClock.run { events.onThemeChanged(theme) }
                         }
@@ -241,7 +273,7 @@ object KeyguardClockViewBinder {
         clockSection.applyConstraints(constraintSet)
         if (animated) {
             set?.let { TransitionManager.beginDelayedTransition(rootView, it) }
-                ?: run { TransitionManager.beginDelayedTransition(rootView) }
+                ?: run { TransitionManager.beginDelayedTransition(rootView, defaultTransition) }
         }
         constraintSet.applyTo(rootView)
     }

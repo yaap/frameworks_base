@@ -17,6 +17,7 @@
 package com.android.providers.settings;
 
 import android.annotation.NonNull;
+import android.content.Context;
 import android.os.UserHandle;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
@@ -96,10 +97,11 @@ class SettingsProtoDumpUtil {
     }
 
     static void dumpProtoLocked(SettingsProvider.SettingsRegistry settingsRegistry,
-            ProtoOutputStream proto) {
+            ProtoOutputStream proto, List<Integer> deviceIds) {
         // Config settings
         SettingsState configSettings = settingsRegistry.getSettingsLocked(
-                SettingsProvider.SETTINGS_TYPE_CONFIG, UserHandle.USER_SYSTEM);
+                SettingsProvider.SETTINGS_TYPE_CONFIG, UserHandle.USER_SYSTEM,
+                Context.DEVICE_ID_DEFAULT);
         if (configSettings != null) {
             dumpProtoConfigSettingsLocked(
                     proto, SettingsServiceDumpProto.CONFIG_SETTINGS, configSettings);
@@ -107,7 +109,8 @@ class SettingsProtoDumpUtil {
 
         // Global settings
         SettingsState globalSettings = settingsRegistry.getSettingsLocked(
-                SettingsProvider.SETTINGS_TYPE_GLOBAL, UserHandle.USER_SYSTEM);
+                SettingsProvider.SETTINGS_TYPE_GLOBAL, UserHandle.USER_SYSTEM,
+                Context.DEVICE_ID_DEFAULT);
         if (globalSettings != null) {
             dumpProtoGlobalSettingsLocked(
                     proto, SettingsServiceDumpProto.GLOBAL_SETTINGS, globalSettings);
@@ -117,8 +120,10 @@ class SettingsProtoDumpUtil {
         SparseBooleanArray users = settingsRegistry.getKnownUsersLocked();
         final int userCount = users.size();
         for (int i = 0; i < userCount; i++) {
-            dumpProtoUserSettingsLocked(proto, SettingsServiceDumpProto.USER_SETTINGS,
-                    settingsRegistry, UserHandle.of(users.keyAt(i)));
+            for (int deviceId : deviceIds) {
+                dumpProtoUserSettingsLocked(proto, SettingsServiceDumpProto.USER_SETTINGS,
+                        settingsRegistry, UserHandle.of(users.keyAt(i)), deviceId);
+            }
         }
 
         // Generation registry
@@ -144,19 +149,20 @@ class SettingsProtoDumpUtil {
             @NonNull ProtoOutputStream proto,
             long fieldId,
             SettingsProvider.SettingsRegistry settingsRegistry,
-            @NonNull UserHandle user) {
+            @NonNull UserHandle user,
+            int deviceId) {
         final long token = proto.start(fieldId);
 
         proto.write(UserSettingsProto.USER_ID, user.getIdentifier());
 
         SettingsState secureSettings = settingsRegistry.getSettingsLocked(
-                SettingsProvider.SETTINGS_TYPE_SECURE, user.getIdentifier());
+                SettingsProvider.SETTINGS_TYPE_SECURE, user.getIdentifier(), deviceId);
         if (secureSettings != null) {
             dumpProtoSecureSettingsLocked(proto, UserSettingsProto.SECURE_SETTINGS, secureSettings);
         }
 
         SettingsState systemSettings = settingsRegistry.getSettingsLocked(
-                SettingsProvider.SETTINGS_TYPE_SYSTEM, user.getIdentifier());
+                SettingsProvider.SETTINGS_TYPE_SYSTEM, user.getIdentifier(), deviceId);
         if (systemSettings != null) {
             dumpProtoSystemSettingsLocked(proto, UserSettingsProto.SYSTEM_SETTINGS, systemSettings);
         }
@@ -1869,6 +1875,10 @@ class SettingsProtoDumpUtil {
                 SecureSettingsProto.Accessibility
                         .ACCESSIBILITY_MAGNIFICATION_FOLLOW_TYPING_ENABLED);
         dumpSetting(s, p,
+                Settings.Secure.ACCESSIBILITY_MAGNIFICATION_FOLLOW_KEYBOARD_ENABLED,
+                SecureSettingsProto.Accessibility
+                        .ACCESSIBILITY_MAGNIFICATION_FOLLOW_KEYBOARD_ENABLED);
+        dumpSetting(s, p,
                 Settings.Secure.ACCESSIBILITY_MAGNIFICATION_ALWAYS_ON_ENABLED,
                 SecureSettingsProto.Accessibility
                         .ACCESSIBILITY_MAGNIFICATION_ALWAYS_ON_ENABLED);
@@ -1888,6 +1898,10 @@ class SettingsProtoDumpUtil {
                 Settings.Secure.ACCESSIBILITY_MAGNIFICATION_TWO_FINGER_TRIPLE_TAP_ENABLED,
                 SecureSettingsProto.Accessibility
                         .ACCESSIBILITY_MAGNIFICATION_TWO_FINGER_TRIPLE_TAP_ENABLED);
+        dumpSetting(s, p,
+                Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MAGNIFY_NAV_AND_IME,
+                SecureSettingsProto.Accessibility
+                        .ACCESSIBILITY_MAGNIFICATION_MAGNIFY_NAV_AND_IME);
         dumpSetting(s, p,
                 Settings.Secure.ACCESSIBILITY_PINCH_TO_ZOOM_ANYWHERE_ENABLED,
                 SecureSettingsProto.Accessibility
@@ -2386,6 +2400,9 @@ class SettingsProtoDumpUtil {
         dumpSetting(s, p,
                 Settings.Secure.NAV_BAR_KIDS_MODE,
                 SecureSettingsProto.NavBar.NAV_BAR_KIDS_MODE);
+        dumpSetting(s, p,
+                Settings.Secure.NAV_BAR_ORDER,
+                SecureSettingsProto.NavBar.NAV_BAR_ORDER);
         p.end(navBar);
 
         dumpSetting(s, p,
@@ -2903,8 +2920,8 @@ class SettingsProtoDumpUtil {
         p.end(hapticFeedbackToken);
 
         dumpSetting(s, p,
-                Settings.System.HEARING_AID,
-                SystemSettingsProto.HEARING_AID);
+                Settings.System.HEARING_AID_COMPATIBILITY,
+                SystemSettingsProto.HEARING_AID_COMPATIBILITY);
         dumpSetting(s, p,
                 Settings.System.LOCK_TO_APP_ENABLED,
                 SystemSettingsProto.LOCK_TO_APP_ENABLED);
@@ -3164,6 +3181,12 @@ class SettingsProtoDumpUtil {
         dumpSetting(s, p,
                 Settings.System.CV_ENABLED,
                 SystemSettingsProto.Display.CV_ENABLED);
+        dumpSetting(s, p,
+                Settings.System.CV_DYNAMIC_ENABLED,
+                SystemSettingsProto.Display.CV_DYNAMIC_ENABLED);
+        dumpSetting(s, p,
+                Settings.System.CV_PREFERRED_INTENSITY,
+                SystemSettingsProto.Display.CV_PREFERRED_INTENSITY);
         p.end(systemDisplayToken);
 
         dumpSetting(s, p,

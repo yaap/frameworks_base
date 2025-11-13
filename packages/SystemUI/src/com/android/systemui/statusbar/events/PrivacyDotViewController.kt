@@ -20,6 +20,7 @@ import android.annotation.UiThread
 import android.graphics.Point
 import android.graphics.Rect
 import android.util.Log
+import android.view.Display
 import android.view.View
 import android.widget.FrameLayout
 import androidx.core.animation.Animator
@@ -32,7 +33,9 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.plugins.statusbar.StatusBarStateController
 import com.android.systemui.res.R
+import com.android.systemui.shade.domain.interactor.ShadeDisplaysInteractor
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
+import com.android.systemui.shade.shared.flag.ShadeWindowGoesAround
 import com.android.systemui.statusbar.StatusBarState.SHADE
 import com.android.systemui.statusbar.StatusBarState.SHADE_LOCKED
 import com.android.systemui.statusbar.core.StatusBarConnectedDisplays
@@ -41,6 +44,7 @@ import com.android.systemui.statusbar.events.PrivacyDotCorner.BottomLeft
 import com.android.systemui.statusbar.events.PrivacyDotCorner.BottomRight
 import com.android.systemui.statusbar.events.PrivacyDotCorner.TopLeft
 import com.android.systemui.statusbar.events.PrivacyDotCorner.TopRight
+import com.android.systemui.statusbar.featurepods.vc.domain.interactor.AvControlsChipInteractor
 import com.android.systemui.statusbar.layout.StatusBarContentInsetsChangedListener
 import com.android.systemui.statusbar.layout.StatusBarContentInsetsProvider
 import com.android.systemui.statusbar.policy.ConfigurationController
@@ -51,6 +55,7 @@ import com.android.systemui.util.leak.RotationUtils.ROTATION_NONE
 import com.android.systemui.util.leak.RotationUtils.ROTATION_SEASCAPE
 import com.android.systemui.util.leak.RotationUtils.ROTATION_UPSIDE_DOWN
 import com.android.systemui.util.leak.RotationUtils.Rotation
+import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.assisted.Assisted
@@ -58,6 +63,8 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import java.util.concurrent.Executor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Understands how to keep the persistent privacy dot in the corner of the screen in
@@ -117,7 +124,10 @@ constructor(
     @Assisted private val contentInsetsProvider: StatusBarContentInsetsProvider,
     private val animationScheduler: SystemStatusAnimationScheduler,
     shadeInteractor: ShadeInteractor?,
+    avControlsChipInteractor: AvControlsChipInteractor?,
     @ScreenDecorationsThread val uiExecutor: DelayableExecutor,
+    @Assisted private val displayId: Int,
+    private val shadeDisplaysInteractor: Lazy<ShadeDisplaysInteractor>?,
 ) : PrivacyDotViewController {
     private lateinit var tl: View
     private lateinit var tr: View
@@ -182,9 +192,32 @@ constructor(
         configurationController.addCallback(configurationListener)
         stateController.addCallback(statusBarStateListener)
         scope.launch {
-            shadeInteractor?.isQsExpanded?.collect { isQsExpanded ->
-                dlog("setQsExpanded $isQsExpanded")
-                synchronized(lock) { nextViewState = nextViewState.copy(qsExpanded = isQsExpanded) }
+            avControlsChipInteractor?.isShowingAvChip?.collect { shouldSuppress ->
+                synchronized(lock) {
+                    nextViewState =
+                        nextViewState.copy(dotDuplicatedByAvControlsChip = shouldSuppress)
+                }
+            }
+        }
+        scope.launch {
+            if (
+                StatusBarConnectedDisplays.isEnabled &&
+                    ShadeWindowGoesAround.isEnabled &&
+                    shadeDisplaysInteractor != null
+            ) {
+                combine(
+                    shadeInteractor?.isQsExpanded ?: flowOf(false),
+                    shadeDisplaysInteractor.get().displayId,
+                ) { _, _ ->
+                    updateStatusBarState()
+                }
+            } else {
+                shadeInteractor?.isQsExpanded?.collect { isQsExpanded ->
+                    dlog("setQsExpanded $isQsExpanded")
+                    synchronized(lock) {
+                        nextViewState = nextViewState.copy(qsExpanded = isQsExpanded)
+                    }
+                }
             }
         }
     }
@@ -478,8 +511,18 @@ constructor(
      */
     @GuardedBy("lock")
     private fun isShadeInQs(): Boolean {
-        return (stateController.isExpanded && stateController.state == SHADE) ||
-            (stateController.state == SHADE_LOCKED)
+        val isShadeExpanded = (stateController.isExpanded && stateController.state == SHADE)
+        val isShadeExpandedOnThisDisplay =
+            if (
+                StatusBarConnectedDisplays.isEnabled &&
+                    ShadeWindowGoesAround.isEnabled &&
+                    shadeDisplaysInteractor != null
+            ) {
+                isShadeExpanded && shadeDisplaysInteractor.get().displayId.value == displayId
+            } else {
+                isShadeExpanded
+            }
+        return isShadeExpandedOnThisDisplay || (stateController.state == SHADE_LOCKED)
     }
 
     private fun scheduleUpdate() {
@@ -612,6 +655,7 @@ constructor(
             scope: CoroutineScope,
             configurationController: ConfigurationController,
             contentInsetsProvider: StatusBarContentInsetsProvider,
+            displayId: Int,
         ): PrivacyDotViewControllerImpl
     }
 }
@@ -638,6 +682,7 @@ data class ViewState(
     val systemPrivacyEventIsActive: Boolean = false,
     val shadeExpanded: Boolean = false,
     val qsExpanded: Boolean = false,
+    val dotDuplicatedByAvControlsChip: Boolean = false,
     val portraitRect: Rect? = null,
     val landscapeRect: Rect? = null,
     val upsideDownRect: Rect? = null,
@@ -650,7 +695,10 @@ data class ViewState(
     val contentDescription: String? = null,
 ) {
     fun shouldShowDot(): Boolean {
-        return systemPrivacyEventIsActive && !shadeExpanded && !qsExpanded
+        return systemPrivacyEventIsActive &&
+            !shadeExpanded &&
+            !qsExpanded &&
+            !dotDuplicatedByAvControlsChip
     }
 
     fun needsLayout(other: ViewState): Boolean {
@@ -688,6 +736,7 @@ object PrivacyDotViewControllerModule {
             scope,
             configurationController,
             contentInsetsProviderStore.defaultDisplay,
+            Display.DEFAULT_DISPLAY,
         )
     }
 }

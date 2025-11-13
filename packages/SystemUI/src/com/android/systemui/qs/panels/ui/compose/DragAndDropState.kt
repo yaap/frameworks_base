@@ -92,12 +92,6 @@ fun Modifier.dragAndDropRemoveZone(
                         true
                     } ?: false
                 }
-
-                override fun onEntered(event: DragAndDropEvent) {
-                    if (!dragAndDropState.isDraggedCellRemovable) return
-
-                    dragAndDropState.movedOutOfBounds()
-                }
             }
         }
     return dragAndDropTarget(
@@ -129,6 +123,11 @@ fun Modifier.dragAndDropTileList(
             object : DragAndDropTarget {
                 override fun onEnded(event: DragAndDropEvent) {
                     dragAndDropState.onDrop()
+                }
+
+                override fun onExited(event: DragAndDropEvent) {
+                    if (!dragAndDropState.isDraggedCellRemovable) return
+                    dragAndDropState.movedOutOfBounds()
                 }
 
                 override fun onMoved(event: DragAndDropEvent) {
@@ -172,7 +171,7 @@ private fun DragAndDropEvent.toOffset(): Offset {
 private fun insertAfter(item: LazyGridItemInfo, offset: Offset): Boolean {
     // We want to insert the tile after the target if we're aiming at the end of a large tile
     // TODO(ostonge): Verify this behavior in RTL
-    val itemCenter = item.offset.x + item.size.width * .75
+    val itemCenter = item.offset.x + item.size.width * .5
     return item.span != 1 && offset.x > itemCenter
 }
 

@@ -21,8 +21,6 @@ import android.os.HandlerExecutor;
 import android.os.Looper;
 import android.os.Trace;
 
-import com.android.internal.annotations.GuardedBy;
-
 import java.util.concurrent.Executor;
 
 /**
@@ -34,68 +32,41 @@ public final class PermissionThread extends ServiceThread {
     private static final long SLOW_DISPATCH_THRESHOLD_MS = 100;
     private static final long SLOW_DELIVERY_THRESHOLD_MS = 200;
 
-    private static final Object sLock = new Object();
+    private static final class NoPreloadHolder {
+        private static final PermissionThread sInstance = new PermissionThread();
+    }
 
-    private static volatile PermissionThread sInstance;
-    private static volatile Handler sHandler;
-    private static volatile HandlerExecutor sHandlerExecutor;
+    private final Handler mHandler;
+    private final HandlerExecutor mHandlerExecutor;
 
     private PermissionThread() {
         super("android.perm", android.os.Process.THREAD_PRIORITY_DEFAULT, /* allowIo= */ true);
-    }
-
-    @GuardedBy("sLock")
-    private static void ensureThreadLocked() {
-        if (sInstance != null) {
-            return;
-        }
-
-        PermissionThread thread = new PermissionThread();
-        thread.start();
-        final Looper looper = thread.getLooper();
+        start();
+        final Looper looper = getLooper();
         looper.setTraceTag(Trace.TRACE_TAG_SYSTEM_SERVER);
-        looper.setSlowLogThresholdMs(
-                SLOW_DISPATCH_THRESHOLD_MS, SLOW_DELIVERY_THRESHOLD_MS);
-        sInstance = thread;
-        sHandler = new Handler(looper);
-        sHandlerExecutor = new HandlerExecutor(sHandler);
+        looper.setSlowLogThresholdMs(SLOW_DISPATCH_THRESHOLD_MS, SLOW_DELIVERY_THRESHOLD_MS);
+        mHandler = new Handler(looper);
+        mHandlerExecutor = new HandlerExecutor(mHandler);
     }
 
     /**
      * Obtain a singleton instance of the PermissionThread.
      */
     public static PermissionThread get() {
-        if (sInstance == null) {
-            synchronized (sLock) {
-                ensureThreadLocked();
-            }
-        }
-        return sInstance;
+        return NoPreloadHolder.sInstance;
     }
 
     /**
      * Obtain a singleton instance of a handler executing in the PermissionThread.
      */
     public static Handler getHandler() {
-        if (sHandler == null) {
-            synchronized (sLock) {
-                ensureThreadLocked();
-                return sHandler;
-            }
-        }
-        return sHandler;
+        return NoPreloadHolder.sInstance.mHandler;
     }
-
 
     /**
      * Obtain a singleton instance of an executor of the PermissionThread.
      */
     public static Executor getExecutor() {
-        if (sHandlerExecutor == null) {
-            synchronized (sLock) {
-                ensureThreadLocked();
-            }
-        }
-        return sHandlerExecutor;
+        return NoPreloadHolder.sInstance.mHandlerExecutor;
     }
 }

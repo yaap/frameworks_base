@@ -41,12 +41,6 @@ import java.io.IOException;
 @RunWith(JUnit4.class)
 public class ApplicationSharedMemoryTest {
 
-    @Before
-    public void setUp() {
-        // Skip tests if the feature under test is disabled.
-        assumeTrue(Flags.applicationSharedMemoryEnabled());
-    }
-
     /**
      * Every application process, including ours, should have had an instance installed at this
      * point.
@@ -174,5 +168,20 @@ public class ApplicationSharedMemoryTest {
             fail("Cannot update system features for read-only ashmem.");
         } catch (IllegalStateException expected) {
         }
+    }
+
+    @Test
+    public void currentAnimatorScaleSharedMemory() throws IOException {
+        ApplicationSharedMemory instance1 = ApplicationSharedMemory.create();
+
+        final float kAnimatorScaleFirst = 1.5f;
+
+        instance1.setCurrentAnimatorScale(kAnimatorScaleFirst);
+        assertThat(instance1.getCurrentAnimatorScale()).isEqualTo(kAnimatorScaleFirst);
+
+        ApplicationSharedMemory instance2 =
+                ApplicationSharedMemory.fromFileDescriptor(
+                        instance1.getReadOnlyFileDescriptor(), /* mutable= */ false);
+        assertThat(instance2.getCurrentAnimatorScale()).isEqualTo(kAnimatorScaleFirst);
     }
 }

@@ -25,6 +25,7 @@ import android.provider.Settings.Secure.LOCKSCREEN_SHOW_CONTROLS
 import android.testing.TestableLooper
 import android.view.WindowManager.LayoutParams.SYSTEM_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import android.view.WindowManager.LayoutParams.SYSTEM_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS
 import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.controls.settings.ControlsSettingsDialogManager.Companion.PREFS_SETTINGS_DIALOG_ATTEMPTS

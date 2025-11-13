@@ -15,36 +15,59 @@
  */
 package com.android.systemui.statusbar.notification.collection
 
-import android.app.NotificationChannel
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow
+import com.android.systemui.statusbar.notification.row.data.repository.BundleRepository
 import java.util.Collections
 import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Class to represent notifications bundled by classification. */
-class BundleEntry(key: String) : PipelineEntry(key) {
+/**
+ * Class to represent notifications bundled by classification.
+ *
+ * This is the model used by the pipeline.
+ */
+class BundleEntry(spec: BundleSpec) : PipelineEntry(spec.key) {
+
+    override val bucket: Int = spec.bucket
+
+    /** The model used by UI. */
+    val bundleRepository =
+        BundleRepository(
+            titleText = spec.titleText,
+            bundleIcon = spec.icon,
+            summaryText = spec.summaryText,
+            bundleType = spec.bundleType,
+        )
+
     // TODO(b/394483200): move NotificationEntry's implementation to PipelineEntry?
     val isSensitive: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
-    // TODO (b/389839319): implement the row
-    val row: ExpandableNotificationRow? = null
+    var row: ExpandableNotificationRow? = null
 
-    private val _children: MutableList<ListEntry> = ArrayList()
+    private val _children = ArrayList<ListEntry>()
+
+    /**
+     * Modifiable list of children for this bundle. You should prefer [children] to this property.
+     */
+    @InternalNotificationsApi val rawChildren: MutableList<ListEntry> = _children
+
     val children: List<ListEntry> = Collections.unmodifiableList(_children)
 
+    @InternalNotificationsApi
     fun addChild(child: ListEntry) {
         _children.add(child)
     }
 
+    @InternalNotificationsApi
+    fun removeChild(child: ListEntry) {
+        _children.remove(child)
+    }
+
+    @InternalNotificationsApi
     fun clearChildren() {
         _children.clear()
     }
 
-    /** @return Null because bundles do not have an associated NotificationEntry. */
-    override fun getRepresentativeEntry(): NotificationEntry? {
-        return null
-    }
-
-    override fun getParent(): PipelineEntry? {
+    override fun asListEntry(): ListEntry? {
         return null
     }
 
@@ -52,13 +75,11 @@ class BundleEntry(key: String) : PipelineEntry(key) {
         return false
     }
 
-    companion object {
-        val ROOT_BUNDLES: List<BundleEntry> =
-            listOf(
-                BundleEntry(NotificationChannel.PROMOTIONS_ID),
-                BundleEntry(NotificationChannel.SOCIAL_MEDIA_ID),
-                BundleEntry(NotificationChannel.NEWS_ID),
-                BundleEntry(NotificationChannel.RECS_ID),
-            )
-    }
+    /**
+     * Returns whether this bundle be cleared when the user wants to "clear all" notifications.
+     *
+     * This is `true` only if all children are clearable.
+     */
+    val isClearable: Boolean
+        get() = _children.all { it.representativeEntry?.sbn?.isClearable != false }
 }

@@ -16,7 +16,6 @@
 
 package com.android.systemui.statusbar;
 
-import static android.adaptiveauth.Flags.enableAdaptiveAuth;
 import static android.app.admin.DevicePolicyManager.DEVICE_OWNER_TYPE_FINANCED;
 import static android.app.admin.DevicePolicyResources.Strings.SystemUi.KEYGUARD_MANAGEMENT_DISCLOSURE;
 import static android.app.admin.DevicePolicyResources.Strings.SystemUi.KEYGUARD_NAMED_MANAGEMENT_DISCLOSURE;
@@ -32,6 +31,7 @@ import static com.android.keyguard.KeyguardUpdateMonitor.BIOMETRIC_HELP_FACE_NOT
 import static com.android.keyguard.KeyguardUpdateMonitor.BIOMETRIC_HELP_FACE_NOT_RECOGNIZED;
 import static com.android.keyguard.KeyguardUpdateMonitor.BIOMETRIC_HELP_FINGERPRINT_NOT_RECOGNIZED;
 import static com.android.systemui.DejankUtils.whitelistIpcs;
+import static com.android.systemui.Flags.showLockedByYourWatchKeyguardIndicator;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.IMPORTANT_MSG_MIN_DURATION;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_IS_DISMISSIBLE;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_ADAPTIVE_AUTH;
@@ -45,6 +45,7 @@ import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewCont
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_PERSISTENT_UNLOCK_MESSAGE;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_TRUST;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_USER_LOCKED;
+import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_WATCH_DISCONNECTED;
 import static com.android.systemui.keyguard.ScreenLifecycle.SCREEN_ON;
 import static com.android.systemui.log.core.LogLevel.ERROR;
 import static com.android.systemui.plugins.FalsingManager.LOW_PENALTY;
@@ -100,14 +101,15 @@ import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.deviceentry.domain.interactor.BiometricMessageInteractor;
+import com.android.systemui.deviceentry.domain.interactor.DeviceEntryBiometricSettingsInteractor;
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFaceAuthInteractor;
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFingerprintAuthInteractor;
 import com.android.systemui.dock.DockManager;
-import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.keyguard.KeyguardIndication;
 import com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController;
 import com.android.systemui.keyguard.ScreenLifecycle;
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor;
+import com.android.systemui.keyguard.shared.model.AuthenticationFlags;
 import com.android.systemui.keyguard.util.IndicationHelper;
 import com.android.systemui.log.core.LogLevel;
 import com.android.systemui.plugins.FalsingManager;
@@ -218,6 +220,7 @@ public class KeyguardIndicationController {
     private boolean mBatteryDefender;
     /** Whether the battery defender is triggered with the device plugged. */
     private boolean mEnableBatteryDefender;
+    private boolean mBatteryDead;
     private boolean mIncompatibleCharger;
     private int mChargingWattage;
     private int mBatteryLevel = -1;
@@ -253,6 +256,10 @@ public class KeyguardIndicationController {
                     updateDeviceEntryIndication(false);
                 }
             };
+    @VisibleForTesting
+    final Consumer<AuthenticationFlags> mDeviceEntryBiometricSettingsInteractorCallback =
+            (AuthenticationFlags flags) -> mAuthenticationFlags = flags;
+
     private final ScreenLifecycle.Observer mScreenObserver = new ScreenLifecycle.Observer() {
         @Override
         public void onScreenTurnedOn() {
@@ -277,8 +284,10 @@ public class KeyguardIndicationController {
     // triggered while the device is asleep
     private final AlarmTimeout mHideTransientMessageHandler;
     private final AlarmTimeout mHideBiometricMessageHandler;
-    private final FeatureFlags mFeatureFlags;
     private final IndicationHelper mIndicationHelper;
+
+    private final DeviceEntryBiometricSettingsInteractor mDeviceEntryBiometricSettingsInteractor;
+    private AuthenticationFlags mAuthenticationFlags;
 
     /**
      * Creates a new KeyguardIndicationController and registers callbacks.
@@ -310,8 +319,8 @@ public class KeyguardIndicationController {
             AlarmManager alarmManager,
             UserTracker userTracker,
             BouncerMessageInteractor bouncerMessageInteractor,
-            FeatureFlags flags,
             IndicationHelper indicationHelper,
+            DeviceEntryBiometricSettingsInteractor deviceEntryBiometricSettingsInteractor,
             KeyguardInteractor keyguardInteractor,
             BiometricMessageInteractor biometricMessageInteractor,
             DeviceEntryFingerprintAuthInteractor deviceEntryFingerprintAuthInteractor,
@@ -342,8 +351,8 @@ public class KeyguardIndicationController {
         mAlternateBouncerInteractor = alternateBouncerInteractor;
         mUserTracker = userTracker;
         mBouncerMessageInteractor = bouncerMessageInteractor;
-        mFeatureFlags = flags;
         mIndicationHelper = indicationHelper;
+        mDeviceEntryBiometricSettingsInteractor = deviceEntryBiometricSettingsInteractor;
         mKeyguardInteractor = keyguardInteractor;
         mBiometricMessageInteractor = biometricMessageInteractor;
         mDeviceEntryFingerprintAuthInteractor = deviceEntryFingerprintAuthInteractor;
@@ -427,8 +436,7 @@ public class KeyguardIndicationController {
                 mLockScreenIndicationView,
                 mExecutor,
                 mStatusBarStateController,
-                mKeyguardLogger,
-                mFeatureFlags
+                mKeyguardLogger
         );
         updateDeviceEntryIndication(false /* animate */);
         updateOrganizedOwnedDevice();
@@ -454,6 +462,9 @@ public class KeyguardIndicationController {
         collectFlow(mIndicationArea,
                 mUserLogoutInteractor.isLogoutEnabled(),
                 mIsLogoutEnabledCallback);
+        collectFlow(mIndicationArea,
+                mDeviceEntryBiometricSettingsInteractor.getAuthenticationFlags(),
+                mDeviceEntryBiometricSettingsInteractorCallback);
     }
 
     @NonNull
@@ -470,6 +481,10 @@ public class KeyguardIndicationController {
         mHideBiometricMessageHandler.cancel();
         mHideTransientMessageHandler.cancel();
         mBroadcastDispatcher.unregisterReceiver(mBroadcastReceiver);
+    }
+
+    public String getPowerChargingString() {
+        return computePowerChargingStringIndication();
     }
 
     private void handleAlignStateChanged(int alignState) {
@@ -520,8 +535,9 @@ public class KeyguardIndicationController {
         updateLockScreenAlignmentMsg();
         updateLockScreenLogoutView();
         updateLockScreenPersistentUnlockMsg();
-        if (enableAdaptiveAuth()) {
-            updateLockScreenAdaptiveAuthMsg(userId);
+        updateLockScreenAdaptiveAuthMsg(userId);
+        if (showLockedByYourWatchKeyguardIndicator()) {
+            updateLockScreenWatchDisconnectedMsg(userId);
         }
     }
 
@@ -824,6 +840,24 @@ public class KeyguardIndicationController {
                     true);
         } else {
             mRotateTextViewController.hideIndication(INDICATION_TYPE_ADAPTIVE_AUTH);
+        }
+    }
+
+    private void updateLockScreenWatchDisconnectedMsg(int userId) {
+        final boolean deviceLocked = mAuthenticationFlags != null
+                && mAuthenticationFlags.isSomeAuthRequiredAfterWatchDisconnected();
+        final boolean canSkipBouncer = mKeyguardUpdateMonitor.getUserCanSkipBouncer(userId);
+        if (deviceLocked && !canSkipBouncer) {
+            mRotateTextViewController.updateIndication(
+                    INDICATION_TYPE_WATCH_DISCONNECTED,
+                    new KeyguardIndication.Builder()
+                            .setMessage(mContext.getString(
+                                    R.string.keyguard_indication_after_watch_disconnected))
+                            .setTextColor(getInitialTextColorState())
+                            .build(),
+                    true);
+        } else {
+            mRotateTextViewController.hideIndication(INDICATION_TYPE_WATCH_DISCONNECTED);
         }
     }
 
@@ -1175,6 +1209,9 @@ public class KeyguardIndicationController {
         }
 
         String percentage = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+        if (mBatteryDead) {
+            return mContext.getResources().getString(R.string.keyguard_plugged_in, percentage);
+        }
         String batteryInfo = "";
         boolean showbatteryInfo = Settings.System.getIntForUser(mContext.getContentResolver(),
                 Settings.System.LOCKSCREEN_BATTERY_INFO, 1, UserHandle.USER_CURRENT) == 1;
@@ -1360,6 +1397,7 @@ public class KeyguardIndicationController {
             mBatteryLevel = status.level;
             mBatteryPresent = status.present;
             mBatteryDefender = isBatteryDefender(status);
+            mBatteryDead = status.isDead();
             // when the battery is overheated, device doesn't charge so only guard on pluggedIn:
             mEnableBatteryDefender = mBatteryDefender && status.isPluggedIn();
             mIncompatibleCharger = status.incompatibleCharger.orElse(false);
@@ -1650,7 +1688,7 @@ public class KeyguardIndicationController {
             return;
         }
         boolean fpEngaged = mDeviceEntryFingerprintAuthInteractor.isEngaged().getValue();
-        boolean faceRunning = mDeviceEntryFaceAuthInteractor.isRunning();
+        boolean faceRunning = mDeviceEntryFaceAuthInteractor.isAuthRunning();
         if (fpEngaged || faceRunning) {
             mKeyguardLogger.delayShowingTrustAgentError(message, fpEngaged, faceRunning);
             mTrustAgentErrorMessage = message;

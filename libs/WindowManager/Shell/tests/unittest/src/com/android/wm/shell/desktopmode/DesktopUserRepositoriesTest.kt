@@ -31,6 +31,8 @@ import com.android.wm.shell.ShellTestCase
 import com.android.wm.shell.common.ShellExecutor
 import com.android.wm.shell.desktopmode.persistence.DesktopPersistentRepository
 import com.android.wm.shell.desktopmode.persistence.DesktopRepositoryInitializer
+import com.android.wm.shell.shared.desktopmode.FakeDesktopConfig
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState
 import com.android.wm.shell.sysui.ShellController
 import com.android.wm.shell.sysui.ShellInit
 import com.google.common.truth.Truth.assertThat
@@ -58,6 +60,8 @@ class DesktopUserRepositoriesTest : ShellTestCase() {
     private lateinit var shellInit: ShellInit
     private lateinit var datastoreScope: CoroutineScope
     private lateinit var mockitoSession: StaticMockitoSession
+    private lateinit var desktopState: FakeDesktopState
+    private lateinit var desktopConfig: FakeDesktopConfig
 
     private val testExecutor = mock<ShellExecutor>()
     private val persistentRepository = mock<DesktopPersistentRepository>()
@@ -75,6 +79,9 @@ class DesktopUserRepositoriesTest : ShellTestCase() {
                 .startMocking()
         doReturn(USER_ID_1).`when` { ActivityManager.getCurrentUser() }
 
+        desktopState = FakeDesktopState()
+        desktopConfig = FakeDesktopConfig()
+
         datastoreScope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
         shellInit = spy(ShellInit(testExecutor))
 
@@ -84,13 +91,14 @@ class DesktopUserRepositoriesTest : ShellTestCase() {
 
         userRepositories =
             DesktopUserRepositories(
-                context,
                 shellInit,
                 shellController,
                 persistentRepository,
                 repositoryInitializer,
                 datastoreScope,
                 userManager,
+                desktopState,
+                desktopConfig,
             )
     }
 
@@ -137,6 +145,17 @@ class DesktopUserRepositoriesTest : ShellTestCase() {
         val userIdForProfile = userRepositories.getUserIdForProfile(PROFILE_ID_1)
 
         assertThat(userIdForProfile).isEqualTo(USER_ID_2)
+    }
+
+    @Test
+    fun forAllRepositories_invokesOnAllRepositories() {
+        userRepositories.onUserChanged(USER_ID_1, mock())
+        userRepositories.getProfile(USER_ID_1)
+        userRepositories.onUserChanged(USER_ID_2, mock())
+        userRepositories.getProfile(USER_ID_2)
+        var repositoriesInvoked = 0
+        userRepositories.forAllRepositories { _ -> repositoriesInvoked++ }
+        assertThat(repositoriesInvoked).isEqualTo(2)
     }
 
     private companion object {

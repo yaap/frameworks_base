@@ -28,6 +28,8 @@ import com.android.wm.shell.ShellTestCase
 import com.android.wm.shell.common.ShellExecutor
 import com.android.wm.shell.desktopmode.DesktopUserRepositories
 import com.android.wm.shell.desktopmode.persistence.DesktopRepositoryInitializer.DeskRecreationFactory
+import com.android.wm.shell.shared.desktopmode.FakeDesktopConfig
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState
 import com.android.wm.shell.sysui.ShellController
 import com.android.wm.shell.sysui.ShellInit
 import com.google.common.truth.Truth.assertThat
@@ -55,6 +57,8 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
     private lateinit var repositoryInitializer: DesktopRepositoryInitializer
     private lateinit var shellInit: ShellInit
     private lateinit var datastoreScope: CoroutineScope
+    private lateinit var desktopState: FakeDesktopState
+    private lateinit var desktopConfig: FakeDesktopConfig
 
     private lateinit var desktopUserRepositories: DesktopUserRepositories
     private val persistentRepository = mock<DesktopPersistentRepository>()
@@ -65,19 +69,28 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
     @Before
     fun setUp() {
         Dispatchers.setMain(StandardTestDispatcher())
+        desktopState = FakeDesktopState()
+        desktopConfig = FakeDesktopConfig()
         shellInit = spy(ShellInit(testExecutor))
         datastoreScope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
         repositoryInitializer =
-            DesktopRepositoryInitializerImpl(context, persistentRepository, datastoreScope)
+            DesktopRepositoryInitializerImpl(
+                context,
+                persistentRepository,
+                datastoreScope,
+                desktopConfig,
+                desktopState,
+            )
         desktopUserRepositories =
             DesktopUserRepositories(
-                context,
                 shellInit,
                 shellController,
                 persistentRepository,
                 repositoryInitializer,
                 datastoreScope,
                 userManager,
+                desktopState,
+                desktopConfig,
             )
     }
 
@@ -104,6 +117,7 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
     )
     fun initWithPersistence_multipleUsers_addedCorrectly() =
         runTest(StandardTestDispatcher()) {
+            desktopState.overrideDesktopModeSupportPerDisplay[DEFAULT_DISPLAY] = true
             whenever(persistentRepository.getUserDesktopRepositoryMap())
                 .thenReturn(
                     mapOf(
@@ -190,6 +204,7 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
     @EnableFlags(FLAG_ENABLE_DESKTOP_WINDOWING_PERSISTENCE, FLAG_ENABLE_MULTIPLE_DESKTOPS_BACKEND)
     fun initWithPersistence_singleUser_addedCorrectly() =
         runTest(StandardTestDispatcher()) {
+            desktopState.overrideDesktopModeSupportPerDisplay[DEFAULT_DISPLAY] = true
             whenever(persistentRepository.getUserDesktopRepositoryMap())
                 .thenReturn(mapOf(USER_ID_1 to desktopRepositoryState1))
             whenever(persistentRepository.getDesktopRepositoryState(USER_ID_1))
@@ -241,6 +256,12 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
                 )
                 .containsExactly(4)
                 .inOrder()
+            assertThat(desktopUserRepositories.getProfile(USER_ID_1).getLeftTiledTask(DESKTOP_ID_2))
+                .isEqualTo(4)
+            assertThat(
+                    desktopUserRepositories.getProfile(USER_ID_1).getRightTiledTask(DESKTOP_ID_2)
+                )
+                .isEqualTo(5)
         }
 
     @Test
@@ -251,6 +272,7 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
     )
     fun initWithPersistence_deskRecreationFailed_deskNotAdded() =
         runTest(StandardTestDispatcher()) {
+            desktopState.overrideDesktopModeSupportPerDisplay[DEFAULT_DISPLAY] = true
             whenever(persistentRepository.getUserDesktopRepositoryMap())
                 .thenReturn(mapOf(USER_ID_1 to desktopRepositoryState1))
             whenever(persistentRepository.getDesktopRepositoryState(USER_ID_1))
@@ -271,6 +293,27 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
 
             assertThat(desktopUserRepositories.getProfile(USER_ID_1).getDeskIds(DEFAULT_DISPLAY))
                 .containsExactly(DESKTOP_ID_1)
+        }
+
+    @Test
+    @EnableFlags(
+        FLAG_ENABLE_DESKTOP_WINDOWING_PERSISTENCE,
+        FLAG_ENABLE_DESKTOP_WINDOWING_HSUM,
+        FLAG_ENABLE_MULTIPLE_DESKTOPS_BACKEND,
+    )
+    fun initWithPersistence_defaultDisplayDoesNotSupportDesks_deskNotAdded() =
+        runTest(StandardTestDispatcher()) {
+            desktopState.overrideDesktopModeSupportPerDisplay[DEFAULT_DISPLAY] = false
+            whenever(persistentRepository.getUserDesktopRepositoryMap())
+                .thenReturn(mapOf(USER_ID_1 to desktopRepositoryState1))
+            whenever(persistentRepository.getDesktopRepositoryState(USER_ID_1))
+                .thenReturn(desktopRepositoryState1)
+            whenever(persistentRepository.readDesktop(USER_ID_1, DESKTOP_ID_1)).thenReturn(desktop1)
+
+            repositoryInitializer.initialize(desktopUserRepositories)
+
+            assertThat(desktopUserRepositories.getProfile(USER_ID_1).getDeskIds(DEFAULT_DISPLAY))
+                .isEmpty()
         }
 
     @After
@@ -318,6 +361,7 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
                     DesktopTask.newBuilder()
                         .setTaskId(4)
                         .setDesktopTaskState(DesktopTaskState.MINIMIZED)
+                        .setDesktopTaskTilingState(DesktopTaskTilingState.LEFT)
                         .build(),
                 )
                 .putTasksByTaskId(
@@ -325,6 +369,7 @@ class DesktopRepositoryInitializerTest : ShellTestCase() {
                     DesktopTask.newBuilder()
                         .setTaskId(5)
                         .setDesktopTaskState(DesktopTaskState.VISIBLE)
+                        .setDesktopTaskTilingState(DesktopTaskTilingState.RIGHT)
                         .build(),
                 )
                 .build()

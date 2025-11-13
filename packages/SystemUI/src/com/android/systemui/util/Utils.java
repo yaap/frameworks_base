@@ -34,29 +34,10 @@ import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.shared.system.QuickStepContract;
 
 import java.util.List;
-import java.util.function.Consumer;
 
 public class Utils {
 
     private static Boolean sUseQsMediaPlayer = null;
-
-    /**
-     * Allows lambda iteration over a list. It is done in reverse order so it is safe
-     * to add or remove items during the iteration.  Skips over null items.
-     *
-     * @deprecated According to b/286841705, this is *not* safe: If an item is removed from the
-     *   list, then list.get(i) could throw an IndexOutOfBoundsException. This method should not be
-     *   used; try using `synchronized` or making a copy of the list instead.
-     */
-    @Deprecated
-    public static <T> void safeForeach(List<T> list, Consumer<T> c) {
-        for (int i = list.size() - 1; i >= 0; i--) {
-            T item = list.get(i);
-            if (item != null) {
-                c.accept(item);
-            }
-        }
-    }
 
     /**
      * Returns {@code true} iff the package {@code packageName} is a headless remote display
@@ -139,14 +120,6 @@ public class Utils {
     }
 
     /**
-     * Returns true if the device should use the collapsed layout for the media player when in
-     * landscape (or seascape) orientation
-     */
-    public static boolean useCollapsedMediaInLandscape(Resources resources) {
-        return resources.getBoolean(R.bool.config_quickSettingsMediaLandscapeCollapsed);
-    }
-
-    /**
      * Gets the {@link R.dimen#status_bar_header_height_keyguard}.
      *
      * @deprecated Prefer SystemBarUtilsState or SystemBarUtilsProxy
@@ -159,5 +132,13 @@ public class Utils {
         final int statusBarHeaderHeightKeyguard = context.getResources()
                 .getDimensionPixelSize(R.dimen.status_bar_header_height_keyguard);
         return Math.max(statusBarHeight, statusBarHeaderHeightKeyguard + waterfallInsetTop);
+    }
+
+    /**
+     * Returns {@code true} if screen capture is enabled and the device is a desktop.
+     */
+    public static boolean isDesktopScreenCaptureEnabled(Context context) {
+        return com.android.systemui.Flags.desktopScreenCapture()
+                && context.getResources().getBoolean(R.bool.config_enableDesktopScreenCapture);
     }
 }

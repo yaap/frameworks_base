@@ -96,6 +96,7 @@ public class InputMethodManagerServiceTestBase {
                     TEST_FOCUSED_WINDOW_NAME,
                     TEST_FOCUSED_WINDOW_NAME,
                     TEST_FOCUSED_WINDOW_NAME,
+                    TEST_FOCUSED_WINDOW_NAME,
                     TEST_FOCUSED_WINDOW_NAME);
     protected static final InputBindResult SUCCESS_WAITING_IME_BINDING_RESULT =
             new InputBindResult(
@@ -225,6 +226,8 @@ public class InputMethodManagerServiceTestBase {
         when(mMockUserManagerInternal.isUserRunning(anyInt())).thenReturn(true);
         when(mMockUserManagerInternal.getProfileIds(anyInt(), anyBoolean()))
                 .thenReturn(new int[] {0});
+        when(mMockUserManagerInternal.getProfileIds(anyInt(), anyBoolean(), anyBoolean()))
+                .thenReturn(new int[] {0});
         when(mMockUserManagerInternal.getUserIds()).thenReturn(new int[] {0});
         when(mMockActivityManagerInternal.isSystemReady()).thenReturn(true);
         when(mMockActivityManagerInternal.getCurrentUserId()).thenReturn(mUserId);
@@ -343,7 +346,7 @@ public class InputMethodManagerServiceTestBase {
                     .setCurrentMethodVisible();
         }
         verify(mMockInputMethod, times(showSoftInput ? 1 : 0))
-                .showSoftInput(any() /* showInputToken */ , notNull() /* statsToken */,
+                .showSoftInput(notNull() /* statsToken */,
                         showFlags != NO_VERIFY_SHOW_FLAGS ? eq(showFlags) : anyInt() /* flags*/,
                         any() /* resultReceiver */);
     }
@@ -355,7 +358,7 @@ public class InputMethodManagerServiceTestBase {
                     .setCurrentMethodNotVisible();
         }
         verify(mMockInputMethod, times(hideSoftInput ? 1 : 0))
-                .hideSoftInput(any() /* hideInputToken */, notNull() /* statsToken */,
+                .hideSoftInput(notNull() /* statsToken */,
                         anyInt() /* flags */, any() /* resultReceiver */);
     }
 

@@ -27,6 +27,8 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
@@ -35,8 +37,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.OverscrollEffect
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.hoverable
@@ -52,7 +56,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -104,6 +108,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.node.Ref
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -113,7 +118,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
-import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.compose.ui.util.fastRoundToInt
 import com.android.compose.PlatformButton
@@ -126,7 +130,11 @@ import com.android.compose.animation.scene.SceneTransitionLayout
 import com.android.compose.animation.scene.rememberMutableSceneTransitionLayoutState
 import com.android.compose.animation.scene.transitions
 import com.android.compose.gesture.effect.rememberOffsetOverscrollEffect
+import com.android.compose.gesture.overscrollToDismiss
+import com.android.compose.modifiers.thenIf
+import com.android.compose.theme.LocalAndroidColorScheme
 import com.android.compose.ui.graphics.painter.rememberDrawablePainter
+import com.android.mechanics.spec.builder.rememberMotionBuilderContext
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.common.ui.compose.Icon
 import com.android.systemui.common.ui.compose.PagerDots
@@ -139,8 +147,8 @@ import com.android.systemui.media.remedia.shared.model.MediaSessionState
 import com.android.systemui.media.remedia.ui.viewmodel.MediaCardGutsViewModel
 import com.android.systemui.media.remedia.ui.viewmodel.MediaCardViewModel
 import com.android.systemui.media.remedia.ui.viewmodel.MediaCarouselVisibility
+import com.android.systemui.media.remedia.ui.viewmodel.MediaDeviceChipViewModel
 import com.android.systemui.media.remedia.ui.viewmodel.MediaNavigationViewModel
-import com.android.systemui.media.remedia.ui.viewmodel.MediaOutputSwitcherChipViewModel
 import com.android.systemui.media.remedia.ui.viewmodel.MediaPlayPauseActionViewModel
 import com.android.systemui.media.remedia.ui.viewmodel.MediaSecondaryActionViewModel
 import com.android.systemui.media.remedia.ui.viewmodel.MediaSettingsButtonViewModel
@@ -243,6 +251,7 @@ private fun CardCarouselContent(
                     state = pagerState,
                     userScrollEnabled = isSwipingEnabled,
                     pageSpacing = 8.dp,
+                    beyondViewportPageCount = 1,
                     key = { index: Int -> viewModel.cards[index].key },
                     overscrollEffect = overscrollEffect ?: rememberOffsetOverscrollEffect(),
                 ) { pageIndex: Int ->
@@ -267,11 +276,17 @@ private fun CardCarouselContent(
         }
 
         if (behavior.isCarouselDismissible) {
-            SwipeToDismiss(
-                content = { PagerContent() },
-                isSwipingEnabled = isSwipingEnabled,
-                onDismissed = onDismissed,
-            )
+            Box(
+                modifier =
+                    Modifier.overscrollToDismiss(
+                        rememberMotionBuilderContext(),
+                        orientation = Orientation.Horizontal,
+                        enabled = isSwipingEnabled,
+                        onDismissed = onDismissed,
+                    )
+            ) {
+                PagerContent()
+            }
         } else {
             val overscrollEffect = rememberOffsetOverscrollEffect()
             SwipeToReveal(
@@ -329,9 +344,11 @@ private fun Card(
 }
 
 @Composable
-private fun rememberAnimatedColorScheme(colorScheme: MediaColorScheme): AnimatedColorScheme {
-    val animatedPrimary by animateColorAsState(targetValue = colorScheme.primary)
-    val animatedOnPrimary by animateColorAsState(targetValue = colorScheme.onPrimary)
+private fun rememberAnimatedColorScheme(colorScheme: MediaColorScheme?): AnimatedColorScheme {
+    val primaryColor = colorScheme?.primary ?: LocalAndroidColorScheme.current.primaryFixed
+    val onPrimaryColor = colorScheme?.onPrimary ?: LocalAndroidColorScheme.current.onPrimaryFixed
+    val animatedPrimary by animateColorAsState(targetValue = primaryColor)
+    val animatedOnPrimary by animateColorAsState(targetValue = onPrimaryColor)
 
     return remember {
         object : AnimatedColorScheme {
@@ -451,8 +468,8 @@ private fun ContentScope.CardForegroundContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier =
                     Modifier.align(Alignment.TopEnd)
-                        // Output switcher chips must each be limited to at most 40% of the maximum
-                        // width of the card.
+                        // Output switcher chip must be limited to at most 40% of the maximum width
+                        // of the card.
                         //
                         // This saves the maximum possible width of the card so it can be referred
                         // to by child custom layout code below.
@@ -467,36 +484,46 @@ private fun ContentScope.CardForegroundContent(
                             }
                         },
             ) {
-                viewModel.outputSwitcherChips.fastForEach { chip ->
-                    OutputSwitcherChip(
-                        viewModel = chip,
-                        colorScheme = colorScheme,
-                        modifier =
-                            Modifier
-                                // Each chip must be limited to 40% of the width of the card at
-                                // most.
-                                //
-                                // The underlying assumption is that there'll never be more than one
-                                // chip with text and one more icon-only chip. Only the one with
-                                // text can ever end up being too wide.
-                                .layout { measurable, constraints ->
-                                    val placeable =
-                                        measurable.measure(
-                                            constraints.copy(
-                                                maxWidth =
-                                                    min(
-                                                        (cardMaxWidth * 0.4f).fastRoundToInt(),
-                                                        constraints.maxWidth,
-                                                    )
-                                            )
-                                        )
-
-                                    layout(placeable.measuredWidth, placeable.measuredHeight) {
-                                        placeable.place(0, 0)
-                                    }
-                                },
-                    )
+                AnimatedVisibility(
+                    visible = viewModel.deviceSuggestionChip != null,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    rememberLastNonNull(viewModel.deviceSuggestionChip)?.let {
+                        DeviceChip(
+                            viewModel = it,
+                            style =
+                                DeviceChipStyle(
+                                    fillColor = Color.Transparent,
+                                    contentColor = colorScheme.primary,
+                                    borderColor = colorScheme.primary,
+                                ),
+                            modifier =
+                                Modifier.fractionalMaxWidth(
+                                    containerMaxWidth = cardMaxWidth,
+                                    fraction = 0.5f,
+                                ),
+                        )
+                    }
                 }
+
+                DeviceChip(
+                    viewModel = viewModel.outputSwitcherChip,
+                    style =
+                        DeviceChipStyle(
+                            fillColor = colorScheme.primary,
+                            contentColor = colorScheme.onPrimary,
+                        ),
+                    modifier =
+                        Modifier
+                            // The chip must be limited to 40% of the width of the card at most.
+                            //
+                            // The underlying assumption is that there'll never be more than one
+                            // chip with text and one more icon-only chip. Only the one with
+                            // text can ever end up being too wide.
+                            .fractionalMaxWidth(containerMaxWidth = cardMaxWidth, fraction = 0.4f)
+                            .padding(end = 16.dp),
+                )
             }
         }
 
@@ -1056,14 +1083,10 @@ private fun ContentScope.Metadata(
     }
 }
 
-/**
- * Renders a small chip showing the current output device and providing a way to switch to a
- * different output device.
- */
 @Composable
-private fun OutputSwitcherChip(
-    viewModel: MediaOutputSwitcherChipViewModel,
-    colorScheme: AnimatedColorScheme,
+private fun DeviceChip(
+    viewModel: MediaDeviceChipViewModel,
+    style: DeviceChipStyle,
     modifier: Modifier = Modifier,
 ) {
     // For accessibility reasons, the touch area for the chip needs to be at least 48dp in height.
@@ -1080,35 +1103,51 @@ private fun OutputSwitcherChip(
     Box(
         modifier =
             modifier
-                .height(48.dp)
+                .heightIn(min = 48.dp)
                 .clickable(interactionSource = clickInteractionSource, indication = null) {
                     viewModel.onClick()
                 }
-                .padding(top = 16.dp, end = 16.dp, bottom = 8.dp)
+                .padding(top = 16.dp, bottom = 8.dp)
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier =
                 Modifier.clip(RoundedCornerShape(12.dp))
-                    .background(colorScheme.primary)
+                    .background(style.fillColor)
+                    .thenIf(style.borderColor != null) {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = style.borderColor!!,
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                    }
                     .indication(clickInteractionSource, ripple())
-                    .padding(start = 8.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
-            Icon(
-                icon = viewModel.icon,
-                tint = colorScheme.onPrimary,
-                modifier = Modifier.size(16.dp),
-            )
-
-            viewModel.text?.let {
-                Text(
-                    text = viewModel.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            if (viewModel.isConnecting) {
+                CircularProgressIndicator(
+                    color = style.contentColor,
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.dp,
                 )
+            } else {
+                Icon(
+                    icon = viewModel.icon,
+                    tint = style.contentColor,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            AnimatedVisibility(visible = viewModel.text != null) {
+                rememberLastNonNull(viewModel.text)?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = style.contentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
+                }
             }
         }
     }
@@ -1364,3 +1403,31 @@ private fun MediaPresentationStyle.toScene(): SceneKey {
         MediaPresentationStyle.Compact -> Media.Scenes.Compact
     }
 }
+
+/** Allows to set the maxWidth constraint as a fractional value. */
+private fun Modifier.fractionalMaxWidth(containerMaxWidth: Int, fraction: Float): Modifier {
+    return layout { measurable, constraints ->
+        val placeable =
+            measurable.measure(
+                constraints.copy(
+                    maxWidth =
+                        min((containerMaxWidth * fraction).fastRoundToInt(), constraints.maxWidth)
+                )
+            )
+
+        layout(placeable.measuredWidth, placeable.measuredHeight) { placeable.place(0, 0) }
+    }
+}
+
+@Composable
+fun <T> rememberLastNonNull(value: T?): T? {
+    val ref = remember { Ref<T?>() }
+    ref.value = value ?: ref.value
+    return ref.value
+}
+
+private data class DeviceChipStyle(
+    val fillColor: Color,
+    val contentColor: Color,
+    val borderColor: Color? = null,
+)

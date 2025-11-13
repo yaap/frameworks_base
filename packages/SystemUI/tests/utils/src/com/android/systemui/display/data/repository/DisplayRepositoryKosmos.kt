@@ -16,21 +16,82 @@
 
 package com.android.systemui.display.data.repository
 
+import android.content.testableContext
+import android.hardware.display.DisplayManager
+import android.os.fakeHandler
 import android.view.Display
+import android.view.mockIWindowManager
+import com.android.app.displaylib.fakes.FakePerDisplayRepository
 import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent
+import com.android.systemui.display.dagger.SystemUIPhoneDisplaySubcomponent
+import com.android.systemui.display.domain.interactor.DisplayStateInteractor
+import com.android.systemui.display.domain.interactor.displayStateInteractor
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.Kosmos.Fixture
 import com.android.systemui.kosmos.testScope
+import com.android.systemui.statusbar.core.statusBarIconRefreshInteractor
+import com.android.systemui.statusbar.domain.interactor.StatusBarIconRefreshInteractor
+import com.android.systemui.statusbar.mockCommandQueue
+import com.android.systemui.statusbar.phone.fragment.CollapsedStatusBarFragment
+import com.android.systemui.statusbar.phone.fragment.dagger.HomeStatusBarComponent
+import com.android.systemui.statusbar.pipeline.shared.ui.binder.HomeStatusBarViewBinder
+import com.android.systemui.statusbar.pipeline.shared.ui.viewmodel.HomeStatusBarViewModel
+import com.android.systemui.statusbar.pipeline.shared.ui.viewmodel.HomeStatusBarViewModel.HomeStatusBarViewModelFactory
+import com.android.systemui.statusbar.pipeline.shared.ui.viewmodel.homeStatusBarViewBinder
+import com.android.systemui.statusbar.pipeline.shared.ui.viewmodel.homeStatusBarViewModelFactory
+import com.android.systemui.util.mockito.mock
+import javax.inject.Provider
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 
 val Kosmos.displayRepository by Fixture { FakeDisplayRepository() }
 
+val Kosmos.sysUiDefaultDisplaySubcomponentLifecycleListeners by Fixture {
+    mutableSetOf<SystemUIDisplaySubcomponent.LifecycleListener>()
+}
+
 fun Kosmos.createFakeDisplaySubcomponent(
-    coroutineScope: CoroutineScope = testScope.backgroundScope
-): SystemUIDisplaySubcomponent {
-    return object : SystemUIDisplaySubcomponent {
+    coroutineScope: CoroutineScope = testScope.backgroundScope,
+    displayStateRepository: DisplayStateRepository = this.displayStateRepository,
+    displayStateInteractor: DisplayStateInteractor = this.displayStateInteractor,
+    statusbarIconRefreshInteractorFromConstructor: StatusBarIconRefreshInteractor =
+        this.statusBarIconRefreshInteractor,
+    homeStatusBarViewModelFactory: (Int) -> HomeStatusBarViewModel =
+        this.homeStatusBarViewModelFactory,
+    homeStatusBarViewBinder: HomeStatusBarViewBinder = this.homeStatusBarViewBinder,
+): SystemUIPhoneDisplaySubcomponent {
+    return object : SystemUIPhoneDisplaySubcomponent {
         override val displayCoroutineScope: CoroutineScope
             get() = coroutineScope
+
+        override val displayStateRepository: DisplayStateRepository
+            get() = displayStateRepository
+
+        override val displayStateInteractor: DisplayStateInteractor
+            get() = displayStateInteractor
+
+        override val statusBarIconRefreshInteractor: StatusBarIconRefreshInteractor =
+            statusbarIconRefreshInteractorFromConstructor
+
+        override val lifecycleListeners: Set<SystemUIDisplaySubcomponent.LifecycleListener> =
+            sysUiDefaultDisplaySubcomponentLifecycleListeners
+
+        override val homeStatusBarComponentFactory: HomeStatusBarComponent.Factory
+            get() = mock<HomeStatusBarComponent.Factory>()
+
+        override val statusBarFragmentProvider: Provider<CollapsedStatusBarFragment>
+            get() = Provider<CollapsedStatusBarFragment> { mock<CollapsedStatusBarFragment>() }
+
+        override val homeStatusBarViewModelFactory: HomeStatusBarViewModelFactory
+            get() =
+                object : HomeStatusBarViewModelFactory {
+                    override fun create(): HomeStatusBarViewModel {
+                        return homeStatusBarViewModelFactory.invoke(testableContext.displayId)
+                    }
+                }
+
+        override val homeStatusBarViewBinder: HomeStatusBarViewBinder
+            get() = homeStatusBarViewBinder
     }
 }
 
@@ -50,4 +111,50 @@ val Kosmos.displaySubcomponentPerDisplayRepository by Fixture {
     FakePerDisplayRepository<SystemUIDisplaySubcomponent>().apply {
         add(Display.DEFAULT_DISPLAY, sysuiDefaultDisplaySubcomponent)
     }
+}
+
+val Kosmos.displayPhoneSubcomponentPerDisplayRepository by Fixture {
+    FakePerDisplayRepository<SystemUIPhoneDisplaySubcomponent>().apply {
+        add(Display.DEFAULT_DISPLAY, sysuiDefaultDisplaySubcomponent)
+    }
+}
+
+val Kosmos.mockDisplayManager by Fixture { mock<DisplayManager>() }
+val Kosmos.displayRepositoryFromDisplayLib by Fixture {
+    com.android.app.displaylib.DisplayRepositoryImpl(
+        mockDisplayManager,
+        fakeHandler,
+        testScope.backgroundScope,
+        UnconfinedTestDispatcher(),
+    )
+}
+val Kosmos.displayWithDecorationsRepository by Fixture {
+    DisplaysWithDecorationsRepositoryImpl(
+        mockCommandQueue,
+        mockIWindowManager,
+        testScope.backgroundScope,
+        displayRepositoryFromDisplayLib,
+    )
+}
+val Kosmos.displaysWithDecorationsRepositoryFromDisplayLib by Fixture {
+    com.android.app.displaylib.DisplaysWithDecorationsRepositoryImpl(
+        mockIWindowManager,
+        testScope.backgroundScope,
+        displayRepositoryFromDisplayLib,
+    )
+}
+
+val Kosmos.realDisplayRepository by Fixture {
+    DisplayRepositoryImpl(
+        displayRepositoryFromDisplayLib,
+        displayWithDecorationsRepository,
+        displaysWithDecorationsRepositoryFromDisplayLib,
+    )
+}
+
+val Kosmos.displaysWithDecorationsRepositoryCompat by Fixture {
+    com.android.app.displaylib.DisplaysWithDecorationsRepositoryCompat(
+        testScope.backgroundScope,
+        displaysWithDecorationsRepositoryFromDisplayLib,
+    )
 }

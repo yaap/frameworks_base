@@ -43,6 +43,7 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalKairosApi::class)
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class StackedMobileIconViewModelKairosTest : SysuiTestCase() {
     private val kosmos =
         testKosmos().useUnconfinedTestDispatcher().apply {
@@ -111,6 +112,65 @@ class StackedMobileIconViewModelKairosTest : SysuiTestCase() {
 
             assertThat(underTest.dualSim!!.primary.level).isEqualTo(2)
             assertThat(underTest.dualSim!!.secondary.level).isEqualTo(1)
+        }
+
+    @Test
+    @EnableFlags(NewStatusBarIcons.FLAG_NAME, StatusBarRootModernization.FLAG_NAME)
+    fun contentDescription_requiresBothIcons() =
+        kosmos.runKairosTest {
+            mobileConnectionsRepositoryKairos.fake.subscriptions.setValue(listOf())
+            assertThat(underTest.contentDescription).isNull()
+
+            mobileConnectionsRepositoryKairos.fake.subscriptions.setValue(listOf(SUB_1))
+            assertThat(underTest.contentDescription).isNull()
+
+            mobileConnectionsRepositoryKairos.fake.subscriptions.setValue(
+                listOf(SUB_1, SUB_2, SUB_3)
+            )
+            assertThat(underTest.contentDescription).isNull()
+
+            mobileConnectionsRepositoryKairos.fake.subscriptions.setValue(listOf(SUB_1, SUB_2))
+            assertThat(underTest.contentDescription).isNotNull()
+        }
+
+    @Test
+    @EnableFlags(NewStatusBarIcons.FLAG_NAME, StatusBarRootModernization.FLAG_NAME)
+    fun contentDescription_tracksBars() =
+        kosmos.runKairosTest {
+            mobileConnectionsRepositoryKairos.fake.subscriptions.setValue(listOf(SUB_1, SUB_2))
+            setIconLevel(SUB_1.subscriptionId, 1)
+            setIconLevel(SUB_2.subscriptionId, 2)
+
+            assertThat(underTest.contentDescription!!)
+                .isEqualTo("default name, one bar. default name, two bars.")
+
+            // Change signal bars
+            setIconLevel(SUB_1.subscriptionId, 3)
+            setIconLevel(SUB_2.subscriptionId, 1)
+
+            assertThat(underTest.contentDescription!!)
+                .isEqualTo("default name, three bars. default name, one bar.")
+        }
+
+    @Test
+    @EnableFlags(NewStatusBarIcons.FLAG_NAME, StatusBarRootModernization.FLAG_NAME)
+    fun contentDescription_hasActiveIconFirst() =
+        kosmos.runKairosTest {
+            // Active sub id is null, order is unchanged
+            mobileConnectionsRepositoryKairos.fake.subscriptions.setValue(listOf(SUB_1, SUB_2))
+            setIconLevel(SUB_1.subscriptionId, 1)
+            setIconLevel(SUB_2.subscriptionId, 2)
+
+            assertThat(underTest.contentDescription!!)
+                .isEqualTo("default name, one bar. default name, two bars.")
+
+            // Active sub is 2, order is swapped
+            mobileConnectionsRepositoryKairos.fake.setActiveMobileDataSubscriptionId(
+                SUB_2.subscriptionId
+            )
+
+            assertThat(underTest.contentDescription!!)
+                .isEqualTo("default name, two bars. default name, one bar.")
         }
 
     private suspend fun KairosTestScope.setIconLevel(subId: Int, level: Int) {

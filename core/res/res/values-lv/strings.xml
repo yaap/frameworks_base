@@ -355,10 +355,12 @@
     <string name="permgroupdesc_sensors" msgid="2610631290633747752">"piekļūt sensoru datiem par jūsu veselības rādījumiem"</string>
     <string name="permgrouplab_notifications" msgid="5472972361980668884">"Paziņojumi"</string>
     <string name="permgroupdesc_notifications" msgid="4608679556801506580">"rādīt paziņojumus"</string>
+    <string name="permgrouplab_xr_eye_sensitive" msgid="2099659100156643683">"PR sensitīvi acu izsekošanas dati"</string>
+    <string name="permgroupdesc_xr_eye_sensitive" msgid="1414121516133760271">"piekļūt sensitīviem acu kustību izsekošanas datiem"</string>
     <string name="permgrouplab_xr_tracking" msgid="7418994009794287471">"PR izsekošanas dati"</string>
     <string name="permgroupdesc_xr_tracking" msgid="6777198859446500821">"piekļūt PR datiem par jums un vidi ap jums"</string>
-    <string name="permgrouplab_xr_tracking_sensitive" msgid="1194833982988144536">"sensitīvi PR izsekošanas dati"</string>
-    <string name="permgroupdesc_xr_tracking_sensitive" msgid="9178027369004805829">"piekļūt sensitīviem izsekošanas datiem, piemēram, acu kustībām"</string>
+    <string name="permgrouplab_xr_tracking_sensitive" msgid="2993940754322250652">"Sensitīvi PR izsekošanas dati"</string>
+    <string name="permgroupdesc_xr_tracking_sensitive" msgid="8498501397939308918">"piekļūt sensitīviem izsekošanas datiem par jums un vidi ap jums"</string>
     <string name="capability_title_canRetrieveWindowContent" msgid="7554282892101587296">"Izgūt loga saturu."</string>
     <string name="capability_desc_canRetrieveWindowContent" msgid="6195610527625237661">"Skatīt tā loga saturu, ar kuru mijiedarbojaties."</string>
     <string name="capability_title_canRequestTouchExploration" msgid="327598364696316213">"Aktivizēt funkciju “Pārlūkot pieskaroties”."</string>
@@ -383,6 +385,8 @@
     <string name="permdesc_expandStatusBar" msgid="7180756900448498536">"Ļauj lietotnei izvērst vai sakļaut statusa joslu."</string>
     <string name="permlab_fullScreenIntent" msgid="4310888199502509104">"paziņojumu darbību rādīšana pilnekrāna režīmā, ja ierīce ir bloķēta"</string>
     <string name="permdesc_fullScreenIntent" msgid="1100721419406643997">"Ļauj lietotnei rādīt paziņojumus kā pilnekrāna režīma darbības, ja ierīce ir bloķēta"</string>
+    <string name="permlab_postPromotedNotifications" msgid="4873499297871691102">"Reāllaika jaunumu rādīšana"</string>
+    <string name="permdesc_postPromotedNotifications" msgid="4530634734172420651">"Ļauj lietotnei rādīt aktīvus, laika ziņā svarīgus paziņojumus statusa joslā un bloķēšanas ekrānā."</string>
     <string name="permlab_install_shortcut" msgid="7451554307502256221">"instalēt saīsnes"</string>
     <string name="permdesc_install_shortcut" msgid="4476328467240212503">"Ļauj lietojumprogrammai pievienot saīsnes sākuma ekrānam, nejautājot lietotājam."</string>
     <string name="permlab_uninstall_shortcut" msgid="295263654781900390">"atinstalēt saīsnes"</string>
@@ -1183,22 +1187,8 @@
     <string name="duration_hours_shortest_future" msgid="2979276794547981674">"pēc <xliff:g id="COUNT">%d</xliff:g> h"</string>
     <string name="duration_days_shortest_future" msgid="3392722163935571543">"pēc <xliff:g id="COUNT">%d</xliff:g> d."</string>
     <string name="duration_years_shortest_future" msgid="5537464088352970388">"pēc <xliff:g id="COUNT">%d</xliff:g> g."</string>
-    <string name="duration_minutes_shortest_past" msgid="1740022450020492407">"pirms <xliff:g id="COUNT">%d</xliff:g> min"</string>
-    <string name="duration_hours_shortest_past" msgid="2098397414186628489">"pirms <xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_shortest_past" msgid="1832006037955897625">"pirms <xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_shortest_past" msgid="6168256514200469291">"pirms <xliff:g id="COUNT">%d</xliff:g> g."</string>
     <string name="duration_minutes_medium" msgid="5891933490342643944">"<xliff:g id="COUNT">%d</xliff:g> min"</string>
     <string name="duration_hours_medium" msgid="1465359726485910115">"<xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_medium" msgid="5994225628248661388">"<xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_medium" msgid="734023884353592526">"<xliff:g id="COUNT">%d</xliff:g> g."</string>
-    <string name="duration_minutes_medium_future" msgid="2750894988731934402">"pēc <xliff:g id="COUNT">%d</xliff:g> min"</string>
-    <string name="duration_hours_medium_future" msgid="6050833881463849764">"pēc <xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_medium_future" msgid="1700821545602729963">"pēc <xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_medium_future" msgid="3281018940397120166">"pēc <xliff:g id="COUNT">%d</xliff:g> g."</string>
-    <string name="duration_minutes_medium_past" msgid="7400424340181947714">"pirms <xliff:g id="COUNT">%d</xliff:g> min"</string>
-    <string name="duration_hours_medium_past" msgid="6709441336035202617">"pirms <xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_medium_past" msgid="5748156261134344532">"pirms <xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_medium_past" msgid="893797065424596243">"pirms <xliff:g id="COUNT">%d</xliff:g> g."</string>
     <string name="duration_minutes_relative" msgid="8620337701051015593">"{count,plural, =1{Pirms vienas minūtes}zero{Pirms # minūtēm}one{Pirms vairākām minūtēm, minūšu skaits: #}other{Pirms vairākām minūtēm, minūšu skaits: #}}"</string>
     <string name="duration_hours_relative" msgid="4836449961693180253">"{count,plural, =1{Pirms vienas stundas}zero{Pirms # stundām}one{Pirms vairākām stundām, stundu skaits: #}other{Pirms vairākām stundām, stundu skaits: #}}"</string>
     <string name="duration_days_relative" msgid="621965767567258302">"{count,plural, =1{Pirms vienas dienas}zero{Pirms # dienām}one{Pirms vairākām dienām, dienu skaits: #}other{Pirms vairākām dienām, dienu skaits: #}}"</string>
@@ -1710,6 +1700,12 @@
     <string name="default_audio_route_name_external_device" msgid="8124229858618975">"Ārēja ierīce"</string>
     <string name="default_audio_route_name_headphones" msgid="6954070994792640762">"Austiņas"</string>
     <string name="default_audio_route_name_usb" msgid="895668743163316932">"USB"</string>
+    <string name="default_audio_route_name_hdmi_tv" msgid="1629608564121895625">"Televizora audio"</string>
+    <string name="default_audio_route_name_arc" msgid="5117738492549798911">"ARC"</string>
+    <string name="default_audio_route_name_earc" msgid="5869527419074773683">"eARC"</string>
+    <string name="default_audio_route_name_analog" msgid="7781645558035374980">"Analogais"</string>
+    <string name="default_audio_route_name_digital" msgid="6959855552809654826">"Digitālais"</string>
+    <string name="default_audio_route_name_aux" msgid="7432808125413299672">"AUX"</string>
     <string name="default_audio_route_category_name" msgid="5241740395748134483">"Sistēma"</string>
     <string name="bluetooth_a2dp_audio_route_name" msgid="4214648773120426288">"Bluetooth audio"</string>
     <string name="wireless_display_route_description" msgid="8297563323032966831">"Bezvadu attēlošana"</string>
@@ -1805,7 +1801,8 @@
     <string name="one_handed_mode_feature_name" msgid="2334330034828094891">"Vienas rokas režīms"</string>
     <string name="reduce_bright_colors_feature_name" msgid="3222994553174604132">"Papildu aptumšošana"</string>
     <string name="hearing_aids_feature_name" msgid="1125892105105852542">"Dzirdes aparāti"</string>
-    <string name="autoclick_feature_name" msgid="8149248738736949630">"Automātiskā klikšķināšana"</string>
+    <string name="autoclick_feature_name" msgid="4056260617171267864">"Automātiskā klikšķināšana (pārdomu laiks)"</string>
+    <string name="mouse_keys_feature_name" msgid="3362643216513384542">"Peles taustiņi"</string>
     <string name="hearing_device_status_disconnected" msgid="497547752953543832">"Atvienota"</string>
     <string name="hearing_device_status_connected" msgid="2149385149669918764">"Pievienota"</string>
     <string name="hearing_device_status_active" msgid="4770378695482566032">"Aktīva"</string>
@@ -1830,6 +1827,7 @@
     <string name="user_logging_out_message" msgid="7216437629179710359">"Notiek lietotāja <xliff:g id="NAME">%1$s</xliff:g> atteikšanās…"</string>
     <string name="owner_name" msgid="8713560351570795743">"Īpašnieks"</string>
     <string name="guest_name" msgid="8502103277839834324">"Viesis"</string>
+    <string name="headless_system_user_name" msgid="1849150903255530049">"Sistēmas lietotājs"</string>
     <string name="error_message_title" msgid="4082495589294631966">"Kļūda"</string>
     <string name="error_message_change_not_allowed" msgid="843159705042381454">"Jūsu administrators neļauj veikt šīs izmaiņas."</string>
     <string name="app_not_found" msgid="3429506115332341800">"Netika atrasta neviena lietojumprogramma, kas var veikt šo darbību."</string>
@@ -2044,7 +2042,7 @@
     <string name="promotional_notification_channel_label" msgid="7414844730492860233">"Akcijas"</string>
     <string name="social_notification_channel_label" msgid="106520267132019945">"Sociālie tīkli"</string>
     <string name="news_notification_channel_label" msgid="4299937455247883311">"Ziņas"</string>
-    <string name="recs_notification_channel_label" msgid="4945985121418684297">"Ieteikumi"</string>
+    <string name="recs_notification_channel_label" msgid="4731685669194175453">"Ieteikumi"</string>
     <string name="importance_from_user" msgid="2782756722448800447">"Jūs iestatījāt šo paziņojumu svarīguma līmeni."</string>
     <string name="importance_from_person" msgid="4235804979664465383">"Tas ir svarīgi iesaistīto personu dēļ."</string>
     <string name="notification_history_title_placeholder" msgid="7748630986182249599">"Pielāgots lietotnes paziņojums"</string>
@@ -2267,19 +2265,21 @@
     <string name="accessibility_system_action_dpad_left_label" msgid="6557647179116479152">"Virzienu slēdzis — pa kreisi"</string>
     <string name="accessibility_system_action_dpad_right_label" msgid="9180196950365804081">"Virzienu slēdzis — pa labi"</string>
     <string name="accessibility_system_action_dpad_center_label" msgid="8149791419358224893">"Virzienu slēdzis — centrs"</string>
-    <string name="accessibility_autoclick_type_settings_panel_title" msgid="7354373370578758696">"Automātiskās klikšķināšanas veida iestatījumu panelis"</string>
-    <string name="accessibility_autoclick_left_click" msgid="2301793352260551080">"Noklikšķināt ar peles kreiso pogu"</string>
-    <string name="accessibility_autoclick_right_click" msgid="4353495816526181293">"Noklikšķināt ar peles labo pogu"</string>
-    <string name="accessibility_autoclick_double_click" msgid="2103826849116176478">"Veikt dubultklikšķi"</string>
+    <string name="accessibility_autoclick_type_settings_panel_title" msgid="2153131135765368397">"Automātiskās klikšķināšanas opciju izvēlne"</string>
+    <string name="accessibility_autoclick_left_click" msgid="8241237237588793835">"Noklikšķināt ar peles kreiso pogu"</string>
+    <string name="accessibility_autoclick_right_click" msgid="6208390123529830506">"Noklikšķināt ar peles labo pogu"</string>
+    <string name="accessibility_autoclick_double_click" msgid="2800154470129612873">"Veikt dubultklikšķi"</string>
     <string name="accessibility_autoclick_drag" msgid="1499559489796843224">"Vilkt"</string>
     <string name="accessibility_autoclick_scroll" msgid="3499385943728726933">"Ritināt"</string>
+    <string name="accessibility_autoclick_long_press" msgid="6241367542788162585">"Pieskarties un turēt"</string>
     <string name="accessibility_autoclick_pause" msgid="3272200156172573568">"Pārtraukt"</string>
-    <string name="accessibility_autoclick_position" msgid="2933660969907663545">"Pozīcija"</string>
-    <string name="accessibility_autoclick_scroll_up" msgid="2044948780797117443">"Ritināt augšup"</string>
-    <string name="accessibility_autoclick_scroll_down" msgid="3733401063292018116">"Ritināt lejup"</string>
-    <string name="accessibility_autoclick_scroll_left" msgid="8564421367992824198">"Ritināt pa kreisi"</string>
-    <string name="accessibility_autoclick_scroll_right" msgid="8932417330753984265">"Ritināt pa labi"</string>
-    <string name="accessibility_autoclick_scroll_exit" msgid="3788610039146769696">"Izslēgt ritināšanas režīmu"</string>
+    <string name="accessibility_autoclick_resume" msgid="3213396544455349247">"Atsākt"</string>
+    <string name="accessibility_autoclick_position" msgid="5952428999227490977">"Mainīt izvēlnes pozīciju"</string>
+    <string name="accessibility_autoclick_scroll_up" msgid="4018950185625702489">"Ritināt augšup"</string>
+    <string name="accessibility_autoclick_scroll_down" msgid="7055049493005995473">"Ritināt lejup"</string>
+    <string name="accessibility_autoclick_scroll_left" msgid="7469540382570551732">"Ritināt pa kreisi"</string>
+    <string name="accessibility_autoclick_scroll_right" msgid="8395851755038161912">"Ritināt pa labi"</string>
+    <string name="accessibility_autoclick_scroll_exit" msgid="8766731873098339511">"Izslēgt ritināšanas režīmu"</string>
     <string name="accessibility_autoclick_scroll_panel_title" msgid="7120598166296447036">"Ritināšanas panelis"</string>
     <string name="as_app_forced_to_restricted_bucket" msgid="8233871289353898964">"Pakotne “<xliff:g id="PACKAGE_NAME">%1$s</xliff:g>” ir ievietota ierobežotā kopā."</string>
     <string name="conversation_single_line_name_display" msgid="8958948312915255999">"<xliff:g id="SENDER_NAME">%1$s</xliff:g>:"</string>
@@ -2556,8 +2556,17 @@
     <string name="keyboard_shortcut_group_applications_maps" msgid="7950000659522589471">"Maps"</string>
     <string name="keyboard_shortcut_group_applications" msgid="3010389163951364798">"Lietojumprogrammas"</string>
     <string name="fingerprint_loe_notification_msg" msgid="3927447270148854546">"Jūsu pirkstu nospiedumus vairs nevar atpazīt. Vēlreiz iestatiet autorizāciju ar pirksta nospiedumu."</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="468577168569874967">"USB ierīce tika pievienota, kad Android ierīce bija bloķēta"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="6695268246267993166">"USB ierīce tika pievienota, kad Android ierīce bija bloķēta. Lai izmantotu ierīci, vispirms atbloķējiet Android ierīci un pēc tam atkārtoti pievienojiet USB ierīci."</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title" msgid="285421860627714333">"Drošība un konfidencialitāte"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="5205863500921477220">"Papildu aizsardzība USB savienojumiem"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="2147694109838597680">"Lai pārsūtītu datus, atbloķējiet ierīci"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text" msgid="1979414895616432005">"Lai pārsūtītu datus, iespējams, ierīce būs jāatbloķē un jāpievieno atkārtoti"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text" msgid="5974307859193807824">"Lai izmantotu ātro uzlādi un pārsūtītu datus, atbloķējiet ierīci"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text" msgid="9045166614060168068">"Lai izmantotu ātro uzlādi un pārsūtītu datus, iespējams, ierīce būs jāatbloķē un jāpievieno atkārtoti"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text" msgid="5538918232374470393">"Lai izmantotu ātro uzlādi, atbloķējiet ierīci"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text" msgid="4301626745704703517">"Lai izmantotu ātro uzlādi, iespējams, ierīce būs jāatbloķē un jāpievieno atkārtoti"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text" msgid="5495539757631669634">"Izslēgt skaņu"</string>
+    <string name="usb_apm_usb_notification_silenced_title" msgid="7883902869771699533">"Paziņojuma skaņa ir izslēgta"</string>
+    <string name="usb_apm_usb_notification_silenced_text" msgid="7154391495952217529">"Skaņa ir izslēgta, līdz restartēsiet ierīci"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_title" msgid="3461195995882871461">"Aizdomīgas darbības ar USB"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_text" msgid="6537085605929303187">"USB datu signāls ir atspējots."</string>
     <string name="fingerprint_frr_notification_title" msgid="3668331918920659093">"Vai radušās problēmas saistībā ar autorizāciju ar pirksta nospiedumu?"</string>

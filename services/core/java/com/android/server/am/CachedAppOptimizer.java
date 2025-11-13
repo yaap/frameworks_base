@@ -21,6 +21,7 @@ import static android.app.ActivityManager.UidFrozenStateChangedCallback.UID_FROZ
 import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_ACTIVITY;
 import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_ALLOWLIST;
 import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_BACKUP;
+import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_SERVICE_BINDER_CALL;
 import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_BIND_SERVICE;
 import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_COMPONENT_DISABLED;
 import static android.app.ActivityManagerInternal.OOM_ADJ_REASON_EXECUTING_SERVICE;
@@ -207,6 +208,8 @@ public class CachedAppOptimizer {
             FrameworkStatsLog.APP_FREEZE_CHANGED__UNFREEZE_REASON_V2__UFR_OOM_ADJ_FOLLOW_UP;
     static final int UNFREEZE_REASON_OOM_ADJ_RECONFIGURATION =
             FrameworkStatsLog.APP_FREEZE_CHANGED__UNFREEZE_REASON_V2__UFR_OOM_ADJ_RECONFIGURATION;
+    static final int UNFREEZE_REASON_OOM_ADJ_SERVICE_BINDER_CALL = FrameworkStatsLog
+            .APP_FREEZE_CHANGED__UNFREEZE_REASON_V2__UFR_OOM_ADJ_REASON_SERVICE_BINDER_CALL;
 
     @IntDef(prefix = {"UNFREEZE_REASON_"}, value = {
         UNFREEZE_REASON_NONE,
@@ -240,6 +243,7 @@ public class CachedAppOptimizer {
         UNFREEZE_REASON_COMPONENT_DISABLED,
         UNFREEZE_REASON_OOM_ADJ_FOLLOW_UP,
         UNFREEZE_REASON_OOM_ADJ_RECONFIGURATION,
+        UNFREEZE_REASON_OOM_ADJ_SERVICE_BINDER_CALL,
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface UnfreezeReason {}
@@ -283,6 +287,12 @@ public class CachedAppOptimizer {
     // Format of this string should be a comma separated list of integers.
     @VisibleForTesting static final String DEFAULT_COMPACT_PROC_STATE_THROTTLE =
             String.valueOf(ActivityManager.PROCESS_STATE_RECEIVER);
+    // The debounce timeout is a grace period for apps that run background cleanup operations
+    // outside their valid lifecycles.  A too-aggressive value (that is, a too-low value) may
+    // freeze these apps before the operations complete.  The default has been found to work on
+    // phones.  (A lower default has been found to work on Wear).  However, once these apps have
+    // been corrected to honor their valid lifecycles, this debounce default may be lowerered or
+    // set to zero.
     @VisibleForTesting static final long DEFAULT_FREEZER_DEBOUNCE_TIMEOUT = 10_000L;
     @VisibleForTesting static final boolean DEFAULT_FREEZER_EXEMPT_INST_PKG = false;
     @VisibleForTesting static final boolean DEFAULT_FREEZER_BINDER_ENABLED = true;
@@ -629,7 +639,10 @@ public class CachedAppOptimizer {
                     + Arrays.toString(mProcStateThrottle.toArray(new Integer[0])));
         }
 
-        mCompactStatsManager.dump(pw);
+        if (mCompactStatsManager != null) {
+            // Compaction stats manager only exists when compaction is enabled.
+            mCompactStatsManager.dump(pw);
+        }
 
         synchronized (mProcLock) {
             if (!mPendingCompactionProcesses.isEmpty()) {
@@ -825,7 +838,9 @@ public class CachedAppOptimizer {
 
                     final ProcessCachedOptimizerRecord opt = process.mOptRecord;
                     if (enable && opt.hasFreezerOverride()) {
-                        freezeAppAsyncLSP(process);
+                        if (OomAdjuster.getFreezePolicy(process)) {
+                            freezeAppAsyncLSP(process);
+                        }
                         opt.setFreezerOverride(false);
                     }
 
@@ -2125,11 +2140,10 @@ public class CachedAppOptimizer {
                             synchronized (mAm.mPidsSelfLocked) {
                                 pr = mAm.mPidsSelfLocked.get(blocked);
                             }
-                            if (pr != null && pr.mState.getCurAdj()
-                                    < mAm.mConstants.FREEZER_CUTOFF_ADJ) {
+                            if (pr != null && !pr.isFreezable()) {
                                 Slog.d(TAG_AM, app.processName + " (" + pid + ") blocks "
                                         + pr.processName + " (" + blocked + ")");
-                                // Found at least one blocked non-cached process
+                                // Found at least one blocked unfrozen process
                                 unfreezeAppLSP(app, UNFREEZE_REASON_FILE_LOCKS);
                                 break;
                             }
@@ -2217,6 +2231,8 @@ public class CachedAppOptimizer {
                 return UNFREEZE_REASON_OOM_ADJ_FOLLOW_UP;
             case OOM_ADJ_REASON_RECONFIGURATION:
                 return UNFREEZE_REASON_OOM_ADJ_RECONFIGURATION;
+            case OOM_ADJ_REASON_SERVICE_BINDER_CALL:
+                return UNFREEZE_REASON_OOM_ADJ_SERVICE_BINDER_CALL;
             default:
                 return UNFREEZE_REASON_NONE;
         }
@@ -2269,8 +2285,7 @@ public class CachedAppOptimizer {
      */
     public void binderError(int debugPid, ProcessRecord app, int code, int flags, int err) {
         Slog.w(TAG_AM, "pid " + debugPid + " " + (app == null ? "null" : app.processName)
-                + " sent binder code " + code + " with flags " + flags
-                + " to frozen apps and got error " + err);
+                + " sent binder code " + code + " with flags " + flags + " and got error " + err);
 
         // Do nothing if the binder error callback is not enabled.
         // That means the frozen apps in a wrong state will be killed when they are unfrozen later.

@@ -272,6 +272,7 @@ public final class StrictMode {
             DETECT_VM_UNTAGGED_SOCKET,
             DETECT_VM_NON_SDK_API_USAGE,
             DETECT_VM_IMPLICIT_DIRECT_BOOT,
+            DETECT_VM_CREDENTIAL_PROTECTED_WHILE_LOCKED,
             DETECT_VM_INCORRECT_CONTEXT_USE,
             DETECT_VM_UNSAFE_INTENT_LAUNCH,
             DETECT_VM_BACKGROUND_ACTIVITY_LAUNCH_ABORTED,
@@ -1311,6 +1312,7 @@ public final class StrictMode {
      *
      * @param policy the policy to put into place
      */
+    @android.ravenwood.annotation.RavenwoodIgnore
     public static void setThreadPolicy(final ThreadPolicy policy) {
         setThreadPolicyMask(policy.mask);
         sThreadViolationListener.set(policy.mListener);
@@ -1379,7 +1381,7 @@ public final class StrictMode {
      * @hide
      */
     @UnsupportedAppUsage
-    @android.ravenwood.annotation.RavenwoodReplace
+    @android.ravenwood.annotation.RavenwoodIgnore
     public static @ThreadPolicyMask int getThreadPolicyMask() {
         final BlockGuard.Policy policy = BlockGuard.getThreadPolicy();
         if (policy instanceof AndroidBlockGuardPolicy) {
@@ -1387,12 +1389,6 @@ public final class StrictMode {
         } else {
             return 0;
         }
-    }
-
-    /** @hide */
-    public static @ThreadPolicyMask int getThreadPolicyMask$ravenwood() {
-        // Ravenwood currently doesn't support any detection modes
-        return 0;
     }
 
     /** Returns the current thread's policy. */
@@ -1441,6 +1437,7 @@ public final class StrictMode {
      *
      * @return the old policy, to be passed to setThreadPolicy to restore the policy.
      */
+    @android.ravenwood.annotation.RavenwoodIgnore
     public static ThreadPolicy allowThreadDiskReads() {
         return new ThreadPolicy(
                 allowThreadDiskReadsMask(),
@@ -1617,6 +1614,45 @@ public final class StrictMode {
                         sVmPolicy.classInstanceLimit,
                         sVmPolicy.mListener,
                         sVmPolicy.mCallbackExecutor);
+    }
+
+    /**
+     * Disable the detection of the access to filesystem paths stored in credential protected
+     * storage areas while the user is locked. Used by the system server to disable the
+     * detection when it deletes user data files during user removal while the user is locked.
+     * Returns whether it was enabled previously.
+     *
+     * @hide
+     */
+    public static boolean getAndDisableCredentialProtectedWhileLocked() {
+        synchronized (StrictMode.class) {
+            final boolean previouslyEnabled =
+                    (sVmPolicy.mask & DETECT_VM_CREDENTIAL_PROTECTED_WHILE_LOCKED) != 0;
+            sVmPolicy =
+                    new VmPolicy(
+                            sVmPolicy.mask & ~(DETECT_VM_CREDENTIAL_PROTECTED_WHILE_LOCKED),
+                            sVmPolicy.classInstanceLimit,
+                            sVmPolicy.mListener,
+                            sVmPolicy.mCallbackExecutor);
+            return previouslyEnabled;
+        }
+    }
+
+    /**
+     * Enable the detection of the access to filesystem paths stored in credential protected
+     * storage areas while the user is locked.
+     *
+     * @hide
+     */
+    public static void enableCredentialProtectedWhileLocked() {
+        synchronized (StrictMode.class) {
+            sVmPolicy =
+                    new VmPolicy(
+                            sVmPolicy.mask | DETECT_VM_CREDENTIAL_PROTECTED_WHILE_LOCKED,
+                            sVmPolicy.classInstanceLimit,
+                            sVmPolicy.mListener,
+                            sVmPolicy.mCallbackExecutor);
+        }
     }
 
     @UnsupportedAppUsage
@@ -2255,62 +2291,122 @@ public final class StrictMode {
         setVmPolicy(new StrictMode.VmPolicy.Builder().detectAll().penaltyLog().build());
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmSqliteObjectLeaksEnabled() {
         return (sVmPolicy.mask & DETECT_VM_CURSOR_LEAKS) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmClosableObjectLeaksEnabled() {
         return (sVmPolicy.mask & DETECT_VM_CLOSABLE_LEAKS) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmRegistrationLeaksEnabled() {
         return (sVmPolicy.mask & DETECT_VM_REGISTRATION_LEAKS) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmFileUriExposureEnabled() {
         return (sVmPolicy.mask & DETECT_VM_FILE_URI_EXPOSURE) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmCleartextNetworkEnabled() {
         return (sVmPolicy.mask & DETECT_VM_CLEARTEXT_NETWORK) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmContentUriWithoutPermissionEnabled() {
         return (sVmPolicy.mask & DETECT_VM_CONTENT_URI_WITHOUT_PERMISSION) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmUntaggedSocketEnabled() {
         return (sVmPolicy.mask & DETECT_VM_UNTAGGED_SOCKET) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmImplicitDirectBootEnabled() {
         return (sVmPolicy.mask & DETECT_VM_IMPLICIT_DIRECT_BOOT) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmCredentialProtectedWhileLockedEnabled() {
         return (sVmPolicy.mask & DETECT_VM_CREDENTIAL_PROTECTED_WHILE_LOCKED) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmIncorrectContextUseEnabled() {
         return (sVmPolicy.mask & DETECT_VM_INCORRECT_CONTEXT_USE) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmUnsafeIntentLaunchEnabled() {
         return (sVmPolicy.mask & DETECT_VM_UNSAFE_INTENT_LAUNCH) != 0;
     }
 
-    /** @hide */
+    /**
+     * Note: This method should be used with caution. The value returned by this method is not
+     * guaranteed to be consistent across multiple calls because the value is read from the VM
+     * policy which can be changed by other threads.
+     * @hide
+     */
     public static boolean vmBackgroundActivityLaunchEnabled() {
         return (sVmPolicy.mask & DETECT_VM_BACKGROUND_ACTIVITY_LAUNCH_ABORTED) != 0;
     }
@@ -2690,13 +2786,9 @@ public final class StrictMode {
      * (Java) thread-local policy value.
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
-    @android.ravenwood.annotation.RavenwoodReplace
+    @android.ravenwood.annotation.RavenwoodIgnore
     private static void onBinderStrictModePolicyChange(@ThreadPolicyMask int newPolicy) {
         setBlockGuardPolicy(newPolicy);
-    }
-
-    private static void onBinderStrictModePolicyChange$ravenwood(@ThreadPolicyMask int newPolicy) {
-        /* no-op */
     }
 
     /**
@@ -2864,6 +2956,7 @@ public final class StrictMode {
      *
      * @param name a short string for the exception stack trace that's built if when this fires.
      */
+    @android.ravenwood.annotation.RavenwoodIgnore
     public static void noteSlowCall(String name) {
         BlockGuard.Policy policy = BlockGuard.getThreadPolicy();
         if (!(policy instanceof AndroidBlockGuardPolicy)) {

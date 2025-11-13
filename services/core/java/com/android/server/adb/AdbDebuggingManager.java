@@ -95,6 +95,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.AbstractMap;
@@ -107,7 +109,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Provides communication to the Android Debug Bridge daemon to allow, deny, or clear public keys
@@ -166,8 +167,10 @@ public class AdbDebuggingManager {
     private final Set<String> mWifiConnectedKeys = new HashSet<>();
     // The current info of the adbwifi connection.
     private AdbConnectionInfo mAdbConnectionInfo = new AdbConnectionInfo();
+
     // Polls for a tls port property when adb wifi is enabled
     private AdbConnectionPortPoller mConnectionPortPoller;
+
     private final Ticker mTicker;
 
     public AdbDebuggingManager(Context context) {
@@ -206,6 +209,27 @@ public class AdbDebuggingManager {
             @NonNull UserHandle userHandle) {
         context.sendBroadcastAsUser(intent, userHandle,
                 android.Manifest.permission.MANAGE_DEBUGGING);
+    }
+
+    private void startTLSPortPoller() {
+        mConnectionPortPoller = new AdbConnectionPortPoller(port -> {
+            Slog.d(TAG, "Received tls port from poller =" + port);
+            Message msg = mHandler.obtainMessage(port > 0
+                    ? AdbDebuggingHandler.MSG_SERVER_CONNECTED
+                    : AdbDebuggingHandler.MSG_SERVER_DISCONNECTED);
+            msg.obj = port;
+            mHandler.sendMessage(msg);
+        });
+        mConnectionPortPoller.start();
+    }
+
+    private void stopTLSPortPoller() {
+        if (mConnectionPortPoller == null) {
+            return;
+        }
+
+        mConnectionPortPoller.cancelAndWait();
+        mConnectionPortPoller = null;
     }
 
     class PairingThread extends Thread implements NsdManager.RegistrationListener {
@@ -322,65 +346,6 @@ public class AdbDebuggingManager {
         }
     }
 
-    /**
-     * This class will poll for a period of time for adbd to write the port
-     * it connected to.
-     *
-     * TODO(joshuaduong): The port is being sent via system property because the adbd socket
-     * (AdbDebuggingManager) is not created when ro.adb.secure=0. Thus, we must communicate the
-     * port through different means. A better fix would be to always start AdbDebuggingManager, but
-     * it needs to adjust accordingly on whether ro.adb.secure is set.
-     */
-    private class AdbConnectionPortPoller extends Thread {
-        private final String mAdbPortProp = "service.adb.tls.port";
-        private final int mDurationSecs = 10;
-        private AtomicBoolean mCanceled = new AtomicBoolean(false);
-
-        @Override
-        public void run() {
-            Slog.d(TAG, "Starting adb port property poller");
-            // Once adbwifi is enabled, we poll the service.adb.tls.port
-            // system property until we get the port, or -1 on failure.
-            // Let's also limit the polling to 10 seconds, just in case
-            // something went wrong.
-            for (int i = 0; i < mDurationSecs; ++i) {
-                if (mCanceled.get()) {
-                    return;
-                }
-
-                // If the property is set to -1, then that means adbd has failed
-                // to start the server. Otherwise we should have a valid port.
-                int port = SystemProperties.getInt(mAdbPortProp, Integer.MAX_VALUE);
-                if (port == -1 || (port > 0 && port <= 65535)) {
-                    onPortReceived(port);
-                    return;
-                }
-                SystemClock.sleep(1000);
-            }
-            Slog.w(TAG, "Failed to receive adb connection port");
-            onPortReceived(-1);
-        }
-
-        private void onPortReceived(int port) {
-            Slog.d(TAG, "Received tls port=" + port);
-            Message msg = mHandler.obtainMessage(port > 0
-                    ? AdbDebuggingHandler.MSG_SERVER_CONNECTED
-                    : AdbDebuggingHandler.MSG_SERVER_DISCONNECTED);
-            msg.obj = port;
-            mHandler.sendMessage(msg);
-        }
-
-        public void cancelAndWait() {
-            mCanceled.set(true);
-            if (this.isAlive()) {
-                try {
-                    this.join();
-                } catch (InterruptedException e) {
-                }
-            }
-        }
-    }
-
     @VisibleForTesting
     static class AdbDebuggingThread extends Thread {
         private boolean mStopped;
@@ -403,19 +368,16 @@ public class AdbDebuggingManager {
         public void run() {
             Slog.d(TAG, "Entering thread");
             while (true) {
-                synchronized (this) {
-                    if (mStopped) {
-                        Slog.d(TAG, "Exiting thread");
-                        return;
-                    }
-                    try {
-                        openSocketLocked();
-                    } catch (Exception e) {
-                        /* Don't loop too fast if adbd dies, before init restarts it */
-                        SystemClock.sleep(1000);
-                    }
-                }
                 try {
+                    synchronized (this) {
+                        if (mStopped) {
+                            Slog.d(TAG, "Exiting thread");
+                            return;
+                        }
+
+                        openSocketLocked();
+                    }
+
                     listenToSocket();
                 } catch (Exception e) {
                     /* Don't loop too fast if adbd dies, before init restarts it */
@@ -438,7 +400,7 @@ public class AdbDebuggingManager {
                 mInputStream = mSocket.getInputStream();
                 mHandler.sendEmptyMessage(AdbDebuggingHandler.MSG_ADBD_SOCKET_CONNECTED);
             } catch (IOException ioe) {
-                Slog.e(TAG, "Caught an exception opening the socket: " + ioe);
+                Slog.e(TAG, "adbd_auth domain socket unavailable: " + ioe);
                 closeSocketLocked();
                 throw ioe;
             }
@@ -456,7 +418,13 @@ public class AdbDebuggingManager {
                         break;
                     }
 
+                    Slog.d(TAG, "Recv packet: " + new String(Arrays.copyOfRange(buffer, 0, 2)));
+
+                    // These messages are send from AdbdAuthContext::SendPacket
+                    // in frameworks/native/libs/adbd_auth/adbd_auth.cpp
+
                     if (buffer[0] == 'P' && buffer[1] == 'K') {
+                        // PK adbauth.AdbdAuthPacketRequestAuthorization
                         String key = new String(Arrays.copyOfRange(buffer, 2, count));
                         Slog.d(TAG, "Received public key: " + key);
                         Message msg = mHandler.obtainMessage(
@@ -464,6 +432,7 @@ public class AdbDebuggingManager {
                         msg.obj = key;
                         mHandler.sendMessage(msg);
                     } else if (buffer[0] == 'D' && buffer[1] == 'C') {
+                        // DC adbauth.AdbdAuthPacketDisconnected
                         String key = new String(Arrays.copyOfRange(buffer, 2, count));
                         Slog.d(TAG, "Received disconnected message: " + key);
                         Message msg = mHandler.obtainMessage(
@@ -471,6 +440,7 @@ public class AdbDebuggingManager {
                         msg.obj = key;
                         mHandler.sendMessage(msg);
                     } else if (buffer[0] == 'C' && buffer[1] == 'K') {
+                        // CK adbauth.AdbdAuthPacketAuthenticated
                         String key = new String(Arrays.copyOfRange(buffer, 2, count));
                         Slog.d(TAG, "Received connected key message: " + key);
                         Message msg = mHandler.obtainMessage(
@@ -478,45 +448,79 @@ public class AdbDebuggingManager {
                         msg.obj = key;
                         mHandler.sendMessage(msg);
                     } else if (buffer[0] == 'W' && buffer[1] == 'E') {
-                        // adbd_auth.h and AdbTransportType.aidl need to be kept in
-                        // sync.
+                        // WE adbauth.AdbdPacketTlsDeviceConnected
                         byte transportType = buffer[2];
                         String key = new String(Arrays.copyOfRange(buffer, 3, count));
-                        if (transportType == AdbTransportType.USB) {
-                            Slog.d(TAG, "Received USB TLS connected key message: " + key);
-                            Message msg = mHandler.obtainMessage(
-                                    AdbDebuggingHandler.MESSAGE_ADB_CONNECTED_KEY);
-                            msg.obj = key;
-                            mHandler.sendMessage(msg);
-                        } else if (transportType == AdbTransportType.WIFI) {
-                            Slog.d(TAG, "Received WIFI TLS connected key message: " + key);
-                            Message msg = mHandler.obtainMessage(
-                                    AdbDebuggingHandler.MSG_WIFI_DEVICE_CONNECTED);
-                            msg.obj = key;
-                            mHandler.sendMessage(msg);
-                        } else {
-                            Slog.e(TAG, "Got unknown transport type from adbd (" + transportType
-                                    + ")");
+                        switch (transportType) {
+                            case AdbTransportType.USB: {
+                                Slog.d(TAG, "Received USB TLS connected key message: " + key);
+                                Message msg = mHandler.obtainMessage(
+                                        AdbDebuggingHandler.MESSAGE_ADB_CONNECTED_KEY);
+                                msg.obj = key;
+                                mHandler.sendMessage(msg);
+                                break;
+                            }
+                            case AdbTransportType.WIFI: {
+                                Slog.d(TAG, "Received WIFI TLS connected key message: " + key);
+                                Message msg = mHandler.obtainMessage(
+                                        AdbDebuggingHandler.MSG_WIFI_DEVICE_CONNECTED);
+                                msg.obj = key;
+                                mHandler.sendMessage(msg);
+                                break;
+                            }
+                            case AdbTransportType.VSOCK:
+                                Slog.e(TAG, "AdbTransportType.VSOCK is not yet supported here");
+                                break;
+                            default:
+                                Slog.e(TAG, "Got unknown transport type from adbd ("
+                                        + transportType + ")");
+                                break;
                         }
                     } else if (buffer[0] == 'W' && buffer[1] == 'F') {
+                        // WF adbauth.AdbdPacketTlsDeviceDisconnected
                         byte transportType = buffer[2];
                         String key = new String(Arrays.copyOfRange(buffer, 3, count));
-                        if (transportType == AdbTransportType.USB) {
-                            Slog.d(TAG, "Received USB TLS disconnect message: " + key);
-                            Message msg = mHandler.obtainMessage(
-                                    AdbDebuggingHandler.MESSAGE_ADB_DISCONNECT);
-                            msg.obj = key;
-                            mHandler.sendMessage(msg);
-                        } else if (transportType == AdbTransportType.WIFI) {
-                            Slog.d(TAG, "Received WIFI TLS disconnect key message: " + key);
-                            Message msg = mHandler.obtainMessage(
-                                    AdbDebuggingHandler.MSG_WIFI_DEVICE_DISCONNECTED);
-                            msg.obj = key;
-                            mHandler.sendMessage(msg);
-                        } else {
-                            Slog.e(TAG, "Got unknown transport type from adbd (" + transportType
-                                    + ")");
+                        switch (transportType) {
+                            case AdbTransportType.USB: {
+                                Slog.d(TAG, "Received USB TLS disconnect message: " + key);
+                                Message msg = mHandler.obtainMessage(
+                                        AdbDebuggingHandler.MESSAGE_ADB_DISCONNECT);
+                                msg.obj = key;
+                                mHandler.sendMessage(msg);
+                                break;
+                            }
+                            case AdbTransportType.WIFI: {
+                                Slog.d(TAG, "Received WIFI TLS disconnect key message: " + key);
+                                Message msg = mHandler.obtainMessage(
+                                        AdbDebuggingHandler.MSG_WIFI_DEVICE_DISCONNECTED);
+                                msg.obj = key;
+                                mHandler.sendMessage(msg);
+                                break;
+                            }
+                            case AdbTransportType.VSOCK:
+                                Slog.e(TAG, "AdbTransportType.VSOCK is not yet supported here");
+                                break;
+                            default:
+                                Slog.e(TAG, "Got unknown transport type from adbd (" + transportType
+                                        + ")");
+                                break;
                         }
+                    } else if (buffer[0] == 'T' && buffer[1] == 'P') {
+                        // TP adbauth.AdbdPacketTlsServerPort
+                        if (count < 4) {
+                            Slog.e(TAG, "Bad TP message length " + count);
+                            break;
+                        }
+                        ByteBuffer bytes = ByteBuffer.wrap(buffer, 2, 2);
+                        bytes.order(ByteOrder.LITTLE_ENDIAN);
+
+                        int port = bytes.getShort() & 0xFFFF;
+                        Slog.d(TAG, "Received tls port=" + port);
+                        Message msg = mHandler.obtainMessage(port > 0
+                                ? AdbDebuggingHandler.MSG_SERVER_CONNECTED
+                                : AdbDebuggingHandler.MSG_SERVER_DISCONNECTED);
+                        msg.obj = port;
+                        mHandler.sendMessage(msg);
                     } else {
                         Slog.e(TAG, "Wrong message: "
                                 + (new String(Arrays.copyOfRange(buffer, 0, 2))));
@@ -560,8 +564,11 @@ public class AdbDebuggingManager {
             }
         }
 
+        // TODO: Change the name of this method. This is not always a response. It should be called
+        // sendMessage.
         void sendResponse(String msg) {
             synchronized (this) {
+                Slog.d(TAG, "Send packet " + msg);
                 if (!mStopped && mOutputStream != null) {
                     try {
                         mOutputStream.write(msg.getBytes());
@@ -788,6 +795,8 @@ public class AdbDebuggingManager {
 
         // === Messages we can send to adbd ===========
         static final String MSG_DISCONNECT_DEVICE = "DD";
+        static final String MSG_START_ADB_WIFI = "W1";
+        static final String MSG_STOP_ADB_WIFI = "W0";
 
         @Nullable @VisibleForTesting AdbKeyStore mAdbKeyStore;
 
@@ -836,6 +845,14 @@ public class AdbDebuggingManager {
                 mAdbNotificationShown = false;
                 mNotificationManager.cancelAsUser(null, id, UserHandle.ALL);
             }
+        }
+
+        private void startAdbdWifi() {
+            AdbService.enableADBdWifi();
+        }
+
+        private void stopAdbdWifi() {
+            AdbService.disableADBdWifi();
         }
 
         private void startAdbDebuggingThread() {
@@ -1074,11 +1091,10 @@ public class AdbDebuggingManager {
                     intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
                     mContext.registerReceiver(mBroadcastReceiver, intentFilter);
 
-                    SystemProperties.set(AdbService.WIFI_PERSISTENT_CONFIG_PROPERTY, "1");
-                    mConnectionPortPoller = new AdbDebuggingManager.AdbConnectionPortPoller();
-                    mConnectionPortPoller.start();
 
                     startAdbDebuggingThread();
+                    startTLSPortPoller();
+                    startAdbdWifi();
                     mAdbWifiEnabled = true;
 
                     Slog.i(TAG, "adb start wireless adb");
@@ -1091,6 +1107,8 @@ public class AdbDebuggingManager {
                     mAdbWifiEnabled = false;
                     setAdbConnectionInfo(null);
                     mContext.unregisterReceiver(mBroadcastReceiver);
+
+                    stopAdbdWifi();
 
                     onAdbdWifiServerDisconnected(-1);
                     stopAdbDebuggingThread();
@@ -1120,11 +1138,9 @@ public class AdbDebuggingManager {
                     intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
                     mContext.registerReceiver(mBroadcastReceiver, intentFilter);
 
-                    SystemProperties.set(AdbService.WIFI_PERSISTENT_CONFIG_PROPERTY, "1");
-                    mConnectionPortPoller = new AdbDebuggingManager.AdbConnectionPortPoller();
-                    mConnectionPortPoller.start();
-
                     startAdbDebuggingThread();
+                    startTLSPortPoller();
+                    startAdbdWifi();
                     mAdbWifiEnabled = true;
 
                     Slog.i(TAG, "adb start wireless adb");
@@ -1215,8 +1231,6 @@ public class AdbDebuggingManager {
                     synchronized (mAdbConnectionInfo) {
                         mAdbConnectionInfo.setPort(port);
                     }
-                    Settings.Global.putInt(mContentResolver,
-                            Settings.Global.ADB_WIFI_ENABLED, 1);
                     break;
                 }
                 case MSG_SERVER_DISCONNECTED: {
@@ -1225,31 +1239,21 @@ public class AdbDebuggingManager {
                     }
                     int port = (int) msg.obj;
                     onAdbdWifiServerDisconnected(port);
-                    Settings.Global.putInt(mContentResolver,
-                            Settings.Global.ADB_WIFI_ENABLED, 0);
                     stopAdbDebuggingThread();
-                    if (mConnectionPortPoller != null) {
-                        mConnectionPortPoller.cancelAndWait();
-                        mConnectionPortPoller = null;
-                    }
+                    stopTLSPortPoller();
                     break;
                 }
                 case MSG_ADBD_SOCKET_CONNECTED: {
                     Slog.d(TAG, "adbd socket connected");
                     if (mAdbWifiEnabled) {
                         // In scenarios where adbd is restarted, the tls port may change.
-                        mConnectionPortPoller =
-                                new AdbDebuggingManager.AdbConnectionPortPoller();
-                        mConnectionPortPoller.start();
+                        startTLSPortPoller();
                     }
                     break;
                 }
                 case MSG_ADBD_SOCKET_DISCONNECTED: {
                     Slog.d(TAG, "adbd socket disconnected");
-                    if (mConnectionPortPoller != null) {
-                        mConnectionPortPoller.cancelAndWait();
-                        mConnectionPortPoller = null;
-                    }
+                    stopTLSPortPoller();
                     if (mAdbWifiEnabled) {
                         // In scenarios where adbd is restarted, the tls port may change.
                         onAdbdWifiServerDisconnected(-1);
@@ -1644,15 +1648,21 @@ public class AdbDebuggingManager {
      * If all transport types are disabled, the ADB handler thread will shut down.
      */
     public void setAdbEnabled(boolean enabled, byte transportType) {
-        if (transportType == AdbTransportType.USB) {
-            mHandler.sendEmptyMessage(enabled ? AdbDebuggingHandler.MESSAGE_ADB_ENABLED
-                                              : AdbDebuggingHandler.MESSAGE_ADB_DISABLED);
-        } else if (transportType == AdbTransportType.WIFI) {
-            mHandler.sendEmptyMessage(enabled ? AdbDebuggingHandler.MSG_ADBDWIFI_ENABLE
-                                              : AdbDebuggingHandler.MSG_ADBDWIFI_DISABLE);
-        } else {
-            throw new IllegalArgumentException(
-                    "setAdbEnabled called with unimplemented transport type=" + transportType);
+        switch (transportType) {
+            case AdbTransportType.USB:
+                mHandler.sendEmptyMessage(enabled ? AdbDebuggingHandler.MESSAGE_ADB_ENABLED
+                                                  : AdbDebuggingHandler.MESSAGE_ADB_DISABLED);
+                break;
+            case AdbTransportType.WIFI:
+                mHandler.sendEmptyMessage(enabled ? AdbDebuggingHandler.MSG_ADBDWIFI_ENABLE
+                                                  : AdbDebuggingHandler.MSG_ADBDWIFI_DISABLE);
+                break;
+            case AdbTransportType.VSOCK:
+                throw new IllegalArgumentException(
+                        "AdbTransportType.VSOCK is not yet supported here");
+            default:
+                throw new IllegalArgumentException(
+                        "setAdbEnabled called with unimplemented transport type=" + transportType);
         }
     }
 

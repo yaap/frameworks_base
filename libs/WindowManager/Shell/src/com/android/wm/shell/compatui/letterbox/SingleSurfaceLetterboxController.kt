@@ -19,6 +19,7 @@ package com.android.wm.shell.compatui.letterbox
 import android.graphics.Rect
 import android.view.SurfaceControl
 import android.view.SurfaceControl.Transaction
+import android.window.WindowContainerToken
 import com.android.internal.protolog.ProtoLog
 import com.android.wm.shell.compatui.letterbox.LetterboxUtils.Maps.runOnItem
 import com.android.wm.shell.compatui.letterbox.LetterboxUtils.Transactions.moveAndCrop
@@ -39,7 +40,7 @@ class SingleSurfaceLetterboxController @Inject constructor(
         private val TAG = "SingleSurfaceLetterboxController"
     }
 
-    private val letterboxMap = mutableMapOf<LetterboxKey, SurfaceControl>()
+    private val letterboxMap = mutableMapOf<Int, SurfaceControl>()
 
     /**
      * Creates a Letterbox Surface for a given displayId/taskId if it doesn't exist.
@@ -47,9 +48,10 @@ class SingleSurfaceLetterboxController @Inject constructor(
     override fun createLetterboxSurface(
         key: LetterboxKey,
         transaction: Transaction,
-        parentLeash: SurfaceControl
+        parentLeash: SurfaceControl,
+        token: WindowContainerToken?
     ) {
-        letterboxMap.runOnItem(key, onMissed = { k, m ->
+        letterboxMap.runOnItem(key.taskId, onMissed = { k, m ->
             m[k] = letterboxBuilder.createSurface(
                 transaction,
                 parentLeash,
@@ -66,12 +68,12 @@ class SingleSurfaceLetterboxController @Inject constructor(
         key: LetterboxKey,
         transaction: Transaction
     ) {
-        letterboxMap.runOnItem(key, onFound = { item ->
+        letterboxMap.runOnItem(key.taskId, onFound = { item ->
             item.run {
                 transaction.remove(this)
             }
         })
-        letterboxMap.remove(key)
+        letterboxMap.remove(key.taskId)
     }
 
     /**
@@ -82,7 +84,7 @@ class SingleSurfaceLetterboxController @Inject constructor(
         transaction: Transaction,
         visible: Boolean
     ) {
-        letterboxMap.runOnItem(key, onFound = { item ->
+        letterboxMap.runOnItem(key.taskId, onFound = { item ->
             item.run {
                 transaction.setVisibility(this, visible)
             }
@@ -98,7 +100,7 @@ class SingleSurfaceLetterboxController @Inject constructor(
         taskBounds: Rect,
         activityBounds: Rect
     ) {
-        letterboxMap.runOnItem(key, onFound = { item ->
+        letterboxMap.runOnItem(key.taskId, onFound = { item ->
             item.run {
                 transaction.moveAndCrop(this, taskBounds)
             }

@@ -30,6 +30,8 @@ import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.MathUtils;
+import com.android.systemui.minmode.MinModeManager;
+import com.android.systemui.minmode.MinModeManagerUtilsKt;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
@@ -90,6 +92,7 @@ public class DozeParameters implements
     private final UnlockedScreenOffAnimationController mUnlockedScreenOffAnimationController;
     private final UserTracker mUserTracker;
     private final SecureSettings mSecureSettings;
+    private final Optional<MinModeManager> mMinModeManager;
 
     private boolean mControlScreenOffAnimation;
     private boolean mIsQuickPickupEnabled;
@@ -134,7 +137,8 @@ public class DozeParameters implements
             UserTracker userTracker,
             DozeInteractor dozeInteractor,
             KeyguardTransitionInteractor transitionInteractor,
-            SecureSettings secureSettings) {
+            SecureSettings secureSettings,
+            Optional<MinModeManager> minModeManager) {
         mResources = resources;
         mAmbientDisplayConfiguration = ambientDisplayConfiguration;
         mAlwaysOnPolicy = alwaysOnDisplayPolicy;
@@ -150,6 +154,7 @@ public class DozeParameters implements
         mDozeInteractor = dozeInteractor;
         mTransitionInteractor = transitionInteractor;
         mSecureSettings = secureSettings;
+        mMinModeManager = minModeManager;
 
         keyguardUpdateMonitor.registerCallback(mKeyguardVisibilityCallback);
         configurationController.addCallback(this);
@@ -263,12 +268,20 @@ public class DozeParameters implements
     }
 
     /**
+     * Checks if minmode is enabled.
+     */
+    public boolean isMinModeActive() {
+        return mMinModeManager.isPresent()
+                && MinModeManagerUtilsKt.isMinModeAvailable(mMinModeManager.get());
+    }
+
+    /**
      * Checks if always on is available and enabled for the current user.
      * @return {@code true} if enabled and available.
      */
     public boolean getAlwaysOn() {
         return mAmbientDisplayConfiguration.alwaysOnEnabled(UserHandle.USER_CURRENT)
-                && !mBatteryController.isAodPowerSave();
+                && !mBatteryController.isAodPowerSave() && !isMinModeActive();
     }
 
     /**
@@ -343,7 +356,7 @@ public class DozeParameters implements
     }
 
     public boolean shouldAnimateDozingChange() {
-        return mScreenOffAnimationController.shouldAnimateDozingChange();
+        return mScreenOffAnimationController.shouldAnimateDozingChange() && !isMinModeActive();
     }
 
     /**
@@ -452,6 +465,7 @@ public class DozeParameters implements
         pw.print("getSelectivelyRegisterSensorsUsingProx(): ");
         pw.println(getSelectivelyRegisterSensorsUsingProx());
         pw.print("isQuickPickupEnabled(): "); pw.println(isQuickPickupEnabled());
+        pw.print("isMinModeActive(): "); pw.println(isMinModeActive());
     }
 
     private void dispatchAlwaysOnEvent() {

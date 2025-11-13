@@ -48,6 +48,7 @@ import static org.mockito.Mockito.when;
 import android.annotation.DimenRes;
 import android.graphics.Insets;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.os.SystemClock;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
@@ -61,6 +62,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsAnimation;
 
+import androidx.annotation.NonNull;
 import androidx.test.filters.SmallTest;
 
 import com.android.keyguard.BouncerPanelExpansionCalculator;
@@ -73,6 +75,7 @@ import com.android.systemui.flags.EnableSceneContainer;
 import com.android.systemui.flags.FakeFeatureFlags;
 import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.flags.Flags;
+import com.android.systemui.kosmos.KosmosJavaAdapter;
 import com.android.systemui.qs.flags.NewQsUI;
 import com.android.systemui.qs.flags.QSComposeFragment;
 import com.android.systemui.res.R;
@@ -82,20 +85,19 @@ import com.android.systemui.shade.transition.LargeScreenShadeInterpolator;
 import com.android.systemui.statusbar.NotificationShelf;
 import com.android.systemui.statusbar.StatusBarState;
 import com.android.systemui.statusbar.SysuiStatusBarStateController;
-import com.android.systemui.statusbar.chips.notification.shared.StatusBarNotifChips;
 import com.android.systemui.statusbar.notification.collection.EntryAdapter;
 import com.android.systemui.statusbar.notification.collection.NotificationEntry;
 import com.android.systemui.statusbar.notification.collection.render.GroupExpansionManager;
+import com.android.systemui.statusbar.notification.collection.render.GroupExpansionManagerImpl;
 import com.android.systemui.statusbar.notification.collection.render.GroupMembershipManager;
 import com.android.systemui.statusbar.notification.data.repository.HeadsUpRepository;
-import com.android.systemui.statusbar.notification.emptyshade.shared.ModesEmptyShadeFix;
 import com.android.systemui.statusbar.notification.emptyshade.ui.view.EmptyShadeView;
 import com.android.systemui.statusbar.notification.footer.ui.view.FooterView;
 import com.android.systemui.statusbar.notification.headsup.AvalancheController;
-import com.android.systemui.statusbar.notification.headsup.HeadsUpManager;
-import com.android.systemui.statusbar.notification.headsup.NotificationsHunSharedAnimationValues;
+import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi;
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
 import com.android.systemui.statusbar.notification.row.ExpandableView;
+import com.android.systemui.statusbar.notification.shared.NotificationBundleUi;
 import com.android.systemui.statusbar.notification.shared.NotificationThrottleHun;
 import com.android.systemui.statusbar.notification.stack.shared.model.ShadeScrimBounds;
 import com.android.systemui.statusbar.notification.stack.shared.model.ShadeScrimShape;
@@ -103,7 +105,6 @@ import com.android.systemui.statusbar.phone.KeyguardBypassController;
 import com.android.systemui.statusbar.phone.ScreenOffAnimationController;
 import com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager;
 import com.android.systemui.statusbar.policy.ResourcesSplitShadeStateController;
-import com.android.systemui.wallpapers.domain.interactor.WallpaperInteractor;
 
 import kotlin.Unit;
 
@@ -117,12 +118,12 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
+import platform.test.runner.parameterized.Parameters;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-
-import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
-import platform.test.runner.parameterized.Parameters;
 
 /**
  * Tests for {@link NotificationStackScrollLayout}.
@@ -157,12 +158,12 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
     @Mock private NotificationStackScrollLayoutController mStackScrollLayoutController;
     @Mock private ScreenOffAnimationController mScreenOffAnimationController;
     @Mock private NotificationShelf mNotificationShelf;
-    @Mock private WallpaperInteractor mWallpaperInteractor;
     @Mock private NotificationStackSizeCalculator mStackSizeCalculator;
     @Mock private StatusBarKeyguardViewManager mStatusBarKeyguardViewManager;
     @Mock private LargeScreenShadeInterpolator mLargeScreenShadeInterpolator;
     @Mock private AvalancheController mAvalancheController;
     @Mock private HeadsUpRepository mHeadsUpRepository;
+    private final KosmosJavaAdapter mKosmos = new KosmosJavaAdapter(this);
 
     public NotificationStackScrollLayoutTest(FlagsParameterization flags) {
         super();
@@ -227,7 +228,6 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
                 .thenReturn(mNotificationRoundnessManager);
         mStackScroller.setController(mStackScrollLayoutController);
         mStackScroller.setShelf(mNotificationShelf);
-        mStackScroller.setWallpaperInteractor(mWallpaperInteractor);
         when(mStackScroller.getExpandHelper()).thenReturn(mExpandHelper);
 
         doNothing().when(mGroupExpansionManager).collapseGroups();
@@ -258,7 +258,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
     @EnableSceneContainer
     public void testIntrinsicStackHeight() {
         int stackHeight = 300;
-        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), anyInt(), anyFloat()))
+        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), anyInt(), anyFloat(), any()))
                 .thenReturn((float) stackHeight);
 
         mStackScroller.updateIntrinsicStackHeight();
@@ -383,7 +383,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
     @EnableSceneContainer
     public void updateStackEndHeightAndStackHeight_maxNotificationsSet_withSceneContainer() {
         float stackHeight = 300f;
-        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), anyInt(), anyFloat()))
+        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), anyInt(), anyFloat(), any()))
                 .thenReturn(stackHeight);
         mStackScroller.setMaxDisplayedNotifications(3); // any non-zero amount
 
@@ -428,47 +428,6 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         verify(mAmbientState).setFlinging(eq(false));
         verify(mAmbientState).setStackEndHeight(anyFloat());
         verify(mAmbientState).setInterpolatedStackHeight(anyFloat());
-    }
-
-    @Test
-    @DisableFlags(ModesEmptyShadeFix.FLAG_NAME)
-    public void updateEmptyView_dndSuppressing() {
-        when(mEmptyShadeView.willBeGone()).thenReturn(true);
-
-        mStackScroller.updateEmptyShadeView(/* visible = */ true,
-                /* areNotificationsHiddenInShade = */ true,
-                /* hasFilteredOutSeenNotifications = */ false);
-
-        verify(mEmptyShadeView).setText(R.string.dnd_suppressing_shade_text);
-    }
-
-    @Test
-    @DisableFlags(ModesEmptyShadeFix.FLAG_NAME)
-    public void updateEmptyView_dndNotSuppressing() {
-        mStackScroller.setEmptyShadeView(mEmptyShadeView);
-        when(mEmptyShadeView.willBeGone()).thenReturn(true);
-
-        mStackScroller.updateEmptyShadeView(/* visible = */ true,
-                /* areNotificationsHiddenInShade = */ false,
-                /* hasFilteredOutSeenNotifications = */ false);
-
-        verify(mEmptyShadeView).setText(R.string.empty_shade_text);
-    }
-
-    @Test
-    @DisableFlags(ModesEmptyShadeFix.FLAG_NAME)
-    public void updateEmptyView_noNotificationsToDndSuppressing() {
-        mStackScroller.setEmptyShadeView(mEmptyShadeView);
-        when(mEmptyShadeView.willBeGone()).thenReturn(true);
-        mStackScroller.updateEmptyShadeView(/* visible = */ true,
-                /* areNotificationsHiddenInShade = */ false,
-                /* hasFilteredOutSeenNotifications = */ false);
-        verify(mEmptyShadeView).setText(R.string.empty_shade_text);
-
-        mStackScroller.updateEmptyShadeView(/* visible = */ true,
-                /* areNotificationsHiddenInShade = */ true,
-                /* hasFilteredOutSeenNotifications = */ false);
-        verify(mEmptyShadeView).setText(R.string.dnd_suppressing_shade_text);
     }
 
     @Test
@@ -620,16 +579,6 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableFlags(ModesEmptyShadeFix.FLAG_NAME)
-    public void testReInflatesEmptyShadeView() {
-        when(mEmptyShadeView.getTextResource()).thenReturn(R.string.empty_shade_text);
-        clearInvocations(mStackScroller);
-        mStackScroller.reinflateViews();
-        verify(mStackScroller, never()).setFooterView(any());
-        verify(mStackScroller).setEmptyShadeView(any());
-    }
-
-    @Test
     public void testSetIsBeingDraggedResetsExposedMenu() {
         mStackScroller.setIsBeingDragged(true);
         verify(mNotificationSwipeHelper).resetExposedMenuView(true, true);
@@ -732,13 +681,16 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // add notification that's before the speed bump
         ExpandableNotificationRow row = mock(ExpandableNotificationRow.class);
-        NotificationEntry entry = mock(NotificationEntry.class);
-        when(row.getEntry()).thenReturn(entry);
-        when(row.getEntryLegacy()).thenReturn(entry);
-        when(entry.isAmbient()).thenReturn(false);
-        EntryAdapter entryAdapter = mock(EntryAdapter.class);
-        when(entryAdapter.isAmbient()).thenReturn(false);
-        when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        if (NotificationBundleUi.isEnabled()) {
+            EntryAdapter entryAdapter = mock(EntryAdapter.class);
+            when(entryAdapter.isAmbient()).thenReturn(false);
+            when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        } else {
+            NotificationEntry entry = mock(NotificationEntry.class);
+            when(row.getEntryLegacy()).thenReturn(entry);
+            when(entry.isAmbient()).thenReturn(false);
+        }
+
         mStackScroller.addContainerView(row);
 
         // speed bump = 1
@@ -752,13 +704,15 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // add notification that's after the speed bump
         ExpandableNotificationRow row = mock(ExpandableNotificationRow.class);
-        NotificationEntry entry = mock(NotificationEntry.class);
-        when(row.getEntry()).thenReturn(entry);
-        when(row.getEntryLegacy()).thenReturn(entry);
-        when(entry.isAmbient()).thenReturn(true);
-        EntryAdapter entryAdapter = mock(EntryAdapter.class);
-        when(entryAdapter.isAmbient()).thenReturn(true);
-        when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        if (NotificationBundleUi.isEnabled()) {
+            EntryAdapter entryAdapter = mock(EntryAdapter.class);
+            when(entryAdapter.isAmbient()).thenReturn(true);
+            when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        } else {
+            NotificationEntry entry = mock(NotificationEntry.class);
+            when(row.getEntryLegacy()).thenReturn(entry);
+            when(entry.isAmbient()).thenReturn(true);
+        }
         mStackScroller.addContainerView(row);
 
         // speed bump is set to 0
@@ -772,13 +726,15 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // add 3 notification that are after the speed bump
         ExpandableNotificationRow row = mock(ExpandableNotificationRow.class);
-        NotificationEntry entry = mock(NotificationEntry.class);
-        when(row.getEntry()).thenReturn(entry);
-        when(row.getEntryLegacy()).thenReturn(entry);
-        when(entry.isAmbient()).thenReturn(false);
-        EntryAdapter entryAdapter = mock(EntryAdapter.class);
-        when(entryAdapter.isAmbient()).thenReturn(false);
-        when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        if (NotificationBundleUi.isEnabled()) {
+            EntryAdapter entryAdapter = mock(EntryAdapter.class);
+            when(entryAdapter.isAmbient()).thenReturn(false);
+            when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        } else {
+            NotificationEntry entry = mock(NotificationEntry.class);
+            when(row.getEntryLegacy()).thenReturn(entry);
+            when(entry.isAmbient()).thenReturn(false);
+        }
         mStackScroller.addContainerView(row);
 
         // speed bump is 1
@@ -938,7 +894,8 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
     @DisableSceneContainer // TODO(b/312473478): address disabled test
     public void setFractionToShade_recomputesStackHeight() {
         mStackScroller.setFractionToShade(1f);
-        verify(mStackSizeCalculator).computeHeight(any(), anyInt(), anyFloat());
+        verify(mStackSizeCalculator).computeHeight(
+                any(), anyInt(), anyFloat(), eq("updateContentHeight"));
     }
 
     @Test
@@ -1101,10 +1058,18 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         float stackViewPortHeight = stackCutoff - stackTop;
         mStackScroller.setStackTop(stackTop);
         mStackScroller.setStackCutoff(stackCutoff);
-        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), eq(-1), anyFloat()))
-                .thenReturn((float) fullStackHeight);
-        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), eq(maxNotifs), anyFloat()))
-                .thenReturn((float) limitedStackHeight);
+        when(mStackSizeCalculator.computeHeight(
+                eq(mStackScroller),
+                eq(-1),
+                anyFloat(),
+                any())
+        ).thenReturn((float) fullStackHeight);
+        when(mStackSizeCalculator.computeHeight(
+                eq(mStackScroller),
+                eq(maxNotifs),
+                anyFloat(),
+                any())
+        ).thenReturn((float) limitedStackHeight);
 
         // When we set a limit on max displayed notifications
         mStackScroller.setMaxDisplayedNotifications(maxNotifs);
@@ -1133,8 +1098,12 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // Given we have a limit on max displayed notifications
         int stackHeightBeforeUpdate = 100;
-        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), eq(maxNotifs), anyFloat()))
-                .thenReturn((float) stackHeightBeforeUpdate);
+        when(mStackSizeCalculator.computeHeight(
+                eq(mStackScroller),
+                eq(maxNotifs),
+                anyFloat(),
+                any())
+        ).thenReturn((float) stackHeightBeforeUpdate);
         mStackScroller.setMaxDisplayedNotifications(maxNotifs);
 
         // And the stack heights are set
@@ -1143,8 +1112,12 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // When a child changes its height
         int stackHeightAfterUpdate = 300;
-        when(mStackSizeCalculator.computeHeight(eq(mStackScroller), eq(maxNotifs), anyFloat()))
-                .thenReturn((float) stackHeightAfterUpdate);
+        when(mStackSizeCalculator.computeHeight(
+                eq(mStackScroller),
+                eq(maxNotifs),
+                anyFloat(),
+                any())
+        ).thenReturn((float) stackHeightAfterUpdate);
         mStackScroller.onChildHeightChanged(row, /* needsAnimation = */ false);
 
         // Then the stack heights are updated
@@ -1266,7 +1239,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // WHEN we generate a disappear event
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ false, /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ false, /* statusBarChipBounds= */ null);
 
         // THEN headsUpAnimatingAway is true
         verify(headsUpAnimatingAwayListener).accept(true);
@@ -1275,7 +1248,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
     @Test
     @EnableSceneContainer
-    @DisableFlags(StatusBarNotifChips.FLAG_NAME)
+    @DisableFlags(PromotedNotificationUi.FLAG_NAME)
     public void testGenerateHeadsUpDisappearEvent_notifChipsFlagOff_statusBarChipNotSet() {
         // GIVEN NSSL is ready for HUN animations
         Consumer<Boolean> headsUpAnimatingAwayListener = mock(BooleanConsumer.class);
@@ -1283,14 +1256,14 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         prepareStackScrollerForHunAnimations(headsUpAnimatingAwayListener);
 
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ false, /* hasStatusBarChip= */ true);
+                row, /* isHeadsUp = */ false, /* statusBarChipBounds= */ new RectF(0f, 0f, 1f, 1f));
 
         verify(row, never()).setHasStatusBarChipDuringHeadsUpAnimation(anyBoolean());
     }
 
     @Test
     @EnableSceneContainer
-    @EnableFlags(StatusBarNotifChips.FLAG_NAME)
+    @EnableFlags(PromotedNotificationUi.FLAG_NAME)
     public void testGenerateHeadsUpDisappearEvent_notifChipsFlagOn_statusBarChipSetToFalse() {
         // GIVEN NSSL is ready for HUN animations
         Consumer<Boolean> headsUpAnimatingAwayListener = mock(BooleanConsumer.class);
@@ -1298,14 +1271,14 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         prepareStackScrollerForHunAnimations(headsUpAnimatingAwayListener);
 
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ false, /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ false, /* statusBarChipBounds= */ null);
 
         verify(row).setHasStatusBarChipDuringHeadsUpAnimation(false);
     }
 
     @Test
     @EnableSceneContainer
-    @EnableFlags(StatusBarNotifChips.FLAG_NAME)
+    @EnableFlags(PromotedNotificationUi.FLAG_NAME)
     public void testGenerateHeadsUpDisappearEvent_notifChipsFlagOn_statusBarChipSetToTrue() {
         // GIVEN NSSL is ready for HUN animations
         Consumer<Boolean> headsUpAnimatingAwayListener = mock(BooleanConsumer.class);
@@ -1313,7 +1286,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         prepareStackScrollerForHunAnimations(headsUpAnimatingAwayListener);
 
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ false, /* hasStatusBarChip= */ true);
+                row, /* isHeadsUp = */ false, /* statusBarChipBounds= */ new RectF(0f, 0f, 1f, 1f));
 
         verify(row).setHasStatusBarChipDuringHeadsUpAnimation(true);
     }
@@ -1331,7 +1304,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // WHEN we generate a disappear event
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ false, /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ false, /* statusBarChipBounds= */ null);
 
         // THEN nothing happens
         verify(headsUpAnimatingAwayListener, never()).accept(anyBoolean());
@@ -1347,11 +1320,11 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         prepareStackScrollerForHunAnimations(headsUpAnimatingAwayListener);
         // BUT there is a pending appear event
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ true, /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ true, /* statusBarChipBounds= */ null);
 
         // WHEN we generate a disappear event
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ false, /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ false, /* statusBarChipBounds= */ null);
 
         // THEN nothing happens
         verify(headsUpAnimatingAwayListener, never()).accept(anyBoolean());
@@ -1368,7 +1341,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // WHEN we generate a disappear event
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ true, /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ true, /* statusBarChipBounds= */ null);
 
         // THEN headsUpAnimatingWay is not set
         verify(headsUpAnimatingAwayListener, never()).accept(anyBoolean());
@@ -1384,15 +1357,20 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         prepareStackScrollerForHunAnimations(headsUpAnimatingAwayListener);
 
         // Entry was seen in shade
-        NotificationEntry entry = mock(NotificationEntry.class);
-        when(entry.isSeenInShade()).thenReturn(true);
         ExpandableNotificationRow row = mock(ExpandableNotificationRow.class);
-        when(row.getEntryLegacy()).thenReturn(entry);
-        when(row.getEntry()).thenReturn(entry);
+        if (NotificationBundleUi.isEnabled()) {
+            EntryAdapter entryAdapter = mock(EntryAdapter.class);
+            when(entryAdapter.isSeenInShade()).thenReturn(true);
+            when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        } else {
+            NotificationEntry entry = mock(NotificationEntry.class);
+            when(entry.isSeenInShade()).thenReturn(true);
+            when(row.getEntryLegacy()).thenReturn(entry);
+        }
 
         // WHEN we generate an add event
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ true, /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ true, /* statusBarChipBounds= */ null);
 
         // THEN nothing happens
         assertThat(mStackScroller.isAddOrRemoveAnimationPending()).isFalse();
@@ -1408,7 +1386,7 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
         // AND there is a HUN animating away
         mStackScroller.generateHeadsUpAnimation(
-                row, /* isHeadsUp = */ false,  /* hasStatusBarChip= */ false);
+                row, /* isHeadsUp = */ false,  /* statusBarChipBounds= */ null);
         assertTrue("a HUN should be animating away", mStackScroller.mHeadsUpAnimatingAway);
 
         // WHEN the child animations are finished
@@ -1417,6 +1395,601 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
         // THEN headsUpAnimatingAway is false
         verify(headsUpAnimatingAwayListener).accept(false);
         assertFalse(mStackScroller.mHeadsUpAnimatingAway);
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapOnTop() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(firstRow);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.setYTranslation(50f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 1;
+        viewState.applyToView(secondRow);
+        mStackScroller.avoidNotificationOverlaps();
+        // bigger than because of padding
+        assertTrue("TopOverlap not calculated accurately", secondRow.getTopOverlap() >= 50);
+        assertTrue("BottomOverlap not calculated accurately", secondRow.getBottomOverlap() == 0);
+        assertTrue("TopOverlap not calculated accurately", firstRow.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately", firstRow.getBottomOverlap() == 0);
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapOnTop_groupCollapsed() {
+        ExpandableNotificationRow firstRow = createRowGroup();
+        mStackScroller.addContainerView(firstRow);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(firstRow);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.setYTranslation(50f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 1;
+        viewState.applyToView(secondRow);
+        mStackScroller.avoidNotificationOverlaps();
+        // bigger than because of padding
+        assertTrue("TopOverlap not calculated accurately", secondRow.getTopOverlap() >= 50);
+        assertTrue("BottomOverlap not calculated accurately", secondRow.getBottomOverlap() == 0);
+        assertTrue("TopOverlap not calculated accurately", firstRow.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately", firstRow.getBottomOverlap() == 0);
+    }
+
+    @Test
+    @EnableFlags({com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT,
+            com.android.systemui.Flags.FLAG_NOTIFICATION_BUNDLE_UI})
+    public void testOverlapOnTop_groupExpanded() {
+        ExpandableNotificationRow parent = createRowGroup();
+        mStackScroller.addContainerView(parent);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+
+        ExpandableViewState viewState = parent.getViewState();
+        viewState.initFrom(parent);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(parent);
+
+        ExpandableNotificationRow child = parent.getAttachedChildren().getLast();
+        viewState = child.getViewState();
+        viewState.initFrom(child);
+        viewState.setYTranslation(400f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 4;
+        viewState.applyToView(child);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.setYTranslation(430f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 5;
+        viewState.applyToView(secondRow);
+        mKosmos.getGroupExpansionManager().setGroupExpanded(parent.getEntryAdapter(), true);
+        mStackScroller.avoidNotificationOverlaps();
+        // bigger than because of padding
+        assertTrue("TopOverlap not calculated accurately", secondRow.getTopOverlap() >= 70);
+        assertTrue("BottomOverlap not calculated accurately", secondRow.getBottomOverlap() == 0);
+        assertTrue("TopOverlap not calculated accurately", child.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately", child.getBottomOverlap() == 0);
+    }
+
+    @Test
+    @EnableFlags({com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT,
+            com.android.systemui.Flags.FLAG_NOTIFICATION_BUNDLE_UI})
+    public void testOverlapOnBottom_groupExpanded_Transient() {
+        ExpandableNotificationRow parent = createRowGroup();
+        mStackScroller.addContainerView(parent);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+
+        ExpandableViewState viewState = parent.getViewState();
+        viewState.initFrom(parent);
+        viewState.setYTranslation(0f);
+        viewState.height = 200;
+        viewState.notGoneIndex = 0;
+        viewState.setAlpha(1.0f);
+        viewState.applyToView(parent);
+
+        // Inset more to reflect header inset
+        ExpandableNotificationRow child = parent.getAttachedChildren().getLast();
+        viewState = child.getViewState();
+        viewState.initFrom(child);
+        viewState.setYTranslation(400f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 4;
+        viewState.applyToView(child);
+        parent.removeChildNotification(child);
+        child.setTransientContainer(parent.getChildrenContainer());
+        parent.getChildrenContainer().addTransientView(child, 0);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.setYTranslation(430f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 5;
+        viewState.applyToView(secondRow);
+        mKosmos.getGroupExpansionManager().setGroupExpanded(parent.getEntryAdapter(), true);
+        mStackScroller.avoidNotificationOverlaps();
+        // bigger than because of padding
+        assertTrue("TopOverlap of transient child not calculated accurately",
+                child.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately", child.getBottomOverlap() >= 70);
+        assertTrue("TopOverlap of child after group not calculated accurately",
+                secondRow.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately", secondRow.getBottomOverlap() == 0);
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapOnBottom_whenTransient() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addTransientView(firstRow, 0);
+        firstRow.setTransientContainer(mStackScroller);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(firstRow);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.setYTranslation(50f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 1;
+        viewState.applyToView(secondRow);
+        mStackScroller.avoidNotificationOverlaps();
+        // bigger than because of padding
+        assertTrue("TopOverlap not calculated accurately for first view",
+                firstRow.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately for first view",
+                firstRow.getBottomOverlap() >= 50);
+        assertTrue("TopOverlap not calculated accurately for second view",
+                secondRow.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately for second view",
+                secondRow.getBottomOverlap() == 0);
+    }
+
+    @NonNull
+    private ExpandableNotificationRow createRow() {
+        ExpandableNotificationRow row = mKosmos.createRow();
+        row.setIsBlurSupported(true);
+        return row;
+    }
+
+    @NonNull
+    private ExpandableNotificationRow createRowGroup() {
+        ExpandableNotificationRow rowGroup = mKosmos.createRowGroup();
+        rowGroup.setIsBlurSupported(true);
+        List<ExpandableNotificationRow> children = rowGroup.getAttachedChildren();
+        children.forEach((it) -> it.setIsBlurSupported(true));
+        return rowGroup;
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_baseline() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.setAlpha(1);
+        viewState.hidden = false;
+        viewState.applyToView(firstRow);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.setYTranslation(50f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 1;
+        viewState.hidden = false;
+        viewState.setAlpha(1);
+        viewState.applyToView(secondRow);
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("First row wasn't returned as the first element",
+                !overlapList.isEmpty() && overlapList.get(0) == firstRow);
+        assertTrue("Second row wasn't returned as the first element",
+                overlapList.size() >= 2 && overlapList.get(1) == secondRow);
+        assertTrue("The first view should not be non-overlapping",
+                !nonOverlapList.contains(firstRow));
+        assertTrue("The second view should not be non-overlapping",
+                !nonOverlapList.contains(secondRow));
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_sorted() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+        ExpandableNotificationRow thirdRow = createRow();
+        mStackScroller.addContainerView(thirdRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.height = 100;
+        viewState.notGoneIndex = 2;
+        viewState.setAlpha(1);
+        viewState.hidden = false;
+        viewState.applyToView(firstRow);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.height = 100;
+        viewState.notGoneIndex = 1;
+        viewState.hidden = false;
+        viewState.setAlpha(1);
+        viewState.applyToView(secondRow);
+
+        viewState = thirdRow.getViewState();
+        viewState.initFrom(thirdRow);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.hidden = false;
+        viewState.setAlpha(1);
+        viewState.applyToView(thirdRow);
+
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("Third row wasn't returned as the first element",
+                !overlapList.isEmpty() && overlapList.get(0) == thirdRow);
+        assertTrue("Second row wasn't returned as the second element",
+                overlapList.size() > 1 &&overlapList.get(1) == secondRow);
+        assertTrue("First row wasn't returned as the last element",
+                overlapList.size() > 2 &&overlapList.get(2) == firstRow);
+        assertTrue("The first view should not be non-overlapping",
+                !nonOverlapList.contains(firstRow));
+        assertTrue("The second view should not be non-overlapping",
+                !nonOverlapList.contains(secondRow));
+        assertTrue("The third view should not be non-overlapping",
+                !nonOverlapList.contains(thirdRow));
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_transient() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addTransientView(firstRow, 0);
+        firstRow.setTransientContainer(mStackScroller);
+        ExpandableNotificationRow secondRow = createRow();
+        mStackScroller.addContainerView(secondRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.setAlpha(1);
+        viewState.hidden = false;
+        viewState.applyToView(firstRow);
+
+        viewState = secondRow.getViewState();
+        viewState.initFrom(secondRow);
+        viewState.setYTranslation(0);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.hidden = false;
+        viewState.setAlpha(1);
+        viewState.applyToView(secondRow);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("First row wasn't returned as the first element",
+                !overlapList.isEmpty() &&overlapList.get(0) == firstRow);
+        assertTrue("Second row wasn't returned as the second element",
+                overlapList.size() > 1 &&overlapList.get(1) == secondRow);
+        assertTrue("The first view should not be non-overlapping",
+                !nonOverlapList.contains(firstRow));
+        assertTrue("The second view should not be non-overlapping",
+                !nonOverlapList.contains(secondRow));
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_alpha() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.setAlpha(0);
+        viewState.hidden = false;
+        viewState.applyToView(firstRow);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("A hidden view wasn't returned as non-overlapping",
+                nonOverlapList.contains(firstRow));
+        assertTrue("There was an unexpected overlapping view", overlapList.isEmpty());
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_gone() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.setAlpha(1);
+        viewState.hidden = false;
+        viewState.applyToView(firstRow);
+        firstRow.setVisibility(View.GONE);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("A gone view wasn't returned as non-overlapping",
+                nonOverlapList.contains(firstRow));
+        assertTrue("There was an unexpected overlapping view", overlapList.isEmpty());
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_opaque() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.setAlpha(1);
+        viewState.hidden = false;
+        viewState.applyToView(firstRow);
+        // make it opaque
+        firstRow.setIsBlurSupported(false);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("A opaque view was returned as foverlapping",
+                nonOverlapList.contains(firstRow));
+        assertTrue("There was an unexpected overlapping view", overlapList.isEmpty());
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_invisible() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(0f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.setAlpha(1);
+        viewState.applyToView(firstRow);
+        firstRow.setVisibility(View.INVISIBLE);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("A hidden view wasn't returned as non-overlapping",
+                nonOverlapList.contains(firstRow));
+        assertTrue("There was an unexpected overlapping view", overlapList.isEmpty());
+    }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT)
+    public void testOverlapListCreation_collapsed_group() {
+        ExpandableNotificationRow parent = createRowGroup();
+        mStackScroller.addContainerView(parent);
+
+        ExpandableViewState viewState = parent.getViewState();
+        viewState.initFrom(parent);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(parent);
+
+        ExpandableNotificationRow child = parent.getAttachedChildren().getLast();
+        viewState = child.getViewState();
+        viewState.initFrom(child);
+        viewState.setYTranslation(200f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 4;
+        viewState.applyToView(child);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("The parent wasn't added to the overlapping list",
+                !overlapList.isEmpty() && overlapList.get(0) == parent);
+        assertTrue("Children should only be added when expanded", !overlapList.contains(child));
+        assertTrue("Children of collapsed group wasn't added non-overlapping",
+                nonOverlapList.contains(child));
+    }
+
+    @Test
+    @EnableFlags({com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT,
+            com.android.systemui.Flags.FLAG_NOTIFICATION_BUNDLE_UI})
+    public void testOverlapListCreation_expanded_group() {
+        ExpandableNotificationRow parent = createRowGroup();
+        mStackScroller.addContainerView(parent);
+
+        ExpandableViewState viewState = parent.getViewState();
+        viewState.initFrom(parent);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(parent);
+
+        ExpandableNotificationRow child = parent.getAttachedChildren().getLast();
+        viewState = child.getViewState();
+        viewState.initFrom(child);
+        viewState.setYTranslation(200f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 4;
+        viewState.applyToView(child);
+
+        mKosmos.getGroupExpansionManager().setGroupExpanded(parent.getEntryAdapter(), true);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("The parent wasn't added to the overlapping list",
+                !overlapList.isEmpty() &&overlapList.get(0) == parent);
+        assertTrue("Children should be added when expanded", overlapList.contains(child));
+        assertTrue("Children of expanded group was added non-overlapping",
+                !nonOverlapList.contains(child));
+    }
+
+    @Test
+    @EnableFlags({com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT,
+            com.android.systemui.Flags.FLAG_NOTIFICATION_BUNDLE_UI})
+    public void testOverlapListCreation_expanded_group_alpha() {
+        ExpandableNotificationRow parent = createRowGroup();
+        mStackScroller.addContainerView(parent);
+
+        ExpandableViewState viewState = parent.getViewState();
+        viewState.initFrom(parent);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(parent);
+
+        ExpandableNotificationRow child = parent.getAttachedChildren().getLast();
+        viewState = child.getViewState();
+        viewState.initFrom(child);
+        viewState.setYTranslation(200f);
+        viewState.height = 100;
+        viewState.setAlpha(0.0f);
+        viewState.notGoneIndex = 4;
+        viewState.applyToView(child);
+
+        mKosmos.getGroupExpansionManager().setGroupExpanded(parent.getEntryAdapter(), true);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("The parent wasn't added to the overlapping list",
+                !overlapList.isEmpty() &&overlapList.get(0) == parent);
+        assertTrue("Children only should be added when expanded and visible",
+                !overlapList.contains(child));
+        assertTrue("Children of expanded group was added non-overlapping",
+                nonOverlapList.contains(child));
+    }
+
+    @Test
+    @EnableFlags({com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT,
+            com.android.systemui.Flags.FLAG_NOTIFICATION_BUNDLE_UI})
+    public void testOverlapListCreation_expanded_group_transient() {
+        ExpandableNotificationRow parent = createRowGroup();
+        mStackScroller.addContainerView(parent);
+
+        ExpandableViewState viewState = parent.getViewState();
+        viewState.initFrom(parent);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(parent);
+
+        ExpandableNotificationRow child = parent.getAttachedChildren().getLast();
+        viewState = child.getViewState();
+        viewState.initFrom(child);
+        viewState.setYTranslation(200f);
+        viewState.height = 100;
+        viewState.setAlpha(1.0f);
+        viewState.notGoneIndex = 4;
+        viewState.applyToView(child);
+        parent.removeChildNotification(child);
+        child.setTransientContainer(parent.getChildrenContainer());
+        parent.getChildrenContainer().addTransientView(child, 0);
+
+        mKosmos.getGroupExpansionManager().setGroupExpanded(parent.getEntryAdapter(), true);
+
+        ArrayList<ExpandableView> overlapList = new ArrayList<>();
+        ArrayList<ExpandableView> nonOverlapList = new ArrayList<>();
+        mStackScroller.createSortedNotificationLists(overlapList, nonOverlapList);
+
+        assertTrue("The parent wasn't added to the overlapping list",
+                !overlapList.isEmpty() && overlapList.get(0) == parent);
+        assertTrue("Transient children should be added overlapping when expanded",
+                overlapList.contains(child));
+        assertTrue("Transient child of expanded group was added non-overlapping",
+                !nonOverlapList.contains(child));
+    }
+
+    @Test
+    @EnableFlags({com.android.systemui.Flags.FLAG_PHYSICAL_NOTIFICATION_MOVEMENT})
+    public void testOverlapWhenOutOfBounds() {
+        ExpandableNotificationRow firstRow = createRow();
+        mStackScroller.addContainerView(firstRow);
+
+        ExpandableViewState viewState = firstRow.getViewState();
+        viewState.initFrom(firstRow);
+        viewState.setYTranslation(-100f);
+        viewState.height = 100;
+        viewState.notGoneIndex = 0;
+        viewState.applyToView(firstRow);
+
+        mStackScroller.avoidNotificationOverlaps();
+        // bigger than because of padding
+        assertTrue("TopOverlap not calculated accurately", firstRow.getTopOverlap() == 0);
+        assertTrue("BottomOverlap not calculated accurately", firstRow.getBottomOverlap() == 0);
     }
 
     private MotionEvent captureTouchSentToSceneFramework() {
@@ -1441,14 +2014,17 @@ public class NotificationStackScrollLayoutTest extends SysuiTestCase {
 
     private ExpandableNotificationRow createClearableRow() {
         ExpandableNotificationRow row = mock(ExpandableNotificationRow.class);
-        NotificationEntry entry = mock(NotificationEntry.class);
+
         when(row.canViewBeCleared()).thenReturn(true);
-        when(row.getEntry()).thenReturn(entry);
-        when(row.getEntryLegacy()).thenReturn(entry);
-        when(entry.isClearable()).thenReturn(true);
-        EntryAdapter entryAdapter = mock(EntryAdapter.class);
-        when(entryAdapter.isClearable()).thenReturn(true);
-        when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        if (NotificationBundleUi.isEnabled()) {
+            EntryAdapter entryAdapter = mock(EntryAdapter.class);
+            when(entryAdapter.isClearable()).thenReturn(true);
+            when(row.getEntryAdapter()).thenReturn(entryAdapter);
+        } else {
+            NotificationEntry entry = mock(NotificationEntry.class);
+            when(row.getEntryLegacy()).thenReturn(entry);
+            when(entry.isClearable()).thenReturn(true);
+        }
 
         return row;
     }

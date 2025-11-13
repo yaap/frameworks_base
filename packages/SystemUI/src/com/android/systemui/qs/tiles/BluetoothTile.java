@@ -16,7 +16,9 @@
 
 package com.android.systemui.qs.tiles;
 
+import static com.android.settingslib.flags.Flags.refactorBatteryLevelDisplay;
 import static com.android.settingslib.satellite.SatelliteDialogUtils.TYPE_IS_BLUETOOTH;
+import static com.android.systemui.Flags.iconRefresh2025;
 import static com.android.systemui.util.PluralMessageFormaterKt.icuMessageFormat;
 
 import android.annotation.Nullable;
@@ -39,12 +41,13 @@ import androidx.annotation.VisibleForTesting;
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.settingslib.Utils;
+import com.android.settingslib.bluetooth.BatteryLevelsInfo;
 import com.android.settingslib.bluetooth.BluetoothUtils;
 import com.android.settingslib.bluetooth.CachedBluetoothDevice;
 import com.android.settingslib.satellite.SatelliteDialogUtils;
 import com.android.systemui.animation.Expandable;
-import com.android.systemui.bluetooth.qsdialog.BluetoothDetailsContentViewModel;
-import com.android.systemui.bluetooth.qsdialog.BluetoothDetailsViewModel;
+import com.android.systemui.bluetooth.ui.viewModel.BluetoothDetailsContentViewModel;
+import com.android.systemui.bluetooth.ui.viewModel.BluetoothDetailsViewModel;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.flags.FeatureFlags;
@@ -85,6 +88,7 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
     private final BluetoothController mController;
 
     private CachedBluetoothDevice mMetadataRegisteredDevice = null;
+    private CachedBluetoothDevice mBatteryCallbackRegisteredDevice = null;
 
     private final Executor mExecutor;
 
@@ -202,7 +206,11 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
         super.handleSetListening(listening);
 
         if (!listening) {
-            stopListeningToStaleDeviceMetadata();
+            if (refactorBatteryLevelDisplay()) {
+                unregisterBatteryChangedCallback();
+            } else {
+                stopListeningToStaleDeviceMetadata();
+            }
         }
     }
 
@@ -223,7 +231,11 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
                     || mController.getBluetoothState() == BluetoothAdapter.STATE_TURNING_OFF;
         }
         if (!enabled || !connected || state.isTransient) {
-            stopListeningToStaleDeviceMetadata();
+            if (refactorBatteryLevelDisplay()) {
+                unregisterBatteryChangedCallback();
+            } else {
+                stopListeningToStaleDeviceMetadata();
+            }
         }
         state.dualTarget = true;
         state.value = enabled;
@@ -248,7 +260,9 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
                 state.icon = maybeLoadResourceIcon(R.drawable.qs_bluetooth_icon_search);
                 state.stateDescription = state.secondaryLabel;
             } else {
-                state.icon = maybeLoadResourceIcon(R.drawable.qs_bluetooth_icon_off);
+                state.icon = maybeLoadResourceIcon(
+                        iconRefresh2025() ? R.drawable.qs_bluetooth_icon_disconnected
+                                : R.drawable.qs_bluetooth_icon_off);
                 state.stateDescription = mContext.getString(R.string.accessibility_not_connected);
             }
             state.state = Tile.STATE_ACTIVE;
@@ -295,7 +309,11 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
         List<CachedBluetoothDevice> connectedDevices = mController.getConnectedDevices();
         if (enabled && connected && !connectedDevices.isEmpty()) {
             if (connectedDevices.size() > 1) {
-                stopListeningToStaleDeviceMetadata();
+                if (refactorBatteryLevelDisplay()) {
+                    unregisterBatteryChangedCallback();
+                } else {
+                    stopListeningToStaleDeviceMetadata();
+                }
                 return icuMessageFormat(mContext.getResources(),
                         R.string.quick_settings_hotspot_secondary_label_num_devices,
                         connectedDevices.size());
@@ -303,14 +321,25 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
 
             CachedBluetoothDevice device = connectedDevices.get(0);
 
-            // Use battery level provided by FastPair metadata if available.
-            // If not, fallback to the default battery level from bluetooth.
-            int batteryLevel = getMetadataBatteryLevel(device);
-            if (batteryLevel > BluetoothUtils.META_INT_ERROR) {
-                listenToMetadata(device);
+            int batteryLevel = BluetoothDevice.BATTERY_LEVEL_UNKNOWN;
+            if (refactorBatteryLevelDisplay()) {
+                BatteryLevelsInfo batteryLevelsInfo = device.getBatteryLevelsInfo();
+                if (batteryLevelsInfo != null) {
+                    batteryLevel = batteryLevelsInfo.getOverallBatteryLevel();
+                    registerBatteryChangedCallback(device);
+                } else {
+                    unregisterBatteryChangedCallback();
+                }
             } else {
-                stopListeningToStaleDeviceMetadata();
-                batteryLevel = device.getMinBatteryLevelWithMemberDevices();
+                // Use battery level provided by FastPair metadata if available.
+                // If not, fallback to the default battery level from bluetooth.
+                batteryLevel = getMetadataBatteryLevel(device);
+                if (batteryLevel > BluetoothUtils.META_INT_ERROR) {
+                    listenToMetadata(device);
+                } else {
+                    stopListeningToStaleDeviceMetadata();
+                    batteryLevel = device.getMinBatteryLevelWithMemberDevices();
+                }
             }
 
             if (batteryLevel > BluetoothDevice.BATTERY_LEVEL_UNKNOWN) {
@@ -320,7 +349,7 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
             } else {
                 final BluetoothClass bluetoothClass = device.getBtClass();
                 if (bluetoothClass != null) {
-                    if (device.isHearingAidDevice()) {
+                    if (device.isHearingDevice()) {
                         return mContext.getString(
                                 R.string.quick_settings_bluetooth_secondary_label_hearing_aids);
                     } else if (bluetoothClass.doesClassMatch(BluetoothClass.PROFILE_A2DP)) {
@@ -380,6 +409,19 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
         }
     }
 
+    private void registerBatteryChangedCallback(CachedBluetoothDevice cachedDevice) {
+        if (cachedDevice.equals(mBatteryCallbackRegisteredDevice)) return;
+        unregisterBatteryChangedCallback();
+        cachedDevice.registerCallback(mExecutor, mBatteryChangedCallback);
+        mBatteryCallbackRegisteredDevice = cachedDevice;
+    }
+
+    private void unregisterBatteryChangedCallback() {
+        if (mBatteryCallbackRegisteredDevice == null) return;
+        mBatteryCallbackRegisteredDevice.unregisterCallback(mBatteryChangedCallback);
+        mBatteryCallbackRegisteredDevice = null;
+    }
+
     private final BluetoothController.Callback mCallback = new BluetoothController.Callback() {
         @Override
         public void onBluetoothStateChange(boolean enabled) {
@@ -396,4 +438,6 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
             (device, key, value) -> {
                 if (key == BluetoothDevice.METADATA_MAIN_BATTERY) refreshState();
             };
+
+    private final CachedBluetoothDevice.Callback mBatteryChangedCallback = this::refreshState;
 }

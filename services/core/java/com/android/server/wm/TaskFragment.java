@@ -36,6 +36,15 @@ import static android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
 import static android.content.res.Configuration.ORIENTATION_UNDEFINED;
+import static android.internal.perfetto.protos.Windowmanagerservice.IdentifierProto.HASH_CODE;
+import static android.internal.perfetto.protos.Windowmanagerservice.IdentifierProto.TITLE;
+import static android.internal.perfetto.protos.Windowmanagerservice.IdentifierProto.USER_ID;
+import static android.internal.perfetto.protos.Windowmanagerservice.TaskFragmentProto.ACTIVITY_TYPE;
+import static android.internal.perfetto.protos.Windowmanagerservice.TaskFragmentProto.DISPLAY_ID;
+import static android.internal.perfetto.protos.Windowmanagerservice.TaskFragmentProto.MIN_HEIGHT;
+import static android.internal.perfetto.protos.Windowmanagerservice.TaskFragmentProto.MIN_WIDTH;
+import static android.internal.perfetto.protos.Windowmanagerservice.TaskFragmentProto.WINDOW_CONTAINER;
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowContainerChildProto.TASK_FRAGMENT;
 import static android.os.Process.INVALID_UID;
 import static android.os.Process.SYSTEM_UID;
 import static android.os.UserHandle.USER_NULL;
@@ -58,15 +67,6 @@ import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_ATM;
 import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_WITH_CLASS_NAME;
 import static com.android.server.wm.ActivityTaskManagerService.checkPermission;
 import static com.android.server.wm.ActivityTaskSupervisor.printThisActivity;
-import static com.android.server.wm.IdentifierProto.HASH_CODE;
-import static com.android.server.wm.IdentifierProto.TITLE;
-import static com.android.server.wm.IdentifierProto.USER_ID;
-import static com.android.server.wm.TaskFragmentProto.ACTIVITY_TYPE;
-import static com.android.server.wm.TaskFragmentProto.DISPLAY_ID;
-import static com.android.server.wm.TaskFragmentProto.MIN_HEIGHT;
-import static com.android.server.wm.TaskFragmentProto.MIN_WIDTH;
-import static com.android.server.wm.TaskFragmentProto.WINDOW_CONTAINER;
-import static com.android.server.wm.WindowContainerChildProto.TASK_FRAGMENT;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -89,7 +89,6 @@ import android.graphics.Rect;
 import android.hardware.power.Boost;
 import android.os.IBinder;
 import android.os.PowerManagerInternal;
-import android.os.RemoteException;
 import android.os.UserHandle;
 import android.util.ArraySet;
 import android.util.DisplayMetrics;
@@ -97,6 +96,7 @@ import android.util.Slog;
 import android.util.proto.ProtoOutputStream;
 import android.view.DisplayInfo;
 import android.view.SurfaceControl;
+import android.window.DesktopExperienceFlags;
 import android.window.ITaskFragmentOrganizer;
 import android.window.TaskFragmentAnimationParams;
 import android.window.TaskFragmentInfo;
@@ -423,7 +423,10 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     private final EnsureActivitiesVisibleHelper mEnsureActivitiesVisibleHelper =
             new EnsureActivitiesVisibleHelper(this);
 
-     private final PowerManagerInternal mPowerManagerInternal;
+    private final boolean mEnableSeeThroughTaskFragments =
+            DesktopExperienceFlags.ENABLE_SEE_THROUGH_TASK_FRAGMENTS.isTrue();
+
+    private final PowerManagerInternal mPowerManagerInternal;
 
     /** Creates an embedded task fragment. */
     TaskFragment(ActivityTaskManagerService atmService, IBinder fragmentToken,
@@ -448,7 +451,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         mPowerManagerInternal = LocalServices.getService(PowerManagerInternal.class);
     }
 
-    @NonNull
+    @Nullable
     static TaskFragment fromTaskFragmentToken(@Nullable IBinder token,
             @NonNull ActivityTaskManagerService service) {
         if (token == null) return null;
@@ -668,9 +671,11 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         mResumedActivity = r;
         final ActivityRecord topResumed = mTaskSupervisor.updateTopResumedActivityIfNeeded(reason);
         if (mResumedActivity != null && topResumed != null && topResumed.isEmbedded()
-                && topResumed.getTaskFragment().isAdjacentTo(this)) {
+                && topResumed.getTaskFragment().isAdjacentTo(this)
+                && topResumed.getTaskFragment().isPinned()) {
             // Explicitly updates the last resumed Activity if the resumed activity is
-            // adjacent to the top-resumed embedded activity.
+            // adjacent to the top-resumed embedded activity and the top-resumed TaskFragment is
+            // pinned.
             mAtmService.setLastResumedActivityUncheckLocked(mResumedActivity, reason);
         }
         if (r == null && prevR.mDisplayContent != null
@@ -900,16 +905,6 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         return Flags.untrustedEmbeddingAnyAppPermission()
                 && checkPermission(EMBED_ANY_APP_IN_UNTRUSTED_MODE,
                 PermissionChecker.PID_UNKNOWN, uid) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    /**
-     * Checks if all activities in the task fragment are embedded as fully trusted.
-     * @see #isFullyTrustedEmbedding(ActivityRecord, int)
-     * @param uid   uid of the TaskFragment organizer.
-     */
-    boolean isFullyTrustedEmbedding(int uid) {
-        // Traverse all activities to see if any of them are not fully trusted embedding.
-        return !forAllActivities(r -> !isFullyTrustedEmbedding(r, uid));
     }
 
     /**
@@ -1338,9 +1333,15 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                 continue;
             }
 
-            final int otherWindowingMode = other.getWindowingMode();
-            if (otherWindowingMode == WINDOWING_MODE_FULLSCREEN
-                    || (otherWindowingMode != WINDOWING_MODE_PINNED && other.matchParentBounds())) {
+            // Must fill the parent to affect visibility.
+            boolean affectsSiblingVisibility = other.fillsParentBounds();
+            if (mEnableSeeThroughTaskFragments) {
+                // It also must have filling content itself, to prevent empty or only partially
+                // occluding containers from affecting visibility.
+                affectsSiblingVisibility &= other.hasFillingContent();
+            }
+            if (affectsSiblingVisibility) {
+                // This task fragment is fully covered by |other|.
                 if (isTranslucent(other, starting)) {
                     // Can be visible behind a translucent TaskFragment.
                     gotTranslucentFullscreen = true;
@@ -1683,14 +1684,8 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                         Slog.v(TAG_RESULTS, "Delivering results to " + next + ": " + a);
                     }
                     final ActivityResultItem item = new ActivityResultItem(next.token, a);
-                    boolean isSuccessful;
-                    try {
-                        isSuccessful = mAtmService.getLifecycleManager().scheduleTransactionItem(
-                                appThread, item);
-                    } catch (RemoteException e) {
-                        // TODO(b/323801078): remove Exception when cleanup
-                        isSuccessful = false;
-                    }
+                    final boolean isSuccessful = mAtmService.getLifecycleManager()
+                            .scheduleTransactionItem(appThread, item);
                     if (!isSuccessful) {
                         onResumeTopActivityRemoteFailure(lastState, next, lastResumedActivity,
                                 lastFocusedRootTask);
@@ -1702,14 +1697,8 @@ class TaskFragment extends WindowContainer<WindowContainer> {
             if (next.newIntents != null) {
                 final NewIntentItem item =
                         new NewIntentItem(next.token, next.newIntents, true /* resume */);
-                boolean isSuccessful;
-                try {
-                    isSuccessful = mAtmService.getLifecycleManager().scheduleTransactionItem(
-                            appThread, item);
-                } catch (RemoteException e) {
-                    // TODO(b/323801078): remove Exception when cleanup
-                    isSuccessful = false;
-                }
+                final boolean isSuccessful = mAtmService.getLifecycleManager()
+                        .scheduleTransactionItem(appThread, item);
                 if (!isSuccessful) {
                     onResumeTopActivityRemoteFailure(lastState, next, lastResumedActivity,
                             lastFocusedRootTask);
@@ -1731,14 +1720,8 @@ class TaskFragment extends WindowContainer<WindowContainer> {
             final ResumeActivityItem resumeActivityItem = new ResumeActivityItem(
                     next.token, topProcessState, dc.isNextTransitionForward(),
                     next.shouldSendCompatFakeFocus());
-            boolean isSuccessful;
-            try {
-                isSuccessful = mAtmService.getLifecycleManager().scheduleTransactionItem(
-                        appThread, resumeActivityItem);
-            } catch (RemoteException e) {
-                // TODO(b/323801078): remove Exception when cleanup
-                isSuccessful = false;
-            }
+            final boolean isSuccessful = mAtmService.getLifecycleManager().scheduleTransactionItem(
+                    appThread, resumeActivityItem);
             if (!isSuccessful) {
                 onResumeTopActivityRemoteFailure(lastState, next, lastResumedActivity,
                         lastFocusedRootTask);
@@ -1931,7 +1914,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         if (prev.attachedToProcess()) {
             if (shouldAutoPip && ActivityTaskManagerService.isPip2ExperimentEnabled()) {
                 prev.mPauseSchedulePendingForPip = true;
-                boolean willAutoPip = mAtmService.prepareAutoEnterPictureAndPictureMode(prev);
+                boolean willAutoPip = mAtmService.setPipCandidateIfNeeded(prev);
                 ProtoLog.d(WM_DEBUG_STATES, "Auto-PIP allowed, requesting PIP mode "
                         + "via requestStartTransition(): %s, willAutoPip: %b", prev, willAutoPip);
             } else if (shouldAutoPip) {
@@ -2004,16 +1987,8 @@ class TaskFragment extends WindowContainer<WindowContainer> {
 
         final PauseActivityItem item = new PauseActivityItem(prev.token, prev.finishing,
                 userLeaving, pauseImmediately, autoEnteringPip);
-        boolean isSuccessful;
-        try {
-            isSuccessful = mAtmService.getLifecycleManager().scheduleTransactionItem(
-                    prev.app.getThread(), item);
-        } catch (RemoteException e) {
-            // TODO(b/323801078): remove Exception when cleanup
-            // Ignore exception, if process died other code will cleanup.
-            Slog.w(TAG, "Exception thrown during pause", e);
-            isSuccessful = false;
-        }
+        final boolean isSuccessful = mAtmService.getLifecycleManager().scheduleTransactionItem(
+                prev.app.getThread(), item);
         if (!isSuccessful) {
             mPausingActivity = null;
             mLastPausedActivity = null;
@@ -2054,8 +2029,6 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                     // We don't need to schedule another stop, we only need to let it happen.
                     prev.setState(STOPPING, "completePausedLocked");
                 } else if (!prev.isVisibleRequested() || shouldSleepOrShutDownActivities()) {
-                    // Clear out any deferred client hide we might currently have.
-                    prev.clearDeferHidingClient();
                     // If we were visible then resumeTopActivities will release resources before
                     // stopping.
                     prev.addToStopping(true /* scheduleIdle */, false /* idleDelayed */,
@@ -2070,7 +2043,12 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         if (resumeNext) {
             final Task topRootTask = mRootWindowContainer.getTopDisplayFocusedRootTask();
             if (topRootTask != null && !topRootTask.shouldSleepOrShutDownActivities()) {
-                mRootWindowContainer.resumeFocusedTasksTopActivities(topRootTask, prev);
+                final boolean resumed =
+                        mRootWindowContainer.resumeFocusedTasksTopActivities(topRootTask, prev);
+                if (!resumed && mWmService.mSyncEngine.hasActiveSync()) {
+                    // TODO(b/294925498): Remove this once we have accurate ready tracking.
+                    mWmService.requestTraversal();
+                }
             } else {
                 // checkReadyForSleep();
                 final ActivityRecord top =
@@ -2355,7 +2333,8 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         boolean mUseOverrideInsetsForConfig;
 
         void resolveTmpOverrides(DisplayContent dc, Configuration parentConfig,
-                boolean isFixedRotationTransforming, @Nullable Rect safeRegionBounds) {
+                boolean isFixedRotationTransforming, @Nullable Rect safeRegionBounds,
+                boolean shouldApplyLegacyInsets) {
             mParentAppBoundsOverride = safeRegionBounds != null ? safeRegionBounds : new Rect(
                     parentConfig.windowConfiguration.getAppBounds());
             mParentBoundsOverride = safeRegionBounds != null ? safeRegionBounds : new Rect(
@@ -2367,8 +2346,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                 mTmpOverrideConfigOrientation =
                         mParentAppBoundsOverride.height() >= mParentAppBoundsOverride.width()
                                 ? ORIENTATION_PORTRAIT : ORIENTATION_LANDSCAPE;
-            } else if (mUseOverrideInsetsForConfig && dc != null
-                    && !isFloating(parentConfig.windowConfiguration.getWindowingMode())) {
+            } else if (shouldApplyLegacyInsets && mUseOverrideInsetsForConfig && dc != null) {
                 // Insets are decoupled from configuration by default from V+, use legacy
                 // compatibility behaviour for apps targeting SDK earlier than 35
                 // (see applySizeOverrideIfNeeded).
@@ -2562,7 +2540,18 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                 // We should just inherit the value from parent for this temporary state.
                 final boolean inPipTransition = windowingMode == WINDOWING_MODE_PINNED
                         && !mTmpFullBounds.isEmpty() && mTmpFullBounds.equals(parentBounds);
-                if (WindowConfiguration.isFloating(windowingMode) && !inPipTransition) {
+                // For floating tasks and app bubbles, calculate the smallest width from the bounds
+                // of the task, because they should not be affected by insets.
+                boolean shouldUseTaskBounds = WindowConfiguration.isFloating(windowingMode);
+                if (com.android.wm.shell.Flags.enableCreateAnyBubble()
+                        && com.android.wm.shell.Flags.enableBubbleAppCompatFixes()) {
+                    final Task task = getTask();
+                    if (task != null) {
+                        // TODO(b/407669465): Update mLaunchNextToBubble usage when migrated.
+                        shouldUseTaskBounds |= task.mLaunchNextToBubble;
+                    }
+                }
+                if (shouldUseTaskBounds && !inPipTransition) {
                     // For floating tasks, calculate the smallest width from the bounds of the
                     // task, because they should not be affected by insets.
                     inOutConfig.smallestScreenWidthDp = (int) (0.5f
@@ -3430,6 +3419,12 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         final Rect bounds = getRequestedOverrideBounds();
         if (!bounds.isEmpty()) {
             pw.println(prefix + "  mBounds=" + bounds);
+        }
+        if (isForceHidden()) {
+            pw.println(prefix + "  mForceHiddenFlags=" + mForceHiddenFlags);
+        }
+        if (isAlwaysOnTop()) {
+            pw.println(prefix + "  isAlwaysOnTop");
         }
         if (mIsRemovalRequested) {
             pw.println(prefix + "  mIsRemovalRequested=true");

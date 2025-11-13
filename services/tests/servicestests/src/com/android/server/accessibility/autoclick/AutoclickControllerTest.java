@@ -18,12 +18,15 @@ package com.android.server.accessibility.autoclick;
 
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
+import static com.android.server.accessibility.autoclick.AutoclickController.CONTINUOUS_SCROLL_INTERVAL;
 import static com.android.server.accessibility.autoclick.AutoclickTypePanel.AUTOCLICK_TYPE_RIGHT_CLICK;
 import static com.android.server.testutils.MockitoUtilsKt.eq;
 
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyFloat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -54,36 +57,79 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** Test cases for {@link AutoclickController}. */
 @RunWith(AndroidTestingRunner.class)
 @TestableLooper.RunWithLooper(setAsMainLooper = true)
 public class AutoclickControllerTest {
 
-    @Rule public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
-    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule
+    public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
+    @Rule
+    public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     @Rule
     public TestableContext mTestableContext =
             new TestableContext(getInstrumentation().getContext());
 
     private TestableLooper mTestableLooper;
-    @Mock private AccessibilityTraceManager mMockTrace;
-    @Mock private WindowManager mMockWindowManager;
+    @Mock
+    private AccessibilityTraceManager mMockTrace;
+    @Mock
+    private WindowManager mMockWindowManager;
     private AutoclickController mController;
+    private MotionEventCaptor mMotionEventCaptor;
 
     private static class MotionEventCaptor extends BaseEventStreamTransformation {
         public MotionEvent downEvent;
+        public MotionEvent buttonPressEvent;
+        public MotionEvent buttonReleaseEvent;
+        public MotionEvent upEvent;
+        public MotionEvent moveEvent;
+        public MotionEvent cancelEvent;
         public int eventCount = 0;
+        private List<MotionEvent> mEventList = new ArrayList<>();
+
         @Override
         public void onMotionEvent(MotionEvent event, MotionEvent rawEvent, int policyFlags) {
+            MotionEvent eventCopy = MotionEvent.obtain(event);
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    downEvent = event;
-                    eventCount++;
+                    downEvent = eventCopy;
                     break;
+                case MotionEvent.ACTION_BUTTON_PRESS:
+                    buttonPressEvent = eventCopy;
+                    break;
+                case MotionEvent.ACTION_BUTTON_RELEASE:
+                    buttonReleaseEvent = eventCopy;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    upEvent = eventCopy;
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    moveEvent = eventCopy;
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    cancelEvent = eventCopy;
+                    break;
+                default:
+                    return;
+            }
+            mEventList.add(eventCopy);
+            eventCount++;
+        }
+
+        public void assertCapturedEvents(int... actionsInOrder) {
+            assertThat(eventCount).isEqualTo(mEventList.size());
+            for (int i = 0; i < eventCount; i++) {
+                assertThat(actionsInOrder[i])
+                        .isEqualTo(mEventList.get(i).getAction());
             }
         }
     }
@@ -238,6 +284,7 @@ public class AutoclickControllerTest {
     }
 
     @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
     public void onMotionEvent_initClickSchedulerDelayFromSetting() {
         injectFakeMouseActionHoverMoveEvent();
 
@@ -245,7 +292,7 @@ public class AutoclickControllerTest {
                 Settings.Secure.getIntForUser(
                         mTestableContext.getContentResolver(),
                         Settings.Secure.ACCESSIBILITY_AUTOCLICK_DELAY,
-                        AccessibilityManager.AUTOCLICK_DELAY_DEFAULT,
+                        mController.DEFAULT_AUTOCLICK_DELAY_TIME,
                         mTestableContext.getUserId());
         assertThat(mController.mClickScheduler.getDelayForTesting()).isEqualTo(delay);
     }
@@ -600,6 +647,27 @@ public class AutoclickControllerTest {
 
     @Test
     @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void toggleAutoclickPause_inScrollMode_exitsScrollMode() {
+        // Initialize the controller.
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Set the active click type to scroll.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_SCROLL);
+        mController.mAutoclickScrollPanel.show();
+
+        // Verify it's visible before pause.
+        assertThat(mController.mAutoclickScrollPanel.isVisible()).isTrue();
+
+        // Pause autoclick.
+        mController.clickPanelController.toggleAutoclickPause(true);
+
+        // Verify scroll panel is now hidden.
+        assertThat(mController.mAutoclickScrollPanel.isVisible()).isFalse();
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
     public void onMotionEvent_flagOn_lazyInitAutoclickScrollPanel() {
         assertThat(mController.mAutoclickScrollPanel).isNull();
 
@@ -653,31 +721,21 @@ public class AutoclickControllerTest {
 
     @Test
     public void sendClick_clickType_leftClick() {
-        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
-        mController.setNext(motionEventCaptor);
-
-        injectFakeMouseActionHoverMoveEvent();
-        // Set delay to zero so click is scheduled to run immediately.
-        mController.mClickScheduler.updateDelay(0);
+        initializeAutoclick();
 
         // Send hover move event.
         injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
 
         // Verify left click sent.
-        assertThat(motionEventCaptor.downEvent).isNotNull();
-        assertThat(motionEventCaptor.downEvent.getButtonState()).isEqualTo(
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getButtonState()).isEqualTo(
                 MotionEvent.BUTTON_PRIMARY);
     }
 
     @Test
     public void sendClick_clickType_rightClick() {
-        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
-        mController.setNext(motionEventCaptor);
-
-        injectFakeMouseActionHoverMoveEvent();
-        // Set delay to zero so click is scheduled to run immediately.
-        mController.mClickScheduler.updateDelay(0);
+        initializeAutoclick();
 
         // Set click type to right click.
         mController.clickPanelController.handleAutoclickTypeChange(
@@ -690,20 +748,15 @@ public class AutoclickControllerTest {
         mTestableLooper.processAllMessages();
 
         // Verify right click sent.
-        assertThat(motionEventCaptor.downEvent).isNotNull();
-        assertThat(motionEventCaptor.downEvent.getButtonState()).isEqualTo(
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getButtonState()).isEqualTo(
                 MotionEvent.BUTTON_SECONDARY);
     }
 
     @Test
     @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
     public void sendClick_clickType_scroll_showsScrollPanelOnlyOnce() {
-        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
-        mController.setNext(motionEventCaptor);
-
-        injectFakeMouseActionHoverMoveEvent();
-        // Set delay to zero so click is scheduled to run immediately.
-        mController.mClickScheduler.updateDelay(0);
+        initializeAutoclick();
 
         // Set click type to scroll.
         mController.clickPanelController.handleAutoclickTypeChange(
@@ -718,16 +771,16 @@ public class AutoclickControllerTest {
         mTestableLooper.processAllMessages();
 
         // Verify scroll panel is shown once.
-        verify(mockScrollPanel, times(1)).show();
-        assertThat(motionEventCaptor.downEvent).isNull();
+        verify(mockScrollPanel, times(1)).show(anyFloat(), anyFloat());
+        assertThat(mMotionEventCaptor.downEvent).isNull();
 
         // Second significant hover move event to trigger another autoclick.
         injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 100f, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
 
         // Verify scroll panel is still only shown once (not called again).
-        verify(mockScrollPanel, times(1)).show();
-        assertThat(motionEventCaptor.downEvent).isNull();
+        verify(mockScrollPanel, times(1)).show(anyFloat(), anyFloat());
+        assertThat(mMotionEventCaptor.downEvent).isNull();
     }
 
     @Test
@@ -750,12 +803,7 @@ public class AutoclickControllerTest {
     @Test
     @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
     public void hoverOnAutoclickPanel_rightClickType_forceTriggerLeftClick() {
-        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
-        mController.setNext(motionEventCaptor);
-
-        injectFakeMouseActionHoverMoveEvent();
-        // Set delay to zero so click is scheduled to run immediately.
-        mController.mClickScheduler.updateDelay(0);
+        initializeAutoclick();
 
         // Set click type to right click.
         mController.clickPanelController.handleAutoclickTypeChange(
@@ -770,9 +818,92 @@ public class AutoclickControllerTest {
         mTestableLooper.processAllMessages();
 
         // Verify left click is sent due to the mouse hovering the panel.
-        assertThat(motionEventCaptor.downEvent).isNotNull();
-        assertThat(motionEventCaptor.downEvent.getButtonState()).isEqualTo(
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getButtonState()).isEqualTo(
                 MotionEvent.BUTTON_PRIMARY);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void hoverOnAutoclickPanel_dragClickType_forceTriggerLeftClick() {
+        initializeAutoclick();
+
+        // Set click type to right click.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_DRAG);
+        // Set mouse to hover panel.
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        when(mockAutoclickTypePanel.isHovered()).thenReturn(true);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+
+        // Send hover move event.
+        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 100f, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+
+        // Verify both the down and up left click events are sent due to the mouse hovering the
+        // panel.
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getButtonState()).isEqualTo(
+                MotionEvent.BUTTON_PRIMARY);
+        assertThat(mMotionEventCaptor.upEvent).isNotNull();
+        assertThat(mController.isDraggingForTesting()).isFalse();
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void hoverOnAutoclickPanel_scrollClickType_forceTriggerLeftClick() {
+        initializeAutoclick();
+
+        // Set click type to scrolling click.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_SCROLL);
+        // Set mouse to hover panel.
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        when(mockAutoclickTypePanel.isHovered()).thenReturn(true);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+
+        // Send hover move event.
+        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 100f, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+
+        // Verify left click is sent and the scroll panel is hidden due to the mouse hovering the
+        // panel.
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getButtonState()).isEqualTo(
+                MotionEvent.BUTTON_PRIMARY);
+        assertThat(mController.mAutoclickScrollPanel.isVisible()).isFalse();
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void hoverOnAutoclickPanel_useDefaultCursorArea() {
+        initializeAutoclick();
+
+        // Set an extra large cursor area size and enable ignore minor cursor movement.
+        int customSize = 250;
+        Settings.Secure.putIntForUser(mTestableContext.getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_AUTOCLICK_CURSOR_AREA_SIZE,
+                customSize,
+                mTestableContext.getUserId());
+        mController.onChangeForTesting(/* selfChange= */ true,
+                Settings.Secure.getUriFor(
+                        Settings.Secure.ACCESSIBILITY_AUTOCLICK_CURSOR_AREA_SIZE));
+        enableIgnoreMinorCursorMovement();
+
+        // Set mouse to hover panel.
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        when(mockAutoclickTypePanel.isHovered()).thenReturn(true);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+
+        // Send a hover move event that's within than the cursor area size. Normally because
+        // ignoreMinorCursorMovement is enabled this wouldn't trigger a click. But since the panel
+        // is hovered a click is expected.
+        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+
+        // Verify the expected left click.
+        assertThat(mMotionEventCaptor.eventCount).isEqualTo(
+                getNumEventsExpectedFromClick(/* numClicks= */ 1));
     }
 
     @Test
@@ -796,8 +927,8 @@ public class AutoclickControllerTest {
         // Set cursor position.
         float expectedX = 75f;
         float expectedY = 125f;
-        mController.mLastCursorX = expectedX;
-        mController.mLastCursorY = expectedY;
+        mController.mScrollCursorX = expectedX;
+        mController.mScrollCursorY = expectedY;
 
         // Trigger scroll action in up direction.
         mController.mScrollPanelController.onHoverButtonChange(
@@ -821,8 +952,8 @@ public class AutoclickControllerTest {
         // Set cursor position.
         final float expectedX = 100f;
         final float expectedY = 200f;
-        mController.mLastCursorX = expectedX;
-        mController.mLastCursorY = expectedY;
+        mController.mScrollCursorX = expectedX;
+        mController.mScrollCursorY = expectedY;
 
         // Test UP direction.
         mController.mScrollPanelController.onHoverButtonChange(
@@ -881,13 +1012,94 @@ public class AutoclickControllerTest {
 
     @Test
     @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
-    public void sendClick_clickType_doubleclick_triggerClickTwice() {
-        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
-        mController.setNext(motionEventCaptor);
+    public void scrollCursor_maintainsScrollPositionWhenPanelHovered() {
+        ScrollEventCaptor scrollCaptor = new ScrollEventCaptor();
+        mController.setNext(scrollCaptor);
 
+        // Initialize controller.
         injectFakeMouseActionHoverMoveEvent();
-        // Set delay to zero so click is scheduled to run immediately.
         mController.mClickScheduler.updateDelay(0);
+
+        // Set click type to scroll.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_SCROLL);
+
+        // Set cursor position.
+        float initialX = 100f;
+        float initialY = 200f;
+        mController.mScrollCursorX = initialX;
+        mController.mScrollCursorY = initialY;
+
+        // Create mock panel that is hovered.
+        AutoclickScrollPanel mockScrollPanel = mock(AutoclickScrollPanel.class);
+        when(mockScrollPanel.isHovered()).thenReturn(true);
+        when(mockScrollPanel.isVisible()).thenReturn(true);
+        mController.mAutoclickScrollPanel = mockScrollPanel;
+
+        // Move cursor to panel position.
+        float newX = 300f;
+        float newY = 400f;
+        injectFakeMouseMoveEvent(newX, newY, MotionEvent.ACTION_HOVER_MOVE);
+        mController.mClickScheduler.updateDelay(0);
+        mTestableLooper.processAllMessages();
+
+        // Trigger scroll action in up direction.
+        mController.mScrollPanelController.onHoverButtonChange(
+                AutoclickScrollPanel.DIRECTION_UP, true);
+
+        // Verify scroll event still happens at the original position instead of new location.
+        assertThat(scrollCaptor.scrollEvent).isNotNull();
+        assertThat(scrollCaptor.scrollEvent.getX()).isEqualTo(initialX);
+        assertThat(scrollCaptor.scrollEvent.getY()).isEqualTo(initialY);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void scrollCursor_updateScrollPositionWhenPanelNotHovered() {
+        ScrollEventCaptor scrollCaptor = new ScrollEventCaptor();
+        mController.setNext(scrollCaptor);
+
+        // Initialize controller.
+        injectFakeMouseActionHoverMoveEvent();
+        mController.mClickScheduler.updateDelay(0);
+
+        // Set click type to scroll.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_SCROLL);
+
+        // Set cursor position.
+        float initialX = 100f;
+        float initialY = 200f;
+        mController.mScrollCursorX = initialX;
+        mController.mScrollCursorY = initialY;
+
+        // Create mock panel that is not hovered.
+        AutoclickScrollPanel mockScrollPanel = mock(AutoclickScrollPanel.class);
+        when(mockScrollPanel.isHovered()).thenReturn(false);
+        when(mockScrollPanel.isVisible()).thenReturn(true);
+        mController.mAutoclickScrollPanel = mockScrollPanel;
+
+        // Move cursor to new position.
+        float newX = 300f;
+        float newY = 400f;
+        injectFakeMouseMoveEvent(newX, newY, MotionEvent.ACTION_HOVER_MOVE);
+        mController.mClickScheduler.updateDelay(0);
+        mTestableLooper.processAllMessages();
+
+        // Trigger scroll action in up direction.
+        mController.mScrollPanelController.onHoverButtonChange(
+                AutoclickScrollPanel.DIRECTION_UP, true);
+
+        // Verify scroll event happens at the new position.
+        assertThat(scrollCaptor.scrollEvent).isNotNull();
+        assertThat(scrollCaptor.scrollEvent.getX()).isEqualTo(newX);
+        assertThat(scrollCaptor.scrollEvent.getY()).isEqualTo(newY);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_clickType_doubleclick_triggerClickTwice() {
+        initializeAutoclick();
 
         // Set click type to double click.
         mController.clickPanelController.handleAutoclickTypeChange(
@@ -899,13 +1111,362 @@ public class AutoclickControllerTest {
         injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 100f, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
 
+        // When all messages (with delays) are processed.
+        mTestableLooper.moveTimeForward(2 * mController.LONG_PRESS_TIMEOUT);
+        mTestableLooper.processAllMessages();
+
         // Verify left click sent.
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getButtonState()).isEqualTo(
+                MotionEvent.BUTTON_PRIMARY);
+        assertThat(mMotionEventCaptor.eventCount).isEqualTo(
+                getNumEventsExpectedFromClick(/* numClicks= */ 2));
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_clickType_drag_simulateDragging() {
+        initializeAutoclick();
+
+        // Set click type to drag click.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_DRAG);
+
+        injectFakeMouseMoveEvent(/* x= */ 30, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+
+        // Verify only two motion events were sent.
+        assertThat(mMotionEventCaptor.eventCount).isEqualTo(2);
+
+        // Verify both events have the same down time.
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.buttonPressEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getDownTime()).isEqualTo(
+                mMotionEventCaptor.buttonPressEvent.getDownTime());
+
+        // Move the mouse again to simulate dragging and verify the new mouse event is
+        // transformed to a MOVE action and its down time matches the drag initiating click's
+        // down time.
+        injectFakeMouseMoveEvent(/* x= */ 40, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+        assertThat(mMotionEventCaptor.eventCount).isEqualTo(3);
+        assertThat(mMotionEventCaptor.moveEvent).isNotNull();
+        assertThat(mMotionEventCaptor.moveEvent.getDownTime()).isEqualTo(
+                mMotionEventCaptor.downEvent.getDownTime());
+
+        // Move the mouse again further now to simulate ending the drag session.
+        mMotionEventCaptor.moveEvent = null;
+        mMotionEventCaptor.eventCount = 0;
+        injectFakeMouseMoveEvent(/* x= */ 300, /* y= */ 300, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+
+        // Verify the final 3 clicks were sent: the 1 move event + 2 up type events to end the drag.
+        assertThat(mMotionEventCaptor.eventCount).isEqualTo(3);
+
+        // Verify each event matches the same down time as the initiating drag click.
+        assertThat(mMotionEventCaptor.moveEvent).isNotNull();
+        assertThat(mMotionEventCaptor.moveEvent.getDownTime()).isEqualTo(
+                mMotionEventCaptor.downEvent.getDownTime());
+        assertThat(mMotionEventCaptor.buttonReleaseEvent).isNotNull();
+        assertThat(mMotionEventCaptor.buttonReleaseEvent.getDownTime()).isEqualTo(
+                mMotionEventCaptor.downEvent.getDownTime());
+        assertThat(mMotionEventCaptor.upEvent).isNotNull();
+        assertThat(mMotionEventCaptor.upEvent.getDownTime()).isEqualTo(
+                mMotionEventCaptor.downEvent.getDownTime());
+    }
+
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_clickType_drag_keyEventCancelsDrag() {
+        initializeAutoclick();
+
+        // Set click type to drag click.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_DRAG);
+
+        // Initiate drag event.
+        injectFakeMouseMoveEvent(/* x= */ 100, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+        assertThat(mController.isDraggingForTesting()).isTrue();
+
+        // Move the mouse to start the click scheduler.
+        injectFakeMouseActionHoverMoveEvent();
+        injectFakeMouseMoveEvent(/* x= */ 200, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        assertThat(mController.isDraggingForTesting()).isTrue();
+
+        // Press a key to see the drag canceled and reset.
+        injectFakeKeyEvent(KeyEvent.KEYCODE_A, /* modifiers= */ 0);
+        assertThat(mController.isDraggingForTesting()).isFalse();
+
+        // Verify the ACTION_UP was sent for alerting the system that dragging has ended.
+        assertThat(mMotionEventCaptor.upEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.upEvent.getDownTime()).isEqualTo(
+                mMotionEventCaptor.downEvent.getDownTime());
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_clickType_drag_clickTypeDoesNotRevertAfterFirstClick() {
+        initializeAutoclick();
+
+        // Set ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK to true.
+        Settings.Secure.putIntForUser(mTestableContext.getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK,
+                AccessibilityUtils.State.ON,
+                mTestableContext.getUserId());
+        mController.onChangeForTesting(/* selfChange= */ true,
+                Settings.Secure.getUriFor(
+                        Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK));
+
+        // Set click type to drag click.
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_DRAG);
+
+        // Initiate drag event.
+        injectFakeMouseMoveEvent(/* x= */ 100, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+
+        // Even after the click, the click type should not be reset.
+        assertThat(mController.getActiveClickTypeForTest())
+                .isEqualTo(AutoclickTypePanel.AUTOCLICK_TYPE_DRAG);
+        verify(mockAutoclickTypePanel, Mockito.never()).collapsePanelWithClickType(anyInt());
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void exitScrollMode_revertToLeftClickEnabled_resetsClickType() {
+        initializeAutoclick();
+
+        // Set ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK to true.
+        Settings.Secure.putIntForUser(mTestableContext.getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK,
+                AccessibilityUtils.State.ON,
+                mTestableContext.getUserId());
+        mController.onChangeForTesting(/* selfChange= */ true,
+                Settings.Secure.getUriFor(
+                        Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK));
+
+        // Set click type to scroll.
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_SCROLL);
+
+        // Show the scroll panel.
+        AutoclickScrollPanel mockScrollPanel = mock(AutoclickScrollPanel.class);
+        when(mockScrollPanel.isVisible()).thenReturn(true);
+        mController.mAutoclickScrollPanel = mockScrollPanel;
+
+        // Exit scroll mode.
+        mController.exitScrollMode();
+
+        // Verify click type is reset when exiting scroll mode.
+        verify(mockAutoclickTypePanel).collapsePanelWithClickType(
+                AutoclickTypePanel.AUTOCLICK_TYPE_LEFT_CLICK);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_clickType_longPress_triggerPressAndHold() {
+        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
+        mController.setNext(motionEventCaptor);
+
+        injectFakeMouseActionHoverMoveEvent();
+        // Set delay to zero so click is scheduled to run immediately.
+        mController.mClickScheduler.updateDelay(0);
+        // Set click type to long press.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_LONG_PRESS);
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+
+        // Send hover move event.
+        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
         assertThat(motionEventCaptor.downEvent).isNotNull();
         assertThat(motionEventCaptor.downEvent.getButtonState()).isEqualTo(
                 MotionEvent.BUTTON_PRIMARY);
-        assertThat(motionEventCaptor.eventCount).isEqualTo(2);
+        assertThat(motionEventCaptor.upEvent).isNull();
+
+        // When all messages (with delays) are processed.
+        mTestableLooper.moveTimeForward(mController.LONG_PRESS_TIMEOUT);
+        mTestableLooper.processAllMessages();
+        assertThat(motionEventCaptor.upEvent).isNotNull();
+        motionEventCaptor.assertCapturedEvents(
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_BUTTON_PRESS,
+                MotionEvent.ACTION_BUTTON_RELEASE, MotionEvent.ACTION_UP);
     }
 
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_clickType_longPress_interruptCancelsLongPress() {
+        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
+        mController.setNext(motionEventCaptor);
+
+        injectFakeMouseActionHoverMoveEvent();
+        // Set delay to zero so click is scheduled to run immediately.
+        mController.mClickScheduler.updateDelay(0);
+        // Set click type to long press.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_LONG_PRESS);
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+
+        // Send hover move event.
+        injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        mTestableLooper.processAllMessages();
+        assertThat(motionEventCaptor.downEvent).isNotNull();
+        assertThat(motionEventCaptor.downEvent.getButtonState()).isEqualTo(
+                MotionEvent.BUTTON_PRIMARY);
+        assertThat(motionEventCaptor.upEvent).isNull();
+        assertThat(mController.hasOngoingLongPressForTesting()).isTrue();
+        assertThat(motionEventCaptor.cancelEvent).isNull();
+
+        // Send another hover move event to interrupt the long press.
+        mTestableLooper.moveTimeForward(mController.LONG_PRESS_TIMEOUT / 2);
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_LEFT_CLICK);
+        injectFakeMouseMoveEvent(/* x= */ 0, /* y= */ 30f, MotionEvent.ACTION_HOVER_MOVE);
+        mController.mClickScheduler.run();
+        mTestableLooper.processAllMessages();
+        assertThat(motionEventCaptor.cancelEvent).isNotNull();
+        assertThat(mController.hasOngoingLongPressForTesting()).isFalse();
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_clickType_longPress_revertsToLeftClick() {
+        MotionEventCaptor motionEventCaptor = new MotionEventCaptor();
+        mController.setNext(motionEventCaptor);
+
+        // Move mouse to initialize autoclick panel.
+        injectFakeMouseActionHoverMoveEvent();
+
+        AutoclickTypePanel mockAutoclickTypePanel = mock(AutoclickTypePanel.class);
+        mController.mAutoclickTypePanel = mockAutoclickTypePanel;
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_LONG_PRESS);
+
+        // Set ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK to false.
+        Settings.Secure.putIntForUser(mTestableContext.getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK,
+                AccessibilityUtils.State.OFF,
+                mTestableContext.getUserId());
+        mController.onChangeForTesting(/* selfChange= */ true,
+                Settings.Secure.getUriFor(
+                        Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK));
+        when(mockAutoclickTypePanel.isPaused()).thenReturn(false);
+        assertThat(mController.mClickScheduler.getRevertToLeftClickForTesting()).isFalse();
+        assertThat(mController.getActiveClickTypeForTest()).isEqualTo(
+                AutoclickTypePanel.AUTOCLICK_TYPE_LONG_PRESS);
+
+        // Send hover move event to trigger long press.
+        when(mockAutoclickTypePanel.isPaused()).thenReturn(false);
+        mController.mClickScheduler.run();
+        mTestableLooper.moveTimeForward(mController.LONG_PRESS_TIMEOUT);
+        mTestableLooper.processAllMessages();
+
+        motionEventCaptor.assertCapturedEvents(
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_BUTTON_PRESS,
+                MotionEvent.ACTION_BUTTON_RELEASE, MotionEvent.ACTION_UP);
+
+        verify(mockAutoclickTypePanel).collapsePanelWithClickType(
+                AutoclickTypePanel.AUTOCLICK_TYPE_LEFT_CLICK);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void continuousScroll_completeLifecycle() {
+        // Set up event capturer to track scroll events.
+        ScrollEventCaptor scrollCaptor = new ScrollEventCaptor();
+        mController.setNext(scrollCaptor);
+
+        // Initialize controller.
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Set cursor position.
+        float expectedX = 100f;
+        float expectedY = 200f;
+        mController.mScrollCursorX = expectedX;
+        mController.mScrollCursorY = expectedY;
+
+        // Start scrolling by hovering UP button.
+        mController.mScrollPanelController.onHoverButtonChange(
+                AutoclickScrollPanel.DIRECTION_UP, true);
+
+        // Verify initial hover state and event.
+        assertThat(mController.mHoveredDirection).isEqualTo(AutoclickScrollPanel.DIRECTION_UP);
+        assertThat(scrollCaptor.eventCount).isEqualTo(1);
+        assertThat(scrollCaptor.scrollEvent.getAxisValue(MotionEvent.AXIS_VSCROLL)).isGreaterThan(
+                0);
+
+        // Simulate continuous scrolling by triggering runnable.
+        scrollCaptor.eventCount = 0;
+
+        // Advance time by CONTINUOUS_SCROLL_INTERVAL (30ms) and process messages.
+        mTestableLooper.moveTimeForward(CONTINUOUS_SCROLL_INTERVAL);
+        mTestableLooper.processAllMessages();
+
+        // Advance time again to trigger second scroll event.
+        mTestableLooper.moveTimeForward(CONTINUOUS_SCROLL_INTERVAL);
+        mTestableLooper.processAllMessages();
+
+        // Verify multiple scroll events were generated.
+        assertThat(scrollCaptor.eventCount).isEqualTo(2);
+        assertThat(scrollCaptor.scrollEvent.getX()).isEqualTo(expectedX);
+        assertThat(scrollCaptor.scrollEvent.getY()).isEqualTo(expectedY);
+
+        // Stop scrolling by un-hovering the button.
+        mController.mScrollPanelController.onHoverButtonChange(
+                AutoclickScrollPanel.DIRECTION_UP, false);
+
+        // Verify direction is reset.
+        assertThat(mController.mHoveredDirection).isEqualTo(AutoclickScrollPanel.DIRECTION_NONE);
+
+        // Verify no more scroll events are generated after stopping.
+        int countBeforeRunnable = scrollCaptor.eventCount;
+        mTestableLooper.moveTimeForward(CONTINUOUS_SCROLL_INTERVAL);
+        mTestableLooper.processAllMessages();
+        assertThat(scrollCaptor.eventCount).isEqualTo(countBeforeRunnable);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void exitButton_exitsScrollMode() {
+        // Initialize the controller.
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Set the active click type to scroll.
+        mController.clickPanelController.handleAutoclickTypeChange(
+                AutoclickTypePanel.AUTOCLICK_TYPE_SCROLL);
+
+        // Enable revert to left click setting.
+        Settings.Secure.putIntForUser(mTestableContext.getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK,
+                AccessibilityUtils.State.ON,
+                mTestableContext.getUserId());
+        mController.onChangeForTesting(/* selfChange= */ true,
+                Settings.Secure.getUriFor(
+                        Settings.Secure.ACCESSIBILITY_AUTOCLICK_REVERT_TO_LEFT_CLICK));
+
+        // Show the scroll panel and verify it's visible before pause.
+        mController.mAutoclickScrollPanel.show();
+        assertThat(mController.mAutoclickScrollPanel.isVisible()).isTrue();
+
+        // Simulate exit button click.
+        mController.mScrollPanelController.onExitScrollMode();
+
+        // Verify that the scroll panel is hidden.
+        assertThat(mController.mAutoclickScrollPanel.isVisible()).isFalse();
+
+        // Verify that the click type is reset to left click.
+        assertThat(mController.getActiveClickTypeForTest())
+                .isEqualTo(AutoclickTypePanel.AUTOCLICK_TYPE_LEFT_CLICK);
+    }
     /**
      * =========================================================================
      * Helper Functions
@@ -963,5 +1524,19 @@ public class AutoclickControllerTest {
         mController.onChangeForTesting(/* selfChange= */ true,
                 Settings.Secure.getUriFor(
                         Settings.Secure.ACCESSIBILITY_AUTOCLICK_IGNORE_MINOR_CURSOR_MOVEMENT));
+    }
+
+    // The 4 events represented are DOWN, BUTTON_PRESS, BUTTON_RELEASE, and UP.
+    private int getNumEventsExpectedFromClick(int numClicks) {
+        return numClicks * 4;
+    }
+
+    private void initializeAutoclick() {
+        mMotionEventCaptor = new MotionEventCaptor();
+        mController.setNext(mMotionEventCaptor);
+
+        injectFakeMouseActionHoverMoveEvent();
+        // Set delay to zero so click is scheduled to run immediately.
+        mController.mClickScheduler.updateDelay(0);
     }
 }

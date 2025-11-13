@@ -21,8 +21,6 @@ import static android.hardware.input.InputGestureData.createKeyTrigger;
 import static com.android.hardware.input.Flags.enableTalkbackAndMagnifierKeyGestures;
 import static com.android.hardware.input.Flags.enableVoiceAccessKeyGestures;
 import static com.android.hardware.input.Flags.keyboardA11yShortcutControl;
-import static com.android.server.flags.Flags.newBugreportKeyboardShortcut;
-import static com.android.window.flags.Flags.enableMoveToNextDisplayShortcut;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -36,6 +34,7 @@ import android.os.SystemProperties;
 import android.util.IndentingPrintWriter;
 import android.util.SparseArray;
 import android.view.KeyEvent;
+import android.window.DesktopExperienceFlags;
 import android.window.DesktopModeFlags;
 
 import com.android.internal.annotations.GuardedBy;
@@ -178,14 +177,14 @@ final class InputGestureManager {
                         KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS
                 )
         ));
-        if (newBugreportKeyboardShortcut() && "1".equals(SystemProperties.get("ro.debuggable"))) {
+        if ("1".equals(SystemProperties.get("ro.debuggable"))) {
             systemShortcuts.add(createKeyGesture(
                     KeyEvent.KEYCODE_DEL,
                     KeyEvent.META_META_ON | KeyEvent.META_CTRL_ON,
                     KeyGestureEvent.KEY_GESTURE_TYPE_TRIGGER_BUG_REPORT
             ));
         }
-        if (enableMoveToNextDisplayShortcut()) {
+        if (DesktopExperienceFlags.ENABLE_MOVE_TO_NEXT_DISPLAY_SHORTCUT.isTrue()) {
             systemShortcuts.add(createKeyGesture(
                     KeyEvent.KEYCODE_D,
                     KeyEvent.META_META_ON | KeyEvent.META_CTRL_ON,
@@ -195,7 +194,7 @@ final class InputGestureManager {
         if (enableTalkbackAndMagnifierKeyGestures()) {
             systemShortcuts.add(createKeyGesture(KeyEvent.KEYCODE_T,
                     KeyEvent.META_META_ON | KeyEvent.META_ALT_ON,
-                    KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_TALKBACK));
+                    KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_SCREEN_READER));
             systemShortcuts.add(createKeyGesture(KeyEvent.KEYCODE_M,
                     KeyEvent.META_META_ON | KeyEvent.META_ALT_ON,
                     KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_MAGNIFICATION));
@@ -254,6 +253,18 @@ final class InputGestureManager {
                     KeyEvent.KEYCODE_6,
                     KeyEvent.META_META_ON | KeyEvent.META_ALT_ON,
                     KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_SLOW_KEYS
+            ));
+        }
+        if (DesktopExperienceFlags.ENABLE_KEYBOARD_SHORTCUTS_TO_SWITCH_DESKS.isTrue()) {
+            systemShortcuts.add(createKeyGesture(
+                    KeyEvent.KEYCODE_LEFT_BRACKET,
+                    KeyEvent.META_META_ON | KeyEvent.META_CTRL_ON,
+                    KeyGestureEvent.KEY_GESTURE_TYPE_SWITCH_TO_PREVIOUS_DESK
+            ));
+            systemShortcuts.add(createKeyGesture(
+                    KeyEvent.KEYCODE_RIGHT_BRACKET,
+                    KeyEvent.META_META_ON | KeyEvent.META_CTRL_ON,
+                    KeyGestureEvent.KEY_GESTURE_TYPE_SWITCH_TO_NEXT_DESK
             ));
         }
         synchronized (mGestureLock) {

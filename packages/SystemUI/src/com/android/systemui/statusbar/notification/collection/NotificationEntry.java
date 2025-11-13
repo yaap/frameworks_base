@@ -22,6 +22,7 @@ import static android.app.Notification.CATEGORY_EVENT;
 import static android.app.Notification.CATEGORY_MESSAGE;
 import static android.app.Notification.CATEGORY_REMINDER;
 import static android.app.Notification.FLAG_BUBBLE;
+import static android.app.NotificationChannel.SYSTEM_RESERVED_IDS;
 import static android.app.NotificationManager.Policy.SUPPRESSED_EFFECT_AMBIENT;
 import static android.app.NotificationManager.Policy.SUPPRESSED_EFFECT_BADGE;
 import static android.app.NotificationManager.Policy.SUPPRESSED_EFFECT_FULL_SCREEN_INTENT;
@@ -51,6 +52,7 @@ import android.service.notification.NotificationListenerService.Ranking;
 import android.service.notification.SnoozeCriterion;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
+import android.util.Pair;
 import android.view.ContentInfo;
 
 import androidx.annotation.NonNull;
@@ -76,15 +78,14 @@ import com.android.systemui.statusbar.notification.row.shared.HeadsUpStatusBarMo
 import com.android.systemui.statusbar.notification.row.shared.NotificationContentModel;
 import com.android.systemui.statusbar.notification.row.shared.NotificationRowContentBinderRefactor;
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi;
-import com.android.systemui.util.ListenerSet;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 
 import kotlinx.coroutines.flow.MutableStateFlow;
 import kotlinx.coroutines.flow.StateFlow;
 import kotlinx.coroutines.flow.StateFlowKt;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * Represents a notification that the system UI knows about
@@ -103,7 +104,6 @@ import kotlinx.coroutines.flow.StateFlowKt;
  */
 public final class NotificationEntry extends ListEntry {
 
-    private final String mKey;
     private StatusBarNotification mSbn;
     private Ranking mRanking;
 
@@ -152,6 +152,7 @@ public final class NotificationEntry extends ListEntry {
 
     private ExpandableNotificationRow row; // the outer expanded view
     private ExpandableNotificationRowController mRowController;
+    private RemoteInputEntryAdapter mRemoteInputEntryAdapter;
 
     private int mCachedContrastColor = COLOR_INVALID;
     private int mCachedContrastColorIsFor = COLOR_INVALID;
@@ -174,8 +175,6 @@ public final class NotificationEntry extends ListEntry {
     private boolean hasSentReply;
 
     private final MutableStateFlow<Boolean> mSensitive = StateFlowKt.MutableStateFlow(true);
-    private final ListenerSet<OnSensitivityChangedListener> mOnSensitivityChangedListeners =
-            new ListenerSet<>();
 
     private boolean mPulseSupressed;
     private boolean mIsMarkedForUserTriggeredMovement;
@@ -250,6 +249,16 @@ public final class NotificationEntry extends ListEntry {
     }
 
     /**
+     * Stores the key of the bundle this notification was added to
+     * and the uptimeMillis when it was first added to that bundle
+     *
+     * String is bundle key, Long is time of the first pipeline run that added this to the bundle
+     * Defaults to (null, 0L) if not in a bundle or timestamp is not set yet.
+     */
+    @NonNull
+    public Pair<String, Long> timeAddedToBundle = new Pair<>(null, 0L);
+
+    /**
      * @param sbn the StatusBarNotification from system server
      * @param ranking also from system server
      * @param creationTime SystemClock.elapsedRealtime of when we were created
@@ -263,19 +272,35 @@ public final class NotificationEntry extends ListEntry {
 
         requireNonNull(ranking);
 
-        mKey = sbn.getKey();
         setSbn(sbn);
         setRanking(ranking);
+        mRemoteInputEntryAdapter = new RemoteInputEntryAdapter(this);
+    }
+
+    /**
+     * Updates the bundle this notif belongs to and when it was added.
+     * Timestamp is updated only if the bundle key actually changes.
+     * Called from BundleCoodinator on pipeline re-runs.
+     *
+     * @param newBundleKey The key of the bundle this notification is now part of, or null if none.
+     * @param pipelineRunUptimeMillis The current uptime from the pipeline run.
+     */
+    public void updateBundle(@Nullable String newBundleKey, long pipelineRunUptimeMillis) {
+        if (newBundleKey != null) {
+            final String oldBundleKey = this.timeAddedToBundle.first;
+            final Long oldTimeAdded = this.timeAddedToBundle.second;
+            // First time added to bundle
+            if (oldTimeAdded == 0L
+                    // or moved to different bundle
+                    || (oldBundleKey != null && !oldBundleKey.equals(newBundleKey))) {
+                this.timeAddedToBundle = new Pair<>(newBundleKey, pipelineRunUptimeMillis);
+            }
+        }
     }
 
     @Override
     public NotificationEntry getRepresentativeEntry() {
         return this;
-    }
-
-    /** The key for this notification. Guaranteed to be immutable and unique */
-    @NonNull public String getKey() {
-        return mKey;
     }
 
     /**
@@ -294,9 +319,9 @@ public final class NotificationEntry extends ListEntry {
         requireNonNull(sbn);
         requireNonNull(sbn.getKey());
 
-        if (!sbn.getKey().equals(mKey)) {
+        if (!sbn.getKey().equals(getKey())) {
             throw new IllegalArgumentException("New key " + sbn.getKey()
-                    + " doesn't match existing key " + mKey);
+                    + " doesn't match existing key " + getKey());
         }
 
         mSbn = sbn;
@@ -320,13 +345,17 @@ public final class NotificationEntry extends ListEntry {
         requireNonNull(ranking);
         requireNonNull(ranking.getKey());
 
-        if (!ranking.getKey().equals(mKey)) {
+        if (!ranking.getKey().equals(getKey())) {
             throw new IllegalArgumentException("New key " + ranking.getKey()
-                    + " doesn't match existing key " + mKey);
+                    + " doesn't match existing key " + getKey());
         }
 
         mRanking = ranking.withAudiblyAlertedInfo(mRanking);
         updateIsBlockable();
+    }
+
+    public RemoteInputEntryAdapter getRemoteInputEntryAdapter() {
+        return mRemoteInputEntryAdapter;
     }
 
     /*
@@ -341,7 +370,8 @@ public final class NotificationEntry extends ListEntry {
         return mDismissState;
     }
 
-    void setDismissState(@NonNull DismissState dismissState) {
+    @VisibleForTesting
+    public void setDismissState(@NonNull DismissState dismissState) {
         mDismissState = requireNonNull(dismissState);
     }
 
@@ -407,6 +437,9 @@ public final class NotificationEntry extends ListEntry {
         return mRanking.getSmartReplies();
     }
 
+    public boolean isBundled() {
+        return SYSTEM_RESERVED_IDS.contains(getRanking().getChannel().getId());
+    }
 
     /*
      * Old methods
@@ -641,6 +674,9 @@ public final class NotificationEntry extends ListEntry {
     }
 
     public void sendAccessibilityEvent(int eventType) {
+        if (com.android.systemui.Flags.notificationsHunAccessibilityRefactor()) {
+            return;
+        }
         if (row != null) {
             row.sendAccessibilityEvent(eventType);
         }
@@ -852,14 +888,6 @@ public final class NotificationEntry extends ListEntry {
     }
 
     /**
-     * Returns whether the NotificationEntry is promoted ongoing.
-     */
-    @FlaggedApi(Flags.FLAG_API_RICH_ONGOING)
-    public boolean isOngoingPromoted() {
-        return mSbn.getNotification().isPromotedOngoing();
-    }
-
-    /**
      * Returns whether this row is considered blockable (i.e. it's not a system notif
      * or is not in an allowList).
      */
@@ -969,21 +997,11 @@ public final class NotificationEntry extends ListEntry {
         getRow().setSensitive(sensitive, deviceSensitive);
         if (sensitive != mSensitive.getValue()) {
             mSensitive.setValue(sensitive);
-            for (NotificationEntry.OnSensitivityChangedListener listener :
+            for (PipelineEntry.OnSensitivityChangedListener listener :
                     mOnSensitivityChangedListeners) {
                 listener.onSensitivityChanged(this);
             }
         }
-    }
-
-    /** Add a listener to be notified when the entry's sensitivity changes. */
-    public void addOnSensitivityChangedListener(OnSensitivityChangedListener listener) {
-        mOnSensitivityChangedListeners.addIfAbsent(listener);
-    }
-
-    /** Remove a listener that was registered above. */
-    public void removeOnSensitivityChangedListener(OnSensitivityChangedListener listener) {
-        mOnSensitivityChangedListeners.remove(listener);
     }
 
     /** @see #setHeadsUpStatusBarText(CharSequence) */
@@ -1035,16 +1053,6 @@ public final class NotificationEntry extends ListEntry {
      */
     public void markForUserTriggeredMovement(boolean marked) {
         mIsMarkedForUserTriggeredMovement = marked;
-    }
-
-    private boolean mSeenInShade = false;
-
-    public void setSeenInShade(boolean seen) {
-        mSeenInShade = seen;
-    }
-
-    public boolean isSeenInShade() {
-        return mSeenInShade;
     }
 
     public void setIsHeadsUpEntry(boolean isHeadsUpEntry) {
@@ -1121,7 +1129,7 @@ public final class NotificationEntry extends ListEntry {
      */
     @FlaggedApi(Flags.FLAG_API_RICH_ONGOING)
     public boolean isPromotedOngoing() {
-        return PromotedNotificationContentModel.isPromotedForStatusBarChip(mSbn.getNotification());
+        return mSbn.getNotification().isPromotedOngoing();
     }
 
     /**
@@ -1154,12 +1162,6 @@ public final class NotificationEntry extends ListEntry {
             this.originalText = originalText;
             this.index = index;
         }
-    }
-
-    /** Listener interface for {@link #addOnSensitivityChangedListener} */
-    public interface OnSensitivityChangedListener {
-        /** Called when the sensitivity changes */
-        void onSensitivityChanged(@NonNull NotificationEntry entry);
     }
 
     /** @see #getDismissState() */

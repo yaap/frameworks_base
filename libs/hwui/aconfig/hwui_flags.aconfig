@@ -90,10 +90,19 @@ flag {
 }
 
 flag {
-  name: "animate_hdr_transitions"
+  name: "requested_formats_12_14"
+  is_exported: true
   namespace: "core_graphics"
-  description: "Automatically animate all changes in HDR headroom"
-  bug: "314810174"
+  description: "Add new 12 & 14-bit formats in the SDK"
+  bug: "390471495"
+}
+
+flag {
+  name: "requested_formats_bgra_1010102"
+  is_exported: true
+  namespace: "core_graphics"
+  description: "Enable BGRA_1010102 in the SDK"
+  bug: "414794424"
 }
 
 flag {
@@ -145,16 +154,6 @@ flag {
 }
 
 flag {
-  name: "query_global_priority"
-  namespace: "core_graphics"
-  description: "Attempt to query whether the vulkan driver supports the requested global priority before queue creation."
-  bug: "343986434"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
   name: "bitmap_ashmem_long_name"
   namespace: "core_graphics"
   description: "Whether to have more information in ashmem filenames for bitmaps"
@@ -187,17 +186,6 @@ flag {
 }
 
 flag {
-  name: "calc_workload_orig_deadline"
-  namespace: "window_surfaces"
-  description: "Use original frame deadline to calculate the workload target deadline for jank tracking"
-  bug: "389939827"
-  is_fixed_read_only: true
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
   name: "early_preinit_buffer_allocator"
   namespace: "core_graphics"
   description: "Initialize GraphicBufferAllocater on ViewRootImpl init, to avoid blocking on init during buffer allocation, improving app launch latency."
@@ -210,4 +198,19 @@ flag {
   namespace: "system_performance"
   description: "Whether to parcel implicit copies of bitmaps to ashmem as immutable"
   bug: "400807118"
+}
+
+flag {
+  name: "bitmap_use_memfd"
+  namespace: "system_performance"
+  description: "Whether to parcel implicit copies of bitmaps to memfd instead of ashmem"
+  bug: "400807118"
+  is_fixed_read_only: true
+}
+
+flag {
+  name: "add_surfacecontrol_constants"
+  namespace: "core_graphics"
+  description: "Add two helper constants to SurfaceControl to improve @IntDef lint"
+  bug: "413710706"
 }

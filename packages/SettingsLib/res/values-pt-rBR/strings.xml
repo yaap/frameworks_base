@@ -45,7 +45,7 @@
     <string name="wifi_security_eap_wpa3" msgid="7961135182909018796">"WPA3-Enterprise"</string>
     <string name="wifi_security_passpoint" msgid="2209078477216565387">"Passpoint"</string>
     <string name="wifi_security_sae" msgid="3644520541721422843">"WPA3-Personal"</string>
-    <string name="wifi_security_psk_sae" msgid="8135104122179904684">"WPA2/WPA3-Personal"</string>
+    <string name="wifi_security_psk_sae" msgid="8135104122179904684">"WPA2/WPA3-Pessoal"</string>
     <string name="wifi_security_none_owe" msgid="5241745828327404101">"Nenhum/Enhanced Open"</string>
     <string name="wifi_security_owe" msgid="3343421403561657809">"Enhanced Open"</string>
     <string name="wifi_security_eap_suiteb" msgid="415842785991698142">"WPA3-Enterprise 192 bits"</string>
@@ -289,7 +289,7 @@
     <string name="adb_wireless_no_network_msg" msgid="2365795244718494658">"Conecte-se a uma rede Wi-Fi"</string>
     <string name="keywords_adb_wireless" msgid="6507505581882171240">"adb, debug, dev"</string>
     <string name="bugreport_in_power" msgid="8664089072534638709">"Atalho para relatório de bugs"</string>
-    <string name="bugreport_in_power_summary" msgid="1885529649381831775">"Mostra um botão para gerar relatórios de bugs no menu do botão liga/desliga"</string>
+    <string name="bugreport_in_power_summary" msgid="1885529649381831775">"Mostra um botão para gerar relatório de bugs no menu liga/desliga"</string>
     <string name="keep_screen_on" msgid="1187161672348797558">"Permanecer ativo"</string>
     <string name="keep_screen_on_summary" msgid="1510731514101925829">"A tela nunca entra em suspensão enquanto está carregando"</string>
     <string name="bt_hci_snoop_log" msgid="7291287955649081448">"Ativar registro de rastreamento de HCI Bluetooth"</string>
@@ -375,7 +375,7 @@
     <string name="hdcp_checking_dialog_title" msgid="7691060297616217781">"Config. a verificação HDCP"</string>
     <string name="debug_debugging_category" msgid="535341063709248842">"Depuração"</string>
     <string name="debug_app" msgid="8903350241392391766">"Selecionar app de depuração"</string>
-    <string name="debug_app_not_set" msgid="1934083001283807188">"Nenhum conjunto de apps de depuração"</string>
+    <string name="debug_app_not_set" msgid="1934083001283807188">"Nenhum app de depuração selecionado"</string>
     <string name="debug_app_set" msgid="6599535090477753651">"App de depuração: <xliff:g id="APP_NAME">%1$s</xliff:g>"</string>
     <string name="select_application" msgid="2543228890535466325">"Selecionar app"</string>
     <string name="no_application" msgid="9038334538870247690">"Nada"</string>
@@ -424,7 +424,7 @@
     <string name="enable_gpu_debug_layers" msgid="4986675516188740397">"Ativar camadas de depuração de GPU"</string>
     <string name="enable_gpu_debug_layers_summary" msgid="4921521407377170481">"Permitir carregamento de camadas de depuração de GPU p/ apps de depuração"</string>
     <string name="enable_verbose_vendor_logging" msgid="1196698788267682072">"Ativar registro detalhado de fornecedor"</string>
-    <string name="enable_verbose_vendor_logging_summary" msgid="5426292185780393708">"Incluir mais registros de fornecedores específicos do dispositivo em relatórios de bugs. Isso pode aumentar o uso da bateria e/ou do armazenamento, e os relatórios podem conter informações particulares."</string>
+    <string name="enable_verbose_vendor_logging_summary" msgid="5426292185780393708">"Inclui mais registros de fornecedores específicos do dispositivo em relatórios de bugs. Isso pode aumentar o uso da bateria e/ou do armazenamento, e os relatórios podem conter informações particulares"</string>
     <string name="enable_verbose_vendor_logging_checkbox" msgid="3864578373293835530">"Desativar depois de 1 dia"</string>
     <string name="verbose_vendor_logging_notification_title" msgid="6811217272559843592">"O registro detalhado de fornecedor foi encerrado"</string>
     <string name="verbose_vendor_logging_notification_summary" msgid="5226524769774370942">"Ativado por 1 dia"</string>
@@ -551,15 +551,19 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> atrás"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> restante(s)"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Mínimo"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Menor"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Pequena"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"Padrão"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Grande"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Muito grande"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Maior"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Maior"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Muito grande"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Extragrande"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Máximo"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Personalizada (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Menu"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Digite a senha para redef. p/ configuração original em modo demo"</string>
-    <string name="retail_demo_reset_next" msgid="3688129033843885362">"Próxima"</string>
+    <string name="retail_demo_reset_next" msgid="3688129033843885362">"Avançar"</string>
     <string name="retail_demo_reset_title" msgid="1866911701095959800">"Senha necessária"</string>
     <string name="active_input_method_subtypes" msgid="4232680535471633046">"Métodos ativos de entrada"</string>
     <string name="use_system_language_to_select_input_method_subtypes" msgid="4865195835541387040">"Usa idiomas do sistema"</string>
@@ -574,8 +578,9 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{1 dispositivo conectado}one{# dispositivo conectado}other{# dispositivos conectados}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Mais tempo."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Menos tempo."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Ampliação"</string>
     <string name="cancel" msgid="5665114069455378395">"Cancelar"</string>
-    <string name="next" msgid="2699398661093607009">"Próxima"</string>
+    <string name="next" msgid="2699398661093607009">"Avançar"</string>
     <string name="back" msgid="5554327870352703710">"Voltar"</string>
     <string name="save" msgid="3745809743277153149">"Salvar"</string>
     <string name="okay" msgid="949938843324579502">"Ok"</string>
@@ -588,7 +593,7 @@
     <string name="zen_mode_do_not_disturb_name" msgid="6798711401734798283">"Não perturbe"</string>
     <string name="zen_mode_settings_title" msgid="7374070457626419755">"Não perturbe"</string>
     <string name="zen_mode_enable_dialog_turn_on" msgid="6418297231575050426">"Ativar"</string>
-    <string name="zen_mode_settings_turn_on_dialog_title" msgid="2760567063190790696">"Ativar o Não perturbe"</string>
+    <string name="zen_mode_settings_turn_on_dialog_title" msgid="2760567063190790696">"Ativar o não perturbe"</string>
     <string name="zen_mode_settings_summary_off" msgid="3832876036123504076">"Nunca"</string>
     <string name="zen_interruption_level_priority" msgid="5392140786447823299">"Somente prioridade"</string>
     <string name="zen_mode_and_condition" msgid="8877086090066332516">"<xliff:g id="ZEN_MODE">%1$s</xliff:g>. <xliff:g id="EXIT_CONDITION">%2$s</xliff:g>"</string>
@@ -655,7 +660,7 @@
     <string name="user_grant_admin_message" msgid="1673791931033486709">"Administradores têm privilégios especiais que outros usuários não têm. Um administrador pode gerenciar todos os usuários, atualizar ou redefinir este dispositivo, modificar configurações, conferir todos os apps instalados e conceder ou revogar privilégios de administrador para outras pessoas."</string>
     <string name="user_grant_admin_button" msgid="5441486731331725756">"Transformar o usuário em administrador"</string>
     <string name="user_setup_dialog_title" msgid="8037342066381939995">"Configurar o usuário agora?"</string>
-    <string name="user_setup_dialog_message" msgid="269931619868102841">"Certifique-se de que a pessoa está disponível para acessar o dispositivo e fazer as próprias configurações"</string>
+    <string name="user_setup_dialog_message" msgid="269931619868102841">"A pessoa precisar estar disponível para acessar o dispositivo e fazer as próprias configurações"</string>
     <string name="user_setup_profile_dialog_message" msgid="4788197052296962620">"Configurar perfil agora?"</string>
     <string name="user_setup_button_setup_now" msgid="1708269547187760639">"Configurar agora"</string>
     <string name="user_setup_button_setup_later" msgid="8712980133555493516">"Agora não"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"Se você transmitir o app <xliff:g id="SWITCHAPP">%1$s</xliff:g> ou mudar a saída, a transmissão atual será interrompida"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"Transmitir <xliff:g id="SWITCHAPP">%1$s</xliff:g>"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Mudar saída"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"Animações de gestos \"Voltar\" preditivos"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"Ativar animações do sistema para gestos \"Voltar\" preditivos"</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"Esta configuração ativa animações do sistema para gestos preditivos. Ela requer que a política enableOnBackInvokedCallback por app seja definida como verdadeira no arquivo de manifesto."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g>%%"</string>
     <string name="not_specified" msgid="5423502443185110328">"Não especificado"</string>
     <string name="neuter" msgid="2075249330106127310">"Neutro"</string>

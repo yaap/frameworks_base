@@ -42,6 +42,7 @@ import com.android.packageinstaller.v2.model.InstallRepository
 import com.android.packageinstaller.v2.model.InstallStage
 import com.android.packageinstaller.v2.model.InstallSuccess
 import com.android.packageinstaller.v2.model.InstallUserActionRequired
+import com.android.packageinstaller.v2.model.PackageUtil
 import com.android.packageinstaller.v2.model.PackageUtil.localLogv
 import com.android.packageinstaller.v2.ui.fragments.AnonymousSourceFragment
 import com.android.packageinstaller.v2.ui.fragments.ExternalSourcesBlockedFragment
@@ -82,6 +83,14 @@ class InstallLaunch : FragmentActivity(), InstallActionListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
+
+        // The base theme inherits a deviceDefault theme. Applying a material style on the base
+        // theme to support the material design.
+        if (PackageUtil.isMaterialDesignEnabled(this)) {
+            Log.d(LOG_TAG, "Apply material design")
+            theme.applyStyle(R.style.Theme_AlertDialogActivity_Material, /* force= */ false)
+        }
+
         fragmentManager = supportFragmentManager
         appOpsManager = getSystemService(AppOpsManager::class.java)
         installRepository = InstallRepository(applicationContext)
@@ -243,11 +252,11 @@ class InstallLaunch : FragmentActivity(), InstallActionListener {
         }
         return when (restriction) {
             UserManager.DISALLOW_INSTALL_APPS ->
-                SimpleErrorFragment.newInstance(R.string.install_apps_user_restriction_dlg_text)
+                SimpleErrorFragment.newInstance(R.string.message_no_install_apps_restriction)
 
             UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
             UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY ->
-                SimpleErrorFragment.newInstance(R.string.unknown_apps_user_restriction_dlg_text)
+                SimpleErrorFragment.newInstance(R.string.message_no_install_unknown_apps_restriction)
 
             else -> null
         }
@@ -292,8 +301,9 @@ class InstallLaunch : FragmentActivity(), InstallActionListener {
         if (localLogv) {
             Log.d(LOG_TAG, "Negative button clicked. StageCode: $stageCode")
         }
-        if (stageCode == InstallStage.STAGE_USER_ACTION_REQUIRED) {
-            installViewModel!!.cleanupInstall()
+        when (stageCode) {
+            InstallStage.STAGE_USER_ACTION_REQUIRED -> installViewModel!!.cleanupInstall()
+            InstallStage.STAGE_STAGING -> installViewModel!!.abortStaging()
         }
         setResult(RESULT_CANCELED, null, true)
     }
@@ -335,6 +345,12 @@ class InstallLaunch : FragmentActivity(), InstallActionListener {
         if (intent != null && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
             startActivity(intent)
         }
+    }
+
+    override fun sendManageAppsIntent() {
+        val intent = Intent("android.intent.action.MANAGE_PACKAGE_STORAGE")
+        startActivity(intent)
+        setResult(RESULT_FIRST_USER, null, true)
     }
 
     private fun registerAppOpChangeListener(listener: UnknownSourcesListener, packageName: String) {

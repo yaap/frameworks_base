@@ -19,8 +19,10 @@ package android.view;
 import static android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE;
 import static android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_STOP;
 import static android.view.flags.Flags.FLAG_TOOLKIT_VIEWGROUP_SET_REQUESTED_FRAME_RATE_API;
-import static android.view.flags.Flags.toolkitViewgroupSetRequestedFrameRateApi;
 import static android.view.flags.Flags.scrollCaptureTargetZOrderFix;
+import static android.view.flags.Flags.toolkitViewgroupSetRequestedFrameRateApi;
+
+import static com.android.window.flags.Flags.interceptMotionFromMoveToCancel;
 
 import android.animation.LayoutTransition;
 import android.annotation.CallSuper;
@@ -88,7 +90,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-
 /**
  * <p>
  * A <code>ViewGroup</code> is a special view that can contain other views
@@ -2674,7 +2675,8 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
             ViewRootImpl viewRootImpl = getViewRootImpl();
             if (actionMasked == MotionEvent.ACTION_DOWN || mFirstTouchTarget != null) {
                 final boolean disallowIntercept = (mGroupFlags & FLAG_DISALLOW_INTERCEPT) != 0;
-                final boolean isBackGestureInProgress = (viewRootImpl != null
+                final boolean isBackGestureInProgress = !interceptMotionFromMoveToCancel()
+                        && (viewRootImpl != null
                         && viewRootImpl.getOnBackInvokedDispatcher().isBackGestureInProgress());
                 if (!disallowIntercept || isBackGestureInProgress) {
                     // Allow back to intercept touch
@@ -2921,7 +2923,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      * Returns true if the flag was previously set.
      */
     private static boolean resetCancelNextUpFlag(@NonNull View view) {
-        if (view != null && (view.mPrivateFlags & PFLAG_CANCEL_NEXT_UP_EVENT) != 0) {
+        if ((view.mPrivateFlags & PFLAG_CANCEL_NEXT_UP_EVENT) != 0) {
             view.mPrivateFlags &= ~PFLAG_CANCEL_NEXT_UP_EVENT;
             return true;
         }
@@ -5286,7 +5288,8 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
         }
 
         if (child.getParent() != null) {
-           ((ViewGroup) child.getParent()).removeView(child);
+            throw new IllegalStateException("The specified child already has a parent. " +
+                    "You must call removeView() on the child's parent first.");
         }
 
         if (mTransition != null) {
@@ -6843,6 +6846,12 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      */
     public LayoutParams generateLayoutParams(AttributeSet attrs) {
         return new LayoutParams(getContext(), attrs);
+    }
+
+    /** @hide */
+    public LayoutParams generateLayoutParams(Context inflationContext, AttributeSet attrs) {
+        // Call the previous method for backwards compatibility
+        return generateLayoutParams(attrs);
     }
 
     /**

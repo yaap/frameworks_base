@@ -21,6 +21,7 @@ import android.testing.AndroidTestingRunner
 import android.view.SurfaceControl
 import androidx.test.filters.SmallTest
 import com.android.wm.shell.ShellTestCase
+import com.android.wm.shell.compatui.letterbox.LetterboxUtils.Maps.runOnFilteredItem
 import com.android.wm.shell.compatui.letterbox.LetterboxUtils.Maps.runOnItem
 import com.android.wm.shell.compatui.letterbox.LetterboxUtils.Transactions.moveAndCrop
 import java.util.function.Consumer
@@ -115,11 +116,37 @@ class LetterboxUtilsTest : ShellTestCase() {
     }
 
     @Test
-    fun `moveAndCrop invoked Move and then Crop`() {
+    fun `runOnFilterItem executes onItem when the predicate is true`() {
+        runTestScenario { r ->
+            r.initMap(1 to 2, 2 to 4, 3 to 6, 4 to 8)
+            r.runOnFilteredItem<Int> { k -> k % 2 == 0 }
+            r.verifyOnFilteredInvoked(mapOf(2 to 4, 4 to 8))
+        }
+    }
+
+    @Test
+    fun `moveAndCrop invoked Move and then Crop and Visible`() {
         runTestScenario { r ->
             r.invoke(Rect(1, 2, 51, 62))
             r.verifySetPosition(expectedX = 1f, expectedY = 2f)
             r.verifySetWindowCrop(expectedWidth = 50, expectedHeight = 60)
+            r.verifySetVisibility(expectedVisibility = true)
+        }
+    }
+
+    @Test
+    fun `moveAndCrop hide surface if rect has an empty dimension`() {
+        runTestScenario { r ->
+            r.invoke(Rect(100, 0, 100, 100))
+            r.verifySetVisibility(expectedVisibility = false)
+        }
+    }
+
+    @Test
+    fun `moveAndCrop hide surface if rect is empty`() {
+        runTestScenario { r ->
+            r.invoke(Rect(0, 0, 0, 0))
+            r.verifySetVisibility(expectedVisibility = false)
         }
     }
 
@@ -140,6 +167,7 @@ class LetterboxUtilsTest : ShellTestCase() {
         private var onItemState: Int? = null
         private var onMissingStateKey: Int? = null
         private var onMissingStateMap: MutableMap<Int, Int>? = null
+        private var onFilteredStateMap = mutableMapOf<Int, Int>()
 
         private val surface = SurfaceControl()
 
@@ -147,7 +175,7 @@ class LetterboxUtilsTest : ShellTestCase() {
             target: LetterboxController,
             times: Int = 1
         ) {
-            verify(target, times(times)).createLetterboxSurface(any(), any(), any())
+            verify(target, times(times)).createLetterboxSurface(any(), any(), any(), any())
         }
 
         fun verifyDestroySurfaceInvokedWithRequest(
@@ -189,6 +217,13 @@ class LetterboxUtilsTest : ShellTestCase() {
             })
         }
 
+        fun <T> runOnFilteredItem(predicate: (Int) -> Boolean) {
+            onFilteredStateMap.clear()
+            testableMap.runOnFilteredItem(predicate) { k, v ->
+                onFilteredStateMap[k] = v
+            }
+        }
+
         fun verifyOnItemInvoked(expectedItem: Int) {
             assertEquals(expectedItem, onItemState)
         }
@@ -200,6 +235,10 @@ class LetterboxUtilsTest : ShellTestCase() {
         fun verifyOnMissingInvoked(expectedKey: Int) {
             assertEquals(expectedKey, onMissingStateKey)
             assertEquals(onMissingStateMap, testableMap)
+        }
+
+        fun verifyOnFilteredInvoked(expected: Map<Int, Int>) {
+            assertEquals(expected, onFilteredStateMap)
         }
 
         fun verifyOnMissingNotInvoked() {
@@ -217,6 +256,10 @@ class LetterboxUtilsTest : ShellTestCase() {
 
         fun verifySetWindowCrop(expectedWidth: Int, expectedHeight: Int) {
             verify(transaction).setWindowCrop(surface, expectedWidth, expectedHeight)
+        }
+
+        fun verifySetVisibility(expectedVisibility: Boolean) {
+            verify(transaction).setVisibility(surface, expectedVisibility)
         }
 
         override fun buildController(): LetterboxController =

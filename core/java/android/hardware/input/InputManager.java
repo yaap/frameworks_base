@@ -39,6 +39,7 @@ import android.app.ActivityThread;
 import android.compat.annotation.ChangeId;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.Context;
+import android.graphics.PointF;
 import android.graphics.drawable.Drawable;
 import android.hardware.BatteryState;
 import android.os.Build;
@@ -1615,6 +1616,49 @@ public final class InputManager {
     public void resetLockedModifierState() {
         try {
             mIm.resetLockedModifierState();
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Set whether all pointer scaling, including linear scaling based on the
+     * user's pointer speed setting, should be enabled or disabled for mice.
+     *
+     * Note that this only affects pointer movements from mice (that is, pointing devices which send
+     * relative motions, including trackballs and pointing sticks), not from other pointer devices
+     * such as touchpads and styluses.
+     *
+     * Scaling is enabled by default on new displays until it is explicitly disabled.
+     * @hide
+     */
+    @TestApi
+    @SuppressLint("UnflaggedApi") // @TestApi without associated feature.
+    @RequiresPermission(Manifest.permission.SET_POINTER_SPEED)
+    public void setMouseScalingEnabled(boolean enabled, int displayId) {
+        try {
+            mIm.setMouseScalingEnabled(enabled, displayId);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Gets the current position of the mouse cursor on the specified display.
+     *
+     * <p>Returns null if no cursor is available, or if existing cursor is not on the supplied
+     * `displayId`.
+     *
+     * <p>This method is inherently racy, and should only be used for test purposes.
+     * @hide
+     */
+    @TestApi
+    @SuppressLint("UnflaggedApi") // @TestApi without associated feature.
+    @RequiresPermission(Manifest.permission.INJECT_EVENTS)
+    @Nullable
+    public PointF getCursorPosition(int displayId) {
+        try {
+            return mIm.getCursorPosition(displayId);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

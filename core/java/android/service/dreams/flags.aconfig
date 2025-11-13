@@ -92,3 +92,21 @@ flag {
         "such as new triggers and various bug fixes"
     bug: "403579494"
 }
+
+flag {
+  name: "dreams_v2_resources"
+  namespace: "systemui"
+  description: "Read only flag for rolling out dream v2 resource values"
+  bug: "403579494"
+  is_fixed_read_only: true
+}
+
+flag {
+    name: "allow_dream_with_charge_limit"
+    namespace: "systemui"
+    description: "Allows dreaming even when a charge limit is active"
+    bug: "397717022"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}

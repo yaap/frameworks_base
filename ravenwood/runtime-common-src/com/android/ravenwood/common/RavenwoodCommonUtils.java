@@ -48,8 +48,11 @@ public class RavenwoodCommonUtils {
     public static final boolean RAVENWOOD_VERBOSE_LOGGING = "1".equals(System.getenv(
             "RAVENWOOD_VERBOSE"));
 
-    /** Directory name of `out/host/linux-x86/testcases/ravenwood-runtime` */
-    private static final String RAVENWOOD_RUNTIME_DIR_NAME = "ravenwood-runtime";
+    /**
+     * Env var name for the runtime dir. When running a test locally, it'll contain
+     * `/...(path).../out/host/linux-x86/testcases/ravenwood-runtime`.
+     */
+    private static final String RAVENWOOD_RUNTIME_DIR_ENV = "RAVENWOOD_RUNTIME_DIR";
 
     private static boolean sEnableExtraRuntimeCheck =
             "1".equals(System.getenv("RAVENWOOD_ENABLE_EXTRA_RUNTIME_CHECK"));
@@ -66,10 +69,6 @@ public class RavenwoodCommonUtils {
 
     public static final String RAVENWOOD_EMPTY_RESOURCES_APK =
             RAVENWOOD_RUNTIME_PATH + "ravenwood-data/ravenwood-empty-res.apk";
-
-    public static final String RAVENWOOD_VERSION_JAVA_SYSPROP = "android.ravenwood.version";
-    public static final String RAVENWOOD_RUNTIME_PATH_JAVA_SYSPROP =
-            "android.ravenwood.runtime_path";
 
     /**
      * @return if we're running on Ravenwood.
@@ -208,36 +207,15 @@ public class RavenwoodCommonUtils {
         if (!isOnRavenwood()) {
             return null;
         }
-        var path = System.getProperty("java.library.path");
-
-        System.out.println("Looking for " + RAVENWOOD_RUNTIME_DIR_NAME + " directory"
-                + " in java.library.path:" + path);
-
-        try {
-            if (path == null) {
-                throw new IllegalStateException("java.library.path shouldn't be null");
-            }
-            for (var dir : path.split(":")) {
-
-                // For each path, see if the path contains RAVENWOOD_RUNTIME_DIR_NAME.
-                var d = new File(dir);
-                for (;;) {
-                    if (d.getParent() == null) {
-                        break; // Root dir, stop.
-                    }
-                    if (RAVENWOOD_RUNTIME_DIR_NAME.equals(d.getName())) {
-                        var ret = d.getAbsolutePath() + "/";
-                        System.out.println("Found: " + ret);
-                        return ret;
-                    }
-                    d = d.getParentFile();
-                }
-            }
-            throw new IllegalStateException(RAVENWOOD_RUNTIME_DIR_NAME + " not found");
-        } catch (Throwable e) {
-            dumpFiles(System.out);
-            throw e;
+        var dir = System.getenv(RAVENWOOD_RUNTIME_DIR_ENV);
+        if (dir == null || dir.isEmpty()) {
+            throw new IllegalStateException("$" + RAVENWOOD_RUNTIME_DIR_ENV + " not set");
         }
+        if (!(new File(dir).isDirectory())) {
+            throw new IllegalStateException("$" + RAVENWOOD_RUNTIME_DIR_ENV + " contains "
+                    + dir + ", but it's not a directory");
+        }
+        return dir;
     }
 
     /** Close an {@link AutoCloseable}. */

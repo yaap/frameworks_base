@@ -16,6 +16,7 @@
 
 package com.android.server.policy;
 
+import static android.bluetooth.BluetoothHidHost.ACTION_CONNECTION_STATE_CHANGED;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
@@ -34,6 +35,7 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.spy;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.when;
+import static com.android.hardware.input.Flags.FLAG_HID_BLUETOOTH_WAKEUP;
 import static com.android.server.policy.PhoneWindowManager.EXTRA_TRIGGER_HUB;
 import static com.android.server.policy.PhoneWindowManager.SHORT_PRESS_POWER_DREAM_OR_AWAKE_OR_SLEEP;
 import static com.android.server.policy.PhoneWindowManager.SHORT_PRESS_POWER_HUB_OR_DREAM_OR_SLEEP;
@@ -46,23 +48,29 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 
 import android.app.ActivityManager;
 import android.app.AppOpsManager;
+import android.bluetooth.BluetoothProfile;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.hardware.input.InputManager;
+import android.hardware.input.KeyGestureEvent;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.PowerManagerInternal;
+import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.provider.Settings;
 import android.service.dreams.DreamManagerInternal;
 import android.testing.TestableContext;
-import android.view.KeyEvent;
 
 import androidx.test.filters.SmallTest;
 
@@ -76,6 +84,7 @@ import com.android.server.wm.ActivityTaskManagerInternal;
 import com.android.server.wm.DisplayPolicy;
 import com.android.server.wm.DisplayRotation;
 import com.android.server.wm.WindowManagerInternal;
+import com.android.window.flags.Flags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -84,6 +93,8 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import java.util.List;
 
 /**
  * Test class for {@link PhoneWindowManager}.
@@ -106,13 +117,17 @@ public class PhoneWindowManagerTests {
 
     @Mock private IBinder mInputToken;
 
+    PhoneWindowManager mNonSpyPhoneWindowManager;
     PhoneWindowManager mPhoneWindowManager;
+
     @Mock
     private ActivityTaskManagerInternal mAtmInternal;
     @Mock
     private DreamManagerInternal mDreamManagerInternal;
     @Mock
     private InputManagerInternal mInputManagerInternal;
+    @Mock
+    private InputManager mInputManager;
     @Mock
     private PowerManagerInternal mPowerManagerInternal;
     @Mock
@@ -128,6 +143,10 @@ public class PhoneWindowManagerTests {
     private KeyguardServiceDelegate mKeyguardServiceDelegate;
     @Mock
     private LockPatternUtils mLockPatternUtils;
+    @Mock
+    private WindowWakeUpPolicy mWindowWakeUpPolicy;
+    @Mock
+    private PackageManager mPackageManager;
 
     private static final int INTERCEPT_SYSTEM_KEY_NOT_CONSUMED_DELAY = 0;
 
@@ -136,7 +155,8 @@ public class PhoneWindowManagerTests {
         MockitoAnnotations.initMocks(this);
         when(mContext.getSystemService(Context.POWER_SERVICE)).thenReturn(mPowerManager);
 
-        mPhoneWindowManager = spy(new PhoneWindowManager());
+        mNonSpyPhoneWindowManager = new PhoneWindowManager();
+        mPhoneWindowManager = spy(mNonSpyPhoneWindowManager);
         spyOn(ActivityManager.getService());
 
         mLocalServiceKeeperRule.overrideLocalService(ActivityTaskManagerInternal.class,
@@ -156,9 +176,8 @@ public class PhoneWindowManagerTests {
                 mock(WindowManagerInternal.class));
 
         mPhoneWindowManager.mKeyguardDelegate = mKeyguardServiceDelegate;
-        final InputManager im = mock(InputManager.class);
-        doNothing().when(im).registerKeyGestureEventHandler(anyList(), any());
-        doReturn(im).when(mContext).getSystemService(eq(Context.INPUT_SERVICE));
+        doNothing().when(mInputManager).registerKeyGestureEventHandler(anyList(), any());
+        doReturn(mInputManager).when(mContext).getSystemService(eq(Context.INPUT_SERVICE));
     }
 
     @After
@@ -281,6 +300,25 @@ public class PhoneWindowManagerTests {
 
         // Device goes to sleep.
         verify(mPowerManager).goToSleep(eventTime, PowerManager.GO_TO_SLEEP_REASON_POWER_BUTTON, 0);
+    }
+
+    @Test
+    public void powerPress_hubOrDreamOrSleep_noDreamManager_noCrash() {
+        mLocalServiceKeeperRule.overrideLocalService(DreamManagerInternal.class,
+                null);
+
+        when(mDisplayPolicy.isAwake()).thenReturn(true);
+        when(mLockPatternUtils.isLockScreenDisabled(anyInt())).thenReturn(false);
+        initPhoneWindowManager();
+
+        // Set power button behavior.
+        Settings.Global.putInt(mContext.getContentResolver(),
+                Settings.Global.POWER_BUTTON_SHORT_PRESS, SHORT_PRESS_POWER_HUB_OR_DREAM_OR_SLEEP);
+        mPhoneWindowManager.updateSettings(null);
+
+        // Power button pressed. Make sure no crash occurs
+        int eventTime = 0;
+        mPhoneWindowManager.powerPress(eventTime, 1, 0);
     }
 
     @Test
@@ -407,33 +445,83 @@ public class PhoneWindowManagerTests {
         verify(mDreamManagerInternal).requestDream();
     }
 
-    @EnableFlags(com.android.hardware.input.Flags.FLAG_FIX_SEARCH_MODIFIER_FALLBACKS)
-    public void testInterceptKeyBeforeDispatching() {
-        // Handle sub-tasks of init().
-        doNothing().when(mPhoneWindowManager).updateSettings(any());
-        doNothing().when(mPhoneWindowManager).initializeHdmiState();
-        final DisplayPolicy displayPolicy = mock(DisplayPolicy.class);
-        mPhoneWindowManager.mDefaultDisplayPolicy = displayPolicy;
-        mPhoneWindowManager.mDefaultDisplayRotation = mock(DisplayRotation.class);
-        final PowerManager pm = mock(PowerManager.class);
-        doReturn(true).when(pm).isInteractive();
-        doReturn(pm).when(mContext).getSystemService(eq(Context.POWER_SERVICE));
+    @Test
+    @EnableFlags(Flags.FLAG_GRANT_MANAGE_KEY_GESTURES_TO_RECENTS)
+    public void testKeyGestureEvents_recentKeyGesturesEventsEnabled_notRegistered() {
+        initPhoneWindowManager();
 
-        mContext.getMainThreadHandler().runWithScissors(() -> mPhoneWindowManager.init(
-                new PhoneWindowManager.Injector(mContext,
-                        mock(WindowManagerPolicy.WindowManagerFuncs.class))), 0);
+        ArgumentCaptor<List<Integer>> registeredKeyGestureEvents = ArgumentCaptor.forClass(
+                List.class);
+        verify(mInputManager).registerKeyGestureEventHandler(registeredKeyGestureEvents.capture(),
+                any());
+        assertThat(registeredKeyGestureEvents.getValue()).containsNoneIn(
+                List.of(KeyGestureEvent.KEY_GESTURE_TYPE_ALL_APPS,
+                        KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS,
+                        KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS_SWITCHER));
+    }
 
-        // Case: KeyNotConsumed with meta key.
-        KeyEvent keyEvent = new KeyEvent(0, 0, KeyEvent.ACTION_DOWN,
-                KeyEvent.KEYCODE_A, 0, KeyEvent.META_META_ON);
-        long result = mPhoneWindowManager.interceptKeyBeforeDispatching(mInputToken, keyEvent, 0);
-        assertEquals(INTERCEPT_SYSTEM_KEY_NOT_CONSUMED_DELAY, result);
+    @Test
+    @DisableFlags(Flags.FLAG_GRANT_MANAGE_KEY_GESTURES_TO_RECENTS)
+    public void testKeyGestureEvents_recentKeyGesturesEventsDisabled_registered() {
+        initPhoneWindowManager();
 
-        // Case: KeyNotConsumed without meta key.
-        KeyEvent keyEvent1 = new KeyEvent(0, 0, KeyEvent.ACTION_DOWN,
-                KeyEvent.KEYCODE_ESCAPE, 0, 0);
-        long result1 = mPhoneWindowManager.interceptKeyBeforeDispatching(mInputToken, keyEvent1, 0);
-        assertEquals(INTERCEPT_SYSTEM_KEY_NOT_CONSUMED_DELAY, result1);
+        ArgumentCaptor<List<Integer>> registeredKeyGestureEvents = ArgumentCaptor.forClass(
+                List.class);
+        verify(mInputManager).registerKeyGestureEventHandler(registeredKeyGestureEvents.capture(),
+                any());
+        assertThat(registeredKeyGestureEvents.getValue()).containsAtLeastElementsIn(
+                List.of(KeyGestureEvent.KEY_GESTURE_TYPE_ALL_APPS,
+                        KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS,
+                        KeyGestureEvent.KEY_GESTURE_TYPE_RECENT_APPS_SWITCHER));
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_KEY_GESTURE_HANDLER_FOR_SYSUI)
+    public void testKeyGestureEvents_sysuiKeyGesturesEventsEnabled_notRegistered() {
+        initPhoneWindowManager();
+
+        ArgumentCaptor<List<Integer>> registeredKeyGestureEvents = ArgumentCaptor.forClass(
+                List.class);
+        verify(mInputManager).registerKeyGestureEventHandler(registeredKeyGestureEvents.capture(),
+                any());
+        assertThat(registeredKeyGestureEvents.getValue()).doesNotContain(
+                KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_NOTIFICATION_PANEL);
+    }
+
+    @Test
+    @DisableFlags(Flags.FLAG_ENABLE_KEY_GESTURE_HANDLER_FOR_SYSUI)
+    public void testKeyGestureEvents_sysuiKeyGesturesEventsDisabled_registered() {
+        initPhoneWindowManager();
+
+        ArgumentCaptor<List<Integer>> registeredKeyGestureEvents = ArgumentCaptor.forClass(
+                List.class);
+        verify(mInputManager).registerKeyGestureEventHandler(registeredKeyGestureEvents.capture(),
+                any());
+        assertThat(registeredKeyGestureEvents.getValue()).contains(
+                KeyGestureEvent.KEY_GESTURE_TYPE_TOGGLE_NOTIFICATION_PANEL);
+    }
+
+    @Test
+    @EnableFlags(FLAG_HID_BLUETOOTH_WAKEUP)
+    public void testBluetoothHidConnectionBroadcastCanWakeup() {
+        when(mContext.getPackageManager()).thenReturn(mPackageManager);
+        when(mPackageManager.hasSystemFeature(PackageManager.FEATURE_PC)).thenReturn(true);
+        initNonSpyPhoneWindowManager();
+
+        final Intent intent = new Intent(ACTION_CONNECTION_STATE_CHANGED);
+        intent.putExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_CONNECTED);
+        ArgumentCaptor<BroadcastReceiver> captor = ArgumentCaptor.forClass(BroadcastReceiver.class);
+        verify(mContext).registerReceiver(captor.capture(), argThat(intentFilter ->
+                                intentFilter.matchAction(ACTION_CONNECTION_STATE_CHANGED)));
+        captor.getValue().onReceive(mContext, intent);
+        verify(mWindowWakeUpPolicy).wakeUpFromBluetooth();
+    }
+
+    private void initNonSpyPhoneWindowManager() {
+        mNonSpyPhoneWindowManager.mDefaultDisplayPolicy = mDisplayPolicy;
+        mNonSpyPhoneWindowManager.mDefaultDisplayRotation = mock(DisplayRotation.class);
+        mContext.getMainThreadHandler().runWithScissors(() -> mNonSpyPhoneWindowManager.init(
+                new TestInjector(mContext, mock(WindowManagerPolicy.WindowManagerFuncs.class))), 0);
     }
 
     private void initPhoneWindowManager() {
@@ -469,7 +557,7 @@ public class PhoneWindowManagerTests {
          * mock it out so we don't have to unregister it after every test.
          */
         WindowWakeUpPolicy getWindowWakeUpPolicy() {
-            return mock(WindowWakeUpPolicy.class);
+            return mWindowWakeUpPolicy;
         }
     }
 }

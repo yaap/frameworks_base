@@ -18,12 +18,14 @@ package com.android.wm.shell.windowdecor.viewholder
 import android.annotation.ColorInt
 import android.annotation.DrawableRes
 import android.app.ActivityManager.RunningTaskInfo
+import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
 import android.view.View.OnLongClickListener
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
@@ -33,6 +35,7 @@ import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import android.window.DesktopExperienceFlags
 import android.window.DesktopModeFlags
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -49,6 +52,7 @@ import com.android.internal.R.color.materialColorSurfaceContainerHigh
 import com.android.internal.R.color.materialColorSurfaceContainerLow
 import com.android.internal.R.color.materialColorSurfaceDim
 import com.android.wm.shell.R
+import com.android.wm.shell.desktopmode.DesktopModeEventLogger.Companion.InputMethod
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger.DesktopUiEventEnum.A11Y_ACTION_MAXIMIZE_RESTORE
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger.DesktopUiEventEnum.A11Y_ACTION_RESIZE_LEFT
@@ -57,6 +61,8 @@ import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger.DesktopUiEventE
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger.DesktopUiEventEnum.A11Y_APP_WINDOW_MAXIMIZE_RESTORE_BUTTON
 import com.android.wm.shell.desktopmode.DesktopModeUiEventLogger.DesktopUiEventEnum.A11Y_APP_WINDOW_MINIMIZE_BUTTON
 import com.android.wm.shell.windowdecor.MaximizeButtonView
+import com.android.wm.shell.windowdecor.WindowDecorLinearLayout
+import com.android.wm.shell.windowdecor.WindowDecorationActions
 import com.android.wm.shell.windowdecor.common.DecorThemeUtil
 import com.android.wm.shell.windowdecor.common.DrawableInsets
 import com.android.wm.shell.windowdecor.common.OPACITY_100
@@ -73,17 +79,16 @@ import com.android.wm.shell.windowdecor.extension.isTransparentCaptionBarAppeara
  * controls.
  */
 class AppHeaderViewHolder(
-        rootView: View,
-        onCaptionTouchListener: View.OnTouchListener,
-        onCaptionButtonClickListener: View.OnClickListener,
-        private val onLongClickListener: OnLongClickListener,
-        onCaptionGenericMotionListener: View.OnGenericMotionListener,
-        mOnLeftSnapClickListener: () -> Unit,
-        mOnRightSnapClickListener: () -> Unit,
-        mOnMaximizeOrRestoreClickListener: () -> Unit,
-        onMaximizeHoverAnimationFinishedListener: () -> Unit,
-        private val desktopModeUiEventLogger: DesktopModeUiEventLogger,
-) : WindowDecorationViewHolder<AppHeaderViewHolder.HeaderData>(rootView) {
+    appHeaderView: View?,
+    private val context: Context,
+    windowDecorationActions: WindowDecorationActions,
+    onCaptionTouchListener: View.OnTouchListener,
+    onCaptionButtonClickListener: View.OnClickListener,
+    private val onLongClickListener: OnLongClickListener,
+    onCaptionGenericMotionListener: View.OnGenericMotionListener,
+    onMaximizeHoverAnimationFinishedListener: () -> Unit,
+    private val desktopModeUiEventLogger: DesktopModeUiEventLogger,
+) : WindowDecorationViewHolder<AppHeaderViewHolder.HeaderData>() {
 
     data class HeaderData(
         val taskInfo: RunningTaskInfo,
@@ -103,6 +108,24 @@ class AppHeaderViewHolder(
      **/
     private val headerButtonsRippleRadius = context.resources
         .getDimensionPixelSize(R.dimen.desktop_mode_header_buttons_ripple_radius)
+
+    /**
+     * The max width of the app name shown on the app header.
+     **/
+    private val appNameMaxWidth = context.resources
+        .getDimensionPixelSize(R.dimen.desktop_mode_header_app_name_max_width)
+
+    /**
+     * The width of the expand menu error image on the app header.
+     **/
+    private val expandMenuErrorImageWidth = context.resources
+        .getDimensionPixelSize(R.dimen.desktop_mode_header_expand_menu_error_image_width)
+
+    /**
+     * The margin added between app name and expand menu error image on the app header.
+     **/
+    private val expandMenuErrorImageMargin = context.resources
+        .getDimensionPixelSize(R.dimen.desktop_mode_header_expand_menu_error_image_margin)
 
     /**
      * The app chip, minimize, maximize and close button's height extends to the top & bottom edges
@@ -136,17 +159,27 @@ class AppHeaderViewHolder(
             .getDimensionPixelSize(R.dimen.desktop_mode_header_close_ripple_inset_horizontal)
     )
 
+    override val rootView =
+        appHeaderView ?: if (DesktopExperienceFlags.ENABLE_WINDOW_DECORATION_REFACTOR.isTrue) {
+            LayoutInflater.from(context)
+            .inflate(R.layout.desktop_mode_app_header, null) as WindowDecorLinearLayout
+    } else {
+        error("App Header root view should not be null")
+    }
     private val captionView: View = rootView.requireViewById(R.id.desktop_mode_caption)
     private val captionHandle: View = rootView.requireViewById(R.id.caption_handle)
     private val openMenuButton: View = rootView.requireViewById(R.id.open_menu_button)
     private val closeWindowButton: ImageButton = rootView.requireViewById(R.id.close_window)
     private val expandMenuButton: ImageButton = rootView.requireViewById(R.id.expand_menu_button)
     private val maximizeButtonView: MaximizeButtonView =
-            rootView.requireViewById(R.id.maximize_button_view)
+        rootView.requireViewById(R.id.maximize_button_view)
     private val maximizeWindowButton: ImageButton = rootView.requireViewById(R.id.maximize_window)
     private val minimizeWindowButton: ImageButton = rootView.requireViewById(R.id.minimize_window)
     private val appNameTextView: TextView = rootView.requireViewById(R.id.application_name)
     private val appIconImageView: ImageView = rootView.requireViewById(R.id.application_icon)
+    private val expandMenuErrorImageView: ImageView =
+        rootView.requireViewById(R.id.expand_menu_error)
+
     val appNameTextWidth: Int
         get() = appNameTextView.width
 
@@ -155,10 +188,18 @@ class AppHeaderViewHolder(
     private val a11yAnnounceTextRestore: String =
         context.getString(R.string.app_header_talkback_action_restore_button_text)
 
+    private val a11yAnnounceTextOpening: String =
+        context.getString(R.string.desktop_mode_talkback_state_opening)
+    private val a11yAnnounceTextMinimizing: String =
+        context.getString(R.string.desktop_mode_talkback_state_minimizing)
+    private val a11yAnnounceTextClosing: String =
+        context.getString(R.string.desktop_mode_talkback_state_closing)
+    private lateinit var a11yAnnounceTextFocused: String
+    private lateinit var a11yAnnounceTextNotFocused: String
+
     private lateinit var sizeToggleDirection: SizeToggleDirection
     private lateinit var a11yTextMaximize: String
     private lateinit var a11yTextRestore: String
-
     private lateinit var currentTaskInfo: RunningTaskInfo
 
     init {
@@ -199,6 +240,8 @@ class AppHeaderViewHolder(
                 info.addAction(a11yActionSnapLeft)
                 info.addAction(a11yActionSnapRight)
                 info.addAction(a11yActionMaximizeRestore)
+                info.liveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                info.isScreenReaderFocusable = false
             }
 
             override fun performAccessibilityAction(
@@ -209,15 +252,24 @@ class AppHeaderViewHolder(
                 when (action) {
                     R.id.action_snap_left -> {
                         desktopModeUiEventLogger.log(currentTaskInfo, A11Y_ACTION_RESIZE_LEFT)
-                        mOnLeftSnapClickListener.invoke()
+                        windowDecorationActions.onLeftSnap(
+                            currentTaskInfo.taskId,
+                            InputMethod.ACCESSIBILITY
+                        )
                     }
                     R.id.action_snap_right -> {
                         desktopModeUiEventLogger.log(currentTaskInfo, A11Y_ACTION_RESIZE_RIGHT)
-                        mOnRightSnapClickListener.invoke()
+                        windowDecorationActions.onRightSnap(
+                            currentTaskInfo.taskId,
+                            InputMethod.ACCESSIBILITY
+                        )
                     }
                     R.id.action_maximize_restore -> {
                         desktopModeUiEventLogger.log(currentTaskInfo, A11Y_ACTION_MAXIMIZE_RESTORE)
-                        mOnMaximizeOrRestoreClickListener.invoke()
+                        windowDecorationActions.onMaximizeOrRestore(
+                            currentTaskInfo.taskId,
+                            InputMethod.ACCESSIBILITY
+                        )
                     }
                 }
 
@@ -251,15 +303,24 @@ class AppHeaderViewHolder(
                     }
                     R.id.action_snap_left -> {
                         desktopModeUiEventLogger.log(currentTaskInfo, A11Y_ACTION_RESIZE_LEFT)
-                        mOnLeftSnapClickListener.invoke()
+                        windowDecorationActions.onLeftSnap(
+                            currentTaskInfo.taskId,
+                            InputMethod.ACCESSIBILITY
+                        )
                     }
                     R.id.action_snap_right -> {
                         desktopModeUiEventLogger.log(currentTaskInfo, A11Y_ACTION_RESIZE_RIGHT)
-                        mOnRightSnapClickListener.invoke()
+                        windowDecorationActions.onRightSnap(
+                            currentTaskInfo.taskId,
+                            InputMethod.ACCESSIBILITY
+                        )
                     }
                     R.id.action_maximize_restore -> {
                         desktopModeUiEventLogger.log(currentTaskInfo, A11Y_ACTION_MAXIMIZE_RESTORE)
-                        mOnMaximizeOrRestoreClickListener.invoke()
+                        windowDecorationActions.onMaximizeOrRestore(
+                            currentTaskInfo.taskId,
+                            InputMethod.ACCESSIBILITY
+                        )
                     }
                 }
 
@@ -274,9 +335,10 @@ class AppHeaderViewHolder(
                 args: Bundle?
             ): Boolean {
                 when (action) {
-                    AccessibilityAction.ACTION_CLICK.id -> desktopModeUiEventLogger.log(
-                        currentTaskInfo, A11Y_APP_WINDOW_CLOSE_BUTTON
-                    )
+                    AccessibilityAction.ACTION_CLICK.id -> {
+                        captionHandle.stateDescription = a11yAnnounceTextClosing
+                        desktopModeUiEventLogger.log(currentTaskInfo, A11Y_APP_WINDOW_CLOSE_BUTTON)
+                    }
                 }
 
                 return super.performAccessibilityAction(host, action, args)
@@ -290,9 +352,12 @@ class AppHeaderViewHolder(
                 args: Bundle?
             ): Boolean {
                 when (action) {
-                    AccessibilityAction.ACTION_CLICK.id -> desktopModeUiEventLogger.log(
-                        currentTaskInfo, A11Y_APP_WINDOW_MINIMIZE_BUTTON
-                    )
+                    AccessibilityAction.ACTION_CLICK.id -> {
+                        captionHandle.stateDescription = a11yAnnounceTextMinimizing
+                        desktopModeUiEventLogger.log(
+                            currentTaskInfo, A11Y_APP_WINDOW_MINIMIZE_BUTTON
+                        )
+                    }
                 }
 
                 return super.performAccessibilityAction(host, action, args)
@@ -335,9 +400,21 @@ class AppHeaderViewHolder(
         )
     }
 
+    /** Announces app window name as "focused" via Talkback */
+    fun a11yAnnounceFocused() {
+        captionHandle.stateDescription = a11yAnnounceTextFocused
+    }
+
     /** Sets the app's name in the header. */
     fun setAppName(name: CharSequence) {
         appNameTextView.text = name
+        populateA11yStrings(name)
+
+        updateMaximizeButtonContentDescription()
+    }
+
+    /** Populates string variables from string templates which rely on app name */
+    private fun populateA11yStrings(name: CharSequence) {
         openMenuButton.contentDescription =
             context.getString(R.string.desktop_mode_app_header_chip_text, name)
 
@@ -347,8 +424,10 @@ class AppHeaderViewHolder(
 
         a11yTextMaximize = context.getString(R.string.maximize_button_text, name)
         a11yTextRestore = context.getString(R.string.restore_button_text, name)
-
-        updateMaximizeButtonContentDescription()
+        a11yAnnounceTextFocused =
+            context.getString(R.string.desktop_mode_talkback_state_focused, name)
+        a11yAnnounceTextNotFocused =
+            context.getString(R.string.desktop_mode_talkback_state_not_focused, name)
     }
 
     private fun updateMaximizeButtonContentDescription() {
@@ -412,6 +491,7 @@ class AppHeaderViewHolder(
         minimizeWindowButton.imageAlpha = alpha
         closeWindowButton.imageAlpha = alpha
         expandMenuButton.imageAlpha = alpha
+        expandMenuErrorImageView.imageAlpha = alpha
         context.withStyledAttributes(
             set = null,
             attrs = intArrayOf(
@@ -467,9 +547,14 @@ class AppHeaderViewHolder(
                 drawableInsets = appChipDrawableInsets,
             )
             expandMenuButton.imageTintList = colorStateList
+            expandMenuErrorImageView.visibility =
+                if (currentTaskInfo.appCompatTaskInfo.isRestartMenuEnabledForDisplayMove)
+                    View.VISIBLE else View.GONE
             appNameTextView.apply {
                 isVisible = header.type == Header.Type.DEFAULT
                 setTextColor(colorStateList)
+                maxWidth = if (currentTaskInfo.appCompatTaskInfo.isRestartMenuEnabledForDisplayMove)
+                    appNameMaxWidth - expandMenuErrorImageWidth - expandMenuErrorImageMargin else appNameMaxWidth
             }
             appIconImageView.imageAlpha = foregroundAlpha
             defaultFocusHighlightEnabled = false
@@ -803,6 +888,10 @@ class AppHeaderViewHolder(
                 Configuration.UI_MODE_NIGHT_YES
     }
 
+    override fun setTaskFocusState(taskFocusState: Boolean) {
+        (rootView as WindowDecorLinearLayout).setTaskFocusState(taskFocusState)
+    }
+
     override fun close() {
         // Should not fire long press events after closing the window decoration.
         maximizeWindowButton.cancelLongPress()
@@ -818,25 +907,23 @@ class AppHeaderViewHolder(
 
     class Factory {
         fun create(
-            rootView: View,
+            rootView: View?,
+            context: Context,
+            windowDecorationActions: WindowDecorationActions,
             onCaptionTouchListener: View.OnTouchListener,
             onCaptionButtonClickListener: View.OnClickListener,
             onLongClickListener: OnLongClickListener,
             onCaptionGenericMotionListener: View.OnGenericMotionListener,
-            mOnLeftSnapClickListener: () -> Unit,
-            mOnRightSnapClickListener: () -> Unit,
-            mOnMaximizeOrRestoreClickListener: () -> Unit,
             onMaximizeHoverAnimationFinishedListener: () -> Unit,
             desktopModeUiEventLogger: DesktopModeUiEventLogger
         ): AppHeaderViewHolder = AppHeaderViewHolder(
             rootView,
+            context,
+            windowDecorationActions,
             onCaptionTouchListener,
             onCaptionButtonClickListener,
             onLongClickListener,
             onCaptionGenericMotionListener,
-            mOnLeftSnapClickListener,
-            mOnRightSnapClickListener,
-            mOnMaximizeOrRestoreClickListener,
             onMaximizeHoverAnimationFinishedListener,
             desktopModeUiEventLogger,
         )

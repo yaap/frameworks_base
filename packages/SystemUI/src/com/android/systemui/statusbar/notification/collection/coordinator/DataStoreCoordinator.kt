@@ -16,12 +16,14 @@
 
 package com.android.systemui.statusbar.notification.collection.coordinator
 
+import com.android.systemui.statusbar.notification.collection.BundleEntry
 import com.android.systemui.statusbar.notification.collection.GroupEntry
-import com.android.systemui.statusbar.notification.collection.PipelineEntry
+import com.android.systemui.statusbar.notification.collection.ListEntry
 import com.android.systemui.statusbar.notification.collection.NotifLiveDataStoreImpl
 import com.android.systemui.statusbar.notification.collection.NotifPipeline
 import com.android.systemui.statusbar.notification.collection.NotificationEntry
 import com.android.systemui.statusbar.notification.collection.PipelineDumper
+import com.android.systemui.statusbar.notification.collection.PipelineEntry
 import com.android.systemui.statusbar.notification.collection.coordinator.dagger.CoordinatorScope
 import com.android.systemui.statusbar.notification.collection.render.requireSummary
 import javax.inject.Inject
@@ -44,21 +46,31 @@ internal constructor(private val notifLiveDataStoreImpl: NotifLiveDataStoreImpl)
     }
 
     private fun onAfterRenderList(entries: List<PipelineEntry>) {
-        val flatEntryList = flattenedEntryList(entries)
+        val flatEntryList = flattenEntrySequence(entries).toList()
         notifLiveDataStoreImpl.setActiveNotifList(flatEntryList)
     }
 
-    private fun flattenedEntryList(entries: List<PipelineEntry>) =
-        mutableListOf<NotificationEntry>().also { list ->
+    private fun flattenEntrySequence(entries: List<PipelineEntry>): Sequence<NotificationEntry> =
+        sequence {
             entries.forEach { entry ->
                 when (entry) {
-                    is NotificationEntry -> list.add(entry)
-                    is GroupEntry -> {
-                        list.add(entry.requireSummary)
-                        list.addAll(entry.children)
+                    is BundleEntry -> {
+                        yieldAll(flattenEntrySequence(entry.children))
                     }
-                    else -> error("Unexpected entry $entry")
+                    is ListEntry -> {
+                        yieldAll(flattenEntrySequence(entry))
+                    }
                 }
             }
         }
+
+    private fun flattenEntrySequence(entry: ListEntry): Sequence<NotificationEntry> = sequence {
+        when (entry) {
+            is NotificationEntry -> yield(entry)
+            is GroupEntry -> {
+                yield(entry.requireSummary)
+                yieldAll(entry.children)
+            }
+        }
+    }
 }

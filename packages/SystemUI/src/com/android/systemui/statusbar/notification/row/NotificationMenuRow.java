@@ -32,6 +32,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.ArrayMap;
 import android.view.LayoutInflater;
@@ -47,6 +48,7 @@ import com.android.systemui.Flags;
 import com.android.systemui.plugins.statusbar.NotificationMenuRowPlugin;
 import com.android.systemui.res.R;
 import com.android.systemui.statusbar.AlphaOptimizedImageView;
+import com.android.systemui.statusbar.notification.collection.NotificationClassificationUiFlag;
 import com.android.systemui.statusbar.notification.people.PeopleNotificationIdentifier;
 import com.android.systemui.statusbar.notification.row.NotificationGuts.GutsContent;
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi;
@@ -268,6 +270,12 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
         StatusBarNotification sbn = NotificationBundleUi.isEnabled()
                 ? mParent.getEntryAdapter().getSbn()
                 : mParent.getEntryLegacy().getSbn();
+        NotificationListenerService.Ranking ranking = NotificationBundleUi.isEnabled()
+                ? mParent.getEntryAdapter().getRanking()
+                : mParent.getEntryLegacy().getRanking();
+        boolean isBundled = NotificationBundleUi.isEnabled()
+                ? mParent.getEntryAdapter().isBundled()
+                : mParent.getEntryLegacy().isBundled();
         if (personNotifType == PeopleNotificationIdentifier.TYPE_PERSON) {
             mInfoItem = createPartialConversationItem(mContext);
         } else if (personNotifType >= PeopleNotificationIdentifier.TYPE_FULL_PERSON) {
@@ -275,8 +283,13 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
         } else if (android.app.Flags.uiRichOngoing()
                 && android.app.Flags.apiRichOngoing()
                 && Flags.permissionHelperUiRichOngoing()
-                && sbn.getNotification().isPromotedOngoing()) {
+                && (sbn != null && sbn.getNotification().isPromotedOngoing())) {
             mInfoItem = createPromotedItem(mContext);
+        } else if ((NotificationClassificationUiFlag.isEnabled()
+                || NotificationBundleUi.isEnabled()) && isBundled) {
+            mInfoItem = createBundledInfoItem(mContext);
+        } else if (mParent.isBundle()) {
+            mInfoItem = createBundleHeaderInfoItem(mContext);
         } else {
             mInfoItem = createInfoItem(mContext);
         }
@@ -468,19 +481,12 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
         setAppName(appName, mRightMenuItems);
     }
 
-    private void setAppName(String appName,
-            ArrayList<MenuItem> menuItems) {
+    private void setAppName(String appName, ArrayList<MenuItem> menuItems) {
         Resources res = mContext.getResources();
         final int count = menuItems.size();
         for (int i = 0; i < count; i++) {
             MenuItem item = menuItems.get(i);
-            String description = String.format(
-                    res.getString(R.string.notification_menu_accessibility),
-                    appName, item.getContentDescription());
-            View menuView = item.getMenuView();
-            if (menuView != null) {
-                menuView.setContentDescription(description);
-            }
+            item.setAppName(appName);
         }
     }
 
@@ -688,13 +694,19 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
         }
     }
 
-    static MenuItem createSnoozeItem(Context context) {
+    @VisibleForTesting static MenuItem createSnoozeItem(Context context) {
         Resources res = context.getResources();
         NotificationSnooze content = (NotificationSnooze) LayoutInflater.from(context)
                 .inflate(R.layout.notification_snooze, null, false);
         String snoozeDescription = res.getString(R.string.notification_menu_snooze_description);
+        int snoozeId;
+        if (Flags.permissionHelperInlineUiRichOngoing()) {
+            snoozeId = NotificationMenuItem.OMIT_FROM_SWIPE_MENU;
+        } else {
+            snoozeId = R.drawable.ic_snooze;
+        }
         MenuItem snooze = new NotificationMenuItem(context, snoozeDescription, content,
-                R.drawable.ic_snooze);
+                snoozeId);
         return snooze;
     }
 
@@ -705,7 +717,13 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
         View demoteButton = LayoutInflater.from(context)
                 .inflate(R.layout.promoted_menu_item, null, false);
         MenuItem info = new NotificationMenuItem(context, null, demoteContent,
-                demoteButton);
+                demoteButton) {
+            @Override
+            public void setAppName(String appName) {
+                super.setAppName(appName);
+                demoteContent.setAppName(appName);
+            }
+        };
 
         return info;
     }
@@ -713,9 +731,12 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
     static NotificationMenuItem createConversationItem(Context context) {
         Resources res = context.getResources();
         String infoDescription = res.getString(R.string.notification_menu_gear_description);
+        int layoutId = notificationsRedesignTemplates()
+                ? R.layout.notification_2025_conversation_info
+                : R.layout.notification_conversation_info;
         NotificationConversationInfo infoContent =
                 (NotificationConversationInfo) LayoutInflater.from(context).inflate(
-                        R.layout.notification_conversation_info, null, false);
+                        layoutId, null, false);
         return new NotificationMenuItem(context, infoDescription, infoContent,
                 NotificationMenuItem.OMIT_FROM_SWIPE_MENU);
     }
@@ -733,9 +754,32 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
     static NotificationMenuItem createPartialConversationItem(Context context) {
         Resources res = context.getResources();
         String infoDescription = res.getString(R.string.notification_menu_gear_description);
+        int layoutId = notificationsRedesignTemplates()
+                ? R.layout.notification_2025_partial_conversation_info
+                : R.layout.partial_conversation_info;
         PartialConversationInfo infoContent =
                 (PartialConversationInfo) LayoutInflater.from(context).inflate(
-                        R.layout.partial_conversation_info, null, false);
+                        layoutId, null, false);
+        return new NotificationMenuItem(context, infoDescription, infoContent,
+                NotificationMenuItem.OMIT_FROM_SWIPE_MENU);
+    }
+
+    static NotificationMenuItem createBundledInfoItem(Context context) {
+        Resources res = context.getResources();
+        String infoDescription = res.getString(R.string.notification_menu_gear_description);
+        int layoutId = R.layout.bundled_notification_info;
+        BundledNotificationInfo infoContent =
+                (BundledNotificationInfo) LayoutInflater.from(context).inflate(
+                        layoutId, null, false);
+        return new NotificationMenuItem(context, infoDescription, infoContent,
+                NotificationMenuItem.OMIT_FROM_SWIPE_MENU);
+    }
+
+    static NotificationMenuItem createBundleHeaderInfoItem(Context context) {
+        BundleHeaderGutsContent infoContent = new BundleHeaderGutsContent(context);
+        // TODO(b/409748420): correct infoDescription?
+        String infoDescription =
+                context.getResources().getString(R.string.notification_menu_gear_description);
         return new NotificationMenuItem(context, infoDescription, infoContent,
                 NotificationMenuItem.OMIT_FROM_SWIPE_MENU);
     }
@@ -847,6 +891,7 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
         View mMenuView;
         GutsContent mGutsContent;
         String mContentDescription;
+        Resources mResources;
 
         /**
          * Add a new 'guts' panel. If iconResId < 0 it will not appear in the slow swipe menu
@@ -854,9 +899,9 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
          */
         public NotificationMenuItem(Context context, String contentDescription, GutsContent content,
                 int iconResId) {
-            Resources res = context.getResources();
-            int padding = res.getDimensionPixelSize(R.dimen.notification_menu_icon_padding);
-            int tint = res.getColor(R.color.notification_gear_color);
+            mResources = context.getResources();
+            int padding = mResources.getDimensionPixelSize(R.dimen.notification_menu_icon_padding);
+            int tint = mResources.getColor(R.color.notification_gear_color);
             if (iconResId >= 0) {
                 AlphaOptimizedImageView iv = new AlphaOptimizedImageView(context);
                 iv.setPadding(padding, padding, padding, padding);
@@ -876,6 +921,7 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
          */
         public NotificationMenuItem(Context context, String contentDescription, GutsContent content,
                 View itemView) {
+            mResources = context.getResources();
             mMenuView = itemView;
             mContentDescription = contentDescription;
             mGutsContent = content;
@@ -888,13 +934,24 @@ public class NotificationMenuRow implements NotificationMenuRowPlugin, View.OnCl
         }
 
         @Override
-        public View getGutsView() {
-            return mGutsContent.getContentView();
+        public GutsContent getGutsContent() {
+            return mGutsContent;
         }
 
         @Override
         public String getContentDescription() {
             return mContentDescription;
+        }
+
+        @Override
+        public void setAppName(String appName) {
+            String description = String.format(
+                    mResources.getString(R.string.notification_menu_accessibility),
+                    appName, getContentDescription());
+            View menuView = getMenuView();
+            if (menuView != null) {
+                menuView.setContentDescription(description);
+            }
         }
     }
 }

@@ -218,7 +218,6 @@ filegroup {
         "tests/src/**/systemui/statusbar/phone/PhoneStatusBarViewControllerTest.kt",
         "tests/src/**/systemui/statusbar/phone/PhoneStatusBarViewTest.kt",
         "tests/src/**/systemui/statusbar/phone/StatusBarBoundsProviderTest.kt",
-        "tests/src/**/systemui/statusbar/phone/StatusBarMoveFromCenterAnimationControllerTest.kt",
         "tests/src/**/systemui/statusbar/pipeline/airplane/ui/viewmodel/AirplaneModeViewModelImplTest.kt",
         "tests/src/**/systemui/statusbar/pipeline/mobile/data/repository/prod/MobileConnectionsRepositoryKairosAdapterTest.kt",
         "tests/src/**/systemui/statusbar/pipeline/mobile/data/repository/prod/MobileConnectionsRepositoryTest.kt",
@@ -296,6 +295,7 @@ filegroup {
         "tests/src/**/systemui/qs/external/TileLifecycleManagerTest.java",
         "tests/src/**/systemui/ScreenDecorationsTest.java",
         "tests/src/**/systemui/statusbar/policy/BatteryControllerStartableTest.java",
+        "tests/src/**/systemui/user/domain/interactor/HeadlessSystemUserModeImplTest.kt",
         "tests/src/**/keyguard/CarrierTextManagerTest.java",
         "tests/src/**/keyguard/KeyguardUpdateMonitorTest.java",
     ],
@@ -425,6 +425,7 @@ android_library {
         "SystemUISharedLib",
         "SystemUICustomizationLib",
         "SettingsLib",
+        "WindowManager-Shell",
         "androidx.leanback_leanback",
         "androidx.slice_slice-core",
         "androidx.slice_slice-view",
@@ -465,9 +466,7 @@ android_library {
     resource_dirs: [],
     static_libs: [
         "//frameworks/libs/systemui:compilelib",
-        "com.android.systemui.dagger-api",
-        "com.android.systemui.util.settings-api",
-        "com.android.systemui.retail-impl",
+        "com.android.systemui.pods-aosp-handheld",
         "SystemUI-res",
         "WifiTrackerLib",
         "WindowManager-Shell",
@@ -480,6 +479,7 @@ android_library {
         "SystemUI-shared-utils",
         "SystemUI-statsd",
         "SettingsLib",
+        "com_android_server_accessibility_flags_lib",
         "com_android_systemui_flags_lib",
         "//frameworks/libs/systemui:com_android_systemui_shared_flags_lib",
         "androidx.core_core-ktx",
@@ -530,6 +530,7 @@ android_library {
         "Traceur-res",
         "//frameworks/libs/systemui:motion_tool_lib",
         "//frameworks/libs/systemui:contextualeducationlib",
+        "//frameworks/libs/systemui/mechanics/compose:mechanics-compose",
         "notification_flags_lib",
         "PlatformComposeCore",
         "PlatformComposeSceneTransitionLayout",
@@ -614,6 +615,15 @@ filegroup {
 }
 
 filegroup {
+    name: "SystemUI-screenshot-tests-utils",
+    srcs: [
+        "tests/utils/screenshot/src/**/*.java",
+        "tests/utils/screenshot/src/**/*.kt",
+    ],
+    path: "tests/utils/screenshot",
+}
+
+filegroup {
     name: "SystemUI-robotest-utils",
     srcs: [
         "tests/robolectric/src/com/android/systemui/testutils/**/*.kt",
@@ -666,6 +676,7 @@ android_library {
         "SystemUI-shared-utils",
         "SystemUI-statsd",
         "SettingsLib",
+        "com_android_server_accessibility_flags_lib",
         "com_android_systemui_flags_lib",
         "//frameworks/libs/systemui:com_android_systemui_shared_flags_lib",
         "flag-junit-base",
@@ -720,6 +731,7 @@ android_library {
         "LowLightDreamLib",
         "//frameworks/libs/systemui:motion_tool_lib",
         "//frameworks/libs/systemui:contextualeducationlib",
+        "//frameworks/libs/systemui/mechanics/compose:mechanics-compose",
         "androidx.core_core-animation-testing",
         "androidx.lifecycle_lifecycle-runtime-testing",
         "androidx.compose.ui_ui",
@@ -743,6 +755,24 @@ android_library {
         "displaylib",
         "vendor.lineage.powershare-V1-java",
     ],
+}
+
+android_app {
+    name: "SystemUI-tests-res",
+    // SystemUiRavenTests references the .aapt.srcjar
+    use_resource_processor: false,
+    manifest: "tests/AndroidManifest-base.xml",
+    resource_dirs: [
+        "tests/res",
+    ],
+    asset_dirs: [
+        "tests/goldens",
+        "schemas",
+    ],
+    static_libs: [
+        "SystemUI-res",
+    ],
+    platform_apis: true,
 }
 
 android_library {
@@ -821,8 +851,7 @@ android_library {
 
 android_app {
     name: "SystemUIRobo-stub",
-    // SystemUiRavenTests references the .aapt.srcjar
-    use_resource_processor: false,
+    use_resource_processor: true,
     defaults: [
         "platform_app_defaults",
         "SystemUI_optimized_defaults",
@@ -875,6 +904,15 @@ java_library {
     ],
 }
 
+// Targets that don't inherit framework aconfig libs (i.e., those that don't set
+// `platform_apis: true`) must manually link them.
+java_defaults {
+    name: "systemui-non-platform-apis-defaults",
+    static_libs: [
+        "android.os.flags-aconfig-java",
+    ],
+}
+
 android_robolectric_test {
     name: "SystemUiRoboTests",
     srcs: [
@@ -883,6 +921,7 @@ android_robolectric_test {
         ":SystemUI-tests-utils",
         ":SystemUI-tests-multivalent",
     ],
+    defaults: ["systemui-non-platform-apis-defaults"],
     static_libs: [
         "RoboTestLibraries",
         "androidx.compose.runtime_runtime",
@@ -947,11 +986,10 @@ android_ravenwood_test {
         ":SystemUI-tests-multivalent",
         // TODO(b/294256649): pivot to using {.aapt.jar} and re-enable
         // use_resource_processor: true when better supported by soong
-        ":SystemUIRobo-stub{.aapt.srcjar}",
+        ":SystemUI-tests-res{.aapt.srcjar}",
     ],
     static_libs: [
         "SystemUI-core",
-        "SystemUI-res",
         "SystemUI-tests-base",
         "androidx.test.uiautomator_uiautomator",
         "androidx.core_core-animation-testing",
@@ -966,6 +1004,7 @@ android_ravenwood_test {
         "android.test.base.impl",
         "android.test.mock.impl",
     ],
+    resource_apk: "SystemUI-tests-res",
     auto_gen_config: true,
     team: "trendy_team_ravenwood",
     plugins: [
@@ -996,6 +1035,7 @@ systemui_optimized_java_defaults {
                 optimized_shrink_resources: true,
                 ignore_warnings: false,
                 proguard_compatibility: false,
+                d8_on_eng: true,
             },
             conditions_default: {
                 optimize: {

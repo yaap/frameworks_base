@@ -42,15 +42,25 @@ class RecentsMixedTransition extends DefaultMixedHandler.MixedTransition {
     private final RecentsTransitionHandler mRecentsHandler;
     private final DesktopTasksController mDesktopTasksController;
 
+    /**
+     * The id of the desk that was active when the transition started. Only set when {@link #mType}
+     * is {@link DefaultMixedHandler.MixedTransition#TYPE_RECENTS_DURING_DESKTOP}.
+     */
+    @Nullable
+    private final Integer mActiveDeskIdOnStart;
+
     RecentsMixedTransition(int type, IBinder transition, Transitions player,
             MixedTransitionHandler mixedHandler, PipTransitionController pipHandler,
             StageCoordinator splitHandler, KeyguardTransitionHandler keyguardHandler,
             RecentsTransitionHandler recentsHandler,
-            DesktopTasksController desktopTasksController) {
+            DesktopTasksController desktopTasksController,
+            int displayId) {
         super(type, transition, player, mixedHandler, pipHandler, splitHandler, keyguardHandler);
         mRecentsHandler = recentsHandler;
         mDesktopTasksController = desktopTasksController;
         mLeftoversHandler = mRecentsHandler;
+        mActiveDeskIdOnStart = mType == TYPE_RECENTS_DURING_DESKTOP
+                ? mDesktopTasksController.getActiveDeskId(displayId) : null;
     }
 
     @Override
@@ -204,7 +214,7 @@ class RecentsMixedTransition extends DefaultMixedHandler.MixedTransition {
     void onAnimateRecentsDuringDesktopFinishing(boolean returnToApp,
             @NonNull WindowContainerTransaction finishWct) {
         mDesktopTasksController.onRecentsInDesktopAnimationFinishing(mTransition, finishWct,
-                returnToApp);
+                returnToApp, mActiveDeskIdOnStart);
     }
 
     @Override

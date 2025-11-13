@@ -17,6 +17,7 @@
 package com.android.systemui.deviceentry.domain.interactor
 
 import android.content.res.Resources
+import com.android.systemui.accessibility.domain.interactor.AccessibilityInteractor
 import com.android.systemui.biometrics.domain.interactor.FingerprintPropertyInteractor
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Main
@@ -61,6 +62,7 @@ constructor(
     private val biometricSettingsInteractor: DeviceEntryBiometricSettingsInteractor,
     faceHelpMessageDeferralInteractor: FaceHelpMessageDeferralInteractor,
     devicePostureInteractor: DevicePostureInteractor,
+    private val accessibilityInteractor: AccessibilityInteractor,
 ) {
     private val faceHelp: Flow<HelpFaceAuthenticationStatus> =
         faceAuthInteractor.authenticationStatus.filterIsInstance<HelpFaceAuthenticationStatus>()
@@ -133,6 +135,15 @@ constructor(
                 }
         }
 
+    private val fingerprintA11yMessage: Flow<FingerprintMessage> =
+        accessibilityInteractor.isTouchExplorationEnabled
+            .sample(biometricSettingsInteractor.fingerprintAuthCurrentlyAllowed, ::Pair)
+            .filter { (_, fingerprintAuthAllowed) -> fingerprintAuthAllowed }
+            .filter { (touchExplorationEnabled, _) -> touchExplorationEnabled }
+            .map {
+                FingerprintMessage(resources.getString(R.string.fingerprint_dialog_touch_sensor))
+            }
+
     val coExFaceAcquisitionMsgIdsToShow: Flow<Set<Int>> =
         devicePostureInteractor.posture.map { devicePosture ->
             when (devicePosture) {
@@ -149,6 +160,7 @@ constructor(
             fingerprintErrorMessage,
             fingerprintFailMessage,
             fingerprintHelpMessage,
+            fingerprintA11yMessage,
         )
 
     private val filterConditionForFaceHelpMessages:
@@ -156,7 +168,7 @@ constructor(
         combine(
                 biometricSettingsInteractor.isFingerprintAuthEnrolledAndEnabled,
                 biometricSettingsInteractor.faceAuthCurrentlyAllowed,
-                ::Pair
+                ::Pair,
             )
             .flatMapLatest { (fingerprintEnrolled, faceAuthCurrentlyAllowed) ->
                 if (fingerprintEnrolled && faceAuthCurrentlyAllowed) {
@@ -208,14 +220,14 @@ constructor(
                         }
                     }
                     status.isLockoutError() -> FaceLockoutMessage(status.msg)
+                    status.isHardwareError() &&
+                        faceAuthInteractor.isCameraPrivacyInterfering.value -> {
+                        FaceMessage(resources.getString(R.string.kg_face_sensor_privacy_enabled))
+                    }
                     else -> FaceMessage(status.msg)
                 }
             }
 
     val faceMessage: Flow<FaceMessage> =
-        merge(
-            faceHelpMessage,
-            faceFailureMessage,
-            faceErrorMessage,
-        )
+        merge(faceHelpMessage, faceFailureMessage, faceErrorMessage)
 }

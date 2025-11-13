@@ -18,6 +18,8 @@ package android.app.supervision;
 
 import android.annotation.FlaggedApi;
 import android.annotation.Nullable;
+import android.annotation.SdkConstant;
+import android.annotation.SdkConstant.SdkConstantType;
 import android.annotation.SystemApi;
 import android.app.Service;
 import android.app.supervision.flags.Flags;
@@ -33,16 +35,25 @@ import android.os.IBinder;
 @SystemApi
 @FlaggedApi(Flags.FLAG_ENABLE_SUPERVISION_APP_SERVICE)
 public class SupervisionAppService extends Service {
-    private final ISupervisionAppService mBinder =
-            new ISupervisionAppService.Stub() {
-                @Override
-                public void onEnabled() {
-                    SupervisionAppService.this.onEnabled();
-                }
+    /**
+     * Service action: Action for a service that the {@code
+     * android.app.role.RoleManager.ROLE_SYSTEM_SUPERVISION} role holder must implement.
+     *
+     * @hide
+     */
+    @SdkConstant(SdkConstantType.SERVICE_ACTION)
+    public static final String ACTION_SUPERVISION_APP_SERVICE =
+            "android.app.action.SUPERVISION_APP_SERVICE";
 
+    private final ISupervisionListener mBinder =
+            new ISupervisionListener.Stub() {
                 @Override
-                public void onDisabled() {
-                    SupervisionAppService.this.onDisabled();
+                public void onSetSupervisionEnabled(int userId, boolean enabled) {
+                    if (enabled) {
+                        SupervisionAppService.this.onSupervisionEnabled();
+                    } else {
+                        SupervisionAppService.this.onSupervisionDisabled();
+                    }
                 }
             };
 
@@ -59,7 +70,7 @@ public class SupervisionAppService extends Service {
      */
     @SystemApi
     @FlaggedApi(Flags.FLAG_ENABLE_SUPERVISION_APP_SERVICE)
-    public void onEnabled() {}
+    public void onSupervisionEnabled() {}
 
     /**
      * Called when supervision is disabled.
@@ -68,5 +79,5 @@ public class SupervisionAppService extends Service {
      */
     @SystemApi
     @FlaggedApi(Flags.FLAG_ENABLE_SUPERVISION_APP_SERVICE)
-    public void onDisabled() {}
+    public void onSupervisionDisabled() {}
 }

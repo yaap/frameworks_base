@@ -848,6 +848,8 @@ static void android_view_ThreadedRenderer_allocateBuffers(JNIEnv* env, jobject c
 
 static void android_view_ThreadedRenderer_setForceDark(JNIEnv* env, jobject clazz, jlong proxyPtr,
                                                        jint type) {
+    Properties::setIsForceInvertEnabled(static_cast<ForceDarkType>(type) ==
+                                        ForceDarkType::FORCE_INVERT_COLOR_DARK);
     RenderProxy* proxy = reinterpret_cast<RenderProxy*>(proxyPtr);
     proxy->setForceDark(static_cast<ForceDarkType>(type));
 }
@@ -880,6 +882,11 @@ static void android_view_ThreadedRenderer_notifyCallbackPending(JNIEnv*, jclass,
 static void android_view_ThreadedRenderer_notifyExpensiveFrame(JNIEnv*, jclass, jlong proxyPtr) {
     RenderProxy* proxy = reinterpret_cast<RenderProxy*>(proxyPtr);
     proxy->notifyExpensiveFrame();
+}
+
+static void android_view_ThreadedRenderer_notifyGpuLoadUp(JNIEnv*, jclass, jlong proxyPtr) {
+    RenderProxy* proxy = reinterpret_cast<RenderProxy*>(proxyPtr);
+    proxy->notifyGpuLoadUp();
 }
 
 // Plumbs the display density down to DeviceInfo.
@@ -1072,6 +1079,8 @@ static const JNINativeMethod gMethods[] = {
          (void*)android_view_ThreadedRenderer_notifyCallbackPending},
         {"nNotifyExpensiveFrame", "(J)V",
          (void*)android_view_ThreadedRenderer_notifyExpensiveFrame},
+        {"nNotifyGpuLoadUp", "(J)V",
+         (void*)android_view_ThreadedRenderer_notifyGpuLoadUp},
         {"nTrimCaches", "(I)V", (void*)android_view_ThreadedRenderer_trimCaches},
 };
 

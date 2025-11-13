@@ -53,6 +53,8 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyCallback;
 import android.telephony.TelephonyDisplayInfo;
 import android.telephony.TelephonyManager;
+import android.telephony.satellite.SatelliteManager;
+import android.telephony.satellite.SatelliteModemStateCallback;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
@@ -85,6 +87,7 @@ import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.flags.Flags;
 import com.android.systemui.plugins.ActivityStarter;
+import com.android.systemui.qs.flags.QsWifiConfig;
 import com.android.systemui.res.R;
 import com.android.systemui.shade.ShadeDisplayAware;
 import com.android.systemui.statusbar.connectivity.AccessPointController;
@@ -104,6 +107,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
@@ -152,19 +156,28 @@ public class InternetDetailsContentController implements AccessPointController.A
 
     static final int MAX_WIFI_ENTRY_COUNT = 3;
 
+    static final int SATELLITE_CONNECTED = 2;
+    static final int SATELLITE_STARTED = 1;
+    static final int SATELLITE_NOT_STARTED = 0;
+
     private final FeatureFlags mFeatureFlags;
 
+    //Should be accessible only to the main thread.
     @VisibleForTesting
-    /** Should be accessible only to the main thread. */
-    final Map<Integer, TelephonyDisplayInfo> mSubIdTelephonyDisplayInfoMap = new HashMap<>();
+    final Map<Integer, TelephonyDisplayInfo>
+            mSubIdTelephonyDisplayInfoMap = new HashMap<>();
+    //Should be accessible only to the main thread.
     @VisibleForTesting
-    /** Should be accessible only to the main thread. */
-    final Map<Integer, TelephonyManager> mSubIdTelephonyManagerMap = new HashMap<>();
+    final Map<Integer, TelephonyManager>
+            mSubIdTelephonyManagerMap = new HashMap<>();
+    // Should be accessible only to the main thread.
     @VisibleForTesting
-    /** Should be accessible only to the main thread. */
-    final Map<Integer, TelephonyCallback> mSubIdTelephonyCallbackMap = new HashMap<>();
+    final Map<Integer, TelephonyCallback>
+            mSubIdTelephonyCallbackMap = new HashMap<>();
 
     private WifiManager mWifiManager;
+    @Nullable
+    private SatelliteManager mSatelliteManager;
     private Context mContext;
     private SubscriptionManager mSubscriptionManager;
     private TelephonyManager mTelephonyManager;
@@ -221,6 +234,24 @@ public class InternetDetailsContentController implements AccessPointController.A
     @VisibleForTesting
     protected boolean mCarrierNetworkChangeMode;
 
+    int mCurrentSatelliteState = SATELLITE_NOT_STARTED;
+
+    final SatelliteModemStateCallback mSatelliteModemStateCallback =
+            new SatelliteModemStateCallback() {
+                @Override
+                public void onSatelliteModemStateChanged(int state) {
+                    mCurrentSatelliteState = switch (state) {
+                        case SatelliteManager.SATELLITE_MODEM_STATE_OFF,
+                             SatelliteManager.SATELLITE_MODEM_STATE_UNAVAILABLE,
+                             SatelliteManager.SATELLITE_MODEM_STATE_UNKNOWN ->
+                                SATELLITE_NOT_STARTED;
+                        case SatelliteManager.SATELLITE_MODEM_STATE_CONNECTED ->
+                                SATELLITE_CONNECTED;
+                        default -> SATELLITE_STARTED;
+                    };
+                }
+            };
+
     private final KeyguardUpdateMonitorCallback mKeyguardUpdateCallback =
             new KeyguardUpdateMonitorCallback() {
                 @Override
@@ -244,21 +275,18 @@ public class InternetDetailsContentController implements AccessPointController.A
 
     @Inject
     public InternetDetailsContentController(@ShadeDisplayAware Context context,
-            UiEventLogger uiEventLogger,
-            ActivityStarter starter, AccessPointController accessPointController,
-            SubscriptionManager subscriptionManager, TelephonyManager telephonyManager,
-            @Nullable WifiManager wifiManager, ConnectivityManager connectivityManager,
+            UiEventLogger uiEventLogger, ActivityStarter starter,
+            AccessPointController accessPointController, SubscriptionManager subscriptionManager,
+            TelephonyManager telephonyManager, @Nullable WifiManager wifiManager,
+            ConnectivityManager connectivityManager, Optional<SatelliteManager> optSatelliteManager,
             @Main Handler handler, @Main Executor mainExecutor,
             BroadcastDispatcher broadcastDispatcher, KeyguardUpdateMonitor keyguardUpdateMonitor,
             GlobalSettings globalSettings, KeyguardStateController keyguardStateController,
             @ShadeDisplayAware WindowManager windowManager, ToastFactory toastFactory,
-            @Background Handler workerHandler,
-            CarrierConfigTracker carrierConfigTracker,
+            @Background Handler workerHandler, CarrierConfigTracker carrierConfigTracker,
             LocationController locationController,
-            DialogTransitionAnimator dialogTransitionAnimator,
-            WifiStateWorker wifiStateWorker,
-            FeatureFlags featureFlags
-    ) {
+            DialogTransitionAnimator dialogTransitionAnimator, WifiStateWorker wifiStateWorker,
+            FeatureFlags featureFlags) {
         if (DEBUG) {
             Log.d(TAG, "Init InternetDetailsContentController");
         }
@@ -269,6 +297,7 @@ public class InternetDetailsContentController implements AccessPointController.A
         mGlobalSettings = globalSettings;
         mWifiManager = wifiManager;
         mTelephonyManager = telephonyManager;
+        mSatelliteManager = optSatelliteManager.orElse(null);
         mConnectivityManager = connectivityManager;
         mSubscriptionManager = subscriptionManager;
         mCarrierConfigTracker = carrierConfigTracker;
@@ -326,6 +355,15 @@ public class InternetDetailsContentController implements AccessPointController.A
         mCanConfigWifi = canConfigWifi;
         scanWifiAccessPoints();
 
+        if (mSatelliteManager != null) {
+            try {
+                mSatelliteManager.registerForModemStateChanged(mExecutor,
+                        mSatelliteModemStateCallback);
+            } catch (IllegalStateException e) {
+                Log.w(TAG, "Unable to register callback for modem state changes : " + e);
+            }
+        }
+
         if (mCanConfigWifi) {
             if (isAutoOn && !isWifiEnabled()) {
                 setWifiEnabled(true);
@@ -352,13 +390,20 @@ public class InternetDetailsContentController implements AccessPointController.A
         mSubIdTelephonyManagerMap.clear();
         mSubIdTelephonyCallbackMap.clear();
         mSubIdTelephonyDisplayInfoMap.clear();
-        mSubscriptionManager.removeOnSubscriptionsChangedListener(
-                mOnSubscriptionsChangedListener);
+        mSubscriptionManager.removeOnSubscriptionsChangedListener(mOnSubscriptionsChangedListener);
         mAccessPointController.removeAccessPointCallback(this);
         mKeyguardUpdateMonitor.removeCallback(mKeyguardUpdateCallback);
         mConnectivityManager.unregisterNetworkCallback(mConnectivityManagerNetworkCallback);
         mConnectedWifiInternetMonitor.unregisterCallback();
         mCallback = null;
+
+        if (mSatelliteManager != null) {
+            try {
+                mSatelliteManager.unregisterForModemStateChanged(mSatelliteModemStateCallback);
+            } catch (IllegalStateException e) {
+                Log.w(TAG, "Unable to unregister callback for modem state changes : " + e);
+            }
+        }
     }
 
     /**
@@ -367,8 +412,7 @@ public class InternetDetailsContentController implements AccessPointController.A
      * {@link com.android.server.TelephonyRegistry}, so if subscription id and callback were cached
      * already, it shall do nothing to avoid registering redundant callback to Telephony.
      */
-    private void registerInternetTelephonyCallback(
-            TelephonyManager telephonyManager, int subId) {
+    private void registerInternetTelephonyCallback(TelephonyManager telephonyManager, int subId) {
         if (mSubIdTelephonyCallbackMap.containsKey(subId)) {
             // Avoid to generate and register unnecessary callback to Telephony.
             return;
@@ -459,8 +503,8 @@ public class InternetDetailsContentController implements AccessPointController.A
         if (DEBUG) {
             Log.d(TAG, "No Wi-Fi item.");
         }
-        boolean isActiveOnNonDds = getActiveAutoSwitchNonDdsSubId() != SubscriptionManager
-                .INVALID_SUBSCRIPTION_ID;
+        boolean isActiveOnNonDds =
+                getActiveAutoSwitchNonDdsSubId() != SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         if (!hasActiveSubIdOnDds() || (!isVoiceStateInService(mDefaultDataSubId)
                 && !isDataStateInService(mDefaultDataSubId) && !isActiveOnNonDds)) {
             if (DEBUG) {
@@ -573,9 +617,8 @@ public class InternetDetailsContentController implements AccessPointController.A
     Drawable getSignalStrengthIcon(int subId, Context context, int level, int numLevels,
             int iconType, boolean cutOut) {
         boolean isForDds = subId == mDefaultDataSubId;
-        int levelDrawable =
-                mCarrierNetworkChangeMode ? SignalDrawable.getCarrierChangeState(numLevels)
-                        : SignalDrawable.getState(level, numLevels, cutOut);
+        int levelDrawable = mCarrierNetworkChangeMode ? SignalDrawable.getCarrierChangeState(
+                numLevels) : SignalDrawable.getState(level, numLevels, cutOut);
         if (isForDds) {
             mSignalDrawable.setLevel(levelDrawable);
         } else {
@@ -583,16 +626,14 @@ public class InternetDetailsContentController implements AccessPointController.A
         }
 
         // Make the network type drawable
-        final Drawable networkDrawable =
-                iconType == NO_CELL_DATA_TYPE_ICON
-                        ? EMPTY_DRAWABLE
-                        : context.getResources().getDrawable(iconType, context.getTheme());
+        final Drawable networkDrawable = iconType == NO_CELL_DATA_TYPE_ICON ? EMPTY_DRAWABLE
+                : context.getResources().getDrawable(iconType, context.getTheme());
 
         // Overlay the two drawables
-        final Drawable[] layers = {networkDrawable, isForDds
-                ? mSignalDrawable : mSecondarySignalDrawable};
-        final int iconSize =
-                context.getResources().getDimensionPixelSize(R.dimen.signal_strength_icon_size);
+        final Drawable[] layers =
+                {networkDrawable, isForDds ? mSignalDrawable : mSecondarySignalDrawable};
+        final int iconSize = context.getResources().getDimensionPixelSize(
+                R.dimen.signal_strength_icon_size);
 
         final LayerDrawable icons = new LayerDrawable(layers);
         // Set the network type icon at the top left
@@ -627,21 +668,17 @@ public class InternetDetailsContentController implements AccessPointController.A
 
         // Map of SubscriptionId to DisplayName
         final Supplier<Stream<DisplayInfo>> originalInfos =
-                () -> getSubscriptionInfo()
-                        .stream()
-                        .filter(i -> {
-                            // Filter out null values.
-                            return (i != null && i.getDisplayName() != null);
-                        })
-                        .map(i -> new DisplayInfo(i, i.getDisplayName().toString().trim()));
+                () -> getSubscriptionInfo().stream().filter(i -> {
+                    // Filter out null values.
+                    return (i != null && i.getDisplayName() != null);
+                }).map(i -> new DisplayInfo(i, i.getDisplayName().toString().trim()));
 
         // A Unique set of display names
         Set<CharSequence> uniqueNames = new HashSet<>();
         // Return the set of duplicate names
-        final Set<CharSequence> duplicateOriginalNames = originalInfos.get()
-                .filter(info -> !uniqueNames.add(info.originalName))
-                .map(info -> info.originalName)
-                .collect(Collectors.toSet());
+        final Set<CharSequence> duplicateOriginalNames = originalInfos.get().filter(
+                info -> !uniqueNames.add(info.originalName)).map(info -> info.originalName).collect(
+                Collectors.toSet());
 
         // If a display name is duplicate, append the final 4 digits of the phone number.
         // Creates a mapping of Subscription id to original display name + phone number display name
@@ -652,8 +689,8 @@ public class InternetDetailsContentController implements AccessPointController.A
                         info.subscriptionInfo);
                 String lastFourDigits = "";
                 if (phoneNumber != null) {
-                    lastFourDigits = (phoneNumber.length() > 4)
-                            ? phoneNumber.substring(phoneNumber.length() - 4) : phoneNumber;
+                    lastFourDigits = (phoneNumber.length() > 4) ? phoneNumber.substring(
+                            phoneNumber.length() - 4) : phoneNumber;
                 }
 
                 if (TextUtils.isEmpty(lastFourDigits)) {
@@ -672,19 +709,17 @@ public class InternetDetailsContentController implements AccessPointController.A
         // We might not have had permission to view the phone numbers.
         // There might also be multiple phone numbers whose last 4 digits the same.
         uniqueNames.clear();
-        final Set<CharSequence> duplicatePhoneNames = uniqueInfos.get()
-                .filter(info -> !uniqueNames.add(info.uniqueName))
-                .map(info -> info.uniqueName)
-                .collect(Collectors.toSet());
+        final Set<CharSequence> duplicatePhoneNames = uniqueInfos.get().filter(
+                info -> !uniqueNames.add(info.uniqueName)).map(info -> info.uniqueName).collect(
+                Collectors.toSet());
 
         return uniqueInfos.get().map(info -> {
             if (duplicatePhoneNames.contains(info.uniqueName)) {
-                info.uniqueName = info.originalName + " "
-                        + info.subscriptionInfo.getSubscriptionId();
+                info.uniqueName =
+                        info.originalName + " " + info.subscriptionInfo.getSubscriptionId();
             }
             return info;
-        }).collect(Collectors.toMap(
-                info -> info.subscriptionInfo.getSubscriptionId(),
+        }).collect(Collectors.toMap(info -> info.subscriptionInfo.getSubscriptionId(),
                 info -> info.uniqueName));
     }
 
@@ -733,8 +768,8 @@ public class InternetDetailsContentController implements AccessPointController.A
      */
     private String getNetworkTypeDescription(Context context, MobileMappings.Config config,
             int subId) {
-        TelephonyDisplayInfo telephonyDisplayInfo =
-                mSubIdTelephonyDisplayInfoMap.getOrDefault(subId, DEFAULT_TELEPHONY_DISPLAY_INFO);
+        TelephonyDisplayInfo telephonyDisplayInfo = mSubIdTelephonyDisplayInfoMap.getOrDefault(
+                subId, DEFAULT_TELEPHONY_DISPLAY_INFO);
         String iconKey = getIconKey(telephonyDisplayInfo);
 
         if (mapIconSets(config) == null || mapIconSets(config).get(iconKey) == null) {
@@ -754,8 +789,8 @@ public class InternetDetailsContentController implements AccessPointController.A
             resId = iconGroup.dataContentDescription;
         }
 
-        return resId != 0
-                ? SubscriptionManager.getResourcesForSubId(context, subId).getString(resId) : "";
+        return resId != 0 ? SubscriptionManager.getResourcesForSubId(context, subId).getString(
+                resId) : "";
     }
 
     private String getMobileSummary(Context context, String networkTypeDescription, int subId) {
@@ -890,8 +925,7 @@ public class InternetDetailsContentController implements AccessPointController.A
             return;
         }
 
-        MergedCarrierEntry mergedCarrierEntry =
-                mAccessPointController.getMergedCarrierEntry();
+        MergedCarrierEntry mergedCarrierEntry = mAccessPointController.getMergedCarrierEntry();
         if (mergedCarrierEntry == null) {
             Log.e(TAG, errorLogPrefix + "no merged entry");
             return;
@@ -1026,8 +1060,8 @@ public class InternetDetailsContentController implements AccessPointController.A
             return;
         }
 
-        mTelephonyManager.setDataEnabledForReason(
-                TelephonyManager.DATA_ENABLED_REASON_USER, enabled);
+        mTelephonyManager.setDataEnabledForReason(TelephonyManager.DATA_ENABLED_REASON_USER,
+                enabled);
         if (disableOtherSubscriptions) {
             final List<SubscriptionInfo> subInfoList =
                     mSubscriptionManager.getActiveSubscriptionInfoList();
@@ -1075,12 +1109,15 @@ public class InternetDetailsContentController implements AccessPointController.A
 
         final ServiceState serviceState = mSubIdServiceState.getOrDefault(subId,
                 new ServiceState());
-        return serviceState != null
-                && serviceState.getState() == serviceState.STATE_IN_SERVICE;
+        return serviceState != null && serviceState.getState() == serviceState.STATE_IN_SERVICE;
     }
 
     public boolean isDeviceLocked() {
         return !mKeyguardStateController.isUnlocked();
+    }
+
+    int getCurrentSatelliteState() {
+        return mCurrentSatelliteState;
     }
 
     boolean activeNetworkIsCellular() {
@@ -1096,8 +1133,8 @@ public class InternetDetailsContentController implements AccessPointController.A
             Log.d(TAG, "getActiveNetwork is null.");
             return false;
         }
-        final NetworkCapabilities networkCapabilities =
-                mConnectivityManager.getNetworkCapabilities(activeNetwork);
+        final NetworkCapabilities networkCapabilities = mConnectivityManager.getNetworkCapabilities(
+                activeNetwork);
         if (networkCapabilities == null) {
             return false;
         }
@@ -1186,7 +1223,8 @@ public class InternetDetailsContentController implements AccessPointController.A
         final boolean hasMoreWifiEntries = (accessPointsSize > MAX_WIFI_ENTRY_COUNT);
         if (accessPointsSize > 0) {
             wifiEntries = new ArrayList<>();
-            final int count = hasMoreWifiEntries ? MAX_WIFI_ENTRY_COUNT : accessPointsSize;
+            final int count = QsWifiConfig.isEnabled() ? accessPointsSize
+                    : hasMoreWifiEntries ? MAX_WIFI_ENTRY_COUNT : accessPointsSize;
             mConnectedWifiInternetMonitor.unregisterCallback();
             for (int i = 0; i < count; i++) {
                 WifiEntry entry = accessPoints.get(i);
@@ -1222,10 +1260,8 @@ public class InternetDetailsContentController implements AccessPointController.A
     }
 
     private class InternetTelephonyCallback extends TelephonyCallback implements
-            TelephonyCallback.DataEnabledListener,
-            TelephonyCallback.DataConnectionStateListener,
-            TelephonyCallback.DisplayInfoListener,
-            TelephonyCallback.ServiceStateListener,
+            TelephonyCallback.DataEnabledListener, TelephonyCallback.DataConnectionStateListener,
+            TelephonyCallback.DisplayInfoListener, TelephonyCallback.ServiceStateListener,
             TelephonyCallback.SignalStrengthsListener,
             TelephonyCallback.UserMobileDataStateListener,
             TelephonyCallback.CarrierNetworkListener {
@@ -1289,8 +1325,8 @@ public class InternetDetailsContentController implements AccessPointController.A
         }
     }
 
-    private class InternetOnSubscriptionChangedListener
-            extends SubscriptionManager.OnSubscriptionsChangedListener {
+    private class InternetOnSubscriptionChangedListener extends
+            SubscriptionManager.OnSubscriptionsChangedListener {
         InternetOnSubscriptionChangedListener() {
             super();
         }
@@ -1342,8 +1378,8 @@ public class InternetDetailsContentController implements AccessPointController.A
             }
             // If the Wi-Fi is not connected yet, or it's the connected Wi-Fi with Internet
             // access. Then we don't need to listen to the callback to update the Wi-Fi entries.
-            if (entry.getConnectedState() != CONNECTED_STATE_CONNECTED
-                    || (entry.isDefaultNetwork() && entry.hasInternetAccess())) {
+            if (entry.getConnectedState() != CONNECTED_STATE_CONNECTED || (entry.isDefaultNetwork()
+                    && entry.hasInternetAccess())) {
                 return;
             }
             mWifiEntry = entry;
@@ -1474,6 +1510,8 @@ public class InternetDetailsContentController implements AccessPointController.A
                 @Nullable WifiEntry connectedEntry, boolean hasMoreWifiEntries);
 
         void onWifiScan(boolean isScan);
+
+        void onSatelliteModemStateChanged(int state);
     }
 
     void makeOverlayToast(int stringId) {

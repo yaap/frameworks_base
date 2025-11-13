@@ -64,28 +64,9 @@ java_genrule {
         "--loggroups-class com.android.internal.protolog.WmProtoLogGroups " +
         "--loggroups-jar $(location :protolog-groups) " +
         "--viewer-config-file-path /etc/core.protolog.pb " +
-        "--legacy-viewer-config-file-path /system/etc/protolog.conf.json.gz " +
-        "--legacy-output-file-path /data/misc/wmtrace/wm_log.winscope " +
         "--output-srcjar $(out) " +
         "$(locations :services.core-sources-am-wm)",
     out: ["services.core.protolog.srcjar"],
-}
-
-java_genrule {
-    name: "generate-protolog.json",
-    srcs: [
-        ":protolog-groups",
-        ":services.core-sources-am-wm",
-    ],
-    tools: ["protologtool"],
-    cmd: "$(location protologtool) generate-viewer-config " +
-        "--protolog-class com.android.internal.protolog.ProtoLog " +
-        "--loggroups-class com.android.internal.protolog.WmProtoLogGroups " +
-        "--loggroups-jar $(location :protolog-groups) " +
-        "--viewer-config-type json " +
-        "--viewer-config $(out) " +
-        "$(locations :services.core-sources-am-wm)",
-    out: ["services.core.protolog.json"],
 }
 
 java_genrule {
@@ -99,7 +80,6 @@ java_genrule {
         "--protolog-class com.android.internal.protolog.ProtoLog " +
         "--loggroups-class com.android.internal.protolog.WmProtoLogGroups " +
         "--loggroups-jar $(location :protolog-groups) " +
-        "--viewer-config-type proto " +
         "--viewer-config $(out) " +
         "$(locations :services.core-sources-am-wm)",
     out: ["core.protolog.pb"],
@@ -163,6 +143,9 @@ java_library_static {
         // Java/AIDL sources to be moved out to CrashRecovery module
         ":services-crashrecovery-sources",
 
+        // Telecom sources to move out to Telecom module
+        ":service-telecom-sources",
+
         // Indicate whether VCN is in platform or mainline
         ":vcn-location-sources",
     ],
@@ -176,6 +159,7 @@ java_library_static {
         "android.hardware.vibrator-V3-java",
         "androidx.annotation_annotation",
         "app-compat-annotations",
+        "error_prone_annotations",
         "framework-tethering.stubs.module_lib",
         "keepanno-annotations",
         "service-art.stubs.system_server",
@@ -189,7 +173,6 @@ java_library_static {
     required: [
         "default_television.xml",
         "gps_debug.conf",
-        "protolog.conf.json.gz",
         "core.protolog.pb",
     ],
 
@@ -233,6 +216,7 @@ java_library_static {
         "android.security.aaid_aidl-java",
         "netd-client",
         "overlayable_policy_aidl-java",
+        "SettingsLibDeviceStateRotationLock",
         "SurfaceFlingerProperties",
         "com.android.sysprop.watchdog",
         "securebox",
@@ -241,6 +225,7 @@ java_library_static {
         "battery_saver_flag_lib",
         "notification_flags_lib",
         "power_hint_flags_lib",
+        "thermal_flags_lib",
         "biometrics_flags_lib",
         "aconfig_settings_flags_lib",
         "am_flags_lib",
@@ -256,7 +241,6 @@ java_library_static {
         "core_os_flags_lib",
         "connectivity_flags_lib",
         "device_config_service_flags_java",
-        "dreams_flags_lib",
         "aconfig_new_storage_flags_lib",
         "powerstats_flags_lib",
         "MmdProperties",
@@ -321,18 +305,6 @@ java_library_host {
 prebuilt_etc {
     name: "gps_debug.conf",
     src: "java/com/android/server/location/gnss/gps_debug.conf",
-}
-
-java_genrule {
-    name: "services.core.json.gz",
-    srcs: [":generate-protolog.json"],
-    out: ["services.core.protolog.json.gz"],
-    cmd: "gzip -c < $(in) > $(out)",
-}
-
-prebuilt_etc {
-    name: "protolog.conf.json.gz",
-    src: ":services.core.json.gz",
 }
 
 prebuilt_etc {

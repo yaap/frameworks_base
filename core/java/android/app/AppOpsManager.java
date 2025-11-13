@@ -1706,9 +1706,36 @@ public class AppOpsManager {
     public static final int OP_SCENE_UNDERSTANDING_FINE =
             AppOpEnums.APP_OP_SCENE_UNDERSTANDING_FINE;
 
+    /**
+     * Post promoted notifications in the notification shade and status bar chips.
+     *
+     * @hide
+     */
+    public static final int OP_POST_PROMOTED_NOTIFICATIONS =
+            AppOpEnums.APP_OP_POST_PROMOTED_NOTIFICATIONS;
+
+    /** @hide */
+    public static final int OP_SYSTEM_APPLICATION_OVERLAY =
+            AppOpEnums.APP_OP_SYSTEM_APPLICATION_OVERLAY;
+
+    /**
+     * Access cell identity data.
+     *
+     * @hide
+     */
+    public static final int OP_READ_CELL_IDENTITY = AppOpEnums.APP_OP_READ_CELL_IDENTITY;
+
+    /**
+     * Access cell info data such as connection status or registered to a
+     * mobile network.
+     *
+     * @hide
+     */
+    public static final int OP_READ_CELL_INFO = AppOpEnums.APP_OP_READ_CELL_INFO;
+
     /** @hide */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
-    public static final int _NUM_OP = 163;
+    public static final int _NUM_OP = 167;
 
     /**
      * All app ops represented as strings.
@@ -1875,6 +1902,10 @@ public class AppOpsManager {
             OPSTR_HEAD_TRACKING,
             OPSTR_SCENE_UNDERSTANDING_COARSE,
             OPSTR_SCENE_UNDERSTANDING_FINE,
+            OPSTR_POST_PROMOTED_NOTIFICATIONS,
+            OPSTR_SYSTEM_APPLICATION_OVERLAY,
+            OPSTR_READ_CELL_IDENTITY,
+            OPSTR_READ_CELL_INFO
     })
     public @interface AppOpString {}
 
@@ -2489,6 +2520,8 @@ public class AppOpsManager {
      *
      * @hide
      */
+    @TestApi
+    @SuppressLint("UnflaggedApi") // Exposing via @TestApi without associated new feature
     public static final String OPSTR_SYSTEM_EXEMPT_FROM_ACTIVITY_BG_START_RESTRICTION =
             "android:system_exempt_from_activity_bg_start_restriction";
 
@@ -2671,6 +2704,20 @@ public class AppOpsManager {
     public static final String OPSTR_SCENE_UNDERSTANDING_FINE =
             "android:scene_understanding_fine";
 
+    /** @hide Permission to post promoted notifications. */
+    public static final String OPSTR_POST_PROMOTED_NOTIFICATIONS =
+            "android:post_promoted_notifications";
+
+    /** @hide Required to draw system application overlays. */
+    public static final String OPSTR_SYSTEM_APPLICATION_OVERLAY =
+            "android:system_application_overlay";
+
+    /** @hide Read telephony cell identity. */
+    public static final String OPSTR_READ_CELL_IDENTITY = "android:read_cell_identity";
+
+    /** @hide Read telephony cell information. */
+    public static final String OPSTR_READ_CELL_INFO = "android:read_cell_info";
+
     /** {@link #sAppOpsToNote} not initialized yet for this op */
     private static final byte SHOULD_COLLECT_NOTE_OP_NOT_INITIALIZED = 0;
     /** Should not collect noting of this app-op in {@link #sAppOpsToNote} */
@@ -2796,6 +2843,10 @@ public class AppOpsManager {
             OP_MEDIA_ROUTING_CONTROL,
             OP_READ_SYSTEM_GRAMMATICAL_GENDER,
             OP_WRITE_SYSTEM_PREFERENCES,
+            android.app.Flags.uiRichOngoing()
+                    ? OP_POST_PROMOTED_NOTIFICATIONS : OP_NONE,
+            com.android.media.projection.flags.Flags.recordingOverlay()
+                    ? OP_SYSTEM_APPLICATION_OVERLAY : OP_NONE,
     };
 
     @SuppressWarnings("FlaggedApi")
@@ -3327,6 +3378,24 @@ public class AppOpsManager {
                 .setPermission(android.xr.Flags.xrManifestEntries()
                     ? Manifest.permission.SCENE_UNDERSTANDING_FINE : null)
                 .build(),
+        new AppOpInfo.Builder(OP_POST_PROMOTED_NOTIFICATIONS, OPSTR_POST_PROMOTED_NOTIFICATIONS,
+                "POST_PROMOTED_NOTIFICATIONS")
+                .setPermission(android.app.Flags.uiRichOngoing()
+                        ? Manifest.permission.POST_PROMOTED_NOTIFICATIONS : null)
+                .build(),
+        new AppOpInfo.Builder(OP_SYSTEM_APPLICATION_OVERLAY, OPSTR_SYSTEM_APPLICATION_OVERLAY,
+                "SYSTEM_APPLICATION_OVERLAY")
+                .setPermission(com.android.media.projection.flags.Flags.recordingOverlay()
+                        ? Manifest.permission.SYSTEM_APPLICATION_OVERLAY : null)
+                .build(),
+        new AppOpInfo.Builder(OP_READ_CELL_IDENTITY, OPSTR_READ_CELL_IDENTITY,
+                "READ_CELL_IDENTITY")
+                .setDefaultMode(AppOpsManager.MODE_ALLOWED)
+                .build(),
+        new AppOpInfo.Builder(OP_READ_CELL_INFO, OPSTR_READ_CELL_INFO,
+                "READ_CELL_INFO")
+                .setDefaultMode(AppOpsManager.MODE_ALLOWED)
+                .build(),
     };
 
     // The number of longs needed to form a full bitmask of app ops
@@ -3394,6 +3463,10 @@ public class AppOpsManager {
             }
         }
         for (int op : APP_OP_PERMISSION_UID_OPS) {
+            if (op == OP_NONE) {
+                // Skip ops with a disabled feature flag.
+                continue;
+            }
             if (sAppOpInfos[op].permission != null) {
                 sPermToOp.put(sAppOpInfos[op].permission, op);
             }
@@ -3588,7 +3661,7 @@ public class AppOpsManager {
      * @hide
      */
     public static boolean opIsUidAppOpPermission(int op) {
-        return ArrayUtils.contains(APP_OP_PERMISSION_UID_OPS, op);
+        return op != OP_NONE && ArrayUtils.contains(APP_OP_PERMISSION_UID_OPS, op);
     }
 
     /**
@@ -7731,8 +7804,8 @@ public class AppOpsManager {
                     && Objects.equals(mAttributionTag, that.mAttributionTag)
                     && mVirtualDeviceId == that.mVirtualDeviceId
                     && Objects.equals(mMessage, that.mMessage)
-                    && Objects.equals(mShouldCollectAsyncNotedOp, that.mShouldCollectAsyncNotedOp)
-                    && Objects.equals(mShouldCollectMessage, that.mShouldCollectMessage);
+                    && mShouldCollectAsyncNotedOp == that.mShouldCollectAsyncNotedOp
+                    && mShouldCollectMessage == that.mShouldCollectMessage;
         }
 
         @Override

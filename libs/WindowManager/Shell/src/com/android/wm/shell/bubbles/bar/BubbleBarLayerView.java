@@ -16,6 +16,8 @@
 
 package com.android.wm.shell.bubbles.bar;
 
+import static com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_BUBBLES;
+import static com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_BUBBLES_NOISY;
 import static com.android.wm.shell.shared.animation.Interpolators.ALPHA_IN;
 import static com.android.wm.shell.shared.animation.Interpolators.ALPHA_OUT;
 import static com.android.wm.shell.bubbles.Bubbles.DISMISS_USER_GESTURE;
@@ -23,6 +25,7 @@ import static com.android.wm.shell.shared.bubbles.BubbleConstants.BUBBLE_EXPANDE
 
 import android.annotation.Nullable;
 import android.content.Context;
+import android.graphics.Insets;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.Region;
@@ -39,9 +42,12 @@ import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.internal.protolog.ProtoLog;
+import com.android.wm.shell.R;
 import com.android.wm.shell.bubbles.Bubble;
 import com.android.wm.shell.bubbles.BubbleController;
 import com.android.wm.shell.bubbles.BubbleData;
+import com.android.wm.shell.bubbles.BubbleExpandedViewTransitionAnimator;
 import com.android.wm.shell.bubbles.BubbleLogger;
 import com.android.wm.shell.bubbles.BubbleOverflow;
 import com.android.wm.shell.bubbles.BubblePositioner;
@@ -70,7 +76,8 @@ import java.util.function.Consumer;
  * on screen and instead shows & animates the expanded bubble for the bubble bar.
  */
 public class BubbleBarLayerView extends FrameLayout
-        implements ViewTreeObserver.OnComputeInternalInsetsListener {
+        implements ViewTreeObserver.OnComputeInternalInsetsListener,
+        BubbleExpandedViewTransitionAnimator {
 
     private static final String TAG = BubbleBarLayerView.class.getSimpleName();
 
@@ -105,6 +112,7 @@ public class BubbleBarLayerView extends FrameLayout
     // Used to ensure touch target size for the menu shown on a bubble expanded view
     private TouchDelegate mHandleTouchDelegate;
     private final Rect mHandleTouchBounds = new Rect();
+    private Insets mInsets;
 
     public BubbleBarLayerView(Context context, BubbleController controller, BubbleData bubbleData,
             BubbleLogger bubbleLogger) {
@@ -142,7 +150,7 @@ public class BubbleBarLayerView extends FrameLayout
                         private DragZone mLastBubbleLocationDragZone = null;
                         private BubbleBarLocation mInitialLocation = null;
                         @Override
-                        public void onDragEnded(@NonNull DragZone zone) {
+                        public void onDragEnded(@Nullable DragZone zone) {
                             if (mExpandedBubble == null || !(mExpandedBubble instanceof Bubble)) {
                                 Log.w(TAG, "dropped invalid bubble: " + mExpandedBubble);
                                 return;
@@ -169,7 +177,7 @@ public class BubbleBarLayerView extends FrameLayout
                         }
 
                         @Override
-                        public void onInitialDragZoneSet(@NonNull DragZone dragZone) {
+                        public void onInitialDragZoneSet(@Nullable DragZone dragZone) {
                             mInitialLocation = dragZone instanceof DragZone.Bubble.Left
                                     ? BubbleBarLocation.LEFT
                                     : BubbleBarLocation.RIGHT;
@@ -178,7 +186,7 @@ public class BubbleBarLayerView extends FrameLayout
 
                         @Override
                         public void onDragZoneChanged(@NonNull DraggedObject draggedObject,
-                                @NonNull DragZone from, @NonNull DragZone to) {
+                                @Nullable DragZone from, @Nullable DragZone to) {
                             final boolean isBubbleLeft = to instanceof DragZone.Bubble.Left;
                             final boolean isBubbleRight = to instanceof DragZone.Bubble.Right;
                             if ((isBubbleLeft || isBubbleRight)
@@ -204,6 +212,23 @@ public class BubbleBarLayerView extends FrameLayout
                         @Override
                         public boolean isSupported() {
                             return false;
+                        }
+                    },
+                    new DragZoneFactory.BubbleBarPropertiesProvider() {
+                        // this is only used in launcher
+                        @Override
+                        public int getBottomPadding() {
+                            return 0;
+                        }
+
+                        @Override
+                        public int getWidth() {
+                            return 0;
+                        }
+
+                        @Override
+                        public int getHeight() {
+                            return 0;
                         }
                     });
         }
@@ -257,6 +282,7 @@ public class BubbleBarLayerView extends FrameLayout
     }
 
     /** Whether the stack of bubbles is expanded or not. */
+    @Override
     public boolean isExpanded() {
         return mIsExpanded;
     }
@@ -276,6 +302,7 @@ public class BubbleBarLayerView extends FrameLayout
      * @return whether it's possible to expand {@param b} right now. This is {@code false} if
      *         the bubble has no view or if the bubble is already showing.
      */
+    @Override
     public boolean canExpandView(BubbleViewProvider b) {
         if (b.getBubbleBarExpandedView() == null) return false;
         if (mExpandedBubble != null && mIsExpanded && b.getKey().equals(mExpandedBubble.getKey())) {
@@ -283,6 +310,11 @@ public class BubbleBarLayerView extends FrameLayout
             return false;
         }
         return true;
+    }
+
+    @Override
+    public void removeViewFromTransition(View view) {
+        removeView(view);
     }
 
     /**
@@ -318,6 +350,14 @@ public class BubbleBarLayerView extends FrameLayout
             boolean isOverflowExpanded = b.getKey().equals(BubbleOverflow.KEY);
             final int width = mPositioner.getExpandedViewWidthForBubbleBar(isOverflowExpanded);
             final int height = mPositioner.getExpandedViewHeightForBubbleBar(isOverflowExpanded);
+            if (width <= 0 || height <= 0) {
+                Log.e(TAG,
+                        String.format("got expanded view with non-positive width=%d or height=%d."
+                                        + " this could result in the expanded view not having a"
+                                        + " surface!",
+                                width, height));
+            }
+
             mExpandedView.setVisibility(GONE);
             mExpandedView.setY(mPositioner.getExpandedViewBottomForBubbleBar() - height);
             mExpandedView.setLayerBoundsSupplier(() -> new Rect(0, 0, getWidth(), getHeight()));
@@ -379,6 +419,19 @@ public class BubbleBarLayerView extends FrameLayout
      *                       bubble is expanded.
      */
     public void animateExpand(BubbleViewProvider previousBubble) {
+        animateExpand(previousBubble, null /* finishCallback */);
+    }
+
+    /**
+     * Performs an animation to open a bubble with content that is not already visible.
+     *
+     * @param previousBubble If non-null, this is a bubble that is already showing before the new
+     *                       bubble is expanded.
+     * @param animFinish If non-null, the callback triggered after the expand animation completes
+     */
+    @Override
+    public void animateExpand(BubbleViewProvider previousBubble,
+            @Nullable Runnable animFinish) {
         if (!mIsExpanded || mExpandedBubble == null) {
             throw new IllegalStateException("Can't animateExpand without expnaded state");
         }
@@ -392,6 +445,10 @@ public class BubbleBarLayerView extends FrameLayout
             mHandleTouchDelegate = new TouchDelegate(mHandleTouchBounds,
                     mExpandedView.getHandleView());
             setTouchDelegate(mHandleTouchDelegate);
+
+            if (animFinish != null) {
+                animFinish.run();
+            }
         };
 
         if (previousBubble != null) {
@@ -411,6 +468,7 @@ public class BubbleBarLayerView extends FrameLayout
      * immediately so it gets a surface that can be animated. Since the surface may not be ready
      * yet, this keeps the TaskView alpha=0.
      */
+    @Override
     public BubbleViewProvider prepareConvertedView(BubbleViewProvider b) {
         final BubbleViewProvider prior = prepareExpandedView(b);
 
@@ -432,6 +490,7 @@ public class BubbleBarLayerView extends FrameLayout
      *
      * @param startT A transaction with first-frame work. this *will* be applied here!
      */
+    @Override
     public void animateConvert(@NonNull SurfaceControl.Transaction startT,
             @NonNull Rect startBounds, float startScale, @NonNull SurfaceControl snapshot,
             SurfaceControl taskLeash, Runnable animFinish) {
@@ -442,25 +501,25 @@ public class BubbleBarLayerView extends FrameLayout
                 taskLeash, animFinish);
     }
 
-    /**
-     * Populates {@param out} with the rest bounds of an expanded bubble.
-     */
-    public void getExpandedViewRestBounds(Rect out) {
-        mAnimationHelper.getExpandedViewRestBounds(out);
-    }
-
-    /** Removes the given {@code bubble}. */
-    public void removeBubble(Bubble bubble, Runnable endAction) {
+    public void removeBubble(@NonNull Bubble bubble, @NonNull Runnable endAction) {
         final boolean inTransition = bubble.getPreparingTransition() != null;
+        ProtoLog.d(WM_SHELL_BUBBLES_NOISY,
+                "BBLayerView.removeBubble(): bubble=%s hasBubbles=%b inTransition=%b",
+                bubble, !mBubbleData.getBubbles().isEmpty(), inTransition);
         Runnable cleanUp = () -> {
             // The transition is already managing the task/wm state.
             bubble.cleanupViews(!inTransition);
             endAction.run();
         };
         if (mBubbleData.getBubbles().isEmpty() || inTransition) {
-            // If we are removing the last bubble or removing the current bubble via transition,
-            // collapse the expanded view and clean up bubbles at the end.
-            collapse(cleanUp);
+            if (mExpandedBubble != null && mExpandedBubble.getKey().equals(bubble.getKey())) {
+                // If we are removing the last bubble or removing the current bubble via transition,
+                // collapse the expanded view and clean up bubbles at the end.
+                collapse(cleanUp);
+            } else {
+                ProtoLog.d(WM_SHELL_BUBBLES_NOISY, "  Skipping, does not match expanded view");
+                cleanUp.run();
+            }
         } else {
             cleanUp.run();
         }
@@ -533,12 +592,15 @@ public class BubbleBarLayerView extends FrameLayout
             removeView(mDismissView);
         }
         mDismissView = new DismissView(getContext());
-        DismissViewUtils.setup(mDismissView);
+        DismissViewUtils.setupWithMarginIgnoringNavBarInset(
+                mDismissView, R.dimen.bubble_bar_dismiss_view_bottom_margin);
         addView(mDismissView);
     }
 
     /** Hides the current modal education/menu view, IME or collapses the expanded view */
     private void hideModalOrCollapse() {
+        ProtoLog.d(WM_SHELL_BUBBLES_NOISY, "hideModalOrCollapse(): expanded=%s",
+                mExpandedBubble != null ? mExpandedBubble.getKey() : "null");
         if (mEducationViewController.isEducationVisible()) {
             mEducationViewController.hideEducation(/* animated = */ true);
             return;
@@ -569,6 +631,7 @@ public class BubbleBarLayerView extends FrameLayout
         mExpandedView.setX(mTempRect.left);
         mExpandedView.setY(mTempRect.top);
         mExpandedView.updateLocation();
+        mExpandedView.updateBottomClip();
     }
 
     private void showScrim(boolean show) {
@@ -619,6 +682,15 @@ public class BubbleBarLayerView extends FrameLayout
     @VisibleForTesting
     public BubbleBarExpandedViewDragController getDragController() {
         return mDragController;
+    }
+
+    /** Notifies view of device config update. */
+    public void update(DeviceConfig deviceConfig) {
+        Insets newInsets = deviceConfig.getInsets();
+        if (!newInsets.equals(mInsets)) {
+            mInsets = newInsets;
+            updateExpandedView();
+        }
     }
 
     private class LocationChangeListener implements

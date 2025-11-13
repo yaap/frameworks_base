@@ -31,13 +31,10 @@ import java.util.regex.Pattern;
 public class FieldColor extends ThemeSettingsField<Integer, String> {
     private static final Pattern COLOR_PATTERN = Pattern.compile("[0-9a-fA-F]{6,8}");
 
-    public FieldColor(
-            String key,
-            BiConsumer<ThemeSettingsUpdater, Integer> setter,
-            Function<ThemeSettings, Integer> getter,
-            ThemeSettings defaults
-    ) {
-        super(key, setter, getter, defaults);
+    public FieldColor(String key, Function<ThemeSettingsUpdater, Integer> updaterGetter,
+            BiConsumer<ThemeSettingsUpdater, Integer> updaterSetter,
+            Function<ThemeSettings, Integer> getter, ThemeSettings defaults) {
+        super(key, updaterGetter, updaterSetter, getter, defaults);
     }
 
     @Override

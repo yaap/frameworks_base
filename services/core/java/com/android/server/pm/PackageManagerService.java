@@ -24,6 +24,7 @@ import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER;
 import static android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+import static android.content.pm.PackageManager.GET_PERMISSIONS;
 import static android.content.pm.PackageManager.MATCH_DIRECT_BOOT_AWARE;
 import static android.content.pm.PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
 import static android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS;
@@ -169,6 +170,7 @@ import android.util.ArraySet;
 import android.util.DisplayMetrics;
 import android.util.EventLog;
 import android.util.ExceptionUtils;
+import android.util.IntArray;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Slog;
@@ -212,6 +214,7 @@ import com.android.server.SystemConfig;
 import com.android.server.ThreadPriorityBooster;
 import com.android.server.Watchdog;
 import com.android.server.apphibernation.AppHibernationManagerInternal;
+import com.android.server.appwindowlayout.AppWindowLayoutSettingsService;
 import com.android.server.art.DexUseManagerLocal;
 import com.android.server.art.model.DeleteResult;
 import com.android.server.compat.CompatChange;
@@ -282,6 +285,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -606,6 +610,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
     final ProcessLoggingHandler mProcessLoggingHandler;
 
     private final int mSdkVersion;
+    private final int mSdkVersionFull;
     final Context mContext;
     final boolean mFactoryTest;
     final DisplayMetrics mMetrics;
@@ -616,6 +621,8 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
     private final boolean mIsPreQUpgrade;
     // If mIsUpgrade == true, contains the prior SDK version, else -1.
     private final int mPriorSdkVersion;
+    // If mIsUpgrade == true, contains the prior full SDK version, else -1.
+    private final int mPriorSdkVersionFull;
 
     // Used for privilege escalation. MUST NOT BE CALLED WITH mPackages
     // LOCK HELD.  Can be called with mInstallLock held.
@@ -1012,6 +1019,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
     private final StorageEventHelper mStorageEventHelper;
     private final FreeStorageHelper mFreeStorageHelper;
 
+    private static Set<String> sRestrictedPermissions;
 
     private static final boolean ENABLE_BOOST = false;
 
@@ -1309,15 +1317,13 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         // If the feature flag is on, retain the old files for a day. Otherwise, delete the old
         // files after a few seconds.
         long deleteDelayMillis = DEFERRED_NO_KILL_POST_DELETE_DELAY_MS;
-        if (Flags.improveInstallDontKill()) {
-            deleteDelayMillis = Binder.withCleanCallingIdentity(() -> {
-                return DeviceConfig.getLong(NAMESPACE_PACKAGE_MANAGER_SERVICE,
-                        /* name= */ PROPERTY_DEFERRED_NO_KILL_POST_DELETE_DELAY_MS_EXTENDED,
-                        /* defaultValue= */ DEFERRED_NO_KILL_POST_DELETE_DELAY_MS_EXTENDED);
-            });
-            Slog.w(TAG, "Delaying the deletion of <" + args.getCodePath() + "> by "
-                    + deleteDelayMillis + "ms or till the next reboot");
-        }
+        deleteDelayMillis = Binder.withCleanCallingIdentity(() -> {
+            return DeviceConfig.getLong(NAMESPACE_PACKAGE_MANAGER_SERVICE,
+                    /* name= */ PROPERTY_DEFERRED_NO_KILL_POST_DELETE_DELAY_MS_EXTENDED,
+                    /* defaultValue= */ DEFERRED_NO_KILL_POST_DELETE_DELAY_MS_EXTENDED);
+        });
+        Slog.w(TAG, "Delaying the deletion of <" + args.getCodePath() + "> by "
+                + deleteDelayMillis + "ms or till the next reboot");
         mHandler.sendMessageDelayed(message, deleteDelayMillis);
     }
 
@@ -1635,10 +1641,11 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
     }
 
     void writeSettings(boolean sync) {
+        final List<UserInfo> activeUsers = Settings.getActiveUsers(mUserManager);
         synchronized (mLock) {
             mHandler.removeMessages(WRITE_SETTINGS);
             mBackgroundHandler.removeMessages(WRITE_DIRTY_PACKAGE_RESTRICTIONS);
-            writeSettingsLPrTEMP(sync);
+            writeSettingsLPrTEMP(activeUsers, sync);
             synchronized (mDirtyUsers) {
                 mDirtyUsers.clear();
             }
@@ -1646,9 +1653,10 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
     }
 
     void writePackageList(int userId) {
+        List<UserInfo> activeUsers = Settings.getActiveUsers(mUserManager);
         synchronized (mLock) {
             mHandler.removeMessages(WRITE_PACKAGE_LIST);
-            mSettings.writePackageListLPr(userId);
+            mSettings.writePackageListLPr(activeUsers, userId);
         }
     }
 
@@ -1759,9 +1767,12 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
             Slog.w(TAG, "**** ro.build.version.sdk not set!");
         }
 
+        final int sdkVersionFull = android.sdk.Flags.majorMinorVersioningScheme()
+                ? Build.VERSION.SDK_INT_FULL : 0;
         PackageManagerService m = new PackageManagerService(injector, factoryTest,
                 PackagePartitions.FINGERPRINT, Build.IS_ENG, Build.IS_USERDEBUG,
-                Build.VERSION.SDK_INT, Build.VERSION.INCREMENTAL);
+                Build.VERSION.SDK_INT, Build.VERSION.INCREMENTAL, sdkVersionFull);
+
         t.traceEnd(); // "create package manager"
 
         final CompatChange.ChangeListener selinuxChangeListener = packageName -> {
@@ -1810,7 +1821,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
     /** Install/uninstall system packages for all users based on their user-type, as applicable. */
     private void installAllowlistedSystemPackages() {
-        if (mUserManager.installWhitelistedSystemPackages(isFirstBoot(), isDeviceUpgrading(),
+        if (mUserManager.installAllowlistedSystemPackages(isFirstBoot(), isDeviceUpgrading(),
                 mExistingPackages)) {
             scheduleWritePackageRestrictions(USER_ALL);
             scheduleWriteSettings();
@@ -1904,6 +1915,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         mIsPreNMR1Upgrade = testParams.isPreNmr1Upgrade;
         mIsPreQUpgrade = testParams.isPreQupgrade;
         mPriorSdkVersion = testParams.priorSdkVersion;
+        mPriorSdkVersionFull = testParams.priorSdkVersionFull;
         mIsUpgrade = testParams.isUpgrade;
         mMetrics = testParams.Metrics;
         mModuleInfoProvider = testParams.moduleInfoProvider;
@@ -1945,6 +1957,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         mPackages.putAll(testParams.packages);
         mFreeStorageHelper = testParams.freeStorageHelper;
         mSdkVersion = testParams.sdkVersion;
+        mSdkVersionFull = testParams.sdkVersionFull;
         mAppInstallDir = testParams.appInstallDir;
         mIsEngBuild = testParams.isEngBuild;
         mIsUserDebugBuild = testParams.isUserDebugBuild;
@@ -1974,10 +1987,21 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
     public PackageManagerService(PackageManagerServiceInjector injector, boolean factoryTest,
             final String partitionsFingerprint, final boolean isEngBuild,
-            final boolean isUserDebugBuild, final int sdkVersion, final String incrementalVersion) {
+            final boolean isUserDebugBuild, final int sdkVersion, final String incrementalVersion,
+            final int sdkVersionFull) {
         mIsEngBuild = isEngBuild;
         mIsUserDebugBuild = isUserDebugBuild;
         mSdkVersion = sdkVersion;
+
+        mSdkVersionFull = sdkVersionFull;
+        // If the major version of sdkVersionFull and sdkVersion are not equal,
+        // throw RuntimeException to crash the system.
+        if (android.sdk.Flags.majorMinorVersioningScheme()
+                && (Build.getMajorSdkVersion(sdkVersionFull) != sdkVersion)) {
+            throw new RuntimeException("sdkVersionFull:" + sdkVersionFull + " and sdkVersion: "
+                    + sdkVersion + " don't match. Please check your build configurations!");
+        }
+
         mIncrementalVersion = incrementalVersion;
         mInjector = injector;
         mInjector.getSystemWrapper().disablePackageCaches();
@@ -2195,10 +2219,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
             t.traceBegin("read user settings");
             mFirstBoot = !mSettings.readLPw(computer,
-                    mInjector.getUserManagerInternal().getUsers(
-                    /* excludePartial= */ true,
-                    /* excludeDying= */ false,
-                    /* excludePreCreated= */ false));
+                    mInjector.getUserManagerInternal().getUsers(/* excludeDying= */ false));
             t.traceEnd();
 
             if (mFirstBoot) {
@@ -2250,6 +2271,8 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                                 + PackagePartitions.FINGERPRINT + " (" + Build.FINGERPRINT + ")");
             }
             mPriorSdkVersion = mIsUpgrade ? ver.sdkVersion : -1;
+            mPriorSdkVersionFull = (android.sdk.Flags.majorMinorVersioningScheme() && mIsUpgrade)
+                    ? ver.sdkVersionFull : -1;
             mInitAppsHelper = new InitAppsHelper(this, mApexManager, mInstallPackageHelper,
                     mInjector.getSystemPartitions());
 
@@ -2378,6 +2401,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
             mPermissionManager.onStorageVolumeMounted(
                     StorageManager.UUID_PRIVATE_INTERNAL, mIsUpgrade);
             ver.sdkVersion = mSdkVersion;
+            ver.sdkVersionFull = mSdkVersionFull;
 
             // If this is the first boot or an update from pre-M, then we need to initialize the
             // default preferred apps across all defined users.
@@ -2445,7 +2469,8 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
             // can downgrade to reader
             t.traceBegin("write settings");
-            writeSettingsLPrTEMP();
+            final List<UserInfo> activeUsers = Settings.getActiveUsers(mUserManager);
+            writeSettingsLPrTEMP(activeUsers);
             t.traceEnd();
             EventLog.writeEvent(EventLogTags.BOOT_PROGRESS_PMS_READY,
                     SystemClock.uptimeMillis());
@@ -4076,14 +4101,13 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
         // packageName -> list of components to send broadcasts now
         final ArrayMap<String, ArrayList<String>> sendNowBroadcasts = new ArrayMap<>(targetSize);
-        final List<PackageMetrics.ComponentStateMetrics> componentStateMetricsList =
-                new ArrayList<PackageMetrics.ComponentStateMetrics>();
-        synchronized (mLock) {
-            Computer computer = snapshotComputer();
-            boolean scheduleBroadcastMessage = false;
-            boolean isSynchronous = false;
-            boolean anyChanged = false;
+        final IntArray changedComponentIndices = new IntArray();
+        boolean scheduleBroadcastMessage = false;
+        boolean isSynchronous = false;
 
+        Computer computer = snapshotComputer();
+        boolean anyChanged = false;
+        synchronized (mLock) {
             for (int i = 0; i < targetSize; i++) {
                 if (!updateAllowed[i]) {
                     continue;
@@ -4092,18 +4116,13 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                 final ComponentEnabledSetting setting = settings.get(i);
                 final String packageName = setting.getPackageName();
                 final PackageSetting packageSetting = pkgSettings.get(packageName);
-                final PackageMetrics.ComponentStateMetrics componentStateMetrics =
-                        new PackageMetrics.ComponentStateMetrics(setting,
-                                UserHandle.getUid(userId, packageSetting.getAppId()),
-                                setting.isComponent() ? computer.getComponentEnabledSettingInternal(
-                                        setting.getComponentName(), callingUid, userId)
-                                        : packageSetting.getEnabled(userId), callingUid);
                 if (!setEnabledSettingInternalLocked(computer, packageSetting, setting, userId,
                         callingPackage)) {
                     continue;
                 }
+
                 anyChanged = true;
-                componentStateMetricsList.add(componentStateMetrics);
+                changedComponentIndices.add(i);
 
                 if ((setting.getEnabledFlags() & PackageManager.SYNCHRONOUS) != 0) {
                     isSynchronous = true;
@@ -4124,7 +4143,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                 } else {
                     mPendingBroadcasts.addComponent(userId, packageName, componentName);
                     Trace.instant(Trace.TRACE_TAG_PACKAGE_MANAGER, "setEnabledSetting broadcast: "
-                                   + componentName + ": " + setting.getEnabledState());
+                            + componentName + ": " + setting.getEnabledState());
                     scheduleBroadcastMessage = true;
                 }
             }
@@ -4132,27 +4151,49 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                 // nothing changed, return immediately
                 return;
             }
-
-            if (isSynchronous) {
+        }
+        if (isSynchronous) {
+            synchronized (mLock) {
                 flushPackageRestrictionsAsUserInternalLocked(userId);
-            } else {
-                scheduleWritePackageRestrictions(userId);
             }
-            if (scheduleBroadcastMessage) {
-                if (!mHandler.hasMessages(SEND_PENDING_BROADCAST)) {
-                    // Schedule a message - if it has been a "reasonably long time" since the
-                    // service started, send the broadcast with a delay of one second to avoid
-                    // delayed reactions from the receiver, else keep the default ten second delay
-                    // to avoid extreme thrashing on service startup.
-                    final long broadcastDelay = SystemClock.uptimeMillis() > mServiceStartWithDelay
-                            ? BROADCAST_DELAY
-                            : BROADCAST_DELAY_DURING_STARTUP;
-                    mHandler.sendMessageDelayed(
-                            mHandler.obtainMessage(SEND_PENDING_BROADCAST, callingUid,
-                                    0 /* arg2 */, "component_state_changed" /* obj */),
-                            broadcastDelay);
-                }
+        } else {
+            scheduleWritePackageRestrictions(userId);
+        }
+        if (scheduleBroadcastMessage) {
+            if (!mHandler.hasMessages(SEND_PENDING_BROADCAST)) {
+                // Schedule a message - if it has been a "reasonably long time" since the
+                // service started, send the broadcast with a delay of one second to avoid
+                // delayed reactions from the receiver, else keep the default ten second delay
+                // to avoid extreme thrashing on service startup.
+                final long broadcastDelay = SystemClock.uptimeMillis() > mServiceStartWithDelay
+                        ? BROADCAST_DELAY
+                        : BROADCAST_DELAY_DURING_STARTUP;
+                mHandler.sendMessageDelayed(
+                        mHandler.obtainMessage(SEND_PENDING_BROADCAST, callingUid,
+                                0 /* arg2 */, "component_state_changed" /* obj */),
+                        broadcastDelay);
             }
+        }
+
+        final List<PackageMetrics.ComponentStateMetrics> componentStateMetricsList =
+                new ArrayList<PackageMetrics.ComponentStateMetrics>();
+        final int listSize = changedComponentIndices.size();
+        for (int i = 0; i < listSize; i++) {
+            final int index = changedComponentIndices.get(i);
+            final ComponentEnabledSetting setting = settings.get(index);
+            final String packageName = setting.getPackageName();
+            final PackageStateInternal psi = computer.getPackageStateInternal(packageName);
+            // Gets component state from the old snapshot which was taken before the state change,
+            // because the metrics want to use the old state
+            final int componentOldState =
+                    setting.isComponent() ? computer.getComponentEnabledSettingInternal(
+                            setting.getComponentName(), callingUid, userId)
+                            : psi.getUserStateOrDefault(userId).getEnabledState();
+            final PackageMetrics.ComponentStateMetrics componentStateMetrics =
+                    new PackageMetrics.ComponentStateMetrics(setting,
+                            UserHandle.getUid(userId, psi.getAppId()),
+                            componentOldState, callingUid);
+            componentStateMetricsList.add(componentStateMetrics);
         }
 
         // Log the metrics when the component state is changed.
@@ -4330,9 +4371,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
         int[] grantPermissionsUserIds = EMPTY_INT_ARRAY;
         final List<UserInfo> livingUsers = mInjector.getUserManagerInternal().getUsers(
-                /* excludePartial= */ true,
-                /* excludeDying= */ true,
-                /* excludePreCreated= */ false);
+                /* excludeDying= */ true);
         final int livingUserCount = livingUsers.size();
         for (int i = 0; i < livingUserCount; i++) {
             final int userId = livingUsers.get(i).id;
@@ -4454,13 +4493,14 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
     /** Called by UserManagerService */
     void cleanUpUser(UserManagerService userManager, @UserIdInt int userId) {
+        final List<UserInfo> activeUsers = Settings.getActiveUsers(userManager);
         synchronized (mLock) {
             synchronized (mDirtyUsers) {
                 mDirtyUsers.remove(userId);
             }
             mUserNeedsBadging.delete(userId);
             mDeletePackageHelper.removeUnusedPackagesLPw(userManager, userId);
-            mSettings.removeUserLPw(userId);
+            mSettings.removeUserLPw(activeUsers, userId);
             mPendingBroadcasts.remove(userId);
             mAppsFilter.onUserDeleted(snapshotComputer(), userId);
             mPermissionManager.onUserRemoved(userId);
@@ -4862,7 +4902,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                 public void run() {
                     mHandler.removeCallbacks(this);
                     final boolean succeeded;
-                    try (PackageFreezer freezer = freezePackage(packageName, USER_ALL,
+                    try (PackageFreezer freezer = freezePackage(packageName, userId,
                             "clearApplicationUserData",
                             ApplicationExitInfo.REASON_USER_REQUESTED, null /* request */,
                             /* waitAppKilled= */ true)) {
@@ -5474,8 +5514,9 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         public VerifierDeviceIdentity getVerifierDeviceIdentity() throws RemoteException {
             getVerifierDeviceIdentity_enforcePermission();
 
+            final List<UserInfo> activeUsers = Settings.getActiveUsers(mUserManager);
             synchronized (mLock) {
-                return mSettings.getVerifierDeviceIdentityLPw(mLiveComputer);
+                return mSettings.getVerifierDeviceIdentityLPw(mLiveComputer, activeUsers);
             }
         }
 
@@ -6506,6 +6547,20 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
             final PackageStateInternal packageState = snapshot
                     .getPackageStateForInstalledAndFiltered(packageName, callingUid, userId);
             if (packageState == null) {
+                if (com.android.window.flags.Flags.restoreUserAspectRatioSettingsUsingService()) {
+                    // Pass along the request to `AppWindowLayoutSettingsService`, which will retry
+                    // to set the user aspect ratio after the package has been installed.
+                    final AppWindowLayoutSettingsService appWindowLayoutSettingsService =
+                            LocalServices.getService(AppWindowLayoutSettingsService.class);
+                    if (appWindowLayoutSettingsService == null) {
+                        Slog.w(TAG, "Could not find AppWindowLayoutSettingsService.");
+                        return;
+                    }
+                    // TODO(b/414381398): expose this API to the Settings app to call directly, so
+                    //  that `setUserMinAspectRatio()` becomes a no-op when app is not installed.
+                    appWindowLayoutSettingsService.awaitPackageInstallForAspectRatio(packageName,
+                            userId, aspectRatio);
+                }
                 return;
             }
 
@@ -7136,11 +7191,12 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
         @Override
         public void writeSettings(boolean async) {
+            final List<UserInfo> activeUsers = Settings.getActiveUsers(mUserManager);
             synchronized (mLock) {
                 if (async) {
                     scheduleWriteSettings();
                 } else {
-                    writeSettingsLPrTEMP();
+                    writeSettingsLPrTEMP(activeUsers, /* sync= */ false);
                 }
             }
         }
@@ -7352,6 +7408,13 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         public boolean isUpgradingFromLowerThan(int sdkVersion) {
             final boolean isUpgrading = mPriorSdkVersion != -1;
             return isUpgrading && mPriorSdkVersion < sdkVersion;
+        }
+
+        @Override
+        public boolean isUpgradingFromLowerThanBySdkVersionFull(
+                @Build.SdkIntFull int sdkVersionFull) {
+            final boolean isUpgrading = mPriorSdkVersionFull != -1;
+            return isUpgrading && (mPriorSdkVersionFull < sdkVersionFull);
         }
     }
 
@@ -7728,15 +7791,15 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
      * TODO(b/182523293): This should be removed once we finish migration of permission storage.
      */
     @SuppressWarnings("GuardedBy")
-    void writeSettingsLPrTEMP(boolean sync) {
+    void writeSettingsLPrTEMP(List<UserInfo> users, boolean sync) {
         snapshotComputer(false);
         mPermissionManager.writeLegacyPermissionsTEMP(mSettings.mPermissions);
-        mSettings.writeLPr(mLiveComputer, sync);
+        mSettings.writeLPr(mLiveComputer, users, sync);
     }
 
     // Default async version.
-    void writeSettingsLPrTEMP() {
-        writeSettingsLPrTEMP(/*sync=*/false);
+    void writeSettingsLPrTEMP(List<UserInfo> users) {
+        writeSettingsLPrTEMP(users, /*sync=*/false);
     }
 
     @Override
@@ -7923,6 +7986,10 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
 
     int getSdkVersion() {
         return mSdkVersion;
+    }
+
+    int getSdkVersionFull() {
+        return mSdkVersionFull;
     }
 
     void addAllPackageProperties(@NonNull AndroidPackage pkg) {
@@ -8304,5 +8371,30 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
     private static boolean isSystemOrPhone(int uid) {
         return UserHandle.isSameApp(uid, Process.SYSTEM_UID)
                 || UserHandle.isSameApp(uid, Process.PHONE_UID);
+    }
+
+    /**
+     * @hide
+     */
+    @NonNull
+    public Set<String> getAllPlatformRestrictedPermissions() {
+        if (sRestrictedPermissions == null) {
+            sRestrictedPermissions = new HashSet<>();
+            final long token = Binder.clearCallingIdentity();
+            try {
+                PackageInfo pi = snapshotComputer().getPackageInfo(
+                        PLATFORM_PACKAGE_NAME, GET_PERMISSIONS, UserHandle.USER_SYSTEM);
+                if (pi.permissions != null) {
+                    for (int i = 0; i < pi.permissions.length; i++) {
+                        if (pi.permissions[i].isRestricted()) {
+                            sRestrictedPermissions.add(pi.permissions[i].name);
+                        }
+                    }
+                }
+            } finally {
+                Binder.restoreCallingIdentity(token);
+            }
+        }
+        return sRestrictedPermissions;
     }
 }

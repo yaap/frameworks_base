@@ -20,11 +20,12 @@ package com.android.systemui.keyguard.ui.viewmodel
 import android.graphics.Point
 import android.util.MathUtils
 import android.view.View.VISIBLE
+import com.android.app.tracing.coroutines.flow.traceAs
 import com.android.systemui.common.shared.model.NotificationContainerBounds
 import com.android.systemui.communal.domain.interactor.CommunalInteractor
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
-import com.android.systemui.deviceentry.domain.interactor.DeviceEntryInteractor
+import com.android.systemui.deviceentry.domain.interactor.DeviceEntryBypassInteractor
 import com.android.systemui.dump.DumpManager
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
@@ -38,6 +39,7 @@ import com.android.systemui.keyguard.shared.model.KeyguardState.PRIMARY_BOUNCER
 import com.android.systemui.keyguard.shared.model.TransitionState.RUNNING
 import com.android.systemui.keyguard.shared.model.TransitionState.STARTED
 import com.android.systemui.keyguard.ui.StateToValue
+import com.android.systemui.minmode.MinModeManager
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
@@ -55,7 +57,7 @@ import com.android.systemui.util.ui.AnimatableEvent
 import com.android.systemui.util.ui.AnimatedValue
 import com.android.systemui.util.ui.toAnimatedValueFlow
 import com.android.systemui.util.ui.zip
-import com.android.systemui.wallpapers.domain.interactor.WallpaperFocalAreaInteractor
+import java.util.Optional
 import javax.inject.Inject
 import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
@@ -66,6 +68,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
@@ -76,16 +79,16 @@ class KeyguardRootViewModel
 @Inject
 constructor(
     @Application private val applicationScope: CoroutineScope,
-    private val deviceEntryInteractor: DeviceEntryInteractor,
+    private val deviceEntryBypassInteractor: DeviceEntryBypassInteractor,
     private val dozeParameters: DozeParameters,
     private val keyguardInteractor: KeyguardInteractor,
-    private val communalInteractor: CommunalInteractor,
-    private val keyguardTransitionInteractor: KeyguardTransitionInteractor,
+    communalInteractor: CommunalInteractor,
+    keyguardTransitionInteractor: KeyguardTransitionInteractor,
     private val notificationsKeyguardInteractor: NotificationsKeyguardInteractor,
     private val pulseExpansionInteractor: PulseExpansionInteractor,
     notificationShadeWindowModel: NotificationShadeWindowModel,
-    private val aodPromotedNotificationInteractor: AODPromotedNotificationInteractor,
-    private val aodNotificationIconViewModel: NotificationIconContainerAlwaysOnDisplayViewModel,
+    aodPromotedNotificationInteractor: AODPromotedNotificationInteractor,
+    aodNotificationIconViewModel: NotificationIconContainerAlwaysOnDisplayViewModel,
     private val alternateBouncerToAodTransitionViewModel: AlternateBouncerToAodTransitionViewModel,
     private val alternateBouncerToGoneTransitionViewModel:
         AlternateBouncerToGoneTransitionViewModel,
@@ -116,7 +119,6 @@ constructor(
     private val goneToDozingTransitionViewModel: GoneToDozingTransitionViewModel,
     private val goneToDreamingTransitionViewModel: GoneToDreamingTransitionViewModel,
     private val goneToLockscreenTransitionViewModel: GoneToLockscreenTransitionViewModel,
-    private val goneToGlanceableHubTransitionViewModel: GoneToGlanceableHubTransitionViewModel,
     private val lockscreenToAodTransitionViewModel: LockscreenToAodTransitionViewModel,
     private val lockscreenToDozingTransitionViewModel: LockscreenToDozingTransitionViewModel,
     private val lockscreenToDreamingTransitionViewModel: LockscreenToDreamingTransitionViewModel,
@@ -140,9 +142,9 @@ constructor(
         PrimaryBouncerToLockscreenTransitionViewModel,
     private val screenOffAnimationController: ScreenOffAnimationController,
     private val aodBurnInViewModel: AodBurnInViewModel,
-    private val shadeInteractor: ShadeInteractor,
-    wallpaperFocalAreaInteractor: WallpaperFocalAreaInteractor,
+    shadeInteractor: ShadeInteractor,
     dumpManager: DumpManager,
+    private val minModeManager: Optional<MinModeManager>,
 ) : FlowDumperImpl(dumpManager) {
     val burnInLayerVisibility: Flow<Int> =
         keyguardTransitionInteractor.startedKeyguardTransitionStep
@@ -200,11 +202,15 @@ constructor(
             .distinctUntilChanged()
 
     /**
-     * Keyguard should not show if fully transitioned into a hidden keyguard state or if
-     * transitioning between hidden states.
+     * Keyguard should not show in any of the following conditions:
+     * 1. If fully transitioned into a hidden keyguard state
+     * 2. If transitioning between hidden states
+     * 3. If minmode activity is in foreground.
      */
     private val hideKeyguard: Flow<Boolean> =
         anyOf(
+            if (minModeManager.isPresent) minModeManager.get().isMinModeInForegroundFlow
+            else flowOf(false),
             notificationShadeWindowModel.isKeyguardOccluded,
             communalInteractor.isIdleOnCommunal,
             keyguardTransitionInteractor
@@ -226,7 +232,12 @@ constructor(
      * non-split shade cases.
      */
     val topClippingBounds: Flow<Int?> =
-        keyguardInteractor.topClippingBounds.dumpWhileCollecting("topClippingBounds")
+        combine(keyguardInteractor.topClippingBounds, shadeInteractor.isShadeAnyExpanded) {
+                topClippingBounds,
+                isShadeAnyExpanded ->
+                if (isShadeAnyExpanded) topClippingBounds else null
+            }
+            .dumpWhileCollecting("topClippingBounds")
 
     /** An observable for the alpha level for the entire keyguard root view. */
     fun alpha(viewState: ViewStateAccessor): Flow<Float> {
@@ -259,7 +270,7 @@ constructor(
                         glanceableHubToAodTransitionViewModel.lockscreenAlpha,
                         goneToAodTransitionViewModel.enterFromTopAnimationAlpha,
                         goneToDozingTransitionViewModel.lockscreenAlpha,
-                        goneToDreamingTransitionViewModel.lockscreenAlpha,
+                        goneToDreamingTransitionViewModel.lockscreenAlpha(),
                         goneToLockscreenTransitionViewModel.lockscreenAlpha,
                         lockscreenToAodTransitionViewModel.lockscreenAlpha(viewState),
                         lockscreenToAodTransitionViewModel.lockscreenAlphaOnFold,
@@ -278,7 +289,6 @@ constructor(
                         primaryBouncerToAodTransitionViewModel.lockscreenAlpha,
                         primaryBouncerToGoneTransitionViewModel.lockscreenAlpha,
                         primaryBouncerToLockscreenTransitionViewModel.lockscreenAlpha(viewState),
-                        goneToGlanceableHubTransitionViewModel.keyguardAlpha,
                     )
                     .onStart { emit(0f) },
             ) { hideKeyguard, alpha ->
@@ -323,14 +333,18 @@ constructor(
 
     val isAodPromotedNotifVisible: StateFlow<AnimatedValue<Boolean>> =
         combine(
+                keyguardTransitionInteractor
+                    .transitionValue(AOD)
+                    .map { it == 1f }
+                    .distinctUntilChanged(),
                 areNotifsFullyHiddenAnimated(),
                 isPulseExpandingAnimated(),
                 aodPromotedNotificationInteractor.isPresent,
-            ) { notifsFullyHiddenAnimated, pulseExpandingAnimated, haveAodPromotedNotif ->
+            ) { isOnAOD, notifsFullyHiddenAnimated, pulseExpandingAnimated, haveAodPromotedNotif ->
                 zip(notifsFullyHiddenAnimated, pulseExpandingAnimated) {
                     notifsFullyHidden,
                     pulseExpanding ->
-                    notifsFullyHidden && !pulseExpanding && haveAodPromotedNotif
+                    isOnAOD && notifsFullyHidden && !pulseExpanding && haveAodPromotedNotif
                 }
             }
             .stateIn(
@@ -339,6 +353,7 @@ constructor(
                 initialValue = AnimatedValue.NotAnimating(false),
             )
             .dumpValue("isAodPromotedNotifVisible")
+            .traceAs("KeyguardRootVM#aodRONVisible")
 
     /** Is the notification icon container visible? */
     val isNotifIconContainerVisible: StateFlow<AnimatedValue<Boolean>> =
@@ -352,7 +367,7 @@ constructor(
                     content = Scenes.Gone,
                     stateWithoutSceneContainer = GONE,
                 ),
-                deviceEntryInteractor.isBypassEnabled,
+                deviceEntryBypassInteractor.isBypassEnabled,
                 areNotifsFullyHiddenAnimated(),
                 isPulseExpandingAnimated(),
                 aodNotificationIconViewModel.icons.map { it.visibleIcons.isNotEmpty() },
@@ -415,7 +430,9 @@ constructor(
     private fun areNotifsFullyHiddenAnimated(): Flow<AnimatedValue<Boolean>> {
         return notificationsKeyguardInteractor.areNotificationsFullyHidden
             .pairwise(initialValue = null)
-            .sample(deviceEntryInteractor.isBypassEnabled) { (prev, fullyHidden), bypassEnabled ->
+            .sample(deviceEntryBypassInteractor.isBypassEnabled) {
+                (prev, fullyHidden),
+                bypassEnabled ->
                 val animate =
                     when {
                         // Don't animate for the first value

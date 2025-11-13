@@ -49,15 +49,13 @@ import com.android.systemui.dagger.qualifiers.DisplayId;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.dagger.qualifiers.UiBackground;
 import com.android.systemui.display.domain.interactor.ConnectedDisplayInteractor;
-import com.android.systemui.modes.shared.ModesUiIcons;
 import com.android.systemui.privacy.PrivacyItem;
 import com.android.systemui.privacy.PrivacyItemController;
 import com.android.systemui.privacy.PrivacyType;
 import com.android.systemui.privacy.logging.PrivacyLogger;
-import com.android.systemui.qs.tiles.DndTile;
 import com.android.systemui.qs.tiles.RotationLockTile;
 import com.android.systemui.res.R;
-import com.android.systemui.screenrecord.RecordingController;
+import com.android.systemui.screenrecord.ScreenRecordUxController;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.phone.ui.StatusBarIconController;
@@ -102,13 +100,12 @@ public class PhoneStatusBarPolicy
                 KeyguardStateController.Callback,
                 PrivacyItemController.Callback,
                 LocationController.LocationChangeCallback,
-                RecordingController.RecordingStateChangeCallback {
+                ScreenRecordUxController.StateChangeCallback {
     private static final String TAG = "PhoneStatusBarPolicy";
     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
     static final int LOCATION_STATUS_ICON_ID = PrivacyType.TYPE_LOCATION.getIconId();
 
-    private final String mSlotCast;
     private final String mSlotHotspot;
     private final String mSlotBluetooth;
     private final String mSlotTty;
@@ -223,7 +220,6 @@ public class PhoneStatusBarPolicy
         mZenModeInteractor = zenModeInteractor;
         mJavaAdapter = javaAdapter;
 
-        mSlotCast = resources.getString(com.android.internal.R.string.status_bar_cast);
         mSlotConnectedDisplay = resources.getString(
                 com.android.internal.R.string.status_bar_connected_display);
         mSlotHotspot = resources.getString(com.android.internal.R.string.status_bar_hotspot);
@@ -296,10 +292,6 @@ public class PhoneStatusBarPolicy
         mIconController.setIconVisibility(mSlotMute, false);
         updateVolumeZen();
 
-        // cast
-        mIconController.setIcon(mSlotCast, R.drawable.stat_sys_cast, null);
-        mIconController.setIconVisibility(mSlotCast, false);
-
         // connected display
         mIconController.setIcon(mSlotConnectedDisplay, R.drawable.stat_sys_connected_display,
                 mResources.getString(R.string.connected_display_icon_desc));
@@ -352,12 +344,10 @@ public class PhoneStatusBarPolicy
         mBluetooth.addCallback(this);
         mProvisionedController.addCallback(this);
         mCurrentUserSetup = mProvisionedController.isCurrentUserSetup();
-        if (ModesUiIcons.isEnabled()) {
-            // Note that we're not fully replacing ZenModeController with ZenModeInteractor, so
-            // we listen for the extra event here but still add the ZMC callback.
-            mJavaAdapter.alwaysCollectFlow(mZenModeInteractor.getMainActiveMode(),
-                    this::onMainActiveModeChanged);
-        }
+        // Note that we're not fully replacing ZenModeController with ZenModeInteractor yet, so
+        // we listen for the extra event here but still add the ZMC callback.
+        mJavaAdapter.alwaysCollectFlow(mZenModeInteractor.getMainActiveMode(),
+                this::onMainActiveModeChanged);
         mZenController.addCallback(mZenControllerCallback);
         mHotspot.addCallback(mHotspotCallback);
         mNextAlarmController.addCallback(mNextAlarmCallback);
@@ -382,10 +372,6 @@ public class PhoneStatusBarPolicy
     }
 
     private void onMainActiveModeChanged(@Nullable ZenModeInfo mainActiveMode) {
-        if (ModesUiIcons.isUnexpectedlyInLegacyMode()) {
-            return;
-        }
-
         boolean visible = mainActiveMode != null;
         if (visible) {
             // Shape=FIXED_SPACE because mode icons can be from 3P packages and may not be square;
@@ -443,43 +429,7 @@ public class PhoneStatusBarPolicy
 
     private void updateVolumeZen() {
         int zen = mZenController.getZen();
-        if (!ModesUiIcons.isEnabled()) {
-            updateZenIcon(zen);
-        }
         updateRingerAndAlarmIcons(zen);
-    }
-
-    private void updateZenIcon(int zen) {
-        if (ModesUiIcons.isEnabled()) {
-            Log.wtf(TAG, "updateZenIcon shouldn't be called if MODES_UI_ICONS is enabled");
-            return;
-        }
-
-        boolean zenVisible = false;
-        int zenIconId = 0;
-        String zenDescription = null;
-
-        if (DndTile.isVisible(mSharedPreferences) || DndTile.isCombinedIcon(mSharedPreferences)) {
-            zenVisible = zen != Global.ZEN_MODE_OFF;
-            zenIconId = R.drawable.stat_sys_dnd;
-            zenDescription = mResources.getString(R.string.quick_settings_dnd_label);
-        } else if (zen == Global.ZEN_MODE_NO_INTERRUPTIONS) {
-            zenVisible = true;
-            zenIconId = R.drawable.stat_sys_dnd;
-            zenDescription = mResources.getString(R.string.interruption_level_none);
-        } else if (zen == Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS) {
-            zenVisible = true;
-            zenIconId = R.drawable.stat_sys_dnd;
-            zenDescription = mResources.getString(R.string.interruption_level_priority);
-        }
-
-        if (zenVisible) {
-            mIconController.setIcon(mSlotZen, zenIconId, zenDescription);
-        }
-        if (zenVisible != mZenVisible) {
-            mIconController.setIconVisibility(mSlotZen, zenVisible);
-            mZenVisible = zenVisible;
-        }
     }
 
     private void updateRingerAndAlarmIcons(int zen) {

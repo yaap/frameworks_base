@@ -61,6 +61,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -106,7 +108,7 @@ fun InteractiveTileContainer(
     resizingState: ResizingState,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
-    onClickLabel: String? = null,
+    contentDescription: String? = null,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val transition: Transition<TileState> = updateTransition(tileState)
@@ -119,6 +121,8 @@ fun InteractiveTileContainer(
     val badgeIconAlpha by transition.animateFloat { state -> if (state == Removable) 1f else 0f }
     val selectionBorderAlpha by
         transition.animateFloat { state -> if (state == Selected) 1f else 0f }
+    val isIdle = transition.currentState == transition.targetState
+    val isDraggable = tileState == Selected
 
     Box(
         modifier.resizable(tileState == Selected, resizingState).selectionBorder(
@@ -133,6 +137,7 @@ fun InteractiveTileContainer(
         MinimumInteractiveSizeComponent(
             angle = { decorationAngle },
             offset = { decorationOffset },
+            excludeSystemGesture = isIdle && isDraggable,
         ) {
             Box(
                 Modifier.fillMaxSize()
@@ -146,17 +151,12 @@ fun InteractiveTileContainer(
                     }
                     .graphicsLayer { this.alpha = decorationAlpha }
                     .anchoredDraggable(
-                        enabled = tileState == Selected,
+                        enabled = isDraggable,
                         state = resizingState.anchoredDraggableState,
                         orientation = Orientation.Horizontal,
                     )
-                    .clickable(
-                        enabled = tileState != None,
-                        interactionSource = null,
-                        indication = null,
-                        onClickLabel = onClickLabel,
-                        onClick = onClick,
-                    )
+                    .clickable(enabled = tileState != None, onClick = onClick)
+                    .semantics { contentDescription?.let { this.contentDescription = it } }
             ) {
                 val size = with(LocalDensity.current) { BadgeIconSize.toDp() }
                 Icon(
@@ -217,14 +217,7 @@ fun StaticTileBadge(
         Box(
             Modifier.fillMaxSize()
                 .graphicsLayer { this.alpha = alpha }
-                .thenIf(enabled) {
-                    Modifier.clickable(
-                        interactionSource = null,
-                        indication = null,
-                        onClickLabel = contentDescription,
-                        onClick = onClick,
-                    )
-                }
+                .thenIf(enabled) { Modifier.clickable(onClick = onClick) }
         ) {
             val size = with(LocalDensity.current) { BadgeIconSize.toDp() }
             val primaryColor = MaterialTheme.colorScheme.primary
@@ -246,6 +239,7 @@ private fun MinimumInteractiveSizeComponent(
     angle: () -> Float,
     offset: () -> Offset,
     modifier: Modifier = Modifier,
+    excludeSystemGesture: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     // Use a higher zIndex than the tile to draw over it, and manually create the touch target
@@ -256,7 +250,6 @@ private fun MinimumInteractiveSizeComponent(
         modifier =
             modifier
                 .zIndex(2f)
-                .systemGestureExclusion { Rect(Offset.Zero, it.size.toSize()) }
                 .layout { measurable, constraints ->
                     val size = minTouchTargetSize.roundToPx()
                     val placeable = measurable.measure(Constraints.fixed(size, size))
@@ -264,11 +257,14 @@ private fun MinimumInteractiveSizeComponent(
                         val radius = constraints.maxHeight / 2f
                         val rotationCenter = Offset(constraints.maxWidth - radius, radius)
                         val position = offsetForAngle(angle(), radius, rotationCenter) + offset()
-                        placeable.place(
+                        placeable.placeRelative(
                             position.x.roundToInt() - placeable.width / 2,
                             position.y.roundToInt() - placeable.height / 2,
                         )
                     }
+                }
+                .thenIf(excludeSystemGesture) {
+                    Modifier.systemGestureExclusion { Rect(Offset.Zero, it.size.toSize()) }
                 },
         content = content,
     )
@@ -285,7 +281,7 @@ private fun Modifier.resizable(selected: Boolean, state: ResizingState): Modifie
             state.anchoredDraggableState.requireOffset().roundToInt().takeIf { !isIdle }
                 ?: constraints.maxWidth
         val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
-        layout(constraints.maxWidth, placeable.height) { placeable.place(0, 0) }
+        layout(constraints.maxWidth, placeable.height) { placeable.placeRelative(0, 0) }
     }
 }
 

@@ -62,6 +62,7 @@ import android.view.Display;
 import android.view.DisplayAdjustments;
 import android.view.DisplayInfo;
 import android.view.Surface;
+import android.window.DesktopExperienceFlags;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.display.feature.flags.Flags;
@@ -82,6 +83,8 @@ import java.util.function.Consumer;
  *
  * @hide
  */
+@android.ravenwood.annotation.RavenwoodPartiallyAllowlisted
+@android.ravenwood.annotation.RavenwoodKeepPartialClass
 public final class DisplayManagerGlobal {
     private static final String TAG = "DisplayManager";
 
@@ -231,7 +234,7 @@ public final class DisplayManagerGlobal {
      * before the display manager has been fully initialized.
      */
     @UnsupportedAppUsage
-    // @RavenwoodIgnore(value = "null")
+    @android.ravenwood.annotation.RavenwoodIgnore
     public static DisplayManagerGlobal getInstance() {
         synchronized (DisplayManagerGlobal.class) {
             if (sInstance == null) {
@@ -460,8 +463,8 @@ public final class DisplayManagerGlobal {
                 mDisplayListeners.get(index).setEventsMask(internalEventFlagsMask);
             }
             updateCallbackIfNeededLocked();
-            maybeLogAllDisplayListeners();
         }
+        maybeLogAllDisplayListeners();
     }
 
 
@@ -508,8 +511,10 @@ public final class DisplayManagerGlobal {
         }
 
         Slog.i(TAG, "Currently Registered Display Listeners:");
-        for (int i = 0; i < mDisplayListeners.size(); i++) {
-            Slog.i(TAG, i + ": " + mDisplayListeners.get(i));
+        int i = 0;
+        for (DisplayListenerDelegate d : mDisplayListeners) {
+            Slog.i(TAG, i + ": " + d);
+            i++;
         }
     }
 
@@ -1132,6 +1137,19 @@ public final class DisplayManagerGlobal {
     }
 
     /**
+     * @see DisplayManager#setBrightness(int, float, int)
+     */
+    @RequiresPermission(Manifest.permission.WRITE_SETTINGS)
+    public void setBrightness(int displayId, float value,
+            @DisplayManager.BrightnessUnit int unit) {
+        try {
+            mDm.setBrightnessByUnit(displayId, value, unit);
+        } catch (RemoteException ex) {
+            throw ex.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * Report whether/how the display supports DISPLAY_DECORATION.
      *
      * @param displayId The display whose support is being queried.
@@ -1156,6 +1174,17 @@ public final class DisplayManagerGlobal {
     public float getBrightness(int displayId) {
         try {
             return mDm.getBrightness(displayId);
+        } catch (RemoteException ex) {
+            throw ex.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * @see DisplayManager#getBrightness(int, int)
+     */
+    public float getBrightness(int displayId, @DisplayManager.BrightnessUnit int unit) {
+        try {
+            return mDm.getBrightnessByUnit(displayId, unit);
         } catch (RemoteException ex) {
             throw ex.rethrowFromSystemServer();
         }
@@ -1214,11 +1243,36 @@ public final class DisplayManagerGlobal {
 
     /**
      * Sets the default display mode, according to the refresh rate and the resolution chosen by the
-     * user.
+     * user. Persists selected mode.
+     * @hide
      */
+    @RequiresPermission("android.permission.MODIFY_USER_PREFERRED_DISPLAY_MODE")
     public void setUserPreferredDisplayMode(int displayId, Display.Mode mode) {
+        setUserPreferredDisplayMode(displayId, mode, true);
+    }
+
+    /**
+     * Sets the default display mode, according to the refresh rate and the resolution chosen by the
+     * user. Allows to set display mode without persisting.
+     * @hide
+     */
+    @RequiresPermission("android.permission.MODIFY_USER_PREFERRED_DISPLAY_MODE")
+    public void setUserPreferredDisplayMode(int displayId, Display.Mode mode, boolean storeMode) {
         try {
-            mDm.setUserPreferredDisplayMode(displayId, mode);
+            mDm.setUserPreferredDisplayMode(displayId, mode, storeMode);
+        } catch (RemoteException ex) {
+            throw ex.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Resets the default display mode from persistence
+     * @hide
+     */
+    @RequiresPermission("android.permission.MODIFY_USER_PREFERRED_DISPLAY_MODE")
+    public void resetUserPreferredDisplayMode(int displayId) {
+        try {
+            mDm.resetUserPreferredDisplayMode(displayId);
         } catch (RemoteException ex) {
             throw ex.rethrowFromSystemServer();
         }
@@ -1433,7 +1487,7 @@ public final class DisplayManagerGlobal {
     @RequiresPermission(MANAGE_DISPLAYS)
     public void registerTopologyListener(@NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<DisplayTopology> listener, String packageName) {
-        if (!Flags.displayTopology()) {
+        if (!DesktopExperienceFlags.DISPLAY_TOPOLOGY.isTrue()) {
             return;
         }
         if (listener == null) {
@@ -1450,8 +1504,8 @@ public final class DisplayManagerGlobal {
                 registerCallbackIfNeededLocked();
                 updateCallbackIfNeededLocked();
             }
-            maybeLogAllTopologyListeners();
         }
+        maybeLogAllTopologyListeners();
     }
 
     /**
@@ -1459,7 +1513,7 @@ public final class DisplayManagerGlobal {
      */
     @RequiresPermission(MANAGE_DISPLAYS)
     public void unregisterTopologyListener(@NonNull Consumer<DisplayTopology> listener) {
-        if (!Flags.displayTopology()) {
+        if (!DesktopExperienceFlags.DISPLAY_TOPOLOGY.isTrue()) {
             return;
         }
         if (listener == null) {

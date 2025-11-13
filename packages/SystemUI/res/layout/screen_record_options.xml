@@ -97,9 +97,7 @@
             android:layout_weight="1"
             android:gravity="center_vertical"
             android:text="@string/screenrecord_taps_label"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:fontFamily="@*android:string/config_bodyFontFamily"
-            android:textColor="?android:attr/textColorPrimary"
+            android:textAppearance="@style/TextAppearance.ScreenRecord.SwitchLabel"
             android:contentDescription="@string/screenrecord_taps_label"/>
         <Switch
             android:layout_width="wrap_content"

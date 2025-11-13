@@ -19,6 +19,7 @@ package com.android.systemui.biometrics;
 import static android.hardware.biometrics.BiometricAuthenticator.TYPE_FACE;
 import static android.hardware.biometrics.BiometricAuthenticator.TYPE_FINGERPRINT;
 import static android.hardware.fingerprint.FingerprintSensorProperties.TYPE_REAR;
+import static android.hardware.fingerprint.FingerprintSensorProperties.TYPE_UNKNOWN;
 import static android.view.Display.INVALID_DISPLAY;
 
 import static com.android.systemui.Flags.contAuthPlugin;
@@ -68,6 +69,7 @@ import android.view.WindowManager;
 
 import com.android.internal.R;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.hidden_from_bootclasspath.android.hardware.biometrics.Flags;
 import com.android.internal.jank.InteractionJankMonitor;
 import com.android.internal.os.SomeArgs;
 import com.android.internal.widget.LockPatternUtils;
@@ -77,6 +79,7 @@ import com.android.systemui.biometrics.domain.interactor.PromptSelectorInteracto
 import com.android.systemui.biometrics.plugins.AuthContextPlugins;
 import com.android.systemui.biometrics.shared.model.UdfpsOverlayParams;
 import com.android.systemui.biometrics.ui.viewmodel.CredentialViewModel;
+import com.android.systemui.biometrics.ui.viewmodel.PromptFallbackViewModel;
 import com.android.systemui.biometrics.ui.viewmodel.PromptViewModel;
 import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.dagger.qualifiers.Application;
@@ -192,6 +195,7 @@ public class AuthController implements
     private final DisplayInfo mCachedDisplayInfo = new DisplayInfo();
     @NonNull private final VibratorHelper mVibratorHelper;
     @NonNull private final MSDLPlayer mMSDLPlayer;
+    @NonNull private final PromptFallbackViewModel.Factory mPromptFallbackViewModelFactory;
 
     private final WindowManagerProvider mWindowManagerProvider;
 
@@ -364,6 +368,8 @@ public class AuthController implements
                         mSfpsEnrolledForUser.put(userId, hasEnrollments);
                     } else if (prop.sensorType == TYPE_REAR) {
                         sensorBiometricType = BiometricType.REAR_FINGERPRINT;
+                    } else {
+                        sensorBiometricType = BiometricType.OTHER_FINGERPRINT;
                     }
                     break;
                 }
@@ -478,7 +484,37 @@ public class AuthController implements
         try {
             receiver.onStartFingerprintNow();
         } catch (RemoteException e) {
-            Log.e(TAG, "RemoteException when sending onDialogAnimatedIn", e);
+            Log.e(TAG, "RemoteException when sending onStartFingerprintNow", e);
+        }
+    }
+
+    @Override
+    public void onPauseAuthentication(long requestId) {
+        final IBiometricSysuiReceiver receiver = getCurrentReceiver(requestId);
+        if (receiver == null) {
+            Log.e(TAG, "onPauseAuthentication: Receiver is null");
+            return;
+        }
+
+        try {
+            receiver.onPauseAuthentication();
+        } catch (RemoteException e) {
+            Log.e(TAG, "RemoteException when sending onPauseAuthentication", e);
+        }
+    }
+
+    @Override
+    public void onResumeAuthentication(long requestId) {
+        final IBiometricSysuiReceiver receiver = getCurrentReceiver(requestId);
+        if (receiver == null) {
+            Log.e(TAG, "onResumeAuthentication: Receiver is null");
+            return;
+        }
+
+        try {
+            receiver.onResumeAuthentication();
+        } catch (RemoteException e) {
+            Log.e(TAG, "RemoteException when sending onResumeAuthentication", e);
         }
     }
 
@@ -666,6 +702,7 @@ public class AuthController implements
         }
         onDialogDismissed(reason);
     }
+
     @Inject
     public AuthController(@Main Context context,
             @Application CoroutineScope applicationCoroutineScope,
@@ -693,7 +730,8 @@ public class AuthController implements
             @NonNull VibratorHelper vibratorHelper,
             @NonNull KeyguardManager keyguardManager,
             @NonNull MSDLPlayer msdlPlayer,
-            WindowManagerProvider windowManagerProvider) {
+            WindowManagerProvider windowManagerProvider,
+            @NonNull PromptFallbackViewModel.Factory promptFallbackViewModelFactory) {
         mContext = context;
         mExecution = execution;
         mUserManager = userManager;
@@ -717,6 +755,7 @@ public class AuthController implements
         mApplicationCoroutineScope = applicationCoroutineScope;
         mVibratorHelper = vibratorHelper;
         mMSDLPlayer = msdlPlayer;
+        mPromptFallbackViewModelFactory = promptFallbackViewModelFactory;
 
         mLogContextInteractor = logContextInteractor;
         mPromptSelectorInteractor = promptSelectorInteractorProvider;
@@ -1006,6 +1045,22 @@ public class AuthController implements
         return false;
     }
 
+    /**
+     * @return true if fps HW is supported on this device, but location is unknown. Can return
+     * true even if the user has not enrolled fps. This may be false if called before
+     * onAllAuthenticatorsRegistered.
+     */
+    public boolean isUnknownFpsSupported() {
+        if (mFpProps != null) {
+            for (FingerprintSensorPropertiesInternal prop: mFpProps) {
+                if (prop.sensorType == TYPE_UNKNOWN) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private String getNotRecognizedString(@Modality int modality) {
         final int messageRes;
         final int userId = mCurrentDialogArgs.argi1;
@@ -1052,18 +1107,21 @@ public class AuthController implements
                 SensorPrivacyManager.TOGGLE_TYPE_SOFTWARE, SensorPrivacyManager.Sensors.CAMERA)) {
             isCameraPrivacyEnabled = true;
         }
-        // TODO(b/141025588): Create separate methods for handling hard and soft errors.
+
         final boolean isSoftError = (error == BiometricConstants.BIOMETRIC_PAUSED_REJECTED
                 || error == BiometricConstants.BIOMETRIC_ERROR_TIMEOUT
                 || error == BiometricConstants.BIOMETRIC_ERROR_RE_ENROLL
+                || error == BiometricConstants.BIOMETRIC_ERROR_UNABLE_TO_PROCESS
                 || isCameraPrivacyEnabled);
         if (mCurrentDialog != null) {
-            if (mCurrentDialog.isAllowDeviceCredentials() && isLockout) {
+            if (isLockout && (Flags.bpFallbackOptions()
+                    || mCurrentDialog.isAllowDeviceCredentials())) {
                 if (DEBUG) Log.d(TAG, "onBiometricError, lockout");
                 mCurrentDialog.animateToCredentialUI(true /* isError */);
             } else if (isSoftError) {
                 final String errorMessage = (error == BiometricConstants.BIOMETRIC_PAUSED_REJECTED
-                        || error == BiometricConstants.BIOMETRIC_ERROR_TIMEOUT)
+                        || error == BiometricConstants.BIOMETRIC_ERROR_TIMEOUT
+                        || error == BiometricConstants.BIOMETRIC_ERROR_UNABLE_TO_PROCESS)
                         ? getNotRecognizedString(modality)
                         : getErrorString(modality, error, vendorCode);
                 if (DEBUG) Log.d(TAG, "onBiometricError, soft error: " + errorMessage);
@@ -1336,7 +1394,8 @@ public class AuthController implements
         return new AuthContainerView(config, mApplicationCoroutineScope, mFpProps, mFaceProps,
                 wakefulnessLifecycle, userManager, mContextPlugins, lockPatternUtils,
                 mInteractionJankMonitor, mPromptSelectorInteractor, viewModel,
-                mCredentialViewModelProvider, bgExecutor, mVibratorHelper, mMSDLPlayer);
+                mCredentialViewModelProvider, bgExecutor, mVibratorHelper, mMSDLPlayer,
+                mPromptFallbackViewModelFactory);
     }
 
     @Override

@@ -356,10 +356,12 @@
     <string name="permgroupdesc_sensors" msgid="2610631290633747752">"prístup k dátam senzorov vašich životných funkcií"</string>
     <string name="permgrouplab_notifications" msgid="5472972361980668884">"Upozornenia"</string>
     <string name="permgroupdesc_notifications" msgid="4608679556801506580">"zobrazovať upozornenia"</string>
+    <string name="permgrouplab_xr_eye_sensitive" msgid="2099659100156643683">"Citlivé údaje sledovania očí v prostredí UR"</string>
+    <string name="permgroupdesc_xr_eye_sensitive" msgid="1414121516133760271">"prístup k citlivým údajom o pohľade"</string>
     <string name="permgrouplab_xr_tracking" msgid="7418994009794287471">"údaje sledovania UR"</string>
     <string name="permgroupdesc_xr_tracking" msgid="6777198859446500821">"prístup k údajom UR o vás a prostredí okolo vás"</string>
-    <string name="permgrouplab_xr_tracking_sensitive" msgid="1194833982988144536">"citlivé údaje sledovania UR"</string>
-    <string name="permgroupdesc_xr_tracking_sensitive" msgid="9178027369004805829">"prístup k citlivým údajom sledovania, ako je pohľad"</string>
+    <string name="permgrouplab_xr_tracking_sensitive" msgid="2993940754322250652">"citlivé údaje sledovania UR"</string>
+    <string name="permgroupdesc_xr_tracking_sensitive" msgid="8498501397939308918">"prístup k citlivým údajom sledovania o vás a prostredí okolo vás"</string>
     <string name="capability_title_canRetrieveWindowContent" msgid="7554282892101587296">"Načítať obsah okna"</string>
     <string name="capability_desc_canRetrieveWindowContent" msgid="6195610527625237661">"Môžete preskúmať obsah okna, s ktorým pracujete."</string>
     <string name="capability_title_canRequestTouchExploration" msgid="327598364696316213">"Zapnúť funkciu Preskúmanie dotykom"</string>
@@ -384,6 +386,8 @@
     <string name="permdesc_expandStatusBar" msgid="7180756900448498536">"Umožňuje aplikácii rozbaliť alebo zbaliť stavový riadok."</string>
     <string name="permlab_fullScreenIntent" msgid="4310888199502509104">"zobrazovanie upozornení ako aktivít na celej obrazovke v uzamknutom zariadení"</string>
     <string name="permdesc_fullScreenIntent" msgid="1100721419406643997">"Táto možnosť umožňuje aplikácii zobrazovať upozornenia ako aktivity na celej obrazovke v uzamknutom zariadení"</string>
+    <string name="permlab_postPromotedNotifications" msgid="4873499297871691102">"Zobrazovanie aktualít naživo"</string>
+    <string name="permdesc_postPromotedNotifications" msgid="4530634734172420651">"Umožňuje aplikácii zobrazovať časovo prioritné upozornenia na prebiehajúcu aktivitu v stavovom riadku a na uzamknutej obrazovke"</string>
     <string name="permlab_install_shortcut" msgid="7451554307502256221">"Inštalovať odkazy"</string>
     <string name="permdesc_install_shortcut" msgid="4476328467240212503">"povoliť aplikácii pridať odkazy na ploche bez zásahu používateľa."</string>
     <string name="permlab_uninstall_shortcut" msgid="295263654781900390">"odinštalovať odkazy"</string>
@@ -1184,22 +1188,8 @@
     <string name="duration_hours_shortest_future" msgid="2979276794547981674">"o <xliff:g id="COUNT">%d</xliff:g> h"</string>
     <string name="duration_days_shortest_future" msgid="3392722163935571543">"o <xliff:g id="COUNT">%d</xliff:g> d."</string>
     <string name="duration_years_shortest_future" msgid="5537464088352970388">"o <xliff:g id="COUNT">%d</xliff:g> r."</string>
-    <string name="duration_minutes_shortest_past" msgid="1740022450020492407">"Pred <xliff:g id="COUNT">%d</xliff:g> min"</string>
-    <string name="duration_hours_shortest_past" msgid="2098397414186628489">"Pred <xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_shortest_past" msgid="1832006037955897625">"Pred <xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_shortest_past" msgid="6168256514200469291">"Pred <xliff:g id="COUNT">%d</xliff:g> r."</string>
     <string name="duration_minutes_medium" msgid="5891933490342643944">"<xliff:g id="COUNT">%d</xliff:g> min"</string>
     <string name="duration_hours_medium" msgid="1465359726485910115">"<xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_medium" msgid="5994225628248661388">"<xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_medium" msgid="734023884353592526">"<xliff:g id="COUNT">%d</xliff:g> r."</string>
-    <string name="duration_minutes_medium_future" msgid="2750894988731934402">"O <xliff:g id="COUNT">%d</xliff:g> min"</string>
-    <string name="duration_hours_medium_future" msgid="6050833881463849764">"O <xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_medium_future" msgid="1700821545602729963">"O <xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_medium_future" msgid="3281018940397120166">"O <xliff:g id="COUNT">%d</xliff:g> r."</string>
-    <string name="duration_minutes_medium_past" msgid="7400424340181947714">"Pred <xliff:g id="COUNT">%d</xliff:g> min"</string>
-    <string name="duration_hours_medium_past" msgid="6709441336035202617">"Pred <xliff:g id="COUNT">%d</xliff:g> h"</string>
-    <string name="duration_days_medium_past" msgid="5748156261134344532">"Pred <xliff:g id="COUNT">%d</xliff:g> d."</string>
-    <string name="duration_years_medium_past" msgid="893797065424596243">"Pred <xliff:g id="COUNT">%d</xliff:g> r."</string>
     <string name="duration_minutes_relative" msgid="8620337701051015593">"{count,plural, =1{Pred # minútou}few{Pred # minútami}many{Pred # minúty}other{Pred # minútami}}"</string>
     <string name="duration_hours_relative" msgid="4836449961693180253">"{count,plural, =1{Pred # hodinou}few{Pred # hodinami}many{Pred # hodiny}other{Pred # hodinami}}"</string>
     <string name="duration_days_relative" msgid="621965767567258302">"{count,plural, =1{Pred # dňom}few{Pred # dňami}many{Pred # dňa}other{Pred # dňami}}"</string>
@@ -1711,6 +1701,12 @@
     <string name="default_audio_route_name_external_device" msgid="8124229858618975">"Externé zariadenie"</string>
     <string name="default_audio_route_name_headphones" msgid="6954070994792640762">"Slúchadlá"</string>
     <string name="default_audio_route_name_usb" msgid="895668743163316932">"USB"</string>
+    <string name="default_audio_route_name_hdmi_tv" msgid="1629608564121895625">"Zvuk televízora"</string>
+    <string name="default_audio_route_name_arc" msgid="5117738492549798911">"ARC"</string>
+    <string name="default_audio_route_name_earc" msgid="5869527419074773683">"eARC"</string>
+    <string name="default_audio_route_name_analog" msgid="7781645558035374980">"Analógové"</string>
+    <string name="default_audio_route_name_digital" msgid="6959855552809654826">"Digitálne"</string>
+    <string name="default_audio_route_name_aux" msgid="7432808125413299672">"AUX"</string>
     <string name="default_audio_route_category_name" msgid="5241740395748134483">"Systém"</string>
     <string name="bluetooth_a2dp_audio_route_name" msgid="4214648773120426288">"Bluetooth audio"</string>
     <string name="wireless_display_route_description" msgid="8297563323032966831">"Bezdrôtové zobrazenie"</string>
@@ -1806,7 +1802,8 @@
     <string name="one_handed_mode_feature_name" msgid="2334330034828094891">"Režim jednej ruky"</string>
     <string name="reduce_bright_colors_feature_name" msgid="3222994553174604132">"Mimoriadne stmavenie"</string>
     <string name="hearing_aids_feature_name" msgid="1125892105105852542">"Načúvacie zariadenia"</string>
-    <string name="autoclick_feature_name" msgid="8149248738736949630">"Automatické kliknutie"</string>
+    <string name="autoclick_feature_name" msgid="4056260617171267864">"Automatické kliknutie (čas zotrvania)"</string>
+    <string name="mouse_keys_feature_name" msgid="3362643216513384542">"Myš klávesnicou"</string>
     <string name="hearing_device_status_disconnected" msgid="497547752953543832">"Odpojené"</string>
     <string name="hearing_device_status_connected" msgid="2149385149669918764">"Pripojené"</string>
     <string name="hearing_device_status_active" msgid="4770378695482566032">"Aktívne"</string>
@@ -1827,10 +1824,11 @@
     <string name="hearing_device_switch_hearing_mic_notification_text" msgid="8288368365767284208">"Pomocou mikrofónu načúvadla môžete volať handsfree. Mikrofón sa prepne iba na čas hovoru."</string>
     <string name="hearing_device_notification_switch_button" msgid="3619524619430941300">"Prepnúť"</string>
     <string name="hearing_device_notification_settings_button" msgid="6673651052880279178">"Nastavenia"</string>
-    <string name="user_switching_message" msgid="1912993630661332336">"Prepína sa na účet <xliff:g id="NAME">%1$s</xliff:g>…"</string>
+    <string name="user_switching_message" msgid="1912993630661332336">"Prepína sa na: <xliff:g id="NAME">%1$s</xliff:g>…"</string>
     <string name="user_logging_out_message" msgid="7216437629179710359">"Prebieha odhlásenie používateľa <xliff:g id="NAME">%1$s</xliff:g>…"</string>
     <string name="owner_name" msgid="8713560351570795743">"Vlastník"</string>
     <string name="guest_name" msgid="8502103277839834324">"Hosť"</string>
+    <string name="headless_system_user_name" msgid="1849150903255530049">"Používateľ systému"</string>
     <string name="error_message_title" msgid="4082495589294631966">"Chyba"</string>
     <string name="error_message_change_not_allowed" msgid="843159705042381454">"Správca túto zmenu zakázal"</string>
     <string name="app_not_found" msgid="3429506115332341800">"Aplikácia potrebná na spracovanie tejto akcie sa nenašla"</string>
@@ -2045,7 +2043,7 @@
     <string name="promotional_notification_channel_label" msgid="7414844730492860233">"Promá"</string>
     <string name="social_notification_channel_label" msgid="106520267132019945">"Sociálne siete"</string>
     <string name="news_notification_channel_label" msgid="4299937455247883311">"Správy"</string>
-    <string name="recs_notification_channel_label" msgid="4945985121418684297">"Odporúčania"</string>
+    <string name="recs_notification_channel_label" msgid="4731685669194175453">"Navrhované"</string>
     <string name="importance_from_user" msgid="2782756722448800447">"Nastavili ste dôležitosť týchto upozornení."</string>
     <string name="importance_from_person" msgid="4235804979664465383">"Táto správa je dôležitá vzhľadom na osoby, ktorých sa to týka."</string>
     <string name="notification_history_title_placeholder" msgid="7748630986182249599">"Vlastné upozornenie na aplikáciu"</string>
@@ -2065,7 +2063,7 @@
     <string name="app_suspended_title" msgid="888873445010322650">"Aplikácia nie je k dispozícii"</string>
     <string name="app_suspended_default_message" msgid="6451215678552004172">"Aplikácia <xliff:g id="APP_NAME_0">%1$s</xliff:g> nie je momentálne k dispozícii. Spravuje to aplikácia <xliff:g id="APP_NAME_1">%2$s</xliff:g>."</string>
     <string name="app_suspended_more_details" msgid="211260942831587014">"Ďalšie informácie"</string>
-    <string name="app_suspended_unsuspend_message" msgid="1665438589450555459">"Znova spustiť aplikáciu"</string>
+    <string name="app_suspended_unsuspend_message" msgid="1665438589450555459">"Zrušiť pozastavenie aplikácie"</string>
     <string name="work_mode_off_title" msgid="6367463960165135829">"Zrušiť pozast. prac. aplikácií?"</string>
     <string name="work_mode_turn_on" msgid="5316648862401307800">"Zrušiť pozastavenie"</string>
     <string name="work_mode_emergency_call_button" msgid="6818855962881612322">"Tiesňová linka"</string>
@@ -2268,19 +2266,21 @@
     <string name="accessibility_system_action_dpad_left_label" msgid="6557647179116479152">"Stlačiť tlačidlo doľava krížového ovládača"</string>
     <string name="accessibility_system_action_dpad_right_label" msgid="9180196950365804081">"Stlačiť tlačidlo doprava krížového ovládača"</string>
     <string name="accessibility_system_action_dpad_center_label" msgid="8149791419358224893">"Stlačiť stredné tlačidlo krížového ovládača"</string>
-    <string name="accessibility_autoclick_type_settings_panel_title" msgid="7354373370578758696">"Panel nastavení typu automatického kliknutia"</string>
-    <string name="accessibility_autoclick_left_click" msgid="2301793352260551080">"Kliknutie ľavým tlačidlom"</string>
-    <string name="accessibility_autoclick_right_click" msgid="4353495816526181293">"Kliknúť pravým tlačidlom"</string>
-    <string name="accessibility_autoclick_double_click" msgid="2103826849116176478">"Dvakrát kliknúť"</string>
+    <string name="accessibility_autoclick_type_settings_panel_title" msgid="2153131135765368397">"Ponuka možností automatického kliknutia"</string>
+    <string name="accessibility_autoclick_left_click" msgid="8241237237588793835">"Kliknúť ľavým tlačidlom myši"</string>
+    <string name="accessibility_autoclick_right_click" msgid="6208390123529830506">"Kliknúť pravým tlačidlom"</string>
+    <string name="accessibility_autoclick_double_click" msgid="2800154470129612873">"Dvakrát kliknúť"</string>
     <string name="accessibility_autoclick_drag" msgid="1499559489796843224">"Presunúť"</string>
     <string name="accessibility_autoclick_scroll" msgid="3499385943728726933">"Posúvať"</string>
+    <string name="accessibility_autoclick_long_press" msgid="6241367542788162585">"Klepnúť a podržať"</string>
     <string name="accessibility_autoclick_pause" msgid="3272200156172573568">"Pozastaviť"</string>
-    <string name="accessibility_autoclick_position" msgid="2933660969907663545">"Pozícia"</string>
-    <string name="accessibility_autoclick_scroll_up" msgid="2044948780797117443">"Posunúť nahor"</string>
-    <string name="accessibility_autoclick_scroll_down" msgid="3733401063292018116">"Posunúť nadol"</string>
-    <string name="accessibility_autoclick_scroll_left" msgid="8564421367992824198">"Posunúť doľava"</string>
-    <string name="accessibility_autoclick_scroll_right" msgid="8932417330753984265">"Posunúť doprava"</string>
-    <string name="accessibility_autoclick_scroll_exit" msgid="3788610039146769696">"Ukončiť režim posúvania"</string>
+    <string name="accessibility_autoclick_resume" msgid="3213396544455349247">"Obnoviť"</string>
+    <string name="accessibility_autoclick_position" msgid="5952428999227490977">"Zmeniť pozíciu ponuky"</string>
+    <string name="accessibility_autoclick_scroll_up" msgid="4018950185625702489">"Posunúť nahor"</string>
+    <string name="accessibility_autoclick_scroll_down" msgid="7055049493005995473">"Posunúť nadol"</string>
+    <string name="accessibility_autoclick_scroll_left" msgid="7469540382570551732">"Posunúť doľava"</string>
+    <string name="accessibility_autoclick_scroll_right" msgid="8395851755038161912">"Posunúť doprava"</string>
+    <string name="accessibility_autoclick_scroll_exit" msgid="8766731873098339511">"Ukončiť režim posúvania"</string>
     <string name="accessibility_autoclick_scroll_panel_title" msgid="7120598166296447036">"Posúvateľný panel"</string>
     <string name="as_app_forced_to_restricted_bucket" msgid="8233871289353898964">"Balík <xliff:g id="PACKAGE_NAME">%1$s</xliff:g> bol vložený do kontajnera OBMEDZENÉ"</string>
     <string name="conversation_single_line_name_display" msgid="8958948312915255999">"<xliff:g id="SENDER_NAME">%1$s</xliff:g>:"</string>
@@ -2289,13 +2289,13 @@
     <string name="conversation_title_fallback_group_chat" msgid="456073374993104303">"Skupinová konverzácia"</string>
     <string name="unread_convo_overflow" msgid="920517615597353833">"<xliff:g id="MAX_UNREAD_COUNT">%1$d</xliff:g>+"</string>
     <string name="resolver_personal_tab" msgid="2051260504014442073">"Osobné"</string>
-    <string name="resolver_work_tab" msgid="2690019516263167035">"Práca"</string>
+    <string name="resolver_work_tab" msgid="2690019516263167035">"Pracovné"</string>
     <string name="resolver_personal_tab_accessibility" msgid="5739524949153091224">"Osobné zobrazenie"</string>
     <string name="resolver_work_tab_accessibility" msgid="4753168230363802734">"Pracovné zobrazenie"</string>
     <string name="resolver_cross_profile_blocked" msgid="3014597376026044840">"Blokované vaším správcom IT"</string>
     <string name="resolver_cant_share_with_work_apps_explanation" msgid="9071442683080586643">"Tento obsah sa nedá zdieľať pomocou pracovných aplikácií"</string>
     <string name="resolver_cant_access_work_apps_explanation" msgid="1129960195389373279">"Tento obsah sa nedá otvoriť pomocou pracovných aplikácií"</string>
-    <string name="resolver_cant_share_with_personal_apps_explanation" msgid="6349766201904601544">"Tento obsah sa nedá zdieľať pomocou osobných aplikácií"</string>
+    <string name="resolver_cant_share_with_personal_apps_explanation" msgid="6349766201904601544">"Tento obsah sa nedá zdieľať s osobnými aplikáciami"</string>
     <string name="resolver_cant_access_personal_apps_explanation" msgid="1679399548862724359">"Tento obsah sa nedá otvoriť pomocou osobných aplikácií"</string>
     <string name="resolver_turn_on_work_apps" msgid="1535946298236678122">"Pracovné aplikácie sú pozastavené"</string>
     <string name="resolver_switch_on_work" msgid="4527096360772311894">"Zrušiť pozastavenie"</string>
@@ -2557,8 +2557,17 @@
     <string name="keyboard_shortcut_group_applications_maps" msgid="7950000659522589471">"Mapy"</string>
     <string name="keyboard_shortcut_group_applications" msgid="3010389163951364798">"Aplikácie"</string>
     <string name="fingerprint_loe_notification_msg" msgid="3927447270148854546">"Vaše odtlačky prstov sa už nedajú rozpoznať. Znova nastavte odomknutie odtlačkom prsta."</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="468577168569874967">"Zariadenie USB bolo pripojené počas uzamknutia"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="6695268246267993166">"Zariadenie USB bolo pripojené, keď bolo zariadenie s Androidom uzamknuté. Ak chcete dané zariadenie používať, najprv odomknite zariadenie s Androidom a potom znova vložte zariadenie USB."</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title" msgid="285421860627714333">"Zabezpečenie a ochrana súkromia"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="5205863500921477220">"Rozšírená ochrana pre zariadenia USB"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="2147694109838597680">"Odomknite zariadenie, aby sa mohli preniesť údaje"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text" msgid="1979414895616432005">"Ak chcete preniesť údaje, zrejme budete musieť zariadenie odomknúť a znova pripojiť"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text" msgid="5974307859193807824">"Odomknite zariadenie, aby sa nabíjalo rýchlejšie a mohli sa preniesť údaje"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text" msgid="9045166614060168068">"Ak chcete, aby sa zariadenie nabíjalo rýchlejšie a mohli sa preniesť údaje, zrejme ho budete musieť odomknúť a znova pripojiť"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text" msgid="5538918232374470393">"Ak chcete rýchlo nabíjať, odomknite zariadenie"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text" msgid="4301626745704703517">"Ak chcete rýchlo nabíjať, možno budete musieť zariadenie odomknúť a znova pripojiť"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text" msgid="5495539757631669634">"Vypnúť zvuk"</string>
+    <string name="usb_apm_usb_notification_silenced_title" msgid="7883902869771699533">"Zvuk upozornení je vypnutý"</string>
+    <string name="usb_apm_usb_notification_silenced_text" msgid="7154391495952217529">"Zvuk bude vypnutý, kým nereštartujete zariadenie"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_title" msgid="3461195995882871461">"Podozrivá aktivita cez USB"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_text" msgid="6537085605929303187">"Dátový signál cez USB bol deaktivovaný."</string>
     <string name="fingerprint_frr_notification_title" msgid="3668331918920659093">"Máte problémy s odomknutím odtlačkom prsta?"</string>

@@ -25,14 +25,10 @@ import com.android.server.notification.Flags.vibrateWhileUnlocked
 import com.android.systemui.Flags.FLAG_COMMUNAL_HUB
 import com.android.systemui.Flags.communalHub
 import com.android.systemui.dagger.SysUISingleton
-import com.android.systemui.scene.shared.flag.SceneContainerFlag
-import com.android.systemui.statusbar.notification.collection.SortBySectionTimeFlag
-import com.android.systemui.statusbar.notification.emptyshade.shared.ModesEmptyShadeFix
 import com.android.systemui.statusbar.notification.interruption.VisualInterruptionRefactor
 import com.android.systemui.statusbar.notification.shared.NotificationAvalancheSuppression
 import com.android.systemui.statusbar.notification.shared.NotificationMinimalism
 import com.android.systemui.statusbar.notification.shared.NotificationThrottleHun
-import com.android.systemui.statusbar.notification.shared.PriorityPeopleSection
 import javax.inject.Inject
 
 /** A class in which engineers can define flag dependencies */
@@ -46,12 +42,7 @@ class FlagDependencies @Inject constructor(featureFlags: FeatureFlagsClassic, ha
 
         // Internal notification frontend dependencies
         NotificationAvalancheSuppression.token dependsOn VisualInterruptionRefactor.token
-        PriorityPeopleSection.token dependsOn SortBySectionTimeFlag.token
         NotificationMinimalism.token dependsOn NotificationThrottleHun.token
-        ModesEmptyShadeFix.token dependsOn modesUi
-
-        // SceneContainer dependencies
-        SceneContainerFlag.getFlagDependencies().forEach { (alpha, beta) -> alpha dependsOn beta }
     }
 
     private inline val politeNotifications
@@ -62,9 +53,6 @@ class FlagDependencies @Inject constructor(featureFlags: FeatureFlagsClassic, ha
 
     private inline val vibrateWhileUnlockedToken: FlagToken
         get() = FlagToken(FLAG_VIBRATE_WHILE_UNLOCKED, vibrateWhileUnlocked())
-
-    private inline val modesUi
-        get() = FlagToken(android.app.Flags.FLAG_MODES_UI, android.app.Flags.modesUi())
 
     private inline val communalHub
         get() = FlagToken(FLAG_COMMUNAL_HUB, communalHub())

@@ -16,28 +16,33 @@
 
 package com.android.systemui.keyguard.ui.viewmodel
 
+import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
+import com.android.systemui.keyguard.dagger.GlanceableHubBlurComponent
 import com.android.systemui.keyguard.domain.interactor.FromGoneTransitionInteractor.Companion.TO_GLANCEABLE_HUB_DURATION
 import com.android.systemui.keyguard.shared.model.Edge
 import com.android.systemui.keyguard.shared.model.KeyguardState.GLANCEABLE_HUB
 import com.android.systemui.keyguard.shared.model.KeyguardState.GONE
 import com.android.systemui.keyguard.ui.KeyguardTransitionAnimationFlow
 import com.android.systemui.keyguard.ui.transitions.DeviceEntryIconTransition
+import com.android.systemui.keyguard.ui.transitions.GlanceableHubTransition
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 @SysUISingleton
 class GoneToGlanceableHubTransitionViewModel
 @Inject
-constructor(animationFlow: KeyguardTransitionAnimationFlow) : DeviceEntryIconTransition {
+constructor(
+    animationFlow: KeyguardTransitionAnimationFlow,
+    blurFactory: GlanceableHubBlurComponent.Factory,
+) : DeviceEntryIconTransition, GlanceableHubTransition {
 
     private val transitionAnimation =
         animationFlow
             .setup(duration = TO_GLANCEABLE_HUB_DURATION, edge = Edge.INVALID)
             .setupWithoutSceneContainer(edge = Edge.create(GONE, GLANCEABLE_HUB))
-
-    val keyguardAlpha = transitionAnimation.immediatelyTransitionTo(0f)
 
     override val deviceEntryParentViewAlpha: Flow<Float> =
         transitionAnimation.sharedFlow(
@@ -46,4 +51,15 @@ constructor(animationFlow: KeyguardTransitionAnimationFlow) : DeviceEntryIconTra
             onCancel = { 1f },
             onFinish = { 1f },
         )
+
+    override val windowBlurRadius: Flow<Float> =
+        blurFactory.create(transitionAnimation).getBlurProvider().enterBlurRadius
+
+    val statusBarAlpha: Flow<Float> =
+        if (!Flags.glanceableHubV2()) {
+            // Only hide the keyguard status bar if hub v2 is not enabled
+            transitionAnimation.immediatelyTransitionTo(0f)
+        } else {
+            emptyFlow()
+        }
 }

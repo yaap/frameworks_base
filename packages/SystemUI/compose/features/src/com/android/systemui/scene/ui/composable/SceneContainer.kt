@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.android.systemui.scene.ui.composable
 
 import android.os.Build
@@ -22,6 +24,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -138,7 +141,10 @@ fun SceneContainer(
                     cuj = transition.cuj,
                 )
             },
+            deferTransitionProgress = true,
         )
+
+    LaunchedEffect(Unit) { viewModel.onInitialComposition() }
 
     DisposableEffect(state) {
         val dataSource = SceneTransitionLayoutDataSource(state, coroutineScope)
@@ -201,7 +207,7 @@ fun SceneContainer(
 
     Box(
         modifier =
-            Modifier.fillMaxSize().pointerInput(Unit) {
+            modifier.fillMaxSize().pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(false)
                     viewModel.onSceneContainerUserInputStarted()
@@ -216,7 +222,7 @@ fun SceneContainer(
 
         SceneTransitionLayout(
             state = state,
-            modifier = modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
             swipeSourceDetector = viewModel.swipeSourceDetector,
         ) {
             sceneByKey.forEach { (sceneKey, scene) ->

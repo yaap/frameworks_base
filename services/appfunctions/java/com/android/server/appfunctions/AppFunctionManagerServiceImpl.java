@@ -26,6 +26,7 @@ import static com.android.server.appfunctions.CallerValidator.CAN_EXECUTE_APP_FU
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.WorkerThread;
+import android.app.appfunctions.AppFunctionAccessServiceInterface;
 import android.app.appfunctions.AppFunctionException;
 import android.app.appfunctions.AppFunctionManager;
 import android.app.appfunctions.AppFunctionManagerHelper;
@@ -56,6 +57,7 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManagerInternal;
+import android.content.pm.SignedPackage;
 import android.content.pm.SigningInfo;
 import android.os.Binder;
 import android.os.CancellationSignal;
@@ -63,20 +65,30 @@ import android.os.IBinder;
 import android.os.ICancellationSignal;
 import android.os.OutcomeReceiver;
 import android.os.ParcelableException;
+import android.os.Process;
 import android.os.RemoteException;
+import android.os.ResultReceiver;
+import android.os.ShellCallback;
 import android.os.UserHandle;
+import android.permission.flags.Flags;
+import android.provider.DeviceConfig;
 import android.text.TextUtils;
 import android.util.Slog;
+import android.util.SparseArray;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.content.PackageMonitor;
 import com.android.internal.infra.AndroidFuture;
+import com.android.internal.os.BackgroundThread;
 import com.android.internal.util.DumpUtils;
+import com.android.server.SystemService;
 import com.android.server.SystemService.TargetUser;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
@@ -86,6 +98,9 @@ import java.util.concurrent.Executor;
 /** Implementation of the AppFunctionManagerService. */
 public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
     private static final String TAG = AppFunctionManagerServiceImpl.class.getSimpleName();
+    private static final String ALLOWLISTED_APP_FUNCTIONS_AGENTS =
+            "allowlisted_app_functions_agents";
+    private static final String NAMESPACE_MACHINE_LEARNING = "machine_learning";
 
     private final RemoteServiceCaller<IAppFunctionService> mRemoteServiceCaller;
     private final CallerValidator mCallerValidator;
@@ -95,9 +110,14 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
     private final Map<String, Object> mLocks = new WeakHashMap<>();
     private final AppFunctionsLoggerWrapper mLoggerWrapper;
     private final PackageManagerInternal mPackageManagerInternal;
+    // Not Guarded by lock since this is only accessed in main thread.
+    private final SparseArray<PackageMonitor> mPackageMonitors = new SparseArray<>();
+
+    private final AppFunctionAccessServiceInterface mAppFunctionAccessService;
 
     public AppFunctionManagerServiceImpl(
-            @NonNull Context context, @NonNull PackageManagerInternal packageManagerInternal) {
+            @NonNull Context context, @NonNull PackageManagerInternal packageManagerInternal,
+            @NonNull AppFunctionAccessServiceInterface appFunctionAccessServiceInterface) {
         this(
                 context,
                 new RemoteServiceCallerImpl<>(
@@ -106,7 +126,8 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
                 new ServiceHelperImpl(context),
                 new ServiceConfigImpl(),
                 new AppFunctionsLoggerWrapper(context),
-                packageManagerInternal);
+                packageManagerInternal,
+                appFunctionAccessServiceInterface);
     }
 
     @VisibleForTesting
@@ -117,7 +138,8 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
             ServiceHelper appFunctionInternalServiceHelper,
             ServiceConfig serviceConfig,
             AppFunctionsLoggerWrapper loggerWrapper,
-            PackageManagerInternal packageManagerInternal) {
+            PackageManagerInternal packageManagerInternal,
+            AppFunctionAccessServiceInterface appFunctionAccessServiceInterface) {
         mContext = Objects.requireNonNull(context);
         mRemoteServiceCaller = Objects.requireNonNull(remoteServiceCaller);
         mCallerValidator = Objects.requireNonNull(callerValidator);
@@ -125,14 +147,17 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
         mServiceConfig = serviceConfig;
         mLoggerWrapper = loggerWrapper;
         mPackageManagerInternal = Objects.requireNonNull(packageManagerInternal);
+        mAppFunctionAccessService = Objects.requireNonNull(appFunctionAccessServiceInterface);
     }
 
     /** Called when the user is unlocked. */
     public void onUserUnlocked(TargetUser user) {
         Objects.requireNonNull(user);
-
         registerAppSearchObserver(user);
         trySyncRuntimeMetadata(user);
+        PackageMonitor pkgMonitorForUser =
+                AppFunctionPackageMonitor.registerPackageMonitorForUser(mContext, user);
+        mPackageMonitors.append(user.getUserIdentifier(), pkgMonitorForUser);
     }
 
     /** Called when the user is stopping. */
@@ -140,6 +165,12 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
         Objects.requireNonNull(user);
 
         MetadataSyncPerUser.removeUserSyncAdapter(user.getUserHandle());
+
+        int userIdentifier = user.getUserIdentifier();
+        if (mPackageMonitors.contains(userIdentifier)) {
+            mPackageMonitors.get(userIdentifier).unregister();
+            mPackageMonitors.delete(userIdentifier);
+        }
     }
 
     @Override
@@ -150,9 +181,81 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
 
         final long token = Binder.clearCallingIdentity();
         try {
-            AppFunctionDumpHelper.dumpAppFunctionsState(mContext, pw);
+            AppFunctionDumpHelper.dumpAppFunctionsState(mContext, pw, args);
         } finally {
             Binder.restoreCallingIdentity(token);
+        }
+    }
+
+    @Override
+    public void onShellCommand(
+            FileDescriptor in,
+            FileDescriptor out,
+            FileDescriptor err,
+            @NonNull String[] args,
+            ShellCallback callback,
+            @NonNull ResultReceiver resultReceiver) {
+        new AppFunctionManagerServiceShellCommand(this)
+                .exec(this, in, out, err, args, callback, resultReceiver);
+    }
+
+    private final DeviceConfig.OnPropertiesChangedListener mDeviceConfigListener =
+            new DeviceConfig.OnPropertiesChangedListener() {
+
+                @Override
+                public void onPropertiesChanged(DeviceConfig.Properties properties) {
+                    if (Flags.appFunctionAccessServiceEnabled()) {
+                        if (properties.getKeyset().contains(ALLOWLISTED_APP_FUNCTIONS_AGENTS)) {
+                            final String signaturesString =
+                                    properties.getString(ALLOWLISTED_APP_FUNCTIONS_AGENTS, "");
+                            Slog.d(TAG, "onPropertiesChanged signatureString " + signaturesString);
+                            try {
+                                final List<SignedPackage> allowedSignedPackages =
+                                        SignedPackageParser.parseList(signaturesString);
+                                // TODO(b/416661798): Calls new
+                                // AppFunctionAccessService#updateAgentAllowlist API to update
+                                // the allowlist
+                            } catch (Exception e) {
+                                Slog.e(
+                                        TAG,
+                                        "Cannot parse signature string: " + signaturesString,
+                                        e);
+                            }
+                        }
+                    }
+                }
+            };
+
+    /**
+     * Called during different phases of the system boot process.
+     *
+     * <p>This method is used to initialize AppFunctionManagerService components that depend on
+     * other system services being ready. Specifically, it handles reading DeviceConfig properties
+     * related to allowed agent package signatures and registers a listener for changes to these
+     * properties.
+     *
+     * @param phase The current boot phase, as defined in {@link SystemService}. This method
+     *     specifically acts on {@link SystemService#PHASE_SYSTEM_SERVICES_READY}.
+     */
+    public void onBootPhase(int phase) {
+        if (phase == SystemService.PHASE_SYSTEM_SERVICES_READY) {
+            final String signatureString =
+                    DeviceConfig.getString(
+                            NAMESPACE_MACHINE_LEARNING, ALLOWLISTED_APP_FUNCTIONS_AGENTS, "");
+            try {
+                final List<SignedPackage> allowedSignedPackages =
+                        SignedPackageParser.parseList(signatureString);
+
+                // TODO(b/416661798): Similar to the callback, update the allowlist with
+                // AppFunctionAccessService#updateAgentAllowlist API.
+
+            } catch (Exception e) {
+                Slog.e(TAG, "Cannot parse signature string: " + signatureString, e);
+            }
+            DeviceConfig.addOnPropertiesChangedListener(
+                    NAMESPACE_MACHINE_LEARNING,
+                    BackgroundThread.getExecutor(),
+                    mDeviceConfigListener);
         }
     }
 
@@ -241,20 +344,21 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
                 .thenCompose(
                         canExecuteResult -> {
                             if (canExecuteResult == CAN_EXECUTE_APP_FUNCTIONS_DENIED) {
-                                return AndroidFuture.failedFuture(new SecurityException(
-                                        "Caller does not have permission to execute the"
-                                                + " appfunction"));
+                                return AndroidFuture.failedFuture(
+                                        new SecurityException(
+                                                "Caller does not have permission to execute the"
+                                                        + " appfunction"));
                             }
                             return isAppFunctionEnabled(
-                                    requestInternal
-                                            .getClientRequest()
-                                            .getFunctionIdentifier(),
-                                    requestInternal
-                                            .getClientRequest()
-                                            .getTargetPackageName(),
-                                    getAppSearchManagerAsUser(
-                                            requestInternal.getUserHandle()),
-                                    THREAD_POOL_EXECUTOR)
+                                            requestInternal
+                                                    .getClientRequest()
+                                                    .getFunctionIdentifier(),
+                                            requestInternal
+                                                    .getClientRequest()
+                                                    .getTargetPackageName(),
+                                            getAppSearchManagerAsUser(
+                                                    requestInternal.getUserHandle()),
+                                            THREAD_POOL_EXECUTOR)
                                     .thenApply(
                                             isEnabled -> {
                                                 if (!isEnabled) {
@@ -353,7 +457,10 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
             @AppFunctionManager.EnabledState int enabledState,
             @NonNull IAppFunctionEnabledCallback callback) {
         try {
-            mCallerValidator.validateCallingPackage(callingPackage);
+            // Skip validation for shell to allow changing enabled state via shell.
+            if (Binder.getCallingUid() != Process.SHELL_UID) {
+                mCallerValidator.validateCallingPackage(callingPackage);
+            }
         } catch (SecurityException e) {
             reportException(callback, e);
             return;
@@ -506,6 +613,10 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
         Objects.requireNonNull(packageName);
         Objects.requireNonNull(targetUser);
 
+        if (uid == Process.ROOT_UID) {
+            // root is not a package. It does not have a signing info.
+            return new SigningInfo();
+        }
         PackageInfo packageInfo;
         packageInfo =
                 Objects.requireNonNull(
@@ -577,7 +688,9 @@ public class AppFunctionManagerServiceImpl extends IAppFunctionManager.Stub {
                         .registerObserverCallbackAsync(
                                 "android",
                                 new ObserverSpec.Builder().build(),
-                                THREAD_POOL_EXECUTOR,
+                                // AppFunctionMetadataObserver implements a simple callback that
+                                // does not block and should be safe to run on any thread.
+                                Runnable::run,
                                 appFunctionMetadataObserver)
                         .whenComplete(
                                 (voidResult, ex) -> {

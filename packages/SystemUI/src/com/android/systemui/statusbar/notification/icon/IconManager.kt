@@ -40,6 +40,7 @@ import com.android.systemui.statusbar.StatusBarIconView
 import com.android.systemui.statusbar.core.StatusBarConnectedDisplays
 import com.android.systemui.statusbar.notification.InflationException
 import com.android.systemui.statusbar.notification.collection.NotificationEntry
+import com.android.systemui.statusbar.notification.collection.PipelineEntry
 import com.android.systemui.statusbar.notification.collection.notifcollection.CommonNotifCollection
 import com.android.systemui.statusbar.notification.collection.notifcollection.NotifCollectionListener
 import java.util.concurrent.ConcurrentHashMap
@@ -120,7 +121,7 @@ constructor(
         }
 
     private val sensitivityListener =
-        NotificationEntry.OnSensitivityChangedListener { entry -> updateIconsSafe(entry) }
+        PipelineEntry.OnSensitivityChangedListener { entry -> updateIconsSafe(entry) }
 
     private fun recalculateForImportantConversationChange() {
         for (entry in notifCollection.allNotifs) {
@@ -184,6 +185,17 @@ constructor(
 
             try {
                 setIcon(entry, normalIconDescriptor, sbIcon)
+
+                if (
+                    android.app.Flags.hideStatusBarNotification() &&
+                        entry.sbn.notification.extras?.getBoolean(
+                            Notification.EXTRA_HIDE_STATUS_BAR_NOTIFICATION
+                        ) == true
+                ) {
+                    Log.i(TAG, "EXTRA_HIDE_STATUS_BAR_NOTIFICATION set, hiding the icon.")
+                    sbIcon.visibility = View.GONE
+                }
+
                 if (sbChipIcon != null) {
                     setIcon(entry, normalIconDescriptor, sbChipIcon)
                 }

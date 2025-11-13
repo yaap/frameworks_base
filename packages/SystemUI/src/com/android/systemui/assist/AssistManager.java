@@ -32,15 +32,17 @@ import com.android.internal.app.IVisualQueryRecognitionStatusListener;
 import com.android.internal.app.IVoiceInteractionSessionListener;
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
+import com.android.systemui.LauncherProxyService;
 import com.android.systemui.assist.domain.interactor.AssistInteractor;
 import com.android.systemui.assist.ui.DefaultUiController;
 import com.android.systemui.dagger.SysUISingleton;
+import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.model.SysUiState;
-import com.android.systemui.recents.LauncherProxyService;
 import com.android.systemui.res.R;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.settings.UserTracker;
+import com.android.systemui.shared.Flags;
 import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.policy.DeviceProvisionedController;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
@@ -108,7 +110,7 @@ public class AssistManager {
 
     private static final String INVOCATION_TIME_MS_KEY = "invocation_time_ms";
     private static final String INVOCATION_PHONE_STATE_KEY = "invocation_phone_state";
-    protected static final String ACTION_KEY = "action";
+    public static final String ACTION_KEY = "action";
     protected static final String SET_ASSIST_GESTURE_CONSTRAINED_ACTION =
             "set_assist_gesture_constrained";
     protected static final String CONSTRAINED_KEY = "should_constrain";
@@ -154,6 +156,7 @@ public class AssistManager {
     private final SelectedUserInteractor mSelectedUserInteractor;
     private final ActivityManager mActivityManager;
     private final AssistInteractor mInteractor;
+    private final Handler mBgHandler;
 
     private final DeviceProvisionedController mDeviceProvisionedController;
 
@@ -193,6 +196,7 @@ public class AssistManager {
             DefaultUiController defaultUiController,
             AssistLogger assistLogger,
             @Main Handler uiHandler,
+            @Background Handler bgHandler,
             UserTracker userTracker,
             DisplayTracker displayTracker,
             SecureSettings secureSettings,
@@ -214,6 +218,7 @@ public class AssistManager {
         mSelectedUserInteractor = selectedUserInteractor;
         mActivityManager = activityManager;
         mInteractor = interactor;
+        mBgHandler = bgHandler;
 
         registerVoiceInteractionSessionListener();
         registerVisualQueryRecognitionStatusListener();
@@ -280,6 +285,15 @@ public class AssistManager {
                                             hints.getBoolean(CONSTRAINED_KEY, false))
                                     .commitUpdate(mDisplayTracker.getDefaultDisplayId());
                         }
+                    }
+
+                    @Override
+                    public void onSetInvocationEffectEnabled(boolean enabled) {
+                        if (VERBOSE) {
+                            Log.v(TAG, "Set invocation effect enabled received");
+                        }
+                        // TODO(b/418179198): Call InvocationEffectEnabler.setEnabled when the
+                        //  squeeze effect codebase moves to the general SystemUIModule
                     }
                 });
     }
@@ -442,9 +456,16 @@ public class AssistManager {
     }
 
     private void startVoiceInteractor(Bundle args) {
-        mAssistUtils.showSessionForActiveService(args,
-                VoiceInteractionSession.SHOW_SOURCE_ASSIST_GESTURE, mContext.getAttributionTag(),
-                null, null);
+        if (Flags.enableLppAssistInvocationEffect()) {
+            // Use background thread to prevent the binder call from blocking the UI thread
+            mBgHandler.post(() -> mAssistUtils.showSessionForActiveService(args,
+                    VoiceInteractionSession.SHOW_SOURCE_ASSIST_GESTURE,
+                    mContext.getAttributionTag(), null, null));
+        } else {
+            mAssistUtils.showSessionForActiveService(args,
+                    VoiceInteractionSession.SHOW_SOURCE_ASSIST_GESTURE,
+                    mContext.getAttributionTag(), null, null);
+        }
     }
 
     private void registerVisualQueryRecognitionStatusListener() {

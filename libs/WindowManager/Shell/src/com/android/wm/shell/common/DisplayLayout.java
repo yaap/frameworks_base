@@ -158,6 +158,20 @@ public class DisplayLayout {
     /**
      * Construct a display layout based on a live display.
      * @param context Used for resources.
+     * @param rawDisplay Display object for the layout
+     * @param hasNavigationBar whether the navigation bar is visible on that display
+     * @param hasStatusBar whether the status bar is visible on that display
+     */
+    public DisplayLayout(@NonNull Context context, @NonNull Display rawDisplay,
+            boolean hasNavigationBar, boolean hasStatusBar) {
+        DisplayInfo info = new DisplayInfo();
+        rawDisplay.getDisplayInfo(info);
+        init(info, context.getResources(), hasNavigationBar, hasStatusBar);
+    }
+
+    /**
+     * Construct a display layout based on a live display.
+     * @param context Used for resources.
      */
     public DisplayLayout(@NonNull Context context, @NonNull Display rawDisplay) {
         final int displayId = rawDisplay.getDisplayId();
@@ -408,8 +422,10 @@ public class DisplayLayout {
 
         // Only navigation bar
         if (hasNavigationBar) {
+            final Rect displayFrame = insetsState.getDisplayFrame();
             final Insets insets = insetsState.calculateInsets(
-                    insetsState.getDisplayFrame(),
+                    displayFrame,
+                    displayFrame,
                     WindowInsets.Type.navigationBars(),
                     false /* ignoreVisibility */);
             int position = navigationBarPosition(res, displayWidth, displayHeight, displayRotation);

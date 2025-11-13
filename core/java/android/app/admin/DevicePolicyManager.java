@@ -144,6 +144,7 @@ import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.ParcelableKeyGenParameterSpec;
 import android.security.keystore.StrongBoxUnavailableException;
 import android.service.restrictions.RestrictionsReceiver;
+import android.telephony.SubscriptionInfo;
 import android.telephony.TelephonyManager;
 import android.telephony.data.ApnSetting;
 import android.text.TextUtils;
@@ -318,11 +319,6 @@ import java.util.function.Consumer;
 @RequiresFeature(PackageManager.FEATURE_DEVICE_ADMIN)
 public class DevicePolicyManager {
 
-    /** @hide */
-    public static final String DEPRECATE_USERMANAGERINTERNAL_DEVICEPOLICY_FLAG =
-            "deprecate_usermanagerinternal_devicepolicy";
-    /** @hide */
-    public static final boolean DEPRECATE_USERMANAGERINTERNAL_DEVICEPOLICY_DEFAULT = true;
     /** @hide */
     public static final String ADD_ISFINANCED_DEVICE_FLAG =
             "add-isfinanced-device";
@@ -3070,6 +3066,16 @@ public class DevicePolicyManager {
     public static final int LOCK_TASK_FEATURE_BLOCK_ACTIVITY_START_IN_TASK = 1 << 6;
 
     /**
+     * Enable quick settings actions during LockTask mode. This feature flag can only be used in
+     * combination with {@link #LOCK_TASK_FEATURE_NOTIFICATIONS}.
+     *
+     * @hide
+     */
+    @FlaggedApi(android.app.supervision.flags.Flags.FLAG_ENABLE_LOCK_TASK_FEATURE_QUICK_SETTINGS)
+    @SystemApi
+    public static final int LOCK_TASK_FEATURE_QUICK_SETTINGS = 1 << 7;
+
+    /**
      * Flags supplied to {@link #setLockTaskFeatures(ComponentName, int)}.
      *
      * @hide
@@ -3083,7 +3089,8 @@ public class DevicePolicyManager {
             LOCK_TASK_FEATURE_OVERVIEW,
             LOCK_TASK_FEATURE_GLOBAL_ACTIONS,
             LOCK_TASK_FEATURE_KEYGUARD,
-            LOCK_TASK_FEATURE_BLOCK_ACTIVITY_START_IN_TASK
+            LOCK_TASK_FEATURE_BLOCK_ACTIVITY_START_IN_TASK,
+            LOCK_TASK_FEATURE_QUICK_SETTINGS
     })
     public @interface LockTaskFeature {}
 
@@ -4025,9 +4032,13 @@ public class DevicePolicyManager {
     public static final int EXEMPT_FROM_SUSPENSION =  0;
 
     /**
-     * Prevent an app from dismissible notifications. Starting from Android U, notifications with
-     * the ongoing parameter can be dismissed by a user on an unlocked device. An app with
-     * this exemption can create non-dismissible notifications.
+     * Allows an app to create non-dismissible notifications. Starting from Android U, notifications
+     * with the {@link android.app.Notification.Builder#setOngoing(boolean)} parameter can be
+     * dismissed by a user on an unlocked device. An app with this exemption can create
+     * non-dismissible notifications.
+     *
+     * <p>In spite of the name, this exemption only affects non-dismissible notifications,
+     * and has no impact on dismissible notifications.
      *
      * @hide
      */
@@ -10324,7 +10335,9 @@ public class DevicePolicyManager {
     /**
      * Returns the configured supervision app if it exists and is the device owner or policy owner.
      * @hide
+     * @deprecated Use {@link android.app.supervision.SupervisionManager} methods instead.
      */
+    @Deprecated
     public @Nullable ComponentName getProfileOwnerOrDeviceOwnerSupervisionComponent(
             @NonNull UserHandle user) {
         if (mService != null) {
@@ -10336,7 +10349,9 @@ public class DevicePolicyManager {
     /**
      * Checks if the specified component is the supervision component.
      * @hide
+     * @deprecated Use {@link android.app.supervision.SupervisionManager} methods instead.
      */
+    @Deprecated
     public boolean isSupervisionComponent(@NonNull ComponentName who) {
         if (mService != null) {
             try {
@@ -11269,6 +11284,26 @@ public class DevicePolicyManager {
                 throw e.rethrowFromSystemServer();
             }
         }
+    }
+
+    /**
+     * Checks whether the given subscription is enterprise-managed.
+     *
+     * @param info The subscription to check.
+     * @param packageName The package to check against the subscription's group owner.
+     * @return whether the subscription is enterprise-managed.
+     * @hide
+     */
+    public boolean isSubscriptionEnterpriseManaged(
+            @NonNull SubscriptionInfo info, @NonNull String packageName) {
+        if (mService != null) {
+            try {
+                return mService.isSubscriptionEnterpriseManaged(info, packageName);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        }
+        return false;
     }
 
     /**
@@ -12610,34 +12645,6 @@ public class DevicePolicyManager {
         if (mService != null) {
             try {
                 return mService.getEnforcingAdmin(userId, identifier);
-            } catch (RemoteException e) {
-                throw e.rethrowFromSystemServer();
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Returns the list of {@link EnforcingAdmin}s who have set this restriction.
-     *
-     * <p>Note that for {@link #POLICY_SUSPEND_PACKAGES} it returns the PO or DO to keep the
-     * behavior the same as before the bug fix for b/192245204.
-     *
-     * <p>This API is only callable by the system UID
-     *
-     * @param userId      The user for whom to retrieve the information.
-     * @param restriction The restriction enforced by admins. It could be any user restriction or
-     *                    policy like {@link DevicePolicyManager#POLICY_DISABLE_CAMERA} and
-     *                    {@link DevicePolicyManager#POLICY_DISABLE_SCREEN_CAPTURE}.
-     *
-     * @hide
-     */
-    public @NonNull Set<EnforcingAdmin> getEnforcingAdminsForRestriction(int userId,
-            @NonNull String restriction) {
-        if (mService != null) {
-            try {
-                return new HashSet<>(mService.getEnforcingAdminsForRestriction(
-                        userId, restriction));
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
             }

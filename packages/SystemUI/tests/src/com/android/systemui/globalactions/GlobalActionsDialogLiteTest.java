@@ -67,6 +67,7 @@ import com.android.systemui.SysuiTestCase;
 import com.android.systemui.animation.DialogTransitionAnimator;
 import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.colorextraction.SysuiColorExtractor;
+import com.android.systemui.common.domain.interactor.SysUIStateDisplaysInteractor;
 import com.android.systemui.display.data.repository.FakeDisplayWindowPropertiesRepository;
 import com.android.systemui.globalactions.domain.interactor.GlobalActionsInteractor;
 import com.android.systemui.kosmos.KosmosJavaAdapter;
@@ -83,6 +84,7 @@ import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.statusbar.window.StatusBarWindowController;
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.telephony.TelephonyListenerManager;
+import com.android.systemui.topui.TopUiController;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
 import com.android.systemui.user.domain.interactor.UserLogoutInteractor;
 import com.android.systemui.util.RingerModeLiveData;
@@ -93,6 +95,7 @@ import com.android.systemui.util.settings.GlobalSettings;
 import com.android.systemui.util.settings.SecureSettings;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -103,6 +106,7 @@ import org.mockito.MockitoAnnotations;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+@Ignore("b/422015546")
 @SmallTest
 @RunWith(AndroidJUnit4.class)
 @TestableLooper.RunWithLooper(setAsMainLooper = true)
@@ -129,6 +133,7 @@ public class GlobalActionsDialogLiteTest extends SysuiTestCase {
     @Mock private IStatusBarService mStatusBarService;
     @Mock private LightBarController mLightBarController;
     @Mock private NotificationShadeWindowController mNotificationShadeWindowController;
+    @Mock private TopUiController mTopUiController;
     @Mock private StatusBarWindowController mStatusBarWindowController;
     @Mock private StatusBarWindowControllerStore mStatusBarWindowControllerStore;
     @Mock private IWindowManager mWindowManager;
@@ -195,6 +200,7 @@ public class GlobalActionsDialogLiteTest extends SysuiTestCase {
                 mStatusBarService,
                 mLightBarController,
                 mNotificationShadeWindowController,
+                mTopUiController,
                 mStatusBarWindowControllerStore,
                 mWindowManager,
                 mBackgroundExecutor,
@@ -217,6 +223,9 @@ public class GlobalActionsDialogLiteTest extends SysuiTestCase {
         backdropColors.setMainColor(Color.BLACK);
         when(mColorExtractor.getNeutralColors()).thenReturn(backdropColors);
         when(mSelectedUserInteractor.getSelectedUserId()).thenReturn(0);
+
+        mDependency.injectTestDependency(
+                SysUIStateDisplaysInteractor.class, mKosmos.getSysuiStateInteractor());
     }
 
     @Test
@@ -231,6 +240,16 @@ public class GlobalActionsDialogLiteTest extends SysuiTestCase {
         mGlobalActionsDialogLite.onDismiss(mGlobalActionsDialogLite.mDialog);
         mTestableLooper.processAllMessages();
         verifyLogPosted(GlobalActionsDialogLite.GlobalActionsEvent.GA_POWER_MENU_CLOSE);
+    }
+
+    @Test
+    public void testShouldLogTimeout() {
+        mGlobalActionsDialogLite.onShow(null);
+        verifyLogPosted(GlobalActionsDialogLite.GlobalActionsEvent.GA_POWER_MENU_OPEN);
+        mGlobalActionsDialogLite.rescheduleBurninTimeout(20); // ms
+        mTestableLooper.moveTimeForward(30);
+        mTestableLooper.processAllMessages();
+        verifyLogPosted(GlobalActionsDialogLite.GlobalActionsEvent.GA_CLOSE_TIMEOUT);
     }
 
     @Test

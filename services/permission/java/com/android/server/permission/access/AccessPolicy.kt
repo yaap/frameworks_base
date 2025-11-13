@@ -16,10 +16,12 @@
 
 package com.android.server.permission.access
 
+import android.content.pm.SignedPackage
 import android.util.Slog
 import com.android.modules.utils.BinaryXmlPullParser
 import com.android.modules.utils.BinaryXmlSerializer
 import com.android.server.SystemConfig
+import com.android.server.permission.access.appfunction.AppIdAppFunctionAccessPolicy
 import com.android.server.permission.access.appop.AppIdAppOpPolicy
 import com.android.server.permission.access.appop.PackageAppOpPolicy
 import com.android.server.permission.access.collection.* // ktlint-disable no-wildcard-imports
@@ -53,6 +55,7 @@ private constructor(
                 addPolicy(DevicePermissionPolicy())
                 addPolicy(AppIdAppOpPolicy())
                 addPolicy(PackageAppOpPolicy())
+                addPolicy(AppIdAppFunctionAccessPolicy())
             } as IndexedMap<String, IndexedMap<String, SchemePolicy>>
         )
 
@@ -71,7 +74,7 @@ private constructor(
         configPermissions: Map<String, SystemConfig.PermissionEntry>,
         privilegedPermissionAllowlistPackages: IndexedListSet<String>,
         permissionAllowlist: PermissionAllowlist,
-        implicitToSourcePermissions: IndexedMap<String, IndexedListSet<String>>
+        implicitToSourcePermissions: IndexedMap<String, IndexedListSet<String>>,
     ) {
         state.mutateExternalState().apply {
             mutateUserIds() += userIds
@@ -125,7 +128,7 @@ private constructor(
         knownPackages: IntMap<Array<String>>,
         volumeUuid: String?,
         packageNames: List<String>,
-        isSystemUpdated: Boolean
+        isSystemUpdated: Boolean,
     ) {
         val addedAppIds = MutableIntSet()
         newState.mutateExternalState().apply {
@@ -175,7 +178,7 @@ private constructor(
         packageStates: Map<String, PackageState>,
         disabledSystemPackageStates: Map<String, PackageState>,
         knownPackages: IntMap<Array<String>>,
-        packageName: String
+        packageName: String,
     ) {
         val packageState = packageStates[packageName]
         checkNotNull(packageState) {
@@ -206,7 +209,7 @@ private constructor(
         disabledSystemPackageStates: Map<String, PackageState>,
         knownPackages: IntMap<Array<String>>,
         packageName: String,
-        appId: Int
+        appId: Int,
     ) {
         check(packageName !in packageStates) {
             "Removed package $packageName is still in packageStates in onPackageRemoved()"
@@ -240,7 +243,7 @@ private constructor(
         disabledSystemPackageStates: Map<String, PackageState>,
         knownPackages: IntMap<Array<String>>,
         packageName: String,
-        userId: Int
+        userId: Int,
     ) {
         newState.mutateExternalState().apply {
             setPackageStates(packageStates)
@@ -260,7 +263,7 @@ private constructor(
         knownPackages: IntMap<Array<String>>,
         packageName: String,
         appId: Int,
-        userId: Int
+        userId: Int,
     ) {
         newState.mutateExternalState().apply {
             setPackageStates(packageStates)
@@ -268,6 +271,11 @@ private constructor(
             setKnownPackages(knownPackages)
         }
         forEachSchemePolicy { with(it) { onPackageUninstalled(packageName, appId, userId) } }
+    }
+
+    fun MutateStateScope.onAgentAllowlistChanged(agentAllowlist: List<SignedPackage>) {
+        newState.mutateExternalState().apply { setAgentAllowlist(agentAllowlist) }
+        forEachSchemePolicy { with(it) { onAgentAllowlistChanged(agentAllowlist) } }
     }
 
     fun MutateStateScope.onSystemReady() {
@@ -308,7 +316,7 @@ private constructor(
                 Slog.w(
                     LOG_TAG,
                     "Unexpected version $version for package $packageName," +
-                        "latest version is $VERSION_LATEST"
+                        "latest version is $VERSION_LATEST",
                 )
         }
     }
@@ -346,7 +354,7 @@ private constructor(
                 else -> {
                     Slog.w(
                         LOG_TAG,
-                        "Ignoring unknown tag $tagName when parsing user state for user $userId"
+                        "Ignoring unknown tag $tagName when parsing user state for user $userId",
                     )
                 }
             }
@@ -381,7 +389,7 @@ private constructor(
 
     private fun BinaryXmlPullParser.parseDefaultPermissionGrant(
         state: MutableAccessState,
-        userId: Int
+        userId: Int,
     ) {
         val userState = state.mutateUserState(userId, WriteMode.NONE)!!
         val fingerprint = getAttributeValueOrThrow(ATTR_FINGERPRINT).intern()
@@ -473,6 +481,8 @@ abstract class SchemePolicy {
 
     open fun MutateStateScope.onPackageUninstalled(packageName: String, appId: Int, userId: Int) {}
 
+    open fun MutateStateScope.onAgentAllowlistChanged(agentAllowlist: List<SignedPackage>) {}
+
     open fun MutateStateScope.onSystemReady() {}
 
     open fun migrateSystemState(state: MutableAccessState) {}
@@ -482,7 +492,7 @@ abstract class SchemePolicy {
     open fun MutateStateScope.upgradePackageState(
         packageState: PackageState,
         userId: Int,
-        version: Int
+        version: Int,
     ) {}
 
     open fun BinaryXmlPullParser.parseSystemState(state: MutableAccessState) {}

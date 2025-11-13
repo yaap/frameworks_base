@@ -58,6 +58,7 @@ import com.android.wm.shell.common.DisplayLayout;
 import com.android.wm.shell.common.SyncTransactionQueue;
 import com.android.wm.shell.compatui.CompatUIController.CompatUIHintsState;
 import com.android.wm.shell.compatui.api.CompatUIEvent;
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState;
 
 import junit.framework.Assert;
 
@@ -95,10 +96,12 @@ public class CompatUIWindowManagerTest extends ShellTestCase {
     private CompatUIWindowManager mWindowManager;
     private TaskInfo mTaskInfo;
     private DisplayLayout mDisplayLayout;
+    private FakeDesktopState mDesktopState;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        mDesktopState = new FakeDesktopState();
         doReturn(100).when(mCompatUIConfiguration).getHideSizeCompatRestartButtonTolerance();
         mTaskInfo = createTaskInfo(/* hasSizeCompat= */ false);
 
@@ -116,7 +119,7 @@ public class CompatUIWindowManagerTest extends ShellTestCase {
         mDisplayLayout.setInsets(mContext.getResources(), insetsState);
         mWindowManager = new CompatUIWindowManager(mContext, mTaskInfo, mSyncTransactionQueue,
                 mCallback, mTaskListener, mDisplayLayout, new CompatUIHintsState(),
-                mCompatUIConfiguration, mOnRestartButtonClicked);
+                mCompatUIConfiguration, mOnRestartButtonClicked, mDesktopState);
 
         spyOn(mWindowManager);
         doReturn(mLayout).when(mWindowManager).inflateLayout();
@@ -396,12 +399,11 @@ public class CompatUIWindowManagerTest extends ShellTestCase {
 
     @Test
     @RequiresFlagsDisabled(FLAG_APP_COMPAT_UI_FRAMEWORK)
-    @EnableFlags(Flags.FLAG_ALLOW_HIDE_SCM_BUTTON)
     public void testShouldShowSizeCompatRestartButton() {
         doReturn(85).when(mCompatUIConfiguration).getHideSizeCompatRestartButtonTolerance();
         mWindowManager = new CompatUIWindowManager(mContext, mTaskInfo, mSyncTransactionQueue,
                 mCallback, mTaskListener, mDisplayLayout, new CompatUIHintsState(),
-                mCompatUIConfiguration, mOnRestartButtonClicked);
+                mCompatUIConfiguration, mOnRestartButtonClicked, mDesktopState);
 
         // Simulate rotation of activity in square display
         TaskInfo taskInfo = createTaskInfo(true);

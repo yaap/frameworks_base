@@ -16,6 +16,9 @@
 
 package com.android.server.wm;
 
+import static android.app.TaskInfo.SELF_MOVABLE_ALLOWED;
+import static android.app.TaskInfo.SELF_MOVABLE_DEFAULT;
+import static android.app.TaskInfo.SELF_MOVABLE_DENIED;
 import static android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM;
 import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.window.WindowContainerTransaction.HierarchyOp.HIERARCHY_OP_TYPE_APP_COMPAT_REACHABILITY;
@@ -28,6 +31,7 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -361,6 +365,37 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_EXCLUDE_TASK_FROM_RECENTS)
+    public void testSetTaskForceExcludedFromRecents() {
+        final Task rootTask = createTask(mDisplayContent);
+        final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
+        final WindowContainerTransaction wct = new WindowContainerTransaction();
+        final WindowContainerToken token = task.mRemoteToken.toWindowContainerToken();
+
+        wct.setTaskForceExcludedFromRecents(token, true /* forceExcluded */);
+        applyTransaction(wct);
+
+        assertTrue(task.isForceExcludedFromRecents());
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_EXCLUDE_TASK_FROM_RECENTS)
+    public void testSetTaskForceExcludedFromRecents_resetsTaskForceExcludedFromRecents() {
+        final Task rootTask = createTask(mDisplayContent);
+        final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
+        final WindowContainerTransaction wct = new WindowContainerTransaction();
+        final WindowContainerToken token = task.mRemoteToken.toWindowContainerToken();
+        wct.setTaskForceExcludedFromRecents(token, true /* forceExcluded */);
+        applyTransaction(wct);
+
+        // Re-include the task using WCT.
+        wct.setTaskForceExcludedFromRecents(token, false /* forceExcluded */);
+        applyTransaction(wct);
+
+        assertFalse(task.isForceExcludedFromRecents());
+    }
+
+    @Test
     public void testDesktopMode_moveTaskToFront() {
         final TestDesktopOrganizer desktopOrganizer = new TestDesktopOrganizer(mAtm);
         TaskDisplayArea tda = desktopOrganizer.mDefaultTDA;
@@ -408,6 +443,105 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
         assertEquals(10, appCompatOptions.getInt(REACHABILITY_EVENT_X));
         assertEquals(20, appCompatOptions.getInt(REACHABILITY_EVENT_Y));
         assertSame(asBinder, appCompatOp.getContainer());
+    }
+
+    @Test
+    public void testSetLaunchNextToBubble() {
+        final Task task = createTask(mDisplayContent);
+
+        WindowContainerTransaction wct = new WindowContainerTransaction();
+        WindowContainerToken token = task.getTaskInfo().token;
+        wct.setLaunchNextToBubble(token, true /* launchNextToBubble */);
+        applyTransaction(wct);
+
+        assertTrue(task.mLaunchNextToBubble);
+
+        wct = new WindowContainerTransaction();
+        wct.setLaunchNextToBubble(token, false /* launchNextToBubble */);
+        applyTransaction(wct);
+
+        assertFalse(task.mLaunchNextToBubble);
+    }
+
+    @Test
+    public void testSetDisablePip() {
+        final Task task = createTask(mDisplayContent);
+        assertFalse(task.isDisablePip());
+
+        WindowContainerTransaction wct = new WindowContainerTransaction();
+        WindowContainerToken token = task.getTaskInfo().token;
+        wct.setDisablePip(token, true /* disablePip */);
+        applyTransaction(wct);
+
+        assertTrue(task.isDisablePip());
+
+        wct = new WindowContainerTransaction();
+        wct.setDisablePip(token, false /* disablePip */);
+        applyTransaction(wct);
+
+        assertFalse(task.isDisablePip());
+    }
+
+    @Test
+    public void testSetDisableLaunchAdjacent() {
+        final Task task = createTask(mDisplayContent);
+        assertFalse(task.isLaunchAdjacentDisabled());
+
+        WindowContainerTransaction wct = new WindowContainerTransaction();
+        final WindowContainerToken token = task.getTaskInfo().token;
+        wct.setDisableLaunchAdjacent(token, true /* disabled */);
+        applyTransaction(wct);
+
+        assertTrue(task.isLaunchAdjacentDisabled());
+
+        wct = new WindowContainerTransaction();
+        wct.setDisableLaunchAdjacent(token, false /* disabled */);
+        applyTransaction(wct);
+
+        assertFalse(task.isLaunchAdjacentDisabled());
+    }
+
+    @Test
+    public void testSetSelfMovable() {
+        final Task task = createTask(mDisplayContent);
+
+        WindowContainerTransaction wct = new WindowContainerTransaction();
+        WindowContainerToken token = task.getTaskInfo().token;
+        wct.setSelfMovable(token, SELF_MOVABLE_ALLOWED /* selfMovable */);
+        applyTransaction(wct);
+
+        assertEquals(SELF_MOVABLE_ALLOWED, task.getSelfMovable());
+
+        wct = new WindowContainerTransaction();
+        wct.setSelfMovable(token, SELF_MOVABLE_DENIED /* selfMovable */);
+        applyTransaction(wct);
+
+        assertEquals(SELF_MOVABLE_DENIED, task.getSelfMovable());
+
+        wct = new WindowContainerTransaction();
+        wct.setSelfMovable(token, SELF_MOVABLE_DEFAULT /* selfMovable */);
+        applyTransaction(wct);
+
+        assertEquals(SELF_MOVABLE_DEFAULT, task.getSelfMovable());
+    }
+
+    @Test
+    public void testSetIsTaskMoveAllowed() {
+        final Task task = createTask(mDisplayContent);
+        assertFalse(task.getIsTaskMoveAllowed());
+
+        WindowContainerTransaction wct = new WindowContainerTransaction();
+        WindowContainerToken token = task.getTaskInfo().token;
+        wct.setIsTaskMoveAllowed(token, true /* isTaskMoveAllowed */);
+        applyTransaction(wct);
+
+        assertTrue(task.getIsTaskMoveAllowed());
+
+        wct = new WindowContainerTransaction();
+        wct.setIsTaskMoveAllowed(token, false /* isTaskMoveAllowed */);
+        applyTransaction(wct);
+
+        assertFalse(task.getIsTaskMoveAllowed());
     }
 
     private Task createTask(int taskId) {

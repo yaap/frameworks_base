@@ -35,7 +35,6 @@ import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.SOM
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_USER_LOCKDOWN;
 import static com.android.keyguard.KeyguardUpdateMonitor.BIOMETRIC_STATE_CANCELLING_RESTARTING;
 import static com.android.keyguard.KeyguardUpdateMonitor.BIOMETRIC_STATE_STOPPED;
-import static com.android.keyguard.KeyguardUpdateMonitor.DEFAULT_CANCEL_SIGNAL_TIMEOUT;
 import static com.android.keyguard.KeyguardUpdateMonitor.HAL_POWER_PRESS_TIMEOUT;
 import static com.android.systemui.Flags.FLAG_GLANCEABLE_HUB_V2;
 import static com.android.systemui.statusbar.policy.DevicePostureController.DEVICE_POSTURE_OPENED;
@@ -50,6 +49,7 @@ import static kotlinx.coroutines.flow.StateFlowKt.MutableStateFlow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -106,7 +106,6 @@ import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.UserHandle;
 import android.os.UserManager;
-import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.FlagsParameterization;
 import android.service.dreams.IDreamManager;
@@ -122,7 +121,6 @@ import androidx.test.filters.SmallTest;
 
 import com.android.compose.animation.scene.ObservableTransitionState;
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
-import com.android.internal.foldables.FoldGracePeriodProvider;
 import com.android.internal.jank.InteractionJankMonitor;
 import com.android.internal.logging.InstanceId;
 import com.android.internal.logging.UiEventLogger;
@@ -259,8 +257,6 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
     private SubscriptionManager mSubscriptionManager;
     @Mock
     private BroadcastDispatcher mBroadcastDispatcher;
-    @Mock
-    private FoldGracePeriodProvider mFoldGracePeriodProvider;
     @Mock
     private TelephonyManager mTelephonyManager;
     @Mock
@@ -401,7 +397,6 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
                         anyInt());
 
         mKeyguardUpdateMonitor = new TestableKeyguardUpdateMonitor(mContext);
-        mKeyguardUpdateMonitor.mFoldGracePeriodProvider = mFoldGracePeriodProvider;
         setupBiometrics(mKeyguardUpdateMonitor);
         mKeyguardUpdateMonitor.setFaceAuthInteractor(mFaceAuthInteractor);
         verify(mFaceAuthInteractor).registerListener(mFaceAuthenticationListener.capture());
@@ -499,25 +494,6 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableFlags(Flags.FLAG_SIM_PIN_USE_SLOT_ID)
-    public void testSimStateInitialized_flagDisabled() {
-        cleanupKeyguardUpdateMonitor();
-        final int subId = 3;
-        final int state = TelephonyManager.SIM_STATE_ABSENT;
-
-        when(mTelephonyManager.getActiveModemCount()).thenReturn(1);
-        when(mTelephonyManager.getSimState(anyInt())).thenReturn(state);
-        when(mSubscriptionManager.getSubscriptionIds(anyInt())).thenReturn(new int[]{subId});
-
-        KeyguardUpdateMonitor testKUM = new TestableKeyguardUpdateMonitor(mContext);
-
-        mTestableLooper.processAllMessages();
-
-        assertThat(testKUM.getSimState(subId)).isEqualTo(state);
-    }
-
-    @Test
-    @EnableFlags(Flags.FLAG_SIM_PIN_USE_SLOT_ID)
     public void testSimStateInitialized_flagEnabled() {
         cleanupKeyguardUpdateMonitor();
         final int state = TelephonyManager.SIM_STATE_ABSENT;
@@ -1318,31 +1294,6 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableFlags(Flags.FLAG_SIM_PIN_USE_SLOT_ID)
-    public void testActiveSubscriptionBecomesInactive_flagDisabled() {
-        List<SubscriptionInfo> list = new ArrayList<>();
-        list.add(TEST_SUBSCRIPTION);
-        when(mSubscriptionManager.getCompleteActiveSubscriptionInfoList()).thenReturn(list);
-        mKeyguardUpdateMonitor.mPhoneStateListener.onActiveDataSubscriptionIdChanged(
-                TEST_SUBSCRIPTION.getSubscriptionId());
-        mTestableLooper.processAllMessages();
-        assertThat(mKeyguardUpdateMonitor.mSimDatas.get(TEST_SUBSCRIPTION.getSubscriptionId()))
-                .isNotNull();
-
-        when(mSubscriptionManager.getCompleteActiveSubscriptionInfoList())
-                .thenReturn(new ArrayList<>());
-        mKeyguardUpdateMonitor.mPhoneStateListener.onActiveDataSubscriptionIdChanged(
-                SubscriptionManager.INVALID_SUBSCRIPTION_ID);
-        mTestableLooper.processAllMessages();
-
-        assertThat(mKeyguardUpdateMonitor.mSimDatas.get(TEST_SUBSCRIPTION.getSubscriptionId()))
-                .isNull();
-        assertThat(mKeyguardUpdateMonitor.mSimDatas.get(
-                SubscriptionManager.INVALID_SUBSCRIPTION_ID)).isNull();
-    }
-
-    @Test
-    @EnableFlags(Flags.FLAG_SIM_PIN_USE_SLOT_ID)
     public void testActiveSubscriptionBecomesInactive_flagEnabled() {
         List<SubscriptionInfo> list = new ArrayList<>();
         list.add(TEST_SUBSCRIPTION);
@@ -1793,8 +1744,8 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
         mKeyguardUpdateMonitor.setKeyguardShowing(false, false);
         mTestableLooper.processAllMessages();
 
-        verify(mHandler).postDelayed(mKeyguardUpdateMonitor.mFpCancelNotReceived,
-                DEFAULT_CANCEL_SIGNAL_TIMEOUT);
+        verify(mHandler).postDelayed(eq(mKeyguardUpdateMonitor.mFpCancelNotReceived),
+                anyLong());
         mKeyguardUpdateMonitor.onFingerprintAuthenticated(0, true);
         mTestableLooper.processAllMessages();
 
@@ -2505,16 +2456,7 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
     }
 
     @Test
-    public void forceIsDismissibleKeyguard_foldingGracePeriodNotEnabled() {
-        when(mFoldGracePeriodProvider.isEnabled()).thenReturn(false);
-        primaryAuthNotRequiredByStrongAuthTracker();
-        mKeyguardUpdateMonitor.tryForceIsDismissibleKeyguard();
-        Assert.assertFalse(mKeyguardUpdateMonitor.forceIsDismissibleIsKeepingDeviceUnlocked());
-    }
-
-    @Test
     public void forceIsDismissibleKeyguard() {
-        when(mFoldGracePeriodProvider.isEnabled()).thenReturn(true);
         primaryAuthNotRequiredByStrongAuthTracker();
         mKeyguardUpdateMonitor.tryForceIsDismissibleKeyguard();
         Assert.assertTrue(mKeyguardUpdateMonitor.forceIsDismissibleIsKeepingDeviceUnlocked());
@@ -2522,9 +2464,16 @@ public class KeyguardUpdateMonitorTest extends SysuiTestCase {
 
     @Test
     public void forceIsDismissibleKeyguard_respectsLockdown() {
-        when(mFoldGracePeriodProvider.isEnabled()).thenReturn(true);
         userDeviceLockDown();
         mKeyguardUpdateMonitor.tryForceIsDismissibleKeyguard();
+        Assert.assertFalse(mKeyguardUpdateMonitor.forceIsDismissibleIsKeepingDeviceUnlocked());
+    }
+
+    @Test
+    public void forceIsDismissibleKeyguard_respectsDream() {
+        mKeyguardUpdateMonitor.tryForceIsDismissibleKeyguard();
+        mKeyguardUpdateMonitor.dispatchDreamingStarted();
+        mTestableLooper.processAllMessages();
         Assert.assertFalse(mKeyguardUpdateMonitor.forceIsDismissibleIsKeepingDeviceUnlocked());
     }
 

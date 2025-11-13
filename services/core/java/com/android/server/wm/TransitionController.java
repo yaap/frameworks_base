@@ -19,7 +19,9 @@ package com.android.server.wm;
 import static android.view.WindowManager.KEYGUARD_VISIBILITY_TRANSIT_FLAGS;
 import static android.view.WindowManager.TRANSIT_CHANGE;
 import static android.view.WindowManager.TRANSIT_CLOSE;
+import static android.view.WindowManager.TRANSIT_FLAG_DISPLAY_LEVEL_TRANSITION;
 import static android.view.WindowManager.TRANSIT_NONE;
+import static android.window.DesktopExperienceFlags.ENABLE_PARALLEL_CD_TRANSITIONS_DURING_RECENTS;
 
 import static com.android.server.wm.ActivityTaskManagerService.POWER_MODE_REASON_CHANGE_DISPLAY;
 
@@ -31,6 +33,7 @@ import android.app.IApplicationThread;
 import android.app.WindowConfiguration;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.internal.perfetto.protos.Windowmanagerservice.AppTransitionProto;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.IRemoteCallback;
@@ -110,11 +113,6 @@ class TransitionController {
     /** Less duration for CHANGE type because it does not involve app startup. */
     private static final int CHANGE_TIMEOUT_MS = 2000;
 
-    // State constants to line-up with legacy app-transition proto expectations.
-    private static final int LEGACY_STATE_IDLE = 0;
-    private static final int LEGACY_STATE_READY = 1;
-    private static final int LEGACY_STATE_RUNNING = 2;
-
     private final ArrayList<TransitionPlayerRecord> mTransitionPlayers = new ArrayList<>();
     final TransitionMetricsReporter mTransitionMetricsReporter = new TransitionMetricsReporter();
 
@@ -180,6 +178,7 @@ class TransitionController {
         final Transition mTransition;
         final OnStartCollect mOnStartCollect;
         final BLASTSyncEngine.SyncGroup mLegacySync;
+        boolean mShouldNoopUponDequeue;
 
         QueuedTransition(Transition transition, OnStartCollect onStartCollect) {
             mTransition = transition;
@@ -216,10 +215,16 @@ class TransitionController {
     final SparseArray<ArrayList<Task>> mLatestOnTopTasksReported = new SparseArray<>();
 
     /**
-     * `true` when building surface layer order for the finish transaction. We want to prevent
+     * `true` when building surface layer order for the start/finish transaction. We want to prevent
      * wm from touching z-order of surfaces during transitions, but we still need to be able to
-     * calculate the layers for the finishTransaction. So, when assigning layers into the finish
-     * transaction, set this to true so that the {@link canAssignLayers} will allow it.
+     * calculate the layers. So, when assigning layers into the start/finish transaction, set this
+     * to true so that the {@link canAssignLayers} will allow it.
+     */
+    boolean mBuildingTransitionLayers = false;
+
+    /**
+     * `true` when building surface layer order for the finish transaction. We use this to
+     * force-assign layers to the finish transaction {@link WindowContainer#assignLayer()}.
      */
     boolean mBuildingFinishLayers = false;
 
@@ -483,6 +488,19 @@ class TransitionController {
         return false;
     }
 
+    /**
+     * Returns {@code true} if the `wc` is a participant of a playing transition even if it is not
+     * the playing target, e.g. its {@link Transition.ChangeInfo#hasChanged()} is false.
+     */
+    boolean isParticipantOfPlayingTransition(@NonNull WindowContainer<?> wc) {
+        for (int i = mPlayingTransitions.size() - 1; i >= 0; --i) {
+            if (mPlayingTransitions.get(i).mParticipants.contains(wc)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Returns {@code true} if the finishing transition contains `wc`. */
     boolean inFinishingTransition(WindowContainer<?> wc) {
         return mFinishingTransition != null && mFinishingTransition.isInTransition(wc);
@@ -689,7 +707,7 @@ class TransitionController {
     boolean canAssignLayers(@NonNull WindowContainer wc) {
         // Don't build window state into finish transaction in case another window is added or
         // removed during transition playing.
-        if (mBuildingFinishLayers) {
+        if (mBuildingTransitionLayers) {
             return wc.asWindowState() == null;
         }
         // Always allow WindowState to assign layers since it won't affect transition.
@@ -762,20 +780,21 @@ class TransitionController {
     @Nullable
     Transition requestTransitionIfNeeded(@WindowManager.TransitionType int type,
             @WindowManager.TransitionFlags int flags, @Nullable WindowContainer trigger,
-            @NonNull WindowContainer readyGroupRef) {
+            @NonNull WindowContainer readyGroupRef, @NonNull ActionChain chain) {
         if (mTransitionPlayers.isEmpty()) {
             return null;
         }
         Transition newTransition = null;
-        if (isCollecting()) {
+        if (chain.isCollecting()) {
             // Make the collecting transition wait until this request is ready.
-            mCollectingTransition.setReady(readyGroupRef, false);
+            chain.getTransition().setReady(readyGroupRef, false);
             if ((flags & KEYGUARD_VISIBILITY_TRANSIT_FLAGS) != 0) {
                 // Add keyguard flags to affect keyguard visibility
-                mCollectingTransition.addFlag(flags & KEYGUARD_VISIBILITY_TRANSIT_FLAGS);
+                chain.getTransition().addFlag(flags & KEYGUARD_VISIBILITY_TRANSIT_FLAGS);
             }
         } else {
-            newTransition = requestStartTransition(createTransition(type, flags),
+            chain.attachTransition(createTransition(type, flags));
+            newTransition = requestStartTransition(chain.getTransition(),
                     trigger != null ? trigger.asTask() : null, null /* remote */, null /* disp */);
         }
         return newTransition;
@@ -1008,9 +1027,9 @@ class TransitionController {
     void finishTransition(@NonNull ActionChain chain) {
         if (!chain.isFinishing()) {
             throw new IllegalStateException("Can't finish on a non-finishing transition "
-                    + chain.mTransition);
+                    + chain.getTransition());
         }
-        final Transition record = chain.mTransition;
+        final Transition record = chain.getTransition();
         // It is usually a no-op but make sure that the metric consumer is removed.
         mTransitionMetricsReporter.reportAnimationStart(record.getToken(), 0 /* startTime */);
         // It is a no-op if the transition did not change the display.
@@ -1042,6 +1061,15 @@ class TransitionController {
         if (!inTransition()) {
             validateStates();
             mAtm.mWindowManager.onAnimationFinished();
+        }
+
+        // Make sure the surface visibility respects the hierarchy state (updateAnimatingState
+        // should have scheduled a frame to update).
+        record.ensureParticipantSurfaceVisibility();
+        // The targets added by Transition#tryPromote also need to update.
+        for (int i = record.mTargets.size() - 1; i >= 0; i--) {
+            mAtm.mWindowManager.mAnimator.addSurfaceVisibilityUpdate(
+                    record.mTargets.get(i).mContainer);
         }
     }
 
@@ -1098,6 +1126,9 @@ class TransitionController {
         final boolean isPlaying = !mPlayingTransitions.isEmpty();
         Slog.e(TAG, "Set visible without transition " + wc + " playing=" + isPlaying
                 + " caller=" + caller);
+        if (mAtm.mWindowManager.mFlags.mEnsureSurfaceVisibility) {
+            return;
+        }
         if (!isPlaying) {
             WindowContainer.enforceSurfaceVisible(wc);
             return;
@@ -1163,6 +1194,14 @@ class TransitionController {
             // do collect things it can cause problems). So, we need to run it's onCollectStarted
             // immediately.
             queued.mOnStartCollect.onCollectStarted(true /* deferred */);
+        } else if (queued.mTransition != null && queued.mShouldNoopUponDequeue) {
+            // This transition was queued at a time when the collecting transition might have left
+            // the incoming transition's changes stale (e.g. display change transition had not
+            // been formally started). So send this transition to Shell before applying any changes
+            // to report it as a no-op.
+            ProtoLog.w(WmProtoLogGroups.WM_DEBUG_WINDOW_TRANSITIONS_MIN,
+                    "Formerly queued #%d force-reported as no-op", queued.mTransition.getSyncId());
+            queued.mTransition.playNow();
         } else {
             // Post this so that the now-playing transition logic isn't interrupted.
             mAtm.mH.post(() -> {
@@ -1199,7 +1238,7 @@ class TransitionController {
      * `collecting` transition. It may still ultimately block in sync-engine or become dependent
      * in {@link #getIsIndependent} later.
      */
-    boolean getCanBeIndependent(Transition collecting, @Nullable Transition queued) {
+    static boolean getCanBeIndependent(Transition collecting, @Nullable Transition queued) {
         // For tests
         if (queued != null && queued.mParallelCollectType == Transition.PARALLEL_TYPE_MUTUAL
                 && collecting.mParallelCollectType == Transition.PARALLEL_TYPE_MUTUAL) {
@@ -1211,12 +1250,19 @@ class TransitionController {
                 // Must serialize with itself.
                 return false;
             }
-            // allow this if `collecting` only has activities
             for (int i = 0; i < collecting.mParticipants.size(); ++i) {
                 final WindowContainer wc = collecting.mParticipants.valueAt(i);
+                final boolean isOnDifferentDisplay = !queued.isOnDisplay(wc.mDisplayContent);
+                if (isOnDifferentDisplay
+                        && ENABLE_PARALLEL_CD_TRANSITIONS_DURING_RECENTS.isTrue()) {
+                    // Running in a different display, could be independent.
+                    continue;
+                }
                 final ActivityRecord ar = wc.asActivityRecord();
-                if (ar == null && wc.asWindowState() == null && wc.asWindowToken() == null) {
-                    // Is task or above, so can't be independent
+                final boolean isTaskOrAbove = ar == null && wc.asWindowState() == null
+                        && wc.asWindowToken() == null;
+                if (isTaskOrAbove) {
+                    // Is task or above, so can't be independent.
                     return false;
                 }
                 if (ar != null && ar.isActivityTypeHomeOrRecents()) {
@@ -1269,9 +1315,17 @@ class TransitionController {
         // actually animating.
         for (int i = 0; i < other.mTargets.size(); ++i) {
             final WindowContainer wc = other.mTargets.get(i).mContainer;
+            final boolean isOnDifferentDisplay = !recents.isOnDisplay(wc.mDisplayContent);
+            if (isOnDifferentDisplay
+                    && ENABLE_PARALLEL_CD_TRANSITIONS_DURING_RECENTS.isTrue()) {
+                // Running in a different display, could be independent.
+                continue;
+            }
             final ActivityRecord ar = wc.asActivityRecord();
-            if (ar == null && wc.asWindowState() == null && wc.asWindowToken() == null) {
-                // Is task or above, so for now don't let them be independent.
+            final boolean isTaskOrAbove = ar == null && wc.asWindowState() == null
+                    && wc.asWindowToken() == null;
+            if (isTaskOrAbove) {
+                // Is task or above, so for now don't let them be independent
                 return false;
             }
             if (ar != null && recents.isTransientLaunch(ar)) {
@@ -1478,15 +1532,15 @@ class TransitionController {
 
     void dumpDebugLegacy(ProtoOutputStream proto, long fieldId) {
         final long token = proto.start(fieldId);
-        int state = LEGACY_STATE_IDLE;
+        int state = AppTransitionProto.APP_STATE_IDLE;
         if (!mPlayingTransitions.isEmpty()) {
-            state = LEGACY_STATE_RUNNING;
+            state = AppTransitionProto.APP_STATE_RUNNING;
         } else if ((mCollectingTransition != null && mCollectingTransition.getLegacyIsReady())
                 || mSyncEngine.hasPendingSyncSets()) {
             // The transition may not be "ready", but we have a sync-transaction waiting to start.
             // Usually the pending transaction is for a transition, so assuming that is the case,
-            // we can't be IDLE for test purposes. Ideally, we should have a STATE_COLLECTING.
-            state = LEGACY_STATE_READY;
+            // we can't be IDLE for test purposes. Ideally, we should have an APP_STATE_COLLECTING.
+            state = AppTransitionProto.APP_STATE_READY;
         }
         proto.write(AppTransitionProto.APP_TRANSITION_STATE, state);
         proto.end(token);
@@ -1494,7 +1548,21 @@ class TransitionController {
 
     /** Returns {@code true} if it started collecting, {@code false} if it was queued. */
     private void queueTransition(Transition transit, OnStartCollect onStartCollect) {
-        mQueuedTransitions.add(new QueuedTransition(transit, onStartCollect));
+        final QueuedTransition queuedTransition = new QueuedTransition(transit, onStartCollect);
+
+        // If we queue a non-display transition while a collecting transition is still not
+        // formally started, then check if collecting transition is changing a display
+        if ((transit.getFlags() & TRANSIT_FLAG_DISPLAY_LEVEL_TRANSITION) == 0
+                && mCollectingTransition != null && !mCollectingTransition.hasStarted()) {
+            for (int i = 0; i < mCollectingTransition.mParticipants.size(); i++) {
+                if (mCollectingTransition.mParticipants.valueAt(i).asDisplayContent() != null) {
+                    queuedTransition.mShouldNoopUponDequeue = true;
+                    break;
+                }
+            }
+        }
+
+        mQueuedTransitions.add(queuedTransition);
         ProtoLog.v(WmProtoLogGroups.WM_DEBUG_WINDOW_TRANSITIONS_MIN,
                 "Queueing transition: %s", transit);
     }
@@ -1745,6 +1813,7 @@ class TransitionController {
         WindowContainerTransaction mStartWCT;
         int mSyncId;
         TransitionInfo mInfo;
+        boolean mFromPlayer;
 
         private String buildOnSendLog() {
             StringBuilder sb = new StringBuilder("Sent Transition (#").append(mSyncId)

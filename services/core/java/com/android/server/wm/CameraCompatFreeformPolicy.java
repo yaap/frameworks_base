@@ -42,6 +42,7 @@ import android.app.CameraCompatTaskInfo;
 import android.content.res.CompatibilityInfo;
 import android.content.res.Configuration;
 import android.os.RemoteException;
+import android.util.Slog;
 import android.view.DisplayInfo;
 import android.view.Surface;
 
@@ -91,6 +92,11 @@ final class CameraCompatFreeformPolicy implements CameraStateMonitor.CameraCompa
         mCameraStateMonitor.addCameraStateListener(this);
         mActivityRefresher.addEvaluator(this);
         mIsRunning = true;
+    }
+
+    int getCameraDeviceRotation() {
+        // TODO(b/276432441): Check device orientation when running on an external display.
+        return mDisplayContent.getRotation();
     }
 
     /** Releases camera callback listener. */
@@ -191,6 +197,11 @@ final class CameraCompatFreeformPolicy implements CameraStateMonitor.CameraCompa
     }
 
     private void updateCompatibilityInfo(@NonNull ActivityRecord activityRecord) {
+        if (activityRecord.app == null) {
+            Slog.w(TAG, "Activity exists, but the app does not. Cannot revert display rotation"
+                    + "sandboxing.");
+            return;
+        }
         final CompatibilityInfo compatibilityInfo = activityRecord.mAtmService
                 .compatibilityInfoForPackageLocked(activityRecord.info.applicationInfo);
         compatibilityInfo.applicationDisplayRotation =

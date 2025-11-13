@@ -17,7 +17,6 @@
 package com.android.internal.widget;
 
 import static android.app.Flags.notificationsRedesignTemplates;
-import static android.widget.flags.Flags.conversationLayoutUseMaximumChildHeight;
 
 import static com.android.internal.widget.MessagingGroup.IMAGE_DISPLAY_LOCATION_EXTERNAL;
 import static com.android.internal.widget.MessagingGroup.IMAGE_DISPLAY_LOCATION_INLINE;
@@ -35,6 +34,7 @@ import android.app.Person;
 import android.app.RemoteInputHistoryItem;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.content.res.Resources;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -124,6 +124,7 @@ public class ConversationLayout extends FrameLayout
     private ViewGroup mExpandButtonContainerA11yContainer;
     private NotificationExpandButton mExpandButton;
     private MessagingLinearLayout mImageMessageContainer;
+    private ImageView mRightIconView;
     private int mBadgeProtrusion;
     private int mConversationAvatarSize;
     private int mConversationAvatarSizeExpanded;
@@ -193,6 +194,7 @@ public class ConversationLayout extends FrameLayout
         mMessagingLinearLayout = findViewById(R.id.notification_messaging);
         mActions = findViewById(R.id.actions);
         mImageMessageContainer = findViewById(R.id.conversation_image_message_container);
+        mRightIconView = findViewById(R.id.right_icon);
         // We still want to clip, but only on the top, since views can temporarily out of bounds
         // during transitions.
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
@@ -207,6 +209,15 @@ public class ConversationLayout extends FrameLayout
         mImportanceRingView = findViewById(R.id.conversation_icon_badge_ring);
         mConversationIconBadge = findViewById(R.id.conversation_icon_badge);
         mConversationIconBadgeBg = findViewById(R.id.conversation_icon_badge_bg);
+        if (notificationsRedesignTemplates()) {
+            // The left_icon in the header has the default rounded square background. Make sure
+            // we're using the circular background instead.
+            ImageView leftIcon = findViewById(R.id.left_icon);
+            if (leftIcon != null) {
+                leftIcon.setBackgroundResource(
+                        R.drawable.notification_2025_conversation_icon_background);
+            }
+        }
         mIcon.setOnVisibilityChangedListener((visibility) -> {
 
             // Let's hide the background directly or in an animated way
@@ -734,13 +745,41 @@ public class ConversationLayout extends FrameLayout
         View newMessage = getNewImageMessage();
         // Remove all messages that don't belong into the image layout
         View previousMessage = mImageMessageContainer.getChildAt(0);
+        boolean isShowingImage = newMessage != null;
         if (previousMessage != newMessage) {
             mImageMessageContainer.removeView(previousMessage);
-            if (newMessage != null) {
+            if (isShowingImage) {
                 mImageMessageContainer.addView(newMessage);
             }
         }
         mImageMessageContainer.setVisibility(newMessage != null ? VISIBLE : GONE);
+
+        if (mRightIconView != null && mRightIconView.getDrawable() != null) {
+            // When showing an image message, do not show the large icon.  Removing the drawable
+            // prevents it from being shown in the left_icon view (by the grouping util).
+            if (notificationsRedesignTemplates() && isShowingImage) {
+                mRightIconView.setImageDrawable(null);
+                mRightIconView.setVisibility(GONE);
+            }
+        } else {
+            // Only alter the padding if we're not showing the large icon; otherwise it's already
+            // been adjusted in Notification.java and we shouldn't override it.
+            adjustExpandButtonPadding(isShowingImage);
+        }
+    }
+
+    /**
+     * When showing an isolated image message similar to the large icon, adjust the padding of the
+     * expand button in the same way we do for large icons.
+     */
+    private void adjustExpandButtonPadding(boolean isShowingImage) {
+        if (notificationsRedesignTemplates() && mExpandButton != null) {
+            final Resources res = mContext.getResources();
+            int normalPadding = res.getDimensionPixelSize(R.dimen.notification_2025_margin);
+            int iconSpacing = res.getDimensionPixelSize(
+                    R.dimen.notification_2025_expand_button_right_icon_spacing);
+            mExpandButton.setStartPadding(isShowingImage ? iconSpacing : normalPadding);
+        }
     }
 
     @Nullable
@@ -1482,24 +1521,22 @@ public class ConversationLayout extends FrameLayout
         // FrameLayout measures its match_parent children twice when any of FLs dimension is not
         // specified. However, its sets its own dimensions before the second measurement pass.
         // Content CutOff happens when children have bigger height on its second measurement.
-        if (conversationLayoutUseMaximumChildHeight()) {
-            int maxHeight = getMeasuredHeight();
-            final int count = getChildCount();
+        int maxHeight = getMeasuredHeight();
+        final int count = getChildCount();
 
-            for (int i = 0; i < count; i++) {
-                final View child = getChildAt(i);
-                if (child == null || child.getVisibility() == GONE) {
-                    continue;
-                }
+        for (int i = 0; i < count; i++) {
+            final View child = getChildAt(i);
+            if (child == null || child.getVisibility() == GONE) {
+                continue;
+            }
 
-                final LayoutParams lp = (LayoutParams) child.getLayoutParams();
-                maxHeight = Math.max(maxHeight,
-                        child.getMeasuredHeight() + lp.topMargin + lp.bottomMargin);
-            }
-            maxHeight = Math.max(maxHeight, getSuggestedMinimumHeight());
-            if (maxHeight != getMeasuredHeight()) {
-                setMeasuredDimension(getMeasuredWidth(), maxHeight);
-            }
+            final LayoutParams lp = (LayoutParams) child.getLayoutParams();
+            maxHeight = Math.max(maxHeight,
+                    child.getMeasuredHeight() + lp.topMargin + lp.bottomMargin);
+        }
+        maxHeight = Math.max(maxHeight, getSuggestedMinimumHeight());
+        if (maxHeight != getMeasuredHeight()) {
+            setMeasuredDimension(getMeasuredWidth(), maxHeight);
         }
     }
 

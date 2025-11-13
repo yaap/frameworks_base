@@ -81,7 +81,7 @@
     <string name="speed_label_fast" msgid="2677719134596044051">"Veloce"</string>
     <string name="speed_label_very_fast" msgid="8215718029533182439">"Molto veloce"</string>
     <string name="wifi_passpoint_expired" msgid="6540867261754427561">"Scaduta"</string>
-    <string name="preference_summary_default_combination" msgid="2644094566845577901">"<xliff:g id="STATE">%1$s</xliff:g>/<xliff:g id="DESCRIPTION">%2$s</xliff:g>"</string>
+    <string name="preference_summary_default_combination" msgid="2644094566845577901">"<xliff:g id="STATE">%1$s</xliff:g> / <xliff:g id="DESCRIPTION">%2$s</xliff:g>"</string>
     <string name="bluetooth_disconnected" msgid="7739366554710388701">"Disconnesso"</string>
     <string name="bluetooth_disconnecting" msgid="7638892134401574338">"Disconnessione…"</string>
     <string name="bluetooth_connecting" msgid="5871702668260192755">"Connessione…"</string>
@@ -137,7 +137,7 @@
     <string name="bluetooth_profile_headset" msgid="5395952236133499331">"Telefonate"</string>
     <string name="bluetooth_profile_opp" msgid="6692618568149493430">"Trasferimento file"</string>
     <string name="bluetooth_profile_hid" msgid="2969922922664315866">"Dispositivo di input"</string>
-    <string name="bluetooth_profile_pan" msgid="1006235139308318188">"Accesso a Internet"</string>
+    <string name="bluetooth_profile_pan" msgid="1006235139308318188">"Accesso a internet"</string>
     <string name="bluetooth_profile_pbap" msgid="2103406516858653017">"Consenti l\'accesso ai contatti e alla cronologia delle chiamate"</string>
     <string name="bluetooth_profile_pbap_summary" msgid="402819589201138227">"Le informazioni saranno utilizzate per gli annunci delle chiamate e altro ancora"</string>
     <string name="bluetooth_profile_pan_nap" msgid="7871974753822470050">"Condivisione connessione Internet"</string>
@@ -418,7 +418,7 @@
     <string name="transparent_navigation_bar_summary" msgid="5454359021817330722">"Rendi trasparente il colore di sfondo della barra di navigazione per impostazione predefinita"</string>
     <string name="window_blurs" msgid="6831008984828425106">"Consenti sfocature finestre"</string>
     <string name="force_msaa" msgid="4081288296137775550">"Forza MSAA 4x"</string>
-    <string name="force_msaa_summary" msgid="9070437493586769500">"Attiva MSAA 4x in applicazioni OpenGL ES 2.0"</string>
+    <string name="force_msaa_summary" msgid="9070437493586769500">"Attiva MSAA 4x in app OpenGL ES 2.0"</string>
     <string name="show_non_rect_clip" msgid="7499758654867881817">"Debug operazioni ritaglio non rettangolare"</string>
     <string name="track_frame_time" msgid="522674651937771106">"Rendering HWUI profilo"</string>
     <string name="enable_gpu_debug_layers" msgid="4986675516188740397">"Attiva livelli debug GPU"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> fa"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> rimanenti"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Minimo"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Più piccolo"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Piccole"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"Predefinite"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Grandi"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Più grandi"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Massimo"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Più grande"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Molto grande"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Extra large"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Massimo"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Personalizzato (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Menu"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Inserisci la password per eseguire il ripristino dei dati di fabbrica in modalità demo"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{1 dispositivo connesso}other{# dispositivi connessi}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Più tempo."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Meno tempo."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Ingrandimento"</string>
     <string name="cancel" msgid="5665114069455378395">"Annulla"</string>
     <string name="next" msgid="2699398661093607009">"Avanti"</string>
     <string name="back" msgid="5554327870352703710">"Indietro"</string>
@@ -633,7 +638,7 @@
     <string name="storage_category" msgid="2287342585424631813">"Archiviazione"</string>
     <string name="shared_data_title" msgid="1017034836800864953">"Dati condivisi"</string>
     <string name="shared_data_summary" msgid="5516326713822885652">"Visualizza e modifica i dati condivisi"</string>
-    <string name="shared_data_no_blobs_text" msgid="3108114670341737434">"Nessun dato condiviso per questo utente."</string>
+    <string name="shared_data_no_blobs_text" msgid="3108114670341737434">"Nessun dato condiviso per questo utente"</string>
     <string name="shared_data_query_failure_text" msgid="3489828881998773687">"Si è verificato un errore durante il recupero dei dati condivisi. Riprova."</string>
     <string name="blob_id_text" msgid="8680078988996308061">"ID dati condivisi: <xliff:g id="BLOB_ID">%d</xliff:g>"</string>
     <string name="blob_expires_text" msgid="7882727111491739331">"Scadenza: <xliff:g id="DATE">%s</xliff:g>"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"Se trasmetti l\'app <xliff:g id="SWITCHAPP">%1$s</xliff:g> o cambi l\'uscita, la trasmissione attuale viene interrotta"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"Trasmetti l\'app <xliff:g id="SWITCHAPP">%1$s</xliff:g>"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Cambia uscita"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"Animazioni predittive per Indietro"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"Attiva le animazioni di sistema per il gesto Indietro predittivo."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"Questa impostazione attiva le animazioni di sistema per il gesto Indietro predittivo. Richiede di impostare il metodo enableOnBackInvokedCallback su true nel file manifest di tutte le app."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g>%%"</string>
     <string name="not_specified" msgid="5423502443185110328">"Non specificato"</string>
     <string name="neuter" msgid="2075249330106127310">"Neutro"</string>

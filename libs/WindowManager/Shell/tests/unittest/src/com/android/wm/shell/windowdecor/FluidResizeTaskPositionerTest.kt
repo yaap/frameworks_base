@@ -24,6 +24,7 @@ import com.android.wm.shell.ShellTaskOrganizer
 import com.android.wm.shell.ShellTestCase
 import com.android.wm.shell.common.DisplayController
 import com.android.wm.shell.common.DisplayLayout
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState
 import com.android.wm.shell.transition.Transitions
 import com.android.wm.shell.windowdecor.DragPositioningCallback.CTRL_TYPE_BOTTOM
 import com.android.wm.shell.windowdecor.DragPositioningCallback.CTRL_TYPE_RIGHT
@@ -91,6 +92,7 @@ class FluidResizeTaskPositionerTest : ShellTestCase() {
     @Mock
     private lateinit var mockResources: Resources
     private lateinit var taskPositioner: FluidResizeTaskPositioner
+    private val desktopState = FakeDesktopState()
 
     @Before
     fun setUp() {
@@ -141,8 +143,8 @@ class FluidResizeTaskPositionerTest : ShellTestCase() {
                 mockTransitions,
                 mockWindowDecoration,
                 mockDisplayController,
-                mockDragEventListener,
-                mockTransactionFactory
+                mockTransactionFactory,
+                desktopState,
         )
     }
 
@@ -207,6 +209,7 @@ class FluidResizeTaskPositionerTest : ShellTestCase() {
 
     @Test
     fun testDragResize_hasEffectiveMove_issuesTransitionOnMoveAndEnd() {
+        taskPositioner.addDragEventListener(mockDragEventListener)
         taskPositioner.onDragPositioningStart(
                 CTRL_TYPE_TOP or CTRL_TYPE_RIGHT,
                 DISPLAY_ID,

@@ -19,8 +19,9 @@ package com.android.systemui.statusbar.notification.collection.coordinator
 import com.android.app.tracing.traceSection
 import com.android.server.notification.Flags.screenshareNotificationHiding
 import com.android.systemui.Flags.screenshareNotificationHidingBugFix
-import com.android.systemui.statusbar.notification.collection.PipelineEntry
+import com.android.systemui.statusbar.notification.collection.BundleEntry
 import com.android.systemui.statusbar.notification.collection.NotifPipeline
+import com.android.systemui.statusbar.notification.collection.PipelineEntry
 import com.android.systemui.statusbar.notification.collection.coordinator.dagger.CoordinatorScope
 import com.android.systemui.statusbar.notification.collection.render.GroupExpansionManagerImpl
 import com.android.systemui.statusbar.notification.data.model.NotifStats
@@ -41,8 +42,7 @@ internal constructor(
     private val groupExpansionManagerImpl: GroupExpansionManagerImpl,
     private val renderListInteractor: RenderNotificationListInteractor,
     private val activeNotificationsInteractor: ActiveNotificationsInteractor,
-    private val sensitiveNotificationProtectionController:
-        SensitiveNotificationProtectionController,
+    private val sensitiveNotificationProtectionController: SensitiveNotificationProtectionController,
 ) : Coordinator {
 
     override fun attach(pipeline: NotifPipeline) {
@@ -67,8 +67,15 @@ internal constructor(
                 screenshareNotificationHidingBugFix() &&
                 sensitiveNotificationProtectionController.isSensitiveStateActive
         entries.forEach {
+            if (it is BundleEntry) {
+                // TODO(b/399736937) calculate based on notifs inside bundle
+                return@forEach
+            }
             val section = checkNotNull(it.section) { "Null section for ${it.key}" }
-            val entry = checkNotNull(it.representativeEntry) { "Null notif entry for ${it.key}" }
+            val entry =
+                checkNotNull(it.asListEntry()?.representativeEntry) {
+                    "Null notif entry for ${it.key}"
+                }
             val isSilent = section.bucket == BUCKET_SILENT
             // NOTE: NotificationEntry.isClearable will internally check group children to ensure
             //  the group itself definitively clearable.

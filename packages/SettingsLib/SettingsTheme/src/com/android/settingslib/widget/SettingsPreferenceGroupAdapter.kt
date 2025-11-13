@@ -127,46 +127,52 @@ open class SettingsPreferenceGroupAdapter(preferenceGroup: PreferenceGroup) :
                     currentParent = pref
                 }
 
-                // ExpandablePreference is PreferenceGroup but it should handle round corner
-                is Expandable -> {
+                // SpacePreference should not have round corner background.
+                is SpacePreference -> {
+                    cornerStyles[i] = 0
+                    endIndex = endIndex - 1
+                }
+
+                else -> {
                     // When ExpandablePreference is expanded, we treat is as the first item.
-                    if (pref.isExpanded()) {
+                    if (pref is Expandable && pref.isExpanded()) {
                         currentParent = pref as? PreferenceGroup
                         startIndex = i
                         cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_TOP or ROUND_CORNER_CENTER
                         endIndex = -1
-                    }
-                }
+                    } else {
 
-                else -> {
-                    val parent = pref?.parent
+                        val parent = pref?.parent
 
-                    // item in the group should have round corner background.
-                    cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_CENTER
-                    if (parent === currentParent) {
-                        // find the first item in the group
-                        if (startIndex == -1) {
+                        // item in the group should have round corner background.
+                        cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_CENTER
+                        // We should treat the ExpandButton as a part of the previous group
+                        // despite that it doesn't have a parent.
+                        if (parent === currentParent || parent == null) {
+                            // find the first item in the group
+                            if (startIndex == -1) {
+                                startIndex = i
+                                cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_TOP
+                            }
+
+                            // find the last item in the group, if we find the new last item, we should
+                            // remove the old last item round corner.
+                            if (endIndex == -1 || endIndex < i) {
+                                if (endIndex != -1) {
+                                    cornerStyles[endIndex] =
+                                        cornerStyles[endIndex] and ROUND_CORNER_BOTTOM.inv()
+                                }
+                                endIndex = i
+                                cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_BOTTOM
+                            }
+                        } else {
+                            // this item is new group, we should reset the index.
+                            currentParent = parent
                             startIndex = i
                             cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_TOP
-                        }
-
-                        // find the last item in the group, if we find the new last item, we should
-                        // remove the old last item round corner.
-                        if (endIndex == -1 || endIndex < i) {
-                            if (endIndex != -1) {
-                                cornerStyles[endIndex] =
-                                    cornerStyles[endIndex] and ROUND_CORNER_BOTTOM.inv()
-                            }
                             endIndex = i
                             cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_BOTTOM
                         }
-                    } else {
-                        // this item is new group, we should reset the index.
-                        currentParent = parent
-                        startIndex = i
-                        cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_TOP
-                        endIndex = i
-                        cornerStyles[i] = cornerStyles[i] or ROUND_CORNER_BOTTOM
                     }
                 }
             }
@@ -199,6 +205,12 @@ open class SettingsPreferenceGroupAdapter(preferenceGroup: PreferenceGroup) :
         return when {
             // This item handles edge to edge itself
             item is NormalPaddingMixin && item is GroupSectionDividerMixin -> 0 to 0
+            // Item is placed directly on screen needs to have extra padding
+            item is OnScreenWidgetMixin -> {
+                val extraPadding = item.context.resources.getDimensionPixelSize(
+                    R.dimen.settingslib_expressive_space_extrasmall4)
+                mNormalPaddingStart + extraPadding to mNormalPaddingEnd + extraPadding
+            }
 
             // According to mappingPreferenceGroup(), backgroundRes == 0 means this item is
             // GroupSectionDividerMixin or PreferenceCategory, which is design to have normal
@@ -223,6 +235,10 @@ open class SettingsPreferenceGroupAdapter(preferenceGroup: PreferenceGroup) :
         isSelected: Boolean,
         isHighlighted: Boolean,
     ): Int {
+        if (position !in mRoundCornerMappingList.indices) {
+            return 0
+        }
+
         val cornerType = mRoundCornerMappingList[position]
 
         if ((cornerType and ROUND_CORNER_CENTER) == 0) {

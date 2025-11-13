@@ -26,11 +26,13 @@ import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 import static com.android.wm.shell.bubbles.BubbleDebugConfig.TAG_BUBBLES;
 import static com.android.wm.shell.bubbles.BubbleDebugConfig.TAG_WITH_CLASS_NAME;
 import static com.android.wm.shell.bubbles.BubblePositioner.MAX_HEIGHT;
+import static com.android.wm.shell.bubbles.util.BubbleUtils.getEnterBubbleTransaction;
 import static com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_BUBBLES;
 import static com.android.wm.shell.shared.TypefaceUtils.setTypeface;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
+import android.app.ActivityManager.RunningTaskInfo;
 import android.app.ActivityOptions;
 import android.app.PendingIntent;
 import android.content.ComponentName;
@@ -62,6 +64,8 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.window.ScreenCapture;
+import android.window.WindowContainerToken;
+import android.window.WindowContainerTransaction;
 
 import androidx.annotation.Nullable;
 
@@ -75,6 +79,7 @@ import com.android.wm.shell.shared.TriangleShape;
 import com.android.wm.shell.shared.TypefaceUtils;
 import com.android.wm.shell.shared.bubbles.BubbleAnythingFlagHelper;
 import com.android.wm.shell.taskview.TaskView;
+import com.android.wm.shell.taskview.TaskViewTaskController;
 
 import java.io.PrintWriter;
 
@@ -226,7 +231,7 @@ public class BubbleExpandedView extends LinearLayout {
                     Rect launchBounds = new Rect();
                     mTaskView.getBoundsOnScreen(launchBounds);
 
-                    options.setTaskAlwaysOnTop(true);
+                    options.setTaskAlwaysOnTop(true /* alwaysOnTop */);
                     options.setPendingIntentBackgroundActivityStartMode(
                             MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS);
 
@@ -247,6 +252,12 @@ public class BubbleExpandedView extends LinearLayout {
                                 // Needs to be mutable for the fillInIntent
                                 PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT,
                                 /* options= */ null);
+                        final WindowContainerToken rootToken = mManager.getAppBubbleRootTaskToken();
+                        if (rootToken != null) {
+                            options.setLaunchRootTask(rootToken);
+                        } else {
+                            options.setLaunchNextToBubble(true /* launchNextToBubble */);
+                        }
                         mTaskView.startActivity(pi, fillInIntent, options, launchBounds);
                     } else if (!mIsOverflow && isShortcutBubble) {
                         ProtoLog.v(WM_SHELL_BUBBLES, "startingShortcutBubble=%s", getBubbleKey());
@@ -254,6 +265,13 @@ public class BubbleExpandedView extends LinearLayout {
                             options.setLaunchedFromBubble(true);
                             options.setApplyActivityFlagsForBubbles(true);
                         } else {
+                            final WindowContainerToken rootToken =
+                                    mManager.getAppBubbleRootTaskToken();
+                            if (rootToken != null) {
+                                options.setLaunchRootTask(rootToken);
+                            } else {
+                                options.setLaunchNextToBubble(true /* launchNextToBubble */);
+                            }
                             options.setApplyMultipleTaskFlagForShortcut(true);
                         }
                         mTaskView.startShortcutActivity(mBubble.getShortcutInfo(),
@@ -274,8 +292,8 @@ public class BubbleExpandedView extends LinearLayout {
                     // If there's a runtime exception here then there's something
                     // wrong with the intent, we can't really recover / try to populate
                     // the bubble again so we'll just remove it.
-                    Log.w(TAG, "Exception while displaying bubble: " + getBubbleKey()
-                            + ", " + e.getMessage() + "; removing bubble");
+                    Log.e(TAG, "Exception while displaying bubble: " + getBubbleKey()
+                            + "; removing bubble", e);
                     mManager.removeBubble(getBubbleKey(), Bubbles.DISMISS_INVALID_INTENT);
                 }
             });
@@ -298,6 +316,13 @@ public class BubbleExpandedView extends LinearLayout {
                 // Let the controller know sooner what the taskId is.
                 mManager.setNoteBubbleTaskId(mBubble.getKey(), mTaskId);
             }
+
+            final TaskViewTaskController tvc = mTaskView.getController();
+            final boolean isAppBubble = mBubble != null
+                    && (mBubble.isApp() || mBubble.isShortcut());
+            final WindowContainerTransaction wct = getEnterBubbleTransaction(
+                    tvc.getTaskToken(), isAppBubble);
+            tvc.getTaskOrganizer().applyTransaction(wct);
 
             // With the task org, the taskAppeared callback will only happen once the task has
             // already drawn
@@ -491,6 +516,11 @@ public class BubbleExpandedView extends LinearLayout {
 
                             @Override
                             public void onTaskRemovalStarted() {
+                                // nothing to do / handled in listener.
+                            }
+
+                            @Override
+                            public void onTaskInfoChanged(RunningTaskInfo taskInfo) {
                                 // nothing to do / handled in listener.
                             }
                         });

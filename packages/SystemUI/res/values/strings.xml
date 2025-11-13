@@ -168,6 +168,9 @@
     <!-- Button label to share wifi [CHAR_LIMIT=20] -->
     <string name="share_wifi_button_text">Share Wi\u2011Fi</string>
 
+    <!-- Button label to add a new network [CHAR_LIMIT=20] -->
+    <string name="add_network_button_text">Add network</string>
+
     <!-- Title of confirmation dialog for wireless debugging [CHAR LIMIT=NONE] -->
     <string name="wifi_debugging_title">Allow wireless debugging on this network?</string>
 
@@ -185,6 +188,9 @@
 
     <!-- Message of notification shown when trying to enable wireless debugging but a secondary user is the current foreground user. [CHAR LIMIT=NONE] -->
     <string name="wifi_debugging_secondary_user_message">The user currently signed in to this device can\u2019t turn on wireless debugging. To use this feature, switch to an admin user.</string>
+
+    <!-- Message of notification shown when trying to modify connected wifi settings at the login screen. [CHAR LIMIT=50] -->
+    <string name="change_connected_wifi_text">You can change this setting once logged in</string>
 
     <!-- Title of USB contaminant presence dialog [CHAR LIMIT=NONE] -->
     <string name="usb_contaminant_title">USB port disabled</string>
@@ -484,12 +490,29 @@
     <!-- Content description for the more options button on biometric prompt content view. [CHAR LIMIT=60] -->
     <string name="biometric_dialog_content_view_more_options_button">More Options</string>
 
+    <string name="biometric_dialog_fallback_title">More Options</string>
+    <string name="biometric_dialog_fallback_button">Verify another way</string>
+    <string name="biometric_dialog_manage_identity_check">Manage Identity Check</string>
+    <string name="biometric_dialog_identity_check_pin_footer">PIN can\'t be used for verification as Identity Check is on and requires a biometric. Learn more about Identity Check</string>
+
     <!-- Button text shown on BiometricPrompt giving the user the option to use an alternate form of authentication (Pin) [CHAR LIMIT=30] -->
     <string name="biometric_dialog_use_pin">Use PIN</string>
     <!-- Button text shown on BiometricPrompt giving the user the option to use an alternate form of authentication (Pattern) [CHAR LIMIT=30] -->
     <string name="biometric_dialog_use_pattern">Use pattern</string>
     <!-- Button text shown on BiometricPrompt giving the user the option to use an alternate form of authentication (Pass) [CHAR LIMIT=30] -->
     <string name="biometric_dialog_use_password">Use password</string>
+    <!-- Header text for biometric prompt reset lockout with PIN [CHAR LIMIT=40] -->
+    <string name="biometric_dialog_enter_pin">Enter your PIN</string>
+    <!-- Header text for biometric prompt reset lockout with password [CHAR LIMIT=40] -->
+    <string name="biometric_dialog_enter_password">Enter your password</string>
+    <!-- Header text for biometric prompt reset lockout with pattern [CHAR LIMIT=40] -->
+    <string name="biometric_dialog_enter_pattern">Enter your pattern</string>
+    <!-- Subtitle string for biometric prompt reset lockout with pin [CHAR LIMIT=NONE] -->
+    <string name="biometric_dialog_recovery_pin">PIN is required to recover biometrics after too many failed attempts</string>
+    <!-- Subtitle string for biometric prompt reset lockout with pattern [CHAR LIMIT=NONE] -->
+    <string name="biometric_dialog_recovery_pattern">Pattern is required to recover biometrics after too many failed attempts</string>
+    <!-- Subtitle string for biometric prompt reset lockout with password [CHAR LIMIT=NONE] -->
+    <string name="biometric_dialog_recovery_password">Password is required to recover biometrics after too many failed attempts</string>
     <!-- Error string shown when the user enters an incorrect PIN [CHAR LIMIT=40]-->
     <string name="biometric_dialog_wrong_pin">Wrong PIN</string>
     <!-- Error string shown when the user enters an incorrect pattern [CHAR LIMIT=40]-->
@@ -576,6 +599,10 @@
     <string name="accessibility_bluetooth_device_settings_gear">Click to configure device detail</string>
     <!-- Content description of the bluetooth device settings gear icon. [CHAR LIMIT=NONE] [BACKUP_MESSAGE_ID=3314916468105272540] -->
     <string name="accessibility_bluetooth_device_settings_gear_with_name"><xliff:g id="device_name">%s</xliff:g>. Configure device detail</string>
+    <!-- Content description of the bluetooth device settings plus button. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_bluetooth_device_settings_plus_button_with_name">Start sharing audio with <xliff:g id="device_name">%s</xliff:g></string>
+    <!-- Content description of the bluetooth device settings check mark. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_bluetooth_device_settings_checkmark_with_name">Stop sharing audio with <xliff:g id="device_name">%s</xliff:g></string>
     <!-- Content description of the bluetooth device settings see all. [CHAR LIMIT=NONE] -->
     <string name="accessibility_bluetooth_device_settings_see_all">See all devices</string>
     <!-- Content description of the bluetooth device settings pair new device. [CHAR LIMIT=NONE] -->
@@ -600,6 +627,12 @@
 
     <!-- Content description of the button to remove a device from a group. [CHAR LIMIT=NONE] -->
     <string name="accessibility_remove_device_from_group">Remove device from group.</string>
+
+    <!-- Content description of the button to add a device to a group. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_add_device_to_group_with_name">Add <xliff:g id="device_name">%s</xliff:g> to group.</string>
+
+    <!-- Content description of the button to remove a device from a group. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_remove_device_from_group_with_name">Remove <xliff:g id="device_name">%s</xliff:g> from group.</string>
 
     <!-- Content description of the button to open the application . [CHAR LIMIT=NONE] -->
     <string name="accessibility_open_application">Open application.</string>
@@ -633,6 +666,9 @@
     <!-- Content description of the battery level icon for accessibility, including the estimated time remaining before the phone runs out of battery *and* information that the device charging is paused in order to protect the lifetime of the battery (not shown on screen). [CHAR LIMIT=NONE] -->
     <string name="accessibility_battery_level_charging_paused_with_estimate">Battery <xliff:g id="percentage" example="90%">%1$d</xliff:g> percent, <xliff:g id="time" example="Until 3:15pm">%2$s</xliff:g>, charging paused for battery protection.</string>
 
+    <!-- Content description of the battery level icon for accessibility (not shown on the screen). [CHAR LIMIT=NONE] -->
+    <string name="accessibility_battery_level_battery_saver_with_percent">Battery <xliff:g id="number">%d</xliff:g> percent. Battery saver is on.</string>
+
     <!-- Content description of overflow icon container of the notifications for accessibility (not shown on the screen)[CHAR LIMIT=NONE] -->
     <string name="accessibility_overflow_action">See all notifications</string>
 
@@ -656,6 +692,8 @@
     <string name="accessibility_desc_qs_notification_shade">Quick settings and Notification shade.</string>
     <!-- Content description for the lock screen (not shown on the screen). [CHAR LIMIT=NONE] -->
     <string name="accessibility_desc_lock_screen">Lock screen</string>
+    <!-- Content description for the lock screen customization action. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_desc_customize_lock_screen">Lock screen, double tap and hold to customize lock screen.</string>
     <!-- Content description for the work profile lock screen. This prevents work profile apps from being used, but personal apps can be used as normal (not shown on the screen). [CHAR LIMIT=NONE] -->
     <string name="accessibility_desc_work_lock">Work lock screen</string>
     <!-- Content description for the close button in the zen mode panel introduction message. [CHAR LIMIT=NONE] -->
@@ -682,6 +720,13 @@
 
     <!-- Content description of the display brightness slider (not shown on the screen). [CHAR LIMIT=NONE] -->
     <string name="accessibility_brightness">Display brightness</string>
+
+    <!-- Content description for AV chip when camera is in use.-->
+    <string name="accessibility_camera_in_use">Camera in use</string>
+    <!-- Content description for AV chip when microphone is in use.-->
+    <string name="accessibility_microphone_in_use">Microphone in use</string>
+    <!-- Content description for AV chip when microphone is in use.-->
+    <string name="accessibility_camera_and_microphone_in_use">Camera and microphone in use</string>
 
     <!-- Content description of the charging indicator on Ambient Display (lower-power version of the lock screen). [CHAR LIMIT=NONE] -->
 
@@ -911,6 +956,11 @@
     <string name="quick_settings_flashlight_label">Flashlight</string>
     <!-- QuickSettings: Flashlight, used when it's not available due to camera in use [CHAR LIMIT=NONE] -->
     <string name="quick_settings_flashlight_camera_in_use">Camera in use</string>
+    <!-- Flashlight dialog title [CHAR LIMIT=NONE] -->
+    <string name="flashlight_dialog_title">Flashlight Strength</string>
+    <!-- QuickSettings: Flashlight tile level percentage [CHAR LIMIT=NONE] -->
+    <string name="quick_settings_flashlight_tile_level_percentage"><xliff:g id="percentage" example="46">%1$d</xliff:g>%%</string>
+
     <!-- QuickSettings: Cellular detail panel title [CHAR LIMIT=NONE] -->
     <string name="quick_settings_cellular_detail_title">Mobile data</string>
     <!-- QuickSettings: Cellular detail panel, data usage title [CHAR LIMIT=NONE] -->
@@ -1167,6 +1217,12 @@
     <!-- Default name for the media device shown in the output switcher when the name is not available [CHAR LIMIT=30] -->
     <string name="media_seamless_other_device">Other device</string>
 
+    <!-- Text on media control when there is a suggested device for playback. [CHAR LIMIT=30] -->
+    <string name="media_suggestion_disconnected_text">Play on <xliff:g id = "device_name" example="Living room speaker">%s</xliff:g></string>
+
+    <!-- Text on media control when connecting to a suggested device. [CHAR LIMIT=30] -->
+    <string name="media_suggestion_failure_text">Can\'t connect. Try again.</string>
+
     <!-- QuickStep: Accessibility to toggle overview [CHAR LIMIT=40] -->
     <string name="quick_step_accessibility_toggle_overview">Toggle Overview</string>
 
@@ -1201,6 +1257,12 @@
             other {# modes are active}
         }
     </string>
+
+    <!-- Modes: title for when multiple modes are active; number is >= 2 [CHAR LIMIT=20] -->
+    <string name="zen_modes_multiple_on_title"><xliff:g id="number" example="3">%s</xliff:g> Modes</string>
+
+    <!-- Modes: subtitle for when multiple modes are active. Plural. [CHAR LIMIT=20] -->
+    <string name="zen_modes_multiple_on_status">On</string>
 
     <!-- Zen mode: Priority only introduction message on first use -->
     <string name="zen_priority_introduction">You won\'t be disturbed by sounds and vibrations, except from alarms, reminders, events, and callers you specify. You\'ll still hear anything you choose to play including music, videos, and games.</string>
@@ -1476,6 +1538,8 @@
     <string name="media_projection_entry_app_permission_dialog_option_text_single_app">@string/screen_share_permission_dialog_option_single_app</string>
     <!-- 1P/3P app media projection permission option for capturing the whole screen [CHAR LIMIT=50] -->
     <string name="screen_share_permission_dialog_option_entire_screen">Share entire screen</string>
+    <!-- Screen recording permission option for recording a connected external display [CHAR LIMIT=50] -->
+    <string name="screen_share_permission_dialog_option_text_entire_screen_for_display">Share <xliff:g id="display_name" example="Display 1">%s</xliff:g></string>
     <!-- CTS tests rely on the `screen_share_permission_dialog_option_entire_screen` resource name, so just point the updated resource name to the old resource name. -->
     <string name="media_projection_entry_app_permission_dialog_option_text_entire_screen">@string/screen_share_permission_dialog_option_entire_screen</string>
     <!-- 1P/3P app media projection permission warning for capturing the whole screen. [CHAR LIMIT=350] -->
@@ -1498,6 +1562,8 @@
     <string name="media_projection_entry_cast_permission_dialog_option_text_single_app">Cast one app</string>
     <!-- System casting media projection permission option for capturing the whole screen [CHAR LIMIT=50] -->
     <string name="media_projection_entry_cast_permission_dialog_option_text_entire_screen">Cast entire screen</string>
+    <!-- System casting media projection permission option for capturing a  connected external display. %s will be replaced by the display name [CHAR LIMIT=50] -->
+    <string name="media_projection_entry_cast_permission_dialog_option_text_entire_screen_for_display">Cast <xliff:g id="display_name" example="Display 1">%s</xliff:g></string>
     <!-- System casting media projection permission warning for capturing the whole screen when SysUI casting requests it. [CHAR LIMIT=350] -->
     <string name="media_projection_entry_cast_permission_dialog_warning_entire_screen">When you’re casting your entire screen, anything on your screen is visible. So be careful with things like passwords, payment details, messages, photos, and audio and video.</string>
     <!-- System casting media projection permission warning for capturing a single app when SysUI casting requests it. [CHAR LIMIT=350] -->
@@ -1604,6 +1670,9 @@
 
     <!-- Disclosure at the bottom of Quick Settings that indicates that parental controls are enabled. [CHAR LIMIT=100] -->
     <string name="quick_settings_disclosure_parental_controls">This device is managed by your parent</string>
+
+    <!-- Disclosure at the bottom of Quick Settings that indicates that some of the settings changes are protected by a PIN. [CHAR LIMIT=100] -->
+    <string name="quick_settings_disclosure_pin_protection">Some device settings are PIN protected.</string>
 
     <!-- Disclosure at the bottom of Quick Settings that indicates that the user's device belongs to their organization, and the organization can monitor network traffic on that device. [CHAR LIMIT=100] -->
     <string name="quick_settings_disclosure_management_monitoring">Your organization owns this device and may monitor network traffic</string>
@@ -1729,6 +1798,9 @@
     <!-- Dialog that a user can access via Quick Settings. [CHAR LIMIT=NONE]-->
     <string name="monitoring_description_parental_controls">This device is managed by your parent. Your parent can see and manage information such as the apps you use, your location, and your screen time.</string>
 
+    <!-- Dialog that a user can access via Quick Settings. [CHAR LIMIT=NONE]-->
+    <string name="monitoring_description_pin_protection">Some controls on your device, like daily limits \u0026 downtime, can only be changed with a PIN.</string>
+
     <!-- Name for a generic legacy VPN connection [CHAR LIMIT=20] -->
     <string name="legacy_vpn_name">VPN</string>
 
@@ -1740,6 +1812,9 @@
 
     <!-- Indication on the keyguard that appears after the device is locked by adaptive auth. [CHAR LIMIT=60] -->
     <string name="keyguard_indication_after_adaptive_auth_lock">Device locked\nFailed authentication</string>
+
+    <!-- Indication on the keyguard that appears after the device is locked by adaptive auth. [CHAR LIMIT=60] -->
+    <string name="keyguard_indication_after_watch_disconnected">Locked by your watch</string>
 
     <!-- Accessibility string for current zen mode and selected exit condition. A template that simply concatenates existing mode string and the current condition description. [CHAR LIMIT=20] -->
     <string name="zen_mode_and_condition"><xliff:g id="zen_mode" example="Priority interruptions only">%1$s</xliff:g>. <xliff:g id="exit_condition" example="For one hour">%2$s</xliff:g></string>
@@ -1884,6 +1959,9 @@
 
     <string name="volume_dialog_ringer_guidance_ring">Calls and notifications will ring (<xliff:g id="volume level" example="56">%1$s</xliff:g>)</string>
 
+    <!-- Content description for accessibility: audio sharing guest device volume row on volume dialog [CHAR LIMIT=NONE] -->
+    <string name="volume_dialog_guest_device_volume_description">Guest device volume</string>
+
     <!-- An audible a11y label for a button, that opens settings when clicked [CHAR_LIMIT=NONE] -->
     <string name="volume_panel_enter_media_output_settings">Enter output settings</string>
     <!-- An audible a11y state description for a button, that expands volume sliders menu [CHAR_LIMIT=NONE] -->
@@ -1972,6 +2050,9 @@
     <!-- Name of the supervision status bar icon. -->
     <string name="status_bar_supervision">Parental controls</string>
 
+    <!-- Name of the supervision status bar icon when pin is set. -->
+    <string name="status_bar_pin_supervision">PIN protection for some device controls</string>
+
     <!-- Description for adding  a quick settings tile -->
 
     <!-- Name of a quick settings tile controlled by broadcast -->
@@ -2006,6 +2087,8 @@
     <string name="satellite_connected_carrier_text">Satellite SOS</string>
     <!-- Text displayed indicating that the user might be able to use satellite SOS. -->
     <string name="satellite_emergency_only_carrier_text">Emergency calls or SOS only</string>
+    <!-- Text displayed indicating current network is satellite network. -->
+    <string name="satellite_network_title_text">Satellite network</string>
 
     <!-- Content description skeleton. Input strings should be carrier name and signal bar description [CHAR LIMIT=NONE]-->
     <string name="accessibility_phone_string_format"><xliff:g id="carrier_name" example="Carrier Name">%1$s</xliff:g>, <xliff:g id="signal_strength_description" example="two bars">%2$s</xliff:g>.</string>
@@ -2060,6 +2143,33 @@
 
     <!-- [CHAR LIMIT=NONE] Notification camera based rotation enabled description -->
     <string name="rotation_lock_camera_rotation_on">On - Face-based</string>
+
+    <!-- [CHAR LIMIT=100] Notification bundle header inline settings title -->
+    <string name="notification_guts_bundle_title">Silence and bundle</string>
+
+    <!-- [CHAR LIMIT=100] Notification bundle individual notification inline settings title -->
+    <string name="notification_guts_single_bundle_notif_title">Use Notification Organizer</string>
+
+    <!-- [CHAR LIMIT=100] Notification bundle inline settings summary for an individual notification -->
+    <string name="notification_guts_bundle_summary">For <xliff:g id="app_name" example="YouTube">%1$s</xliff:g></string>
+
+    <!-- [CHAR LIMIT=100] Notification bundle inline settings summary -->
+    <string name="notification_guts_promotions_summary">Sales, new features, and more</string>
+    <!-- [CHAR LIMIT=100] Notification bundle inline settings summary -->
+    <string name="notification_guts_news_summary">Top stories, editorials, and more</string>
+    <!-- [CHAR LIMIT=100] Notification bundle inline settings summary -->
+    <string name="notification_guts_social_summary">Likes, posts, and more</string>
+    <!-- [CHAR LIMIT=100] Notification bundle inline settings summary -->
+    <string name="notification_guts_recs_summary">Newsletters, recommended media, and more</string>
+
+    <!-- Notification summaries onboarding affordance turn on button [CHAR LIMIT=40]-->
+    <string name="notification_onboarding_summaries_turn_on">Turn on</string>
+
+    <!--  Notification summaries onboarding affordance message [CHAR LIMIT=NONE]-->
+    <string name="notification_onboarding_summaries_message">Your longer conversations can now be summarized to give you quick recaps</string>
+
+    <!--  Notification bundles onboarding affordance  [CHAR LIMIT=NONE]-->
+    <string name="notification_onboarding_bundles_message">Notification organizer bundles and silences lower priority notifications</string>
 
     <!-- Notification Inline controls: button to dismiss the blocking helper [CHAR_LIMIT=20] -->
     <string name="inline_done_button">Done</string>
@@ -2125,16 +2235,16 @@
     <string name="notification_inline_dismiss">Dismiss</string>
 
     <!-- [CHAR LIMIT=30] Text shown in button used to prevent app from showing Live Updates, for this notification and all future ones -->
-    <string name="notification_inline_disable_promotion">Don\'t show as pinned</string>
+    <string name="notification_inline_disable_promotion">Turn off</string>
 
     <!-- [CHAR LIMIT=30] Text shown in button used to prevent app from showing Live Updates, for this notification and all future ones -->
     <string name="notification_inline_disable_promotion_button">Block Live Updates from this app</string>
 
     <!-- Text accompanying the "Show live updates" switch explaining the purpose of the setting -->
-    <string name="live_notifications_title">Showing Live Updates</string>
+    <string name="live_notifications_title">Live updates</string>
 
     <!-- Text accompanying the "Show live updates" switch explaining the purpose of the setting -->
-    <string name="live_notifications_desc">Pinned notifications display live info from apps, and always appear on the status bar and lock screen</string>
+    <string name="live_notifications_desc">When turned off, ongoing notifications from this app won\'t be promoted on your lock screen and status bar</string>
 
     <!-- Notification: Control panel: Label that displays when the app's notifications cannot be blocked. -->
     <string name="notification_unblockable_desc">These notifications can\'t be modified.</string>
@@ -2230,6 +2340,8 @@
         few {# minutes}
         other {# minutes}
     }</string>
+    <!-- Notification: Promoted Ongoing specific long click [CHAR LIMIT=NONE] -->
+    <string name="notification_promoted_ongoing_long_click">to open demotion menu</string>
 
     <!-- Summary of battery saver not available [CHAR LIMIT=NONE] -->
 
@@ -2557,6 +2669,9 @@
     <!-- Label for header of customize QS [CHAR LIMIT=60] -->
     <string name="drag_to_rearrange_tiles">Hold and drag to rearrange tiles</string>
 
+    <!-- Label for header of customize QS to indicate that tiles can be selected to be edited [CHAR LIMIT=60] -->
+    <string name="select_to_rearrange_tiles">Select tiles to rearrange and resize</string>
+
     <!-- Label for placing tiles in edit mode for QS [CHAR LIMIT=60] -->
     <string name="tap_to_position_tile">Tap to position tile</string>
 
@@ -2571,6 +2686,9 @@
 
     <!-- Title for QS Edit mode screen [CHAR LIMIT=30] -->
     <string name="qs_edit_tiles">Edit tiles</string>
+
+    <!-- Tooltip for the edit mode button indicating that tiles can be resized [CHAR LIMIT=60] -->
+    <string name="qs_edit_mode_tooltip">Resize Quick Settings tiles</string>
 
     <!-- SysUI Tuner: Options for how clock is displayed [CHAR LIMIT=NONE] -->
     <string name="tuner_time">Time</string>
@@ -2598,8 +2716,11 @@
     <!-- Accessibility description of action to toggle QS tile size on click. It will read as "Double-tap to toggle the tile's size" in screen readers [CHAR LIMIT=NONE] -->
     <string name="accessibility_qs_edit_toggle_tile_size_action">toggle the tile\'s size</string>
 
-    <!-- Accessibility description of action to remove QS tile on click. It will read as "Double-tap to remove tile" in screen readers [CHAR LIMIT=NONE] -->
-    <string name="accessibility_qs_edit_remove_tile_action">remove tile</string>
+    <!-- Accessibility description of action to remove QS tile on click. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_qs_edit_remove_tile_action">Remove tile</string>
+
+    <!-- Accessibility description of action to place the QS tile on click. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_qs_edit_place_tile_action">Place tile</string>
 
     <!-- Accessibility description of action to select the QS tile to place on click. It will read as "Double-tap to toggle placement mode" in screen readers [CHAR LIMIT=NONE] -->
     <string name="accessibility_qs_edit_toggle_placement_mode">toggle placement mode</string>
@@ -2607,8 +2728,11 @@
     <!-- Accessibility description of action to toggle the QS tile selection. It will read as "Double-tap to toggle selection" in screen readers [CHAR LIMIT=NONE] -->
     <string name="accessibility_qs_edit_toggle_selection">toggle selection</string>
 
-    <!-- Accessibility action of action to add QS tile to end. It will read as "Double-tap to add tile to the last position" in screen readers [CHAR LIMIT=NONE] -->
-    <string name="accessibility_qs_edit_tile_add_action">add tile to the last position</string>
+    <!-- Accessibility action of action to add QS tile to end. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_qs_edit_tile_add_action">Add tile to the last position</string>
+
+    <!-- Accessibility action of action to add a named QS tile to the end. [CHAR LIMIT=NONE] -->
+    <string name="accessibility_qs_edit_named_tile_add_action">Add <xliff:g id="name" example="Internet">%1$s</xliff:g> to the last position</string>
 
     <!-- Accessibility action for context menu to move QS tile [CHAR LIMIT=NONE] -->
     <string name="accessibility_qs_edit_tile_start_move">Move tile</string>
@@ -2677,6 +2801,14 @@
 
     <!-- accessibility label for paging indicator in quick settings [CHAR LIMITi=NONE] -->
     <string name="accessibility_quick_settings_page">Page <xliff:g name="current_page" example="1">%1$d</xliff:g> of <xliff:g name="num_pages" example="2">%2$d</xliff:g></string>
+
+    <!-- Strings for the dialog to enable accessibility services in key gestures -->
+    <!-- Text for the dialog title. -->
+    <string name="accessibility_key_gesture_dialog_title" translatable="false">Turn on <xliff:g name="feature_name" example="Magnification">%1$s</xliff:g>?</string>
+    <!-- Text for showing inside the dialog.-->
+    <string name="accessibility_key_gesture_dialog_content" translatable="false">Action + <xliff:g name="secondary_key" example="Alt">%1$s</xliff:g> + <xliff:g name="key_code" example="M">%2$s</xliff:g> is the keyboard shortcut to use <xliff:g name="feature_name" example="Magnification">%3$s</xliff:g>. <xliff:g name="feature_intro" example="Magnification intro">%4$s</xliff:g></string>
+    <!-- The prefix string for the magnification intro -->
+    <string name="accessibility_key_gesture_dialog_magnifier_intro" translatable="false">This allows you to quickly zoom in on the screen to make content larger.</string>
 
     <!-- Plugin control section of the tuner. Non-translatable since it should
          not appear on production builds ever. -->
@@ -2907,7 +3039,7 @@
     <string name="ongoing_privacy_dialog_a11y_title">In use</string>
 
     <!-- Content description for ongoing privacy chip. Use with multiple apps [CHAR LIMIT=NONE]-->
-    <string name="ongoing_privacy_chip_content_multiple_apps">Applications are using your <xliff:g id="types_list" example="camera, location">%s</xliff:g>.</string>
+    <string name="ongoing_privacy_chip_content_multiple_apps"><xliff:g id="types_list" example="camera, location">%s</xliff:g> in use.</string>
 
     <!-- Separator for types. Include spaces before and after if needed [CHAR LIMIT=10] -->
     <string name="ongoing_privacy_dialog_separator">,\u0020</string>
@@ -3006,6 +3138,10 @@
 
     <!-- Title of the magnification option button allow diagonal scrolling [CHAR LIMIT=NONE]-->
     <string name="accessibility_allow_diagonal_scrolling">Allow diagonal scrolling</string>
+    <!-- Title of the magnification option button allow magnify typing [CHAR LIMIT=NONE]-->
+    <string name="accessibility_magnify_typing">Follow typing</string>
+    <!-- Title of the magnification option button allow magnify keyboard [CHAR LIMIT=NONE]-->
+    <string name="accessibility_magnify_keyboard">Magnify keyboard</string>
     <!-- Title of the magnification option button Resize [CHAR LIMIT=NONE]-->
     <string name="accessibility_resize">Resize</string>
     <!-- Title of the magnification option button Change type [CHAR LIMIT=NONE]-->
@@ -3228,17 +3364,6 @@
     <!-- Description for button in media controls. Used when media is connecting to a remote device (via something like chromecast). Pressing button does nothing [CHAR_LIMIT=NONE] -->
     <string name="controls_media_button_connecting">Connecting</string>
 
-    <!-- Title for Smartspace recommendation card within media controls. The "Play" means the action to play a media [CHAR_LIMIT=10] -->
-    <string name="controls_media_smartspace_rec_title">Play</string>
-    <!-- Description for Smartspace recommendation card within media controls [CHAR_LIMIT=NONE] -->
-    <string name="controls_media_smartspace_rec_description">Open <xliff:g id="app_label" example="Spotify">%1$s</xliff:g></string>
-    <!-- Description for Smartspace recommendation's media item, including information for the media's title, the artist, and source app [CHAR LIMIT=NONE]-->
-    <string name="controls_media_smartspace_rec_item_description">Play <xliff:g id="song_name" example="Daily mix">%1$s</xliff:g> by <xliff:g id="artist_name" example="Various artists">%2$s</xliff:g> from <xliff:g id="app_label" example="Spotify">%3$s</xliff:g></string>
-    <!-- Description for Smartspace recommendation's media item which doesn't have artist info, including information for the media's title and the source app [CHAR LIMIT=NONE]-->
-    <string name="controls_media_smartspace_rec_item_no_artist_description">Play <xliff:g id="song_name" example="Daily mix">%1$s</xliff:g> from <xliff:g id="app_label" example="Spotify">%2$s</xliff:g></string>
-    <!-- Header title for Smartspace recommendation card within media controls. [CHAR_LIMIT=30] -->
-    <string name="controls_media_smartspace_rec_header">For You</string>
-
     <!--- ****** Media tap-to-transfer ****** -->
     <!-- Text for a button to undo the media transfer. [CHAR LIMIT=20] -->
     <string name="media_transfer_undo">Undo</string>
@@ -3290,8 +3415,8 @@
     <string name="media_output_dialog_single_device">1 device selected</string>
     <!-- Summary for media output group with the active device count [CHAR LIMIT=NONE] -->
     <string name="media_output_dialog_multiple_devices"><xliff:g id="count" example="2">%1$d</xliff:g> devices selected</string>
-    <!-- Summary for disconnected status [CHAR LIMIT=50] -->
-    <string name="media_output_dialog_disconnected">(disconnected)</string>
+    <!-- Accessibility label for media output item connected state [CHAR LIMIT=50] -->
+    <string name="media_output_item_connected_state">Connected</string>
     <!-- Summary for connecting error message [CHAR LIMIT=NONE] -->
     <string name="media_output_dialog_connect_failed">Can\'t switch. Tap to try again.</string>
     <!-- Title for connecting item [CHAR LIMIT=60] -->
@@ -3312,6 +3437,8 @@
     <string name="media_output_group_title_connected_speakers">Connected speakers</string>
     <!-- Title for Speakers and Displays group. [CHAR LIMIT=NONE] -->
     <string name="media_output_group_title_speakers_and_displays">Speakers &amp; Displays</string>
+    <!-- Title for the Suggested section in the Output Switcher device list. [CHAR LIMIT=NONE] -->
+    <string name="media_output_group_title_suggested">Suggested</string>
     <!-- Title for Suggested Devices group. [CHAR LIMIT=NONE] -->
     <string name="media_output_group_title_suggested_device">Suggested Devices</string>
     <!-- Title for input device group. [CHAR LIMIT=NONE] -->
@@ -3468,6 +3595,10 @@
     <string name="ongoing_call_content_description">Ongoing call</string>
     <!-- Content description for a chip in the status bar showing that the user currently has an ongoing activity. [CHAR LIMIT=NONE]-->
     <string name="ongoing_notification_extra_content_description">Ongoing</string>
+    <!-- Custom accessibility action text to tell that user that tapping on the status bar chip will show/expand the notification associated with that chip. [CHAR LIMIT=NONE]-->
+    <string name="status_bar_chip_custom_a11y_action_expand_notification">expand notification</string>
+    <!-- Custom accessibility action text to tell that user that tapping on the status bar chip will hide/collapse the notification associated with that chip. [CHAR LIMIT=NONE]-->
+    <string name="status_bar_chip_custom_a11y_action_collapse_notification">collapse notification</string>
 
     <!-- Provider Model: Default title of the mobile network in the mobile layout. [CHAR LIMIT=50] -->
     <string name="mobile_data_settings_title">Mobile data</string>
@@ -3594,8 +3725,6 @@
     <string name="dream_overlay_status_bar_camera_off">Camera is off</string>
     <!-- Content description for the mic off icon in the dream overlay status bar [CHAR LIMIT=NONE] -->
     <string name="dream_overlay_status_bar_mic_off">Mic is off</string>
-    <!-- Content description for the camera and mic off icon in the dream overlay status bar [CHAR LIMIT=NONE] -->
-    <string name="dream_overlay_status_bar_camera_mic_off">Camera and mic are off</string>
     <!-- Content description for the notifications indicator icon in the dream overlay status bar [CHAR LIMIT=NONE] -->
     <string name="dream_overlay_status_bar_notification_indicator">{count, plural,
     =1 {# notification}
@@ -4040,7 +4169,7 @@
     <!-- Notification title for launching keyboard tutorial [CHAR_LIMIT=100] -->
     <string name="launch_keyboard_tutorial_notification_title">Navigate using your keyboard</string>
     <!-- Notification text for launching keyboard tutorial [CHAR_LIMIT=100] -->
-    <string name="launch_keyboard_tutorial_notification_content">Learn keyboards shortcuts</string>
+    <string name="launch_keyboard_tutorial_notification_content">Learn keyboard shortcuts</string>
 
     <!-- Notification title for launching touchpad tutorial [CHAR_LIMIT=100] -->
     <string name="launch_touchpad_tutorial_notification_title">Navigate using your touchpad</string>
@@ -4050,7 +4179,7 @@
     <!-- Notification title for launching keyboard tutorial [CHAR_LIMIT=100] -->
     <string name="launch_keyboard_touchpad_tutorial_notification_title">Navigate using your keyboard and touchpad</string>
     <!-- Notification text for launching keyboard tutorial [CHAR_LIMIT=100] -->
-    <string name="launch_keyboard_touchpad_tutorial_notification_content">Learn touchpad gestures, keyboards shortcuts, and more</string>
+    <string name="launch_keyboard_touchpad_tutorial_notification_content">Learn touchpad gestures, keyboard shortcuts, and more</string>
 
     <!-- TOUCHPAD TUTORIAL-->
     <!-- Label for button opening tutorial for back gesture on touchpad [CHAR LIMIT=NONE] -->
@@ -4202,9 +4331,13 @@
     <string name="qs_edit_mode_category_privacy">
         Privacy
     </string>
-    <!-- Label for category in QS Edit mode list of tiles, for tiles that are provided by an app, e.g. Calculator. [CHAR LIMIT=NONE] -->
+    <!-- Label for category in QS Edit mode list of tiles, for tiles that are provided by a system app, e.g. Calculator. [CHAR LIMIT=NONE] -->
+    <string name="qs_edit_mode_category_providedBySystemApps">
+        From system apps
+    </string>
+    <!-- Label for category in QS Edit mode list of tiles, for tiles that are provided by a third party app. [CHAR LIMIT=NONE] -->
     <string name="qs_edit_mode_category_providedByApps">
-        Provided by apps
+        From apps you installed
     </string>
     <!-- Label for category in QS Edit mode list of tiles, for tiles that are related to the display, e.g. Dark theme. [CHAR LIMIT=NONE] -->
     <string name="qs_edit_mode_category_display">
@@ -4231,4 +4364,19 @@
 
     <!-- Template that joins disabled message with the label for the voice over. [CHAR LIMIT=NONE] -->
     <string name="volume_slider_disabled_message_template"><xliff:g example="Notification" id="stream_name">%1$s</xliff:g>, <xliff:g example="Disabled because ring is muted" id="disabled_message">%2$s</xliff:g></string>
+
+    <!-- Description for the Underlay close button. The Underlay view appears on the bottom of the screen and shows some AI hints. The button will dismiss the underlay view. [CHAR LIMIT=NONE] -->
+    <string name="underlay_close_button_content_description">Close</string>
+
+    <!--
+    Content of user education tooltip shown to teach the user that they can swipe down from the top
+    left edge of the display to expand the notification shade panel.
+    -->
+    <string name="dual_shade_educational_tooltip_notifs">Swipe from the top left to open notifications</string>
+
+    <!--
+    Content of user education tooltip shown to teach the user that they can swipe down from the top
+    right edge of the display to expand the Quick Settings shade panel.
+    -->
+    <string name="dual_shade_educational_tooltip_qs">Swipe from the top right to open Quick Settings</string>
 </resources>

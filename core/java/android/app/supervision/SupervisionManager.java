@@ -22,6 +22,7 @@ import static android.Manifest.permission.QUERY_USERS;
 import static android.permission.flags.Flags.FLAG_ENABLE_SYSTEM_SUPERVISION_ROLE_BEHAVIOR;
 
 import android.annotation.FlaggedApi;
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.annotation.SystemApi;
@@ -44,6 +45,41 @@ import android.os.RemoteException;
 @SystemApi
 @FlaggedApi(Flags.FLAG_SUPERVISION_MANAGER_APIS)
 public class SupervisionManager {
+    /**
+     * Listener for supervision state changes.
+     *
+     * @hide
+     */
+    public abstract static class SupervisionListener {
+        protected final ISupervisionListener mListener =
+                new ISupervisionListener.Stub() {
+                    @Override
+                    public void onSetSupervisionEnabled(int userId, boolean enabled) {
+                        if (enabled) {
+                            onSupervisionEnabled(userId);
+                        } else {
+                            onSupervisionDisabled(userId);
+                        }
+                    }
+                };
+
+        /**
+         * Called after supervision has been enabled for a given user.
+         *
+         * @param userId Int ID of the user for whom supervision was enabled.
+         * @hide
+         */
+        public abstract void onSupervisionEnabled(@UserIdInt int userId);
+
+        /**
+         * Called after supervision has been enabled for a given user.
+         *
+         * @param userId Int ID of the user for whom supervision was enabled.
+         * @hide
+         */
+        public abstract void onSupervisionDisabled(@UserIdInt int userId);
+    }
+
     private final Context mContext;
     @Nullable private final ISupervisionManager mService;
 
@@ -59,6 +95,8 @@ public class SupervisionManager {
      *
      * @hide
      */
+    @SystemApi
+    @FlaggedApi(Flags.FLAG_SUPERVISION_MANAGER_APIS)
     public static final String ACTION_ENABLE_SUPERVISION =
             "android.app.supervision.action.ENABLE_SUPERVISION";
 
@@ -74,6 +112,8 @@ public class SupervisionManager {
      *
      * @hide
      */
+    @SystemApi
+    @FlaggedApi(Flags.FLAG_SUPERVISION_MANAGER_APIS)
     public static final String ACTION_DISABLE_SUPERVISION =
             "android.app.supervision.action.DISABLE_SUPERVISION";
 
@@ -105,7 +145,8 @@ public class SupervisionManager {
     public Intent createConfirmSupervisionCredentialsIntent() {
         if (mService != null) {
             try {
-                Intent result = mService.createConfirmSupervisionCredentialsIntent();
+                Intent result =
+                        mService.createConfirmSupervisionCredentialsIntent(mContext.getUserId());
                 if (result != null) {
                     result.prepareToEnterProcess(
                             Intent.LOCAL_FLAG_FROM_SYSTEM, mContext.getAttributionSource());
@@ -195,11 +236,9 @@ public class SupervisionManager {
         return null;
     }
 
-
     /**
      * @return {@code true} if bypassing the qualification is allowed for the specified role based
-     * on the current state of the device.
-     *
+     *     on the current state of the device.
      * @hide
      */
     @SystemApi
@@ -214,5 +253,86 @@ public class SupervisionManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Sets the supervision recovery information.
+     *
+     * @hide
+     */
+    public void setSupervisionRecoveryInfo(SupervisionRecoveryInfo recoveryInfo) {
+        if (mService != null) {
+            try {
+                mService.setSupervisionRecoveryInfo(recoveryInfo);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        }
+    }
+
+    /**
+     * Returns the supervision recovery information or null if recovery is not setup.
+     *
+     * @hide
+     */
+    @Nullable
+    public SupervisionRecoveryInfo getSupervisionRecoveryInfo() {
+        if (mService != null) {
+            try {
+                return mService.getSupervisionRecoveryInfo();
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns whether supervision credentials are set up.
+     *
+     * @hide
+     */
+    @RequiresPermission(anyOf = {MANAGE_USERS, QUERY_USERS})
+    public boolean hasSupervisionCredentials() {
+        if (mService != null) {
+            try {
+                return mService.hasSupervisionCredentials();
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Registers a listener to be notified on supervision state changes.
+     *
+     * @param listener Listener to be registered. Can't be null.
+     * @hide
+     */
+    public void registerSupervisionListener(@NonNull SupervisionListener listener) {
+        if (mService != null) {
+            try {
+                mService.registerSupervisionListener(listener.mListener);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        }
+    }
+
+    /**
+     * Unregisters a listener that was previously registered.
+     *
+     * @param listener Listener to be unregistered. Can't be null.
+     * @hide
+     */
+    public void unregisterSupervisionListener(@NonNull SupervisionListener listener) {
+        if (mService != null) {
+            try {
+                mService.unregisterSupervisionListener(listener.mListener);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        }
     }
 }

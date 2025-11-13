@@ -139,7 +139,7 @@
     <string name="bluetooth_profile_hid" msgid="2969922922664315866">"Peranti input"</string>
     <string name="bluetooth_profile_pan" msgid="1006235139308318188">"Akses Internet"</string>
     <string name="bluetooth_profile_pbap" msgid="2103406516858653017">"Benarkan akses kepada kenalan dan sejarah panggilan"</string>
-    <string name="bluetooth_profile_pbap_summary" msgid="402819589201138227">"Maklumat digunakan untuk makluman panggilan dan banyak lagi"</string>
+    <string name="bluetooth_profile_pbap_summary" msgid="402819589201138227">"Maklumat akan digunakan untuk pengumuman panggilan dan lain-lain"</string>
     <string name="bluetooth_profile_pan_nap" msgid="7871974753822470050">"Perkongsian sambungan Internet"</string>
     <string name="bluetooth_profile_map" msgid="8907204701162107271">"Mesej Teks"</string>
     <string name="bluetooth_profile_sap" msgid="8304170950447934386">"Akses SIM"</string>
@@ -361,7 +361,7 @@
     <string name="dev_settings_warning_title" msgid="8251234890169074553">"Benarkan tetapan pembangunan?"</string>
     <string name="dev_settings_warning_message" msgid="37741686486073668">"Tetapan ini adalah untuk penggunaan pembangunan sahaja. Peranti dan aplikasi yang terdapat padanya boleh rosak atau tidak berfungsi dengan betul."</string>
     <string name="verify_apps_over_usb_title" msgid="6031809675604442636">"Sahkan apl melalui USB"</string>
-    <string name="verify_apps_over_usb_summary" msgid="1317933737581167839">"Semak apl yang dipasang melalui ADB/ADT untuk tingkah laku yang berbahaya."</string>
+    <string name="verify_apps_over_usb_summary" msgid="1317933737581167839">"Semak kehadiran tingkah laku yang berbahaya pada apl yang dipasang melalui ADB/ADT."</string>
     <string name="bluetooth_show_devices_without_names_summary" msgid="780964354377854507">"Peranti Bluetooth tanpa nama (alamat MAC sahaja) akan dipaparkan"</string>
     <string name="bluetooth_disable_absolute_volume_summary" msgid="2006309932135547681">"Lumpuhkan ciri kelantangan mutlak Bluetooth jika ada masalah kelantangan pada peranti kawalan jauh seperti kelantangan yang sangat kuat atau tidak terkawal."</string>
     <string name="bluetooth_enable_gabeldorsche_summary" msgid="2054730331770712629">"Mendayakan tindanan ciri Gabeldorche Bluetooth."</string>
@@ -375,7 +375,7 @@
     <string name="hdcp_checking_dialog_title" msgid="7691060297616217781">"Ttpkn tngkh laku smk HDCP"</string>
     <string name="debug_debugging_category" msgid="535341063709248842">"Menyahpepijat"</string>
     <string name="debug_app" msgid="8903350241392391766">"Pilih apl penyahpepijat"</string>
-    <string name="debug_app_not_set" msgid="1934083001283807188">"Tiada aplikasi penyahpepijat ditentukan"</string>
+    <string name="debug_app_not_set" msgid="1934083001283807188">"Tiada aplikasi penyahpepijat yang ditetapkan"</string>
     <string name="debug_app_set" msgid="6599535090477753651">"Menyahpepijat aplikasi: <xliff:g id="APP_NAME">%1$s</xliff:g>"</string>
     <string name="select_application" msgid="2543228890535466325">"Pilih aplikasi"</string>
     <string name="no_application" msgid="9038334538870247690">"Tiada apa-apa"</string>
@@ -399,10 +399,10 @@
     <string name="touchpad_visualizer_summary" msgid="4056080018119847449">"Tindanan skrin memaparkan data input pad sentuh dan gerak isyarat yang dikenali"</string>
     <string name="show_screen_updates" msgid="2078782895825535494">"Tunjuk kemaskinian permukaan"</string>
     <string name="show_screen_updates_summary" msgid="2126932969682087406">"Denyar permukaan tetingkap apabila dikemas kini"</string>
-    <string name="show_hw_screen_updates" msgid="2021286231267747506">"Tunjuk kemaskinian paparan"</string>
+    <string name="show_hw_screen_updates" msgid="2021286231267747506">"Tunjukkan kemaskinian paparan"</string>
     <string name="show_hw_screen_updates_summary" msgid="3539770072741435691">"Denyar paparan dalam tetingkap apabila dilukis"</string>
-    <string name="show_hw_layers_updates" msgid="5268370750002509767">"Tunjukkan kemas kini perkakasan"</string>
-    <string name="show_hw_layers_updates_summary" msgid="5850955890493054618">"Denyar hijau lapisan perkakasan yang dikemas kini"</string>
+    <string name="show_hw_layers_updates" msgid="5268370750002509767">"Tunjukkan kemaskinian perkakasan"</string>
+    <string name="show_hw_layers_updates_summary" msgid="5850955890493054618">"Denyar hijau lapisan perkakasan yang dikemaskinikan"</string>
     <string name="debug_hw_overdraw" msgid="8944851091008756796">"Nyahpepijat lebih lukis GPU"</string>
     <string name="disable_overlays" msgid="4206590799671557143">"Lumpuhkan tindihan HW"</string>
     <string name="disable_overlays_summary" msgid="1954852414363338166">"Sentiasa gunakan GPU untuk komposit skrin"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> yang lalu"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> lagi"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Paling kecil"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Lebih kecil"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Kecil"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"Lalai"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Besar"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Lebih besar"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Terbesar"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Lebih besar"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Amat Besar"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Teramat Besar"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Terbesar"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Tersuai (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Menu"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Mskkn kta laluan utk ttpn sml kilang dlm mod demo"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{1 peranti disambungkan}other{# peranti disambungkan}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Lagi masa."</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Kurang masa."</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Pembesaran"</string>
     <string name="cancel" msgid="5665114069455378395">"Batal"</string>
     <string name="next" msgid="2699398661093607009">"Seterusnya"</string>
     <string name="back" msgid="5554327870352703710">"Kembali"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"Jika anda siarkan <xliff:g id="SWITCHAPP">%1$s</xliff:g> atau tukarkan output, siaran semasa anda akan berhenti"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"Siarkan <xliff:g id="SWITCHAPP">%1$s</xliff:g>"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Tukar output"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"Animasi kembali ramalan"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"Dayakan animasi sistem untuk kembali ramalan."</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"Tetapan ini mendayakan animasi sistem untuk animasi gerak isyarat ramalan. Animasi sistem memerlukan tetapan enableOnBackInvokedCallback untuk setiap apl kepada benar dalam fail manifes."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="not_specified" msgid="5423502443185110328">"Tidak dinyatakan"</string>
     <string name="neuter" msgid="2075249330106127310">"Neuter"</string>

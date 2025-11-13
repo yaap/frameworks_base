@@ -45,6 +45,7 @@ import com.android.systemui.plugins.DarkIconDispatcher.DarkReceiver;
 import com.android.systemui.res.R;
 import com.android.systemui.shade.ShadeExpandsOnStatusBarLongPress;
 import com.android.systemui.shade.StatusBarLongPressGestureDetector;
+import com.android.systemui.statusbar.core.StatusBarConnectedDisplays;
 import com.android.systemui.statusbar.phone.userswitcher.StatusBarUserSwitcherContainer;
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.user.ui.binder.StatusBarUserChipViewBinder;
@@ -52,6 +53,7 @@ import com.android.systemui.user.ui.viewmodel.StatusBarUserChipViewModel;
 import com.android.systemui.util.leak.RotationUtils;
 
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 
 public class PhoneStatusBarView extends FrameLayout {
     private static final String TAG = "PhoneStatusBarView";
@@ -77,6 +79,8 @@ public class PhoneStatusBarView extends FrameLayout {
     private int mStatusBarHeight;
     @Nullable
     private Gefingerpoken mTouchEventHandler;
+    @Nullable
+    private BooleanSupplier mIsStatusBarInteractiveSupplier;
     @Nullable
     private HasCornerCutoutFetcher mHasCornerCutoutFetcher;
     @Nullable
@@ -104,6 +108,10 @@ public class PhoneStatusBarView extends FrameLayout {
 
     void setTouchEventHandler(Gefingerpoken handler) {
         mTouchEventHandler = handler;
+    }
+
+    void setIsStatusBarInteractiveSupplier(BooleanSupplier isStatusBarInteractiveSupplier) {
+        mIsStatusBarInteractiveSupplier = isStatusBarInteractiveSupplier;
     }
 
     void setHasCornerCutoutFetcher(@NonNull HasCornerCutoutFetcher cornerCutoutFetcher) {
@@ -248,6 +256,30 @@ public class PhoneStatusBarView extends FrameLayout {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean dispatchHoverEvent(MotionEvent event) {
+        if (mIsStatusBarInteractiveSupplier != null
+                && !mIsStatusBarInteractiveSupplier.getAsBoolean()) {
+            // Consume the event to prevent any calls to #onHoverEvent on status bar view or its
+            // components, essentially making the status bar and its children completely
+            // non-interactive.
+            return true;
+        }
+        return super.dispatchHoverEvent(event);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (mIsStatusBarInteractiveSupplier != null
+                && !mIsStatusBarInteractiveSupplier.getAsBoolean()) {
+            // Consume the event to prevent any calls to #onTouchEvent on status bar view or its
+            // components, essentially making the status bar and its children completely
+            // non-interactive.
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override
@@ -398,7 +430,8 @@ public class PhoneStatusBarView extends FrameLayout {
     }
 
     private void updateWindowHeight() {
-        if (Flags.statusBarStopUpdatingWindowHeight()) {
+        if (StatusBarConnectedDisplays.isEnabled()) {
+            // Handled directly from StatusBarWindowControllerImpl (for each display)
             return;
         }
         mStatusBarWindowControllerStore.getDefaultDisplay().refreshStatusBarHeight();

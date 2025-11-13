@@ -17,7 +17,6 @@
 package com.android.server.am;
 
 import static com.android.server.am.ActivityManagerDebugConfig.TAG_AM;
-import static com.android.server.am.ProcessList.UNKNOWN_ADJ;
 
 import android.annotation.Nullable;
 import android.app.IServiceConnection;
@@ -25,6 +24,7 @@ import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.os.SystemClock;
+import android.util.IndentingPrintWriter;
 import android.util.Slog;
 import android.util.proto.ProtoOutputStream;
 import android.util.proto.ProtoUtils;
@@ -38,13 +38,15 @@ import java.io.PrintWriter;
 /**
  * Description of a single binding to a service.
  */
-final class ConnectionRecord implements OomAdjusterModernImpl.Connection{
+final class ConnectionRecord implements OomAdjusterImpl.Connection{
+    BoundServiceSession mBoundServiceSession;  // The associated bound service session if created.
     final AppBindRecord binding;    // The application/service binding.
     final ActivityServiceConnectionsHolder<ConnectionRecord> activity;  // If non-null, the owning activity.
     final IServiceConnection conn;  // The client connection.
     private final long flags;                // Binding options.
     final int clientLabel;          // String resource labeling this client.
     final PendingIntent clientIntent; // How to launch the client.
+    private boolean mOngoingCalls;  // Any ongoing transactions over this connection?
     final int clientUid;            // The identity of this connection's client
     final String clientProcessName; // The source process of this connection's client
     final String clientPackageName; // The source package of this connection's client
@@ -108,6 +110,13 @@ final class ConnectionRecord implements OomAdjusterModernImpl.Connection{
         }
         pw.println(prefix + "conn=" + conn.asBinder()
                 + " flags=0x" + Long.toHexString(flags));
+
+        pw.print(prefix);
+        pw.print("ongoingCalls=");
+        pw.println(mOngoingCalls);
+        if (mBoundServiceSession != null) {
+            mBoundServiceSession.dump(new IndentingPrintWriter(pw, "  ", prefix));
+        }
     }
 
     ConnectionRecord(AppBindRecord _binding,
@@ -128,12 +137,19 @@ final class ConnectionRecord implements OomAdjusterModernImpl.Connection{
         aliasComponent = _aliasComponent;
     }
 
+    boolean setOngoingCalls(boolean ongoingCalls) {
+        if (mOngoingCalls != ongoingCalls) {
+            mOngoingCalls = ongoingCalls;
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public void computeHostOomAdjLSP(OomAdjuster oomAdjuster, ProcessRecord host,
             ProcessRecord client, long now, ProcessRecord topApp, boolean doingAll,
             int oomAdjReason, int cachedAdj) {
-        oomAdjuster.computeServiceHostOomAdjLSP(this, host, client, now, topApp, doingAll, false,
-                false, oomAdjReason, UNKNOWN_ADJ, false, false);
+        oomAdjuster.computeServiceHostOomAdjLSP(this, host, client, now, false);
     }
 
     @Override
@@ -144,7 +160,7 @@ final class ConnectionRecord implements OomAdjusterModernImpl.Connection{
 
     @Override
     public boolean transmitsCpuTime() {
-        return !hasFlag(Context.BIND_ALLOW_FREEZE);
+        return !hasFlag(Context.BIND_ALLOW_FREEZE) || mOngoingCalls;
     }
 
     public long getFlags() {
@@ -208,6 +224,19 @@ final class ConnectionRecord implements OomAdjusterModernImpl.Connection{
             }
             association = null;
         }
+    }
+
+    String toShortString() {
+        final StringBuilder sb = new StringBuilder(128);
+        sb.append("CR{");
+        sb.append(Integer.toHexString(System.identityHashCode(this)));
+        sb.append(" ");
+        sb.append(binding.client.mPid);
+        sb.append("->");
+        sb.append(binding.service.shortInstanceName);
+        sb.append(" flags=0x" + Long.toHexString(flags));
+        sb.append('}');
+        return sb.toString();
     }
 
     public String toString() {
@@ -279,6 +308,9 @@ final class ConnectionRecord implements OomAdjusterModernImpl.Connection{
         }
         if (hasFlag(Context.BIND_ALLOW_FREEZE)) {
             sb.append("!CPU ");
+        }
+        if (hasFlag(Context.BIND_SIMULATE_ALLOW_FREEZE)) {
+            sb.append("S!CPU ");
         }
         if (serviceDead) {
             sb.append("DEAD ");

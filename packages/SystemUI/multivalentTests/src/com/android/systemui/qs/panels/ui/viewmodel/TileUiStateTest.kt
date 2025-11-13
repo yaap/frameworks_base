@@ -34,6 +34,7 @@ import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class TileUiStateTest : SysuiTestCase() {
 
     private val kosmos = testKosmos()
@@ -168,7 +169,7 @@ class TileUiStateTest : SysuiTestCase() {
     }
 
     @Test
-    fun switchInactive_emptySecondaryLabel_defaultOff() {
+    fun switchInactive_emptySecondaryLabel_defaultOff_onlyOnStateDescription() {
         val state =
             QSTile.State().apply {
                 expandedAccessibilityClassName = Switch::class.java.name
@@ -178,11 +179,13 @@ class TileUiStateTest : SysuiTestCase() {
 
         val uiState = state.toUiState()
 
-        assertThat(uiState.secondaryLabel).isEqualTo(resources.getString(R.string.switch_bar_off))
+        assertThat(uiState.secondaryLabel).isEmpty()
+        assertThat(uiState.accessibilityUiState.stateDescription)
+            .isEqualTo(resources.getString(R.string.switch_bar_off))
     }
 
     @Test
-    fun switchActive_emptySecondaryLabel_defaultOn() {
+    fun switchActive_emptySecondaryLabel_defaultOn_onlyOnStateDescription() {
         val state =
             QSTile.State().apply {
                 expandedAccessibilityClassName = Switch::class.java.name
@@ -192,7 +195,9 @@ class TileUiStateTest : SysuiTestCase() {
 
         val uiState = state.toUiState()
 
-        assertThat(uiState.secondaryLabel).isEqualTo(resources.getString(R.string.switch_bar_on))
+        assertThat(uiState.secondaryLabel).isEmpty()
+        assertThat(uiState.accessibilityUiState.stateDescription)
+            .isEqualTo(resources.getString(R.string.switch_bar_on))
     }
 
     @Test
@@ -261,6 +266,32 @@ class TileUiStateTest : SysuiTestCase() {
         val uiState = state.toUiState()
         assertThat(uiState.accessibilityUiState.stateDescription)
             .contains(resources.getString(R.string.tile_unavailable))
+    }
+
+    @Test
+    fun dualTarget_inactive_hasStateDescriptionOff() {
+        val state =
+            QSTile.State().apply {
+                state = Tile.STATE_INACTIVE
+                handlesSecondaryClick = true
+            }
+
+        val uiState = state.toUiState()
+        assertThat(uiState.accessibilityUiState.stateDescription)
+            .contains(context.getString(R.string.switch_bar_off))
+    }
+
+    @Test
+    fun dualTarget_active_hasStateDescriptionOn() {
+        val state =
+            QSTile.State().apply {
+                state = Tile.STATE_ACTIVE
+                handlesSecondaryClick = true
+            }
+
+        val uiState = state.toUiState()
+        assertThat(uiState.accessibilityUiState.stateDescription)
+            .contains(context.getString(R.string.switch_bar_on))
     }
 
     private fun QSTile.State.toUiState() = toUiState(resources)

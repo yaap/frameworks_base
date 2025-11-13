@@ -41,12 +41,48 @@ import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.suspendCancellableCoroutine
 
+/** Repository-style state for battery information. */
+interface BatteryRepository {
+    /**
+     * True if the phone is plugged in. Note that this does not always mean the device is charging
+     */
+    val isPluggedIn: Flow<Boolean>
+
+    /** Is power saver enabled */
+    val isPowerSaveEnabled: Flow<Boolean>
+
+    /** Battery defender means the device is plugged in but not charging to protect the battery */
+    val isBatteryDefenderEnabled: Flow<Boolean>
+
+    /** True if the system has detected an incompatible charger (and thus is not charging) */
+    val isIncompatibleCharging: Flow<Boolean>
+
+    /** The current level [0-100] */
+    val level: Flow<Int?>
+
+    /** State unknown means that we can't detect a battery */
+    val isStateUnknown: Flow<Boolean>
+
+    /**
+     * [Settings.System.SHOW_BATTERY_PERCENT]. A user setting to indicate whether we should show the
+     * battery percentage in the home screen status bar
+     */
+    val isShowBatteryPercentSettingEnabled: StateFlow<Boolean>
+
+    /**
+     * If available, this flow yields a string that describes the approximate time remaining for the
+     * current battery charge and usage information. While subscribed, the estimate is updated every
+     * 2 minutes.
+     */
+    val batteryTimeRemainingEstimate: Flow<String?>
+}
+
 /**
- * Repository-style state for battery information. Currently we just use the [BatteryController] as
- * our source of truth, but we could (should?) migrate away from that eventually.
+ * Currently we just use the [BatteryController] as our source of truth, but we could (should?)
+ * migrate away from that eventually.
  */
 @SysUISingleton
-class BatteryRepository
+class BatteryRepositoryImpl
 @Inject
 constructor(
     @Application context: Context,
@@ -54,7 +90,7 @@ constructor(
     @Background bgDispatcher: CoroutineDispatcher,
     private val controller: BatteryController,
     settingsRepository: SystemSettingsRepository,
-) {
+) : BatteryRepository {
     private val batteryState: StateFlow<BatteryCallbackState> =
         conflatedCallbackFlow<(BatteryCallbackState) -> BatteryCallbackState> {
                 val callback =
@@ -74,6 +110,14 @@ constructor(
                         override fun onIsBatteryDefenderChanged(isBatteryDefender: Boolean) {
                             trySend { prev ->
                                 prev.copy(isBatteryDefenderEnabled = isBatteryDefender)
+                            }
+                        }
+
+                        override fun onIsIncompatibleChargingChanged(
+                            isIncompatibleCharging: Boolean
+                        ) {
+                            trySend { prev ->
+                                prev.copy(isIncompatibleCharging = isIncompatibleCharging)
                             }
                         }
 
@@ -97,28 +141,19 @@ constructor(
             .flowOn(bgDispatcher)
             .stateIn(scope, SharingStarted.Lazily, BatteryCallbackState())
 
-    /**
-     * True if the phone is plugged in. Note that this does not always mean the device is charging
-     */
-    val isPluggedIn = batteryState.map { it.isPluggedIn }
+    override val isPluggedIn = batteryState.map { it.isPluggedIn }
 
-    /** Is power saver enabled */
-    val isPowerSaveEnabled = batteryState.map { it.isPowerSaveEnabled }
+    override val isPowerSaveEnabled = batteryState.map { it.isPowerSaveEnabled }
 
-    /** Battery defender means the device is plugged in but not charging to protect the battery */
-    val isBatteryDefenderEnabled = batteryState.map { it.isBatteryDefenderEnabled }
+    override val isBatteryDefenderEnabled = batteryState.map { it.isBatteryDefenderEnabled }
 
-    /** The current level [0-100] */
-    val level = batteryState.map { it.level }
+    override val isIncompatibleCharging = batteryState.map { it.isIncompatibleCharging }
 
-    /** State unknown means that we can't detect a battery */
-    val isStateUnknown = batteryState.map { it.isStateUnknown }
+    override val level = batteryState.map { it.level }
 
-    /**
-     * [Settings.System.SHOW_BATTERY_PERCENT]. A user setting to indicate whether we should show the
-     * battery percentage in the home screen status bar
-     */
-    val isShowBatteryPercentSettingEnabled = run {
+    override val isStateUnknown = batteryState.map { it.isStateUnknown }
+
+    override val isShowBatteryPercentSettingEnabled = run {
         val default =
             context.resources.getBoolean(
                 com.android.internal.R.bool.config_defaultBatteryPercentageSetting
@@ -138,12 +173,7 @@ constructor(
         }
     }
 
-    /**
-     * If available, this flow yields a string that describes the approximate time remaining for the
-     * current battery charge and usage information. While subscribed, the estimate is updated every
-     * 2 minutes.
-     */
-    val batteryTimeRemainingEstimate: Flow<String?> = estimate.flowOn(bgDispatcher)
+    override val batteryTimeRemainingEstimate: Flow<String?> = estimate.flowOn(bgDispatcher)
 
     private suspend fun fetchEstimate() = suspendCancellableCoroutine { continuation ->
         val callback =
@@ -160,4 +190,5 @@ private data class BatteryCallbackState(
     val isPowerSaveEnabled: Boolean = false,
     val isBatteryDefenderEnabled: Boolean = false,
     val isStateUnknown: Boolean = false,
+    val isIncompatibleCharging: Boolean = false,
 )

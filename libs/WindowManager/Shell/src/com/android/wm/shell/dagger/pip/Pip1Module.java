@@ -123,11 +123,15 @@ public abstract class Pip1Module {
     static PhonePipMenuController providesPipPhoneMenuController(Context context,
             PipBoundsState pipBoundsState, PipMediaController pipMediaController,
             SystemWindows systemWindows,
+            DisplayController displayController,
+            DisplayInsetsController displayInsetsController,
+            PipDisplayLayoutState pipDisplayLayoutState,
             PipUiEventLogger pipUiEventLogger,
             @ShellMainThread ShellExecutor mainExecutor,
             @ShellMainThread Handler mainHandler) {
         return new PhonePipMenuController(context, pipBoundsState, pipMediaController,
-                systemWindows, pipUiEventLogger, mainExecutor, mainHandler);
+                systemWindows, displayController, displayInsetsController, pipDisplayLayoutState,
+                pipUiEventLogger, mainExecutor, mainHandler);
     }
 
     @WMSingleton
@@ -159,6 +163,7 @@ public abstract class Pip1Module {
     @WMSingleton
     @Provides
     static PipTaskOrganizer providePipTaskOrganizer(Context context,
+            ShellInit shellInit,
             SyncTransactionQueue syncTransactionQueue,
             PipTransitionState pipTransitionState,
             PipBoundsState pipBoundsState,
@@ -176,7 +181,7 @@ public abstract class Pip1Module {
             DisplayController displayController,
             PipUiEventLogger pipUiEventLogger, ShellTaskOrganizer shellTaskOrganizer,
             @ShellMainThread ShellExecutor mainExecutor) {
-        return new PipTaskOrganizer(context,
+        return new PipTaskOrganizer(context, shellInit,
                 syncTransactionQueue, pipTransitionState, pipBoundsState, pipDisplayLayoutState,
                 pipBoundsAlgorithm, menuPhoneController, pipAnimationController,
                 pipSurfaceTransactionHelper, pipTransitionController, pipParamsChangedForwarder,

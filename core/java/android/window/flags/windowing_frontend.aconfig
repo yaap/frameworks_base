@@ -19,10 +19,21 @@ flag {
 }
 
 flag {
-  name: "cache_window_style"
+  name: "release_surface_on_transition_finish"
   namespace: "windowing_frontend"
-  description: "Cache common window styles"
-  bug: "350394503"
+  description: "Reduce offscreen layers which rely on GC to release"
+  bug: "407719374"
+  is_fixed_read_only: true
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "respect_hierarchy_surface_visibility"
+  namespace: "windowing_frontend"
+  description: "Ensure consistent surface visibility with window hierarchy"
+  bug: "383241933"
   is_fixed_read_only: true
   metadata {
     purpose: PURPOSE_BUGFIX
@@ -38,13 +49,6 @@ flag {
   metadata {
     purpose: PURPOSE_BUGFIX
   }
-}
-
-flag {
-  name: "edge_to_edge_by_default"
-  namespace: "windowing_frontend"
-  description: "Make app go edge-to-edge by default when targeting SDK 35 or greater"
-  bug: "309578419"
 }
 
 flag {
@@ -73,29 +77,10 @@ flag {
 }
 
 flag {
-  name: "keyguard_going_away_timeout"
-  namespace: "windowing_frontend"
-  description: "Allow a maximum of 10 seconds with keyguardGoingAway=true before force-resetting"
-  bug: "343598832"
-  is_fixed_read_only: true
-}
-
-flag {
   name: "close_to_square_config_includes_status_bar"
   namespace: "windowing_frontend"
   description: "On close to square display, when necessary, configuration includes status bar"
   bug: "291870756"
-}
-
-flag {
-  name: "reduce_keyguard_transitions"
-  namespace: "windowing_frontend"
-  description: "Avoid setting keyguard transitions ready unless there are no other changes"
-  bug: "354647472"
-  is_fixed_read_only: true
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
 }
 
 flag {
@@ -168,13 +153,6 @@ flag {
 }
 
 flag {
-  name: "process_priority_policy_for_multi_window_mode"
-  namespace: "windowing_frontend"
-  description: "Use higher priority for top-like processes"
-  bug: "200769420"
-}
-
-flag {
   name: "universal_resizable_by_default"
   namespace: "windowing_frontend"
   description: "The orientation, aspect ratio, resizability of activity will follow system behavior by default"
@@ -196,13 +174,6 @@ flag {
   metadata {
     purpose: PURPOSE_BUGFIX
   }
-}
-
-flag {
-  name: "respect_non_top_visible_fixed_orientation"
-  namespace: "windowing_frontend"
-  description: "If top activity is not opaque, respect the fixed orientation of activity behind it"
-  bug: "283514860"
 }
 
 flag {
@@ -276,53 +247,22 @@ flag {
 }
 
 flag {
-  name: "reduce_unnecessary_measure"
-  namespace: "windowing_frontend"
-  description: "Skip measuring view hierarchy if the size is known"
-  bug: "260382739"
-  is_fixed_read_only: true
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
-  name: "use_visible_requested_for_process_tracker"
-  namespace: "windowing_frontend"
-  description: "Do not count closing activity as visible process"
-  bug: "396653764"
-  is_fixed_read_only: true
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
-  name: "ensure_wallpaper_in_transitions"
-  namespace: "windowing_frontend"
-  description: "Ensure that wallpaper window tokens are always present/available for collection in transitions"
-  bug: "347593088"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
-  name: "ensure_wallpaper_in_wear_transitions"
-  namespace: "windowing_frontend"
-  description: "Ensure that wallpaper window tokens are always present/available for collection in transitions on Wear"
-  bug: "355596979"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
   name: "ensure_keyguard_does_transition_starting"
   namespace: "windowing_frontend"
   description: "Ensure that keyguard is the one starting transitions, instead of delegating to Core"
   bug: "364930619"
   is_fixed_read_only: true
+}
+
+flag {
+  name: "fix_show_when_locked_sync_timeout"
+  namespace: "windowing_frontend"
+  description: "Prevent sync timeout from setShowWhenLocked(false) by setting the DisplayContent ready"
+  bug: "411544184"
+  is_fixed_read_only: true
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }
 
 flag {
@@ -370,17 +310,6 @@ flag {
 }
 
 flag {
-  name: "record_task_snapshots_before_shutdown"
-  namespace: "windowing_frontend"
-  description: "Record task snapshots before shutdown"
-  bug: "376821232"
-  is_fixed_read_only: true
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
     name: "predictive_back_three_button_nav"
     namespace: "systemui"
     description: "Enable Predictive Back Animation for 3-button-nav"
@@ -407,17 +336,6 @@ flag {
 }
 
 flag {
-    name: "remove_defer_hiding_client"
-    namespace: "windowing_frontend"
-    description: "Remove mDeferHidingClient since everything is in shell-transition."
-    is_fixed_read_only: true
-    bug: "382485959"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
   name: "relative_insets"
   namespace: "windowing_frontend"
   description: "Support insets definition and calculation relative to task bounds."
@@ -426,33 +344,11 @@ flag {
 }
 
 flag {
-    name: "exclude_drawing_app_theme_snapshot_from_lock"
-    namespace: "windowing_frontend"
-    description: "Do not hold wm lock when drawing app theme snapshot."
-    is_fixed_read_only: true
-    bug: "373502791"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "reduce_changed_exclusion_rects_msgs"
     namespace: "windowing_frontend"
     description: "Don't send MSG_SYSTEM_GESTURE_EXCLUSION_CHANGED when there is no change"
     bug: "388231176"
     is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "use_rt_frame_callback_for_splash_screen_transfer"
-    namespace: "windowing_frontend"
-    description: "report SplashscreenView shown after RtFrame commit"
-    is_fixed_read_only: true
-    bug: "387231234"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -473,27 +369,6 @@ flag {
 }
 
 flag {
-    name: "check_disabled_snapshots_in_task_persister"
-    namespace: "windowing_frontend"
-    description: "Check for TaskSnapshots disabling in TaskSnapshotPersister."
-    bug: "387915176"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "clear_system_vibrator"
-    namespace: "windowing_frontend"
-    description: "Clears the system vibrator before attaching new window, to avoid leaks."
-    bug: "393190314"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "reduce_task_snapshot_memory_usage"
     namespace: "windowing_frontend"
     description: "Reduce task snapshot memory usage in either heap and dmabuf."
@@ -501,17 +376,6 @@ flag {
     is_fixed_read_only: true
     metadata {
         purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "early_launch_hint"
-    namespace: "windowing_frontend"
-    description: "Sets Launch powermode for activity launches earlier"
-    bug: "399380676"
-    is_fixed_read_only: true
-        metadata {
-            purpose: PURPOSE_BUGFIX
     }
 }
 
@@ -538,14 +402,10 @@ flag {
 }
 
 flag {
-    name: "delegate_back_gesture_to_shell"
+    name: "enable_handlers_debugging_mode"
     namespace: "windowing_frontend"
-    description: "Delegate back gesture event to back animation controller."
-    bug: "394599430"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
+    description: "collect data on handlers that did or did not play"
+    bug: "402454136"
 }
 
 flag {
@@ -553,4 +413,112 @@ flag {
     namespace: "lse_desktop_experience"
     description: "Adds support for trackpad back gestures on connected displays"
     bug: "382774299"
+}
+
+flag {
+    name: "splash_screen_view_sync_transaction"
+    namespace: "windowing_frontend"
+    description: "Fixes flickering when transfer splash screen view to client."
+    bug: "402644135"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "wear_frameworks"
+    name: "dispatch_first_keyguard_locked_state"
+    description: "Ensures the first keyguard locked state is dispatched to listeners reigstered through KeyguardManager.addKeyguardLockedStateListener"
+    bug: "375029840"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "remove_starting_in_transition"
+    namespace: "windowing_frontend"
+    description: "Allows the starting window to be removed while a transition is in progress."
+    bug: "397353053"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "transition_handler_cuj_tags"
+    namespace: "windowing_frontend"
+    description: "Add CUJ tags for measuring performance of transition handlers"
+    bug: "404190067"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "extending_persistence_snapshot_queue_depth"
+    namespace: "windowing_frontend"
+    description: "Use ImageReader to persist snapshot into disk, and extending the persistence snapshot queue depth."
+    bug: "416144425"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "intercept_motion_from_move_to_cancel"
+    namespace: "windowing_frontend"
+    description: "Ensure that the client receives ACTION_CANCEL when the back gesture is intercepted."
+    bug: "404173501"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "exclude_non_main_window_from_snapshot"
+    namespace: "windowing_frontend"
+    description: "Exclude non-main windows during their removal from being captured in the snapshot."
+    bug: "412295455"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "current_animator_scale_uses_shared_memory"
+    namespace: "wear_system_health"
+    description: "WindowManagerService.getCurrentAnimatorScale() reads the animator scale from shared memory"
+    bug: "406182390"
+}
+
+flag {
+    name: "always_seq_id_layout"
+    namespace: "windowing_frontend"
+    description: "Use seq-id for all client config changes"
+    bug: "385976595"
+}
+
+flag {
+    name: "unify_shell_binders"
+    namespace: "windowing_frontend"
+    description: "Use a single binder for task-org/transition messaging to shell"
+    bug: "410930250"
+}
+
+flag {
+    name: "screen_brightness_dim_on_emulator"
+    namespace: "wear_systems"
+    description: "Apply screen brightness to emulator display overlay"
+    bug: "418830217"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }

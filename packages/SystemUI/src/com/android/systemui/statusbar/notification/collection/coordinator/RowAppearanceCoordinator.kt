@@ -64,10 +64,13 @@ internal constructor(
     }
 
     private fun onBeforeRenderList(list: List<PipelineEntry>) {
-        entryToExpand =
-            list.firstOrNull()?.representativeEntry?.takeIf { entry ->
-                !mSectionStyleProvider.isMinimizedSection(entry.section!!)
-            }
+        entryToExpand = list.firstOrNull()?.let { getEntryToExpand(it) }
+    }
+
+    private fun getEntryToExpand(pipelineEntry: PipelineEntry): NotificationEntry? {
+        return pipelineEntry.asListEntry()?.representativeEntry?.takeIf { entry ->
+            !mSectionStyleProvider.isMinimizedSection(entry.section!!)
+        }
     }
 
     private fun onAfterRenderEntry(entry: NotificationEntry, controller: NotifRowController) {
@@ -75,8 +78,9 @@ internal constructor(
         // very first notification if it's not a child of grouped notifications and when
         // mAutoExpandFirstNotification is true.
         controller.setSystemExpanded(
-            mAlwaysExpandNonGroupedNotification ||
-                (mAutoExpandFirstNotification && entry == entryToExpand)
+            !entry.isBundled &&
+                (mAlwaysExpandNonGroupedNotification ||
+                    (mAutoExpandFirstNotification && entry == entryToExpand))
         )
         // Show/hide the feedback icon
         controller.setFeedbackIcon(mAssistantFeedbackController.getFeedbackIcon(entry.ranking))

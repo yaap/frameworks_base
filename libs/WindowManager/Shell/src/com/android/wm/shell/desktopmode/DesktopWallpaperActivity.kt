@@ -20,7 +20,9 @@ import android.app.Activity
 import android.app.TaskInfo
 import android.content.ComponentName
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
+import android.window.DesktopExperienceFlags
 
 /**
  * A transparent activity used in the desktop mode to show the wallpaper under the freeform windows.
@@ -35,11 +37,38 @@ class DesktopWallpaperActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        Log.d(TAG, "onCreate")
+        // Set to |false| by default. This shouldn't matter because
+        // [Activity#onTopResumedActivityChanged] is supposed to be called after [onResume] which
+        // should set the correct state. However, there's a lifecycle bug that causes it not to
+        // be called after [onCreate] (see b/416700931) and may leave the wallpaper touchable after
+        // entering desktop mode with another app. To prevent this make it not focusable by
+        // default, as it is more likely a user will enter desktop with a task than without one
+        // (entering through an empty desk may result in a reversed bug: unfocusable when we wanted
+        // it to be focusable).
+        updateFocusableFlag(focusable = false)
+    }
+
+    override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
+        if (!DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue) return
+        Log.d(TAG, "onTopResumedActivityChanged: $isTopResumedActivity")
+        // Let the activity be focusable when it is top-resumed (e.g. empty desk), otherwise input
+        // events will result in an ANR because the focused app would have no focusable window.
+        updateFocusableFlag(focusable = isTopResumedActivity)
+    }
+
+    private fun updateFocusableFlag(focusable: Boolean) {
+        if (focusable) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        } else {
+            window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        }
     }
 
     companion object {
+        private const val TAG = "DesktopWallpaperActivity"
         private const val SYSTEM_UI_PACKAGE_NAME = "com.android.systemui"
+
         @JvmStatic
         val wallpaperActivityComponent =
             ComponentName(SYSTEM_UI_PACKAGE_NAME, DesktopWallpaperActivity::class.java.name)

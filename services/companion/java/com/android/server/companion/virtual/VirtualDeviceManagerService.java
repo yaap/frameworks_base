@@ -41,12 +41,13 @@ import android.companion.virtual.VirtualDevice;
 import android.companion.virtual.VirtualDeviceManager;
 import android.companion.virtual.VirtualDeviceParams;
 import android.companion.virtual.sensor.VirtualSensor;
+import android.companion.virtualdevice.flags.Flags;
 import android.companion.virtualnative.IVirtualDeviceManagerNative;
 import android.compat.annotation.ChangeId;
 import android.compat.annotation.EnabledAfter;
 import android.content.AttributionSource;
 import android.content.Context;
-import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManagerInternal;
 import android.hardware.display.IVirtualDisplayCallback;
 import android.os.Binder;
@@ -270,7 +271,8 @@ public class VirtualDeviceManagerService extends SystemService {
         for (int i = 0; i < virtualDevicesSnapshot.size(); i++) {
             final CameraAccessController cameraAccessController =
                     virtualDevicesSnapshot.get(i).getCameraAccessController();
-            if (cameraAccessController.getUserId() == userId) {
+            if (cameraAccessController != null
+                    && cameraAccessController.getUserId() == userId) {
                 return cameraAccessController;
             }
         }        Context userContext = getContext().createContextAsUser(userHandle, 0);
@@ -303,8 +305,7 @@ public class VirtualDeviceManagerService extends SystemService {
     }
 
     /**
-     * Remove the virtual device. Sends the
-     * {@link VirtualDeviceManager#ACTION_VIRTUAL_DEVICE_REMOVED} broadcast as a result.
+     * Removes the virtual device and notifies all registered listeners about this.
      *
      * @param deviceId deviceId to be removed
      * @return {@code true} if the device was removed, {@code false} if the operation was a no-op
@@ -328,15 +329,6 @@ public class VirtualDeviceManagerService extends SystemService {
             }
         });
 
-        Intent i = new Intent(VirtualDeviceManager.ACTION_VIRTUAL_DEVICE_REMOVED);
-        i.putExtra(VirtualDeviceManager.EXTRA_VIRTUAL_DEVICE_ID, deviceId);
-        i.setFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY);
-        final long identity = Binder.clearCallingIdentity();
-        try {
-            getContext().sendBroadcastAsUser(i, UserHandle.ALL);
-        } finally {
-            Binder.restoreCallingIdentity(identity);
-        }
         return true;
     }
 
@@ -440,6 +432,25 @@ public class VirtualDeviceManagerService extends SystemService {
                     activityListener, soundEffectListener);
         }
 
+        @EnforcePermission(android.Manifest.permission.ACCESS_COMPUTER_CONTROL)
+        @Override // Binder call
+        public IVirtualDevice createLocalVirtualDevice(
+                IBinder token,
+                AttributionSource attributionSource,
+                @NonNull VirtualDeviceParams params,
+                @NonNull IVirtualDeviceActivityListener activityListener,
+                @NonNull IVirtualDeviceSoundEffectListener soundEffectListener) {
+            createLocalVirtualDevice_enforcePermission();
+            if (!android.companion.virtualdevice.flags.Flags.computerControlAccess()) {
+                throw new IllegalStateException("Cannot create VirtualDevice - flag disabled");
+            }
+            Objects.requireNonNull(activityListener);
+            Objects.requireNonNull(soundEffectListener);
+
+            return createVirtualDevice(token, attributionSource, null, params, activityListener,
+                    soundEffectListener);
+        }
+
         private IVirtualDevice createVirtualDevice(
                 IBinder token,
                 AttributionSource attributionSource,
@@ -447,7 +458,6 @@ public class VirtualDeviceManagerService extends SystemService {
                 @NonNull VirtualDeviceParams params,
                 @Nullable IVirtualDeviceActivityListener activityListener,
                 @Nullable IVirtualDeviceSoundEffectListener soundEffectListener) {
-            createVirtualDevice_enforcePermission();
             attributionSource.enforceCallingUid();
 
             final String packageName = attributionSource.getPackageName();
@@ -467,13 +477,16 @@ public class VirtualDeviceManagerService extends SystemService {
                     runningUids -> notifyRunningAppsChanged(deviceId, runningUids);
             VirtualDeviceImpl virtualDevice = new VirtualDeviceImpl(getContext(), associationInfo,
                     VirtualDeviceManagerService.this, mVirtualDeviceLog, token, attributionSource,
-                    deviceId,
-                    cameraAccessController, mPendingTrampolineCallback, activityListener,
+                    deviceId, cameraAccessController, mPendingTrampolineCallback, activityListener,
                     soundEffectListener, runningAppsChangedCallback, params);
             Counter.logIncrement("virtual_devices.value_virtual_devices_created_count");
 
             synchronized (mVirtualDeviceManagerLock) {
                 mVirtualDevices.put(deviceId, virtualDevice);
+            }
+
+            if (Flags.viewconfigurationApis()) {
+                virtualDevice.applyViewConfigurationParams(params.getViewConfigurationParams());
             }
 
             mVirtualDeviceListeners.broadcast(listener -> {
@@ -644,8 +657,9 @@ public class VirtualDeviceManagerService extends SystemService {
             if (!DumpUtils.checkDumpAndUsageStatsPermission(getContext(), TAG, fout)) {
                 return;
             }
-            fout.println("Created virtual devices: ");
             ArrayList<VirtualDeviceImpl> virtualDevicesSnapshot = getVirtualDevicesSnapshot();
+            fout.println("Number of active virtual devices: " + virtualDevicesSnapshot.size());
+            fout.println("Created virtual devices: ");
             for (int i = 0; i < virtualDevicesSnapshot.size(); i++) {
                 virtualDevicesSnapshot.get(i).dump(fd, fout, args);
             }
@@ -686,6 +700,12 @@ public class VirtualDeviceManagerService extends SystemService {
         @Override
         public @NonNull VirtualDeviceManager.VirtualDevice createVirtualDevice(
                 @NonNull VirtualDeviceParams params) {
+            if (getContext().checkCallingOrSelfPermission(
+                    android.Manifest.permission.CREATE_VIRTUAL_DEVICE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                throw new SecurityException("Missing CREATE_VIRTUAL_DEVICE permission");
+            }
+
             Objects.requireNonNull(params, "params must not be null");
             Objects.requireNonNull(params.getName(), "virtual device name must not be null");
             IVirtualDevice virtualDevice = mImpl.createVirtualDevice(

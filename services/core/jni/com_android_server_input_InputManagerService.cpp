@@ -138,10 +138,6 @@ static struct {
     jmethodID getInputUniqueIdAssociationsByDescriptor;
     jmethodID getDeviceTypeAssociations;
     jmethodID getKeyboardLayoutAssociations;
-    jmethodID getHoverTapTimeout;
-    jmethodID getHoverTapSlop;
-    jmethodID getDoubleTapTimeout;
-    jmethodID getLongPressTimeout;
     jmethodID getPointerLayer;
     jmethodID getLoadedPointerIcon;
     jmethodID getKeyboardLayoutOverlay;
@@ -327,9 +323,8 @@ public:
     void setDisplayTopology(JNIEnv* env, jobject topologyGraph);
 
     base::Result<std::unique_ptr<InputChannel>> createInputChannel(const std::string& name);
-    base::Result<std::unique_ptr<InputChannel>> createInputMonitor(ui::LogicalDisplayId displayId,
-                                                                   const std::string& name,
-                                                                   gui::Pid pid);
+    base::Result<std::unique_ptr<InputChannel>> createFocusInputMonitor(
+            ui::LogicalDisplayId displayId, const std::string& name, gui::Pid pid);
     status_t removeInputChannel(const sp<IBinder>& connectionToken);
     status_t pilferPointers(const sp<IBinder>& token);
 
@@ -371,7 +366,7 @@ public:
     void setMotionClassifierEnabled(bool enabled);
     std::optional<std::string> getBluetoothAddress(int32_t deviceId);
     void setStylusButtonMotionEventsEnabled(bool enabled);
-    vec2 getMouseCursorPosition(ui::LogicalDisplayId displayId);
+    std::optional<vec2> getMouseCursorPosition(ui::LogicalDisplayId displayId);
     void setStylusPointerIconEnabled(bool enabled);
     void setInputMethodConnectionIsActive(bool isActive);
     void setKeyRemapping(const std::map<int32_t, int32_t>& keyRemapping);
@@ -584,7 +579,7 @@ NativeInputManager::NativeInputManager(jobject serviceObj, const sp<Looper>& loo
 
     mServiceObj = env->NewGlobalRef(serviceObj);
 
-    InputManager* im = new InputManager(this, *this, *this, *this);
+    InputManager* im = new InputManager(this, *this, *this, *this, env);
     mInputManager = im;
     defaultServiceManager()->addService(String16("inputflinger"), im);
 }
@@ -671,13 +666,14 @@ void NativeInputManager::setDisplayTopology(JNIEnv* env, jobject topologyGraph) 
         return;
     }
 
-    const DisplayTopologyGraph displayTopology =
+    const base::Result<DisplayTopologyGraph> result =
             android_hardware_display_DisplayTopologyGraph_toNative(env, topologyGraph);
-    if (input_flags::enable_display_topology_validation() && !displayTopology.isValid()) {
-        LOG(ERROR) << "Ignoring Invalid DisplayTopology";
+    if (!result.ok()) {
+        LOG(ERROR) << "Ignoring Invalid DisplayTopology" << result.error();
         return;
     }
 
+    const DisplayTopologyGraph& displayTopology = result.value();
     mInputManager->getDispatcher().setDisplayTopology(displayTopology);
     mInputManager->getChoreographer().setDisplayTopology(displayTopology);
 }
@@ -688,10 +684,10 @@ base::Result<std::unique_ptr<InputChannel>> NativeInputManager::createInputChann
     return mInputManager->getDispatcher().createInputChannel(name);
 }
 
-base::Result<std::unique_ptr<InputChannel>> NativeInputManager::createInputMonitor(
+base::Result<std::unique_ptr<InputChannel>> NativeInputManager::createFocusInputMonitor(
         ui::LogicalDisplayId displayId, const std::string& name, gui::Pid pid) {
     ATRACE_CALL();
-    return mInputManager->getDispatcher().createInputMonitor(displayId, name, pid);
+    return mInputManager->getDispatcher().createFocusInputMonitor(displayId, name, pid);
 }
 
 status_t NativeInputManager::removeInputChannel(const sp<IBinder>& connectionToken) {
@@ -775,45 +771,11 @@ void NativeInputManager::getReaderConfiguration(InputReaderConfiguration* outCon
                                                               std::move(layoutType));
                                 });
 
-    jint hoverTapTimeout = env->CallIntMethod(mServiceObj,
-            gServiceClassInfo.getHoverTapTimeout);
-    if (!checkAndClearExceptionFromCallback(env, "getHoverTapTimeout")) {
-        jint doubleTapTimeout = env->CallIntMethod(mServiceObj,
-                gServiceClassInfo.getDoubleTapTimeout);
-        if (!checkAndClearExceptionFromCallback(env, "getDoubleTapTimeout")) {
-            jint longPressTimeout = env->CallIntMethod(mServiceObj,
-                    gServiceClassInfo.getLongPressTimeout);
-            if (!checkAndClearExceptionFromCallback(env, "getLongPressTimeout")) {
-                outConfig->pointerGestureTapInterval = milliseconds_to_nanoseconds(hoverTapTimeout);
-
-                // We must ensure that the tap-drag interval is significantly shorter than
-                // the long-press timeout because the tap is held down for the entire duration
-                // of the double-tap timeout.
-                jint tapDragInterval = max(min(longPressTimeout - 100,
-                        doubleTapTimeout), hoverTapTimeout);
-                outConfig->pointerGestureTapDragInterval =
-                        milliseconds_to_nanoseconds(tapDragInterval);
-            }
-        }
-    }
-
-    jint hoverTapSlop = env->CallIntMethod(mServiceObj,
-            gServiceClassInfo.getHoverTapSlop);
-    if (!checkAndClearExceptionFromCallback(env, "getHoverTapSlop")) {
-        outConfig->pointerGestureTapSlop = hoverTapSlop;
-    }
-
     { // acquire lock
         std::scoped_lock _l(mLock);
 
         outConfig->mousePointerSpeed = mLocked.pointerSpeed;
         outConfig->displaysWithMouseScalingDisabled = mLocked.displaysWithMouseScalingDisabled;
-        outConfig->pointerVelocityControlParameters.scale =
-                exp2f(mLocked.pointerSpeed * POINTER_SPEED_EXPONENT);
-        outConfig->pointerVelocityControlParameters.acceleration =
-                mLocked.displaysWithMouseScalingDisabled.count(mLocked.pointerDisplayId) == 0
-                ? android::os::IInputConstants::DEFAULT_POINTER_ACCELERATION
-                : 1;
         outConfig->wheelVelocityControlParameters.acceleration =
                 mLocked.mouseScrollingAccelerationEnabled
                 ? android::os::IInputConstants::DEFAULT_MOUSE_WHEEL_ACCELERATION
@@ -2168,7 +2130,7 @@ void NativeInputManager::setStylusButtonMotionEventsEnabled(bool enabled) {
             InputReaderConfiguration::Change::STYLUS_BUTTON_REPORTING);
 }
 
-vec2 NativeInputManager::getMouseCursorPosition(ui::LogicalDisplayId displayId) {
+std::optional<vec2> NativeInputManager::getMouseCursorPosition(ui::LogicalDisplayId displayId) {
     return mInputManager->getChoreographer().getMouseCursorPosition(displayId);
 }
 
@@ -2342,8 +2304,8 @@ static jobject nativeCreateInputChannel(JNIEnv* env, jobject nativeImplObj, jstr
     return inputChannelObj;
 }
 
-static jobject nativeCreateInputMonitor(JNIEnv* env, jobject nativeImplObj, jint displayId,
-                                        jstring nameObj, jint pid) {
+static jobject nativeCreateFocusInputMonitor(JNIEnv* env, jobject nativeImplObj, jint displayId,
+                                             jstring nameObj, jint pid) {
     NativeInputManager* im = getNativeInputManager(env, nativeImplObj);
 
     if (ui::LogicalDisplayId{displayId} == ui::LogicalDisplayId::INVALID) {
@@ -2356,7 +2318,7 @@ static jobject nativeCreateInputMonitor(JNIEnv* env, jobject nativeImplObj, jint
     std::string name = nameChars.c_str();
 
     base::Result<std::unique_ptr<InputChannel>> inputChannel =
-            im->createInputMonitor(ui::LogicalDisplayId{displayId}, name, gui::Pid{pid});
+            im->createFocusInputMonitor(ui::LogicalDisplayId{displayId}, name, gui::Pid{pid});
 
     if (!inputChannel.ok()) {
         std::string message = inputChannel.error().message();
@@ -2995,7 +2957,7 @@ static bool nativeSetPointerIcon(JNIEnv* env, jobject nativeImplObj, jobject ico
     std::variant<std::unique_ptr<SpriteIcon>, PointerIconStyle> icon;
     if (pointerIcon.style == PointerIconStyle::TYPE_CUSTOM) {
         icon = std::make_unique<SpriteIcon>(pointerIcon.bitmap.copy(
-                                                    ANDROID_BITMAP_FORMAT_RGBA_8888),
+                                                    SpriteController::getBitmapFormat()),
                                             pointerIcon.style, pointerIcon.hotSpotX,
                                             pointerIcon.hotSpotY, pointerIcon.drawNativeDropShadow);
     } else {
@@ -3226,7 +3188,10 @@ static jfloatArray nativeGetMouseCursorPosition(JNIEnv* env, jobject nativeImplO
                                                 jint displayId) {
     NativeInputManager* im = getNativeInputManager(env, nativeImplObj);
     const auto p = im->getMouseCursorPosition(ui::LogicalDisplayId{displayId});
-    const std::array<float, 2> arr = {{p.x, p.y}};
+    if (!p) {
+        return nullptr;
+    }
+    const std::array<float, 2> arr = {{p->x, p->y}};
     jfloatArray outArr = env->NewFloatArray(2);
     env->SetFloatArrayRegion(outArr, 0, arr.size(), arr.data());
     return outArr;
@@ -3330,8 +3295,8 @@ static const JNINativeMethod gInputManagerMethods[] = {
         {"getKeyCodeForKeyLocation", "(II)I", (void*)nativeGetKeyCodeForKeyLocation},
         {"createInputChannel", "(Ljava/lang/String;)Landroid/view/InputChannel;",
          (void*)nativeCreateInputChannel},
-        {"createInputMonitor", "(ILjava/lang/String;I)Landroid/view/InputChannel;",
-         (void*)nativeCreateInputMonitor},
+        {"createFocusInputMonitor", "(ILjava/lang/String;I)Landroid/view/InputChannel;",
+         (void*)nativeCreateFocusInputMonitor},
         {"removeInputChannel", "(Landroid/os/IBinder;)V", (void*)nativeRemoveInputChannel},
         {"pilferPointers", "(Landroid/os/IBinder;)V", (void*)nativePilferPointers},
         {"setInputFilterEnabled", "(Z)V", (void*)nativeSetInputFilterEnabled},
@@ -3565,18 +3530,6 @@ int register_android_server_InputManager(JNIEnv* env) {
 
     GET_METHOD_ID(gServiceClassInfo.getKeyboardLayoutAssociations, clazz,
                   "getKeyboardLayoutAssociations", "()[Ljava/lang/String;");
-
-    GET_METHOD_ID(gServiceClassInfo.getHoverTapTimeout, clazz,
-            "getHoverTapTimeout", "()I");
-
-    GET_METHOD_ID(gServiceClassInfo.getHoverTapSlop, clazz,
-            "getHoverTapSlop", "()I");
-
-    GET_METHOD_ID(gServiceClassInfo.getDoubleTapTimeout, clazz,
-            "getDoubleTapTimeout", "()I");
-
-    GET_METHOD_ID(gServiceClassInfo.getLongPressTimeout, clazz,
-            "getLongPressTimeout", "()I");
 
     GET_METHOD_ID(gServiceClassInfo.getPointerLayer, clazz,
             "getPointerLayer", "()I");

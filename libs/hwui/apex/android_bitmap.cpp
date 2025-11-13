@@ -48,7 +48,7 @@ void ABitmap_releaseRef(ABitmap* bitmap) {
     SkSafeUnref(TypeCast::toBitmap(bitmap));
 }
 
-static AndroidBitmapFormat getFormat(const SkImageInfo& info) {
+static uint32_t getFormat(const SkImageInfo& info) {
     switch (info.colorType()) {
         case kN32_SkColorType:
             return ANDROID_BITMAP_FORMAT_RGBA_8888;
@@ -62,12 +62,14 @@ static AndroidBitmapFormat getFormat(const SkImageInfo& info) {
             return ANDROID_BITMAP_FORMAT_RGBA_F16;
         case kRGBA_1010102_SkColorType:
             return ANDROID_BITMAP_FORMAT_RGBA_1010102;
+        case kBGRA_8888_SkColorType:
+            return ANDROID_BITMAP_FORMAT_BGRA_8888;
         default:
             return ANDROID_BITMAP_FORMAT_NONE;
     }
 }
 
-static SkColorType getColorType(AndroidBitmapFormat format) {
+static SkColorType getColorType(uint32_t format) {
     switch (format) {
         case ANDROID_BITMAP_FORMAT_RGBA_8888:
             return kN32_SkColorType;
@@ -81,6 +83,8 @@ static SkColorType getColorType(AndroidBitmapFormat format) {
             return kRGBA_F16_SkColorType;
         case ANDROID_BITMAP_FORMAT_RGBA_1010102:
             return kRGBA_1010102_SkColorType;
+        case ANDROID_BITMAP_FORMAT_BGRA_8888:
+            return kBGRA_8888_SkColorType;
         default:
             return kUnknown_SkColorType;
     }
@@ -108,7 +112,7 @@ static uint32_t getInfoFlags(const SkImageInfo& info, bool isHardware) {
     return flags;
 }
 
-ABitmap* ABitmap_copy(ABitmap* srcBitmapHandle, AndroidBitmapFormat dstFormat) {
+ABitmap* ABitmap_copy(ABitmap* srcBitmapHandle, uint32_t dstFormat) {
     SkColorType dstColorType = getColorType(dstFormat);
     if (srcBitmapHandle && dstColorType != kUnknown_SkColorType) {
         SkBitmap srcBitmap;
@@ -241,6 +245,7 @@ int ABitmap_compressWithGainmap(const AndroidBitmapInfo* info, ADataSpace dataSp
             // kWEBP_JavaEncodeFormat is a valid parameter for Bitmap::compress,
             // for the deprecated Bitmap.CompressFormat.WEBP, but it should not
             // be provided via the NDK. Other integers are likewise invalid.
+            ALOGE("%s: bad compress format %d", __func__, inFormat);
             return ANDROID_BITMAP_RESULT_BAD_PARAMETER;
     }
 
@@ -268,11 +273,13 @@ int ABitmap_compressWithGainmap(const AndroidBitmapInfo* info, ADataSpace dataSp
             colorType = kRGBA_1010102_SkColorType;
             break;
         default:
+            ALOGE("%s: bad format %d", __func__, info->format);
             return ANDROID_BITMAP_RESULT_BAD_PARAMETER;
     }
 
     auto alphaType = getAlphaType(info);
     if (alphaType == kUnknown_SkAlphaType) {
+        ALOGE("%s: bad alphaType %d", __func__, info->flags & ANDROID_BITMAP_FLAGS_ALPHA_MASK);
         return ANDROID_BITMAP_RESULT_BAD_PARAMETER;
     }
 
@@ -287,6 +294,7 @@ int ABitmap_compressWithGainmap(const AndroidBitmapInfo* info, ADataSpace dataSp
         // DataSpaceToColorSpace treats UNKNOWN as SRGB, but compress forces the
         // client to specify SRGB if that is what they want.
         if (!cs || dataSpace == ADATASPACE_UNKNOWN) {
+            ALOGE("%s: bad dataspace %d", __func__, dataSpace);
             return ANDROID_BITMAP_RESULT_BAD_PARAMETER;
         }
     }
@@ -294,6 +302,7 @@ int ABitmap_compressWithGainmap(const AndroidBitmapInfo* info, ADataSpace dataSp
     {
         size_t size;
         if (!Bitmap::computeAllocationSize(info->stride, info->height, &size)) {
+            ALOGE("%s: unable to compute allocation size", __func__);
             return ANDROID_BITMAP_RESULT_BAD_PARAMETER;
         }
     }
@@ -305,6 +314,7 @@ int ABitmap_compressWithGainmap(const AndroidBitmapInfo* info, ADataSpace dataSp
     {
         SkBitmap tempBitmap;
         if (!tempBitmap.installPixels(imageInfo, const_cast<void*>(pixels), info->stride)) {
+            ALOGE("%s: unable to install pixels", __func__);
             return ANDROID_BITMAP_RESULT_BAD_PARAMETER;
         }
     }

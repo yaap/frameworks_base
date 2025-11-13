@@ -19,12 +19,12 @@ import android.graphics.Typeface
 import android.os.Vibrator
 import android.view.LayoutInflater
 import com.android.systemui.customization.R
+import com.android.systemui.customization.clocks.ClockLogger
 import com.android.systemui.log.core.MessageBuffer
 import com.android.systemui.plugins.clocks.AxisPresetConfig
 import com.android.systemui.plugins.clocks.ClockAxisStyle
 import com.android.systemui.plugins.clocks.ClockController
 import com.android.systemui.plugins.clocks.ClockFontAxis.Companion.merge
-import com.android.systemui.plugins.clocks.ClockLogger
 import com.android.systemui.plugins.clocks.ClockMessageBuffers
 import com.android.systemui.plugins.clocks.ClockMetadata
 import com.android.systemui.plugins.clocks.ClockPickerConfig
@@ -45,15 +45,18 @@ data class ClockContext(
     val messageBuffers: ClockMessageBuffers,
     val messageBuffer: MessageBuffer,
     val vibrator: Vibrator?,
+    val timeKeeper: TimeKeeper,
 )
 
 /** Provides the default system clock */
-class DefaultClockProvider(
-    val ctx: Context,
+class DefaultClockProvider
+@JvmOverloads
+constructor(
     val layoutInflater: LayoutInflater,
     val resources: Resources,
     private val isClockReactiveVariantsEnabled: Boolean = false,
     private val vibrator: Vibrator?,
+    private val timeKeeperFactory: () -> TimeKeeper = { TimeKeeperImpl() },
 ) : ClockProvider {
     private var messageBuffers: ClockMessageBuffers? = null
 
@@ -74,7 +77,7 @@ class DefaultClockProvider(
         return clocks
     }
 
-    override fun createClock(settings: ClockSettings): ClockController {
+    override fun createClock(ctx: Context, settings: ClockSettings): ClockController {
         if (getClocks().all { it.clockId != settings.clockId }) {
             throw IllegalArgumentException("${settings.clockId} is unsupported by $TAG")
         }
@@ -96,6 +99,7 @@ class DefaultClockProvider(
                     buffers,
                     buffers.infraMessageBuffer,
                     vibrator,
+                    timeKeeperFactory(),
                 )
             )
         } else {

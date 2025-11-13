@@ -227,7 +227,7 @@ public class DozeSensors {
                         true /* touchscreen */,
                         false /* ignoresSetting */,
                         dozeParameters.singleTapUsesProx(mDevicePosture) /* requiresProx */,
-                        true /* immediatelyReRegister */,
+                        false /* immediatelyReRegister */,
                         mDevicePosture,
                         false
                 ),

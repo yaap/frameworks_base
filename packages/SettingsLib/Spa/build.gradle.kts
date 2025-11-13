@@ -24,11 +24,11 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
 }
 
-val androidTop: String = File(rootDir, "../../../../..").canonicalPath
+val androidTop: String = file("../../../../..").canonicalPath
 
 allprojects {
     extra["androidTop"] = androidTop
-    extra["jetpackComposeVersion"] = "1.8.0-rc01"
+    extra["jetpackComposeVersion"] = "1.9.0-alpha04"
 }
 
 subprojects {
@@ -39,7 +39,6 @@ subprojects {
             compileSdkVersion(36)
 
             defaultConfig {
-                minSdk = 21
                 targetSdk = 36
             }
         }

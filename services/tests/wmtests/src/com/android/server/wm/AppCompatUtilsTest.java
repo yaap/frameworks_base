@@ -17,6 +17,7 @@
 package com.android.server.wm;
 
 import static android.app.CameraCompatTaskInfo.CAMERA_COMPAT_FREEFORM_PORTRAIT_DEVICE_IN_LANDSCAPE;
+import static android.view.Surface.ROTATION_270;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doAnswer;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
@@ -27,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import android.annotation.Nullable;
 import android.app.CameraCompatTaskInfo.FreeformCameraCompatMode;
 import android.app.TaskInfo;
 import android.graphics.Rect;
@@ -34,6 +36,7 @@ import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.view.DisplayInfo;
 import android.view.Surface;
+import android.window.AppCompatTransitionInfo;
 
 import androidx.annotation.NonNull;
 
@@ -219,6 +222,23 @@ public class AppCompatUtilsTest extends WindowTestsBase {
     }
 
     @Test
+    @EnableFlags({Flags.FLAG_ENABLE_CAMERA_COMPAT_FOR_DESKTOP_WINDOWING,
+            Flags.FLAG_ENABLE_CAMERA_COMPAT_CHECK_DEVICE_ROTATION_BUGFIX})
+    public void testTopActivityInCameraCompatMode_rotationFlagEnabled_rotationSet() {
+        runTestScenario((robot) -> {
+            robot.dw().allowEnterDesktopMode(/* isAllowed= */ true);
+            robot.applyOnActivity(
+                    AppCompatActivityRobot::createActivityWithComponentInNewTaskAndDisplay);
+            robot.setCameraCompatTreatmentEnabledForActivity(/* enabled= */ true);
+            robot.setFreeformCameraCompatMode(CAMERA_COMPAT_FREEFORM_PORTRAIT_DEVICE_IN_LANDSCAPE);
+
+            final int expectedDisplayRotation = ROTATION_270;
+            robot.activity().rotateDisplayForTopActivity(expectedDisplayRotation);
+            robot.checkTaskInfoCameraCompatDisplayRotationSet(expectedDisplayRotation);
+        });
+    }
+
+    @Test
     public void testTopActivityLetterboxed_hasBounds() {
         runTestScenario((robot) -> {
             robot.applyOnActivity((a) -> {
@@ -246,6 +266,37 @@ public class AppCompatUtilsTest extends WindowTestsBase {
         });
     }
 
+    @Test
+    public void testCreateAppCompatTransitionInfo_whenNotLetterboxed_returnsNull() {
+        runTestScenario((robot) -> {
+            robot.applyOnActivity((a) -> {
+                a.createActivityWithComponent();
+                a.setIgnoreOrientationRequest(true);
+                a.setTopActivityHasLetterboxedBounds(/* letterboxed */ false);
+            });
+
+            robot.createAppCompatTransitionInfo();
+
+            robot.checkAppCompatTransitionInfoIsCreated(/* expected */ false);
+        });
+    }
+
+    @Test
+    public void createAppCompatTransitionInfo_whenLetterboxed_containsLetterboxBounds() {
+        runTestScenario((robot) -> {
+            robot.applyOnActivity((a) -> {
+                a.createActivityWithComponent();
+                a.setTopActivityHasLetterboxedBounds(/* letterboxed */ true);
+                a.configureTopActivityBounds(new Rect(20, 30, 520, 630));
+            });
+
+            robot.createAppCompatTransitionInfo();
+
+            robot.checkAppCompatTransitionInfoIsCreated(/* expected */ true);
+            robot.checkAppCompatTransitionInfoLetterboxBounds(new Rect(20, 30, 520, 630));
+        });
+    }
+
     /**
      * Runs a test scenario providing a Robot.
      */
@@ -259,6 +310,9 @@ public class AppCompatUtilsTest extends WindowTestsBase {
         private final WindowState mWindowState;
         @NonNull
         private final AppCompatTransparentActivityRobot mTransparentActivityRobot;
+
+        @Nullable
+        private AppCompatTransitionInfo mAppCompatTransitionInfo;
 
         AppCompatUtilsRobotTest(@NonNull WindowManagerService wm,
                 @NonNull ActivityTaskManagerService atm,
@@ -321,6 +375,23 @@ public class AppCompatUtilsTest extends WindowTestsBase {
                     AppCompatUtils.getLetterboxReasonString(activity().top(), mWindowState));
         }
 
+        void createAppCompatTransitionInfo() {
+            mAppCompatTransitionInfo = AppCompatUtils.createAppCompatTransitionInfo(
+                    activity().top());
+        }
+
+        void checkAppCompatTransitionInfoIsCreated(boolean expected) {
+            if (expected) {
+                Assert.assertNotNull(mAppCompatTransitionInfo);
+            } else {
+                Assert.assertNull(mAppCompatTransitionInfo);
+            }
+        }
+
+        void checkAppCompatTransitionInfoLetterboxBounds(@NonNull Rect expectedBounds) {
+            Assert.assertEquals(expectedBounds, mAppCompatTransitionInfo.getLetterboxBounds());
+        }
+
         @NonNull
         TaskInfo getTopTaskInfo() {
             return activity().top().getTask().getTaskInfo();
@@ -334,6 +405,11 @@ public class AppCompatUtilsTest extends WindowTestsBase {
         void checkTaskInfoFreeformCameraCompatMode(@FreeformCameraCompatMode int mode) {
             Assert.assertEquals(mode, getTopTaskInfo().appCompatTaskInfo
                     .cameraCompatTaskInfo.freeformCameraCompatMode);
+        }
+
+        void checkTaskInfoCameraCompatDisplayRotationSet(@Surface.Rotation int expectedRotation) {
+            Assert.assertEquals(expectedRotation, getTopTaskInfo().appCompatTaskInfo
+                    .cameraCompatTaskInfo.displayRotation);
         }
 
         void checkTaskInfoTopActivityHasBounds(Rect bounds) {

@@ -21,10 +21,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Resources
+import android.icu.util.TimeZone as IcuTimeZone
 import android.os.Trace
 import android.provider.Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS
 import android.provider.Settings.Global.ZEN_MODE_OFF
-import android.text.format.DateFormat
 import android.util.Log
 import android.util.TypedValue
 import android.view.View
@@ -37,7 +37,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.systemui.broadcast.BroadcastDispatcher
-import com.android.systemui.customization.R
+import com.android.systemui.customization.clocks.R as clocksR
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.dagger.qualifiers.DisplaySpecific
 import com.android.systemui.dagger.qualifiers.Main
@@ -52,13 +52,14 @@ import com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN
 import com.android.systemui.keyguard.shared.model.TransitionState
 import com.android.systemui.lifecycle.repeatWhenAttached
 import com.android.systemui.log.core.Logger
-import com.android.systemui.modes.shared.ModesUi
 import com.android.systemui.plugins.clocks.AlarmData
 import com.android.systemui.plugins.clocks.ClockController
 import com.android.systemui.plugins.clocks.ClockEventListener
 import com.android.systemui.plugins.clocks.ClockFaceController
+import com.android.systemui.plugins.clocks.ClockFaceController.Companion.updateTheme
 import com.android.systemui.plugins.clocks.ClockMessageBuffers
 import com.android.systemui.plugins.clocks.ClockTickRate
+import com.android.systemui.plugins.clocks.TimeFormatKind
 import com.android.systemui.plugins.clocks.VRectF
 import com.android.systemui.plugins.clocks.WeatherData
 import com.android.systemui.plugins.clocks.ZenData
@@ -126,8 +127,8 @@ constructor(
             connectClock(value)
         }
 
-    private fun is24HourFormat(userId: Int? = null): Boolean {
-        return DateFormat.is24HourFormat(context, userId ?: userTracker.userId)
+    private fun getTimeFormatKind(userId: Int? = null): TimeFormatKind {
+        return TimeFormatKind.getFromContext(context, userId ?: userTracker.userId)
     }
 
     private fun disconnectClock(clock: ClockController?) {
@@ -150,7 +151,8 @@ constructor(
         val clockStr = clock.toString()
         loggers.forEach { it.d({ "New Clock: $str1" }) { str1 = clockStr } }
 
-        clock.initialize(isDarkTheme(), dozeAmount.value, 0f, clockListener)
+        clock.eventListeners.attach(clockListener)
+        clock.initialize(isDarkTheme(), dozeAmount.value, 0f)
 
         if (!regionSamplingEnabled) {
             updateColors()
@@ -196,7 +198,7 @@ constructor(
                 var pastVisibility: Int? = null
 
                 override fun onViewAttachedToWindow(view: View) {
-                    clock.events.onTimeFormatChanged(is24HourFormat())
+                    clock.events.onTimeFormatChanged(getTimeFormatKind())
                     // Match the asing for view.parent's layout classes.
                     smallClockFrame =
                         (view.parent as ViewGroup)?.also { frame ->
@@ -228,7 +230,7 @@ constructor(
         largeClockOnAttachStateChangeListener =
             object : OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(p0: View) {
-                    clock.events.onTimeFormatChanged(is24HourFormat())
+                    clock.events.onTimeFormatChanged(getTimeFormatKind())
                 }
 
                 override fun onViewDetachedFromWindow(p0: View) {}
@@ -264,19 +266,19 @@ constructor(
         if (regionSamplingEnabled) {
             clock?.smallClock?.run {
                 val isDark = smallRegionSampler?.currentRegionDarkness()?.isDark ?: isDarkTheme
-                events.onThemeChanged(theme.copy(isDarkTheme = isDark))
+                updateTheme { it.copy(isDarkTheme = isDark) }
             }
             clock?.largeClock?.run {
                 val isDark = largeRegionSampler?.currentRegionDarkness()?.isDark ?: isDarkTheme
-                events.onThemeChanged(theme.copy(isDarkTheme = isDark))
+                updateTheme { it.copy(isDarkTheme = isDark) }
             }
             return
         }
 
         clock?.run {
             Log.i(TAG, "isThemeDark: $isDarkTheme")
-            smallClock.events.onThemeChanged(smallClock.theme.copy(isDarkTheme = isDarkTheme))
-            largeClock.events.onThemeChanged(largeClock.theme.copy(isDarkTheme = isDarkTheme))
+            smallClock.updateTheme { it.copy(isDarkTheme = isDarkTheme) }
+            largeClock.updateTheme { it.copy(isDarkTheme = isDarkTheme) }
         }
     }
 
@@ -316,6 +318,8 @@ constructor(
 
     private val clockListener =
         object : ClockEventListener {
+            override fun onChangeComplete() {}
+
             override fun onBoundsChanged(bounds: VRectF) {
                 onClockBoundsChanged.value = bounds
             }
@@ -366,15 +370,15 @@ constructor(
             }
 
             override fun onTimeFormatChanged(timeFormat: String?) {
-                clock?.run { events.onTimeFormatChanged(is24HourFormat()) }
+                clock?.run { events.onTimeFormatChanged(getTimeFormatKind()) }
             }
 
             override fun onTimeZoneChanged(timeZone: TimeZone) {
-                clock?.run { events.onTimeZoneChanged(timeZone) }
+                clock?.run { events.onTimeZoneChanged(IcuTimeZone.getTimeZone(timeZone.getID())) }
             }
 
             override fun onUserSwitchComplete(userId: Int) {
-                clock?.run { events.onTimeFormatChanged(is24HourFormat(userId)) }
+                clock?.run { events.onTimeFormatChanged(getTimeFormatKind(userId)) }
                 zenModeCallback.onNextAlarmChanged()
             }
 
@@ -396,7 +400,6 @@ constructor(
     @DeprecatedSysuiVisibleForTesting
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     fun listenForDnd(scope: CoroutineScope): Job {
-        ModesUi.unsafeAssertInNewMode()
         return scope.launch {
             zenModeInteractor.dndMode.collect {
                 val zenMode =
@@ -414,12 +417,6 @@ constructor(
 
     private val zenModeCallback =
         object : ZenModeController.Callback {
-            override fun onZenChanged(zen: Int) {
-                if (!ModesUi.isEnabled) {
-                    handleZenMode(zen)
-                }
-            }
-
             override fun onNextAlarmChanged() {
                 val nextAlarmMillis = zenModeController.getNextAlarm()
                 alarmData =
@@ -478,9 +475,7 @@ constructor(
         disposableHandle =
             parent.repeatWhenAttached {
                 repeatOnLifecycle(Lifecycle.State.CREATED) {
-                    if (ModesUi.isEnabled) {
-                        listenForDnd(this)
-                    }
+                    listenForDnd(this)
                     listenForDozeAmountTransition(this)
                     listenForAnyStateToAodTransition(this)
                     listenForAnyStateToLockscreenTransition(this)
@@ -492,9 +487,6 @@ constructor(
 
         bgExecutor.execute {
             // Query ZenMode data
-            if (!ModesUi.isEnabled) {
-                zenModeCallback.onZenChanged(zenModeController.zen)
-            }
             zenModeCallback.onNextAlarmChanged()
         }
     }
@@ -564,14 +556,14 @@ constructor(
     }
 
     private fun getSmallClockSizePx(): Float {
-        return resources.getDimensionPixelSize(R.dimen.small_clock_text_size).toFloat()
+        return resources.getDimensionPixelSize(clocksR.dimen.small_clock_text_size).toFloat()
     }
 
     private fun getLargeClockSizePx(): Float {
         return if (largeClockOnSecondaryDisplay) {
-            resources.getDimensionPixelSize(R.dimen.presentation_clock_text_size).toFloat()
+            resources.getDimensionPixelSize(clocksR.dimen.presentation_clock_text_size).toFloat()
         } else {
-            resources.getDimensionPixelSize(R.dimen.large_clock_text_size).toFloat()
+            resources.getDimensionPixelSize(clocksR.dimen.large_clock_text_size).toFloat()
         }
     }
 

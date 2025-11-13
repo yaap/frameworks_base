@@ -16,14 +16,19 @@
 
 package com.android.server.wm;
 
+import static android.Manifest.permission.REPOSITION_SELF_WINDOWS;
 import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
 import static android.content.pm.ActivityInfo.RESIZE_MODE_RESIZEABLE;
 import static android.content.pm.ActivityInfo.RESIZE_MODE_UNRESIZEABLE;
+import static android.content.pm.PackageManager.PERMISSION_DENIED;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mock;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
 import static com.android.server.display.feature.flags.Flags.FLAG_ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT;
 import static com.android.server.wm.ActivityInterceptorCallback.MAINLINE_FIRST_ORDERED_ID;
@@ -33,6 +38,8 @@ import static com.android.server.wm.ActivityRecord.State.PAUSED;
 import static com.android.server.wm.ActivityRecord.State.PAUSING;
 import static com.android.server.wm.ActivityRecord.State.RESUMED;
 import static com.android.server.wm.ActivityRecord.State.STOPPING;
+import static com.android.window.flags.Flags.FLAG_ENABLE_SYS_DECORS_CALLBACKS_VIA_WM;
+import static com.android.window.flags.Flags.FLAG_ENABLE_WINDOW_REPOSITIONING_API;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -44,7 +51,9 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
@@ -77,13 +86,12 @@ import android.view.WindowManager;
 
 import androidx.test.filters.MediumTest;
 
-import com.android.server.UiThread;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.mockito.MockitoSession;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -102,6 +110,36 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
 
     private static final String DEFAULT_PACKAGE_NAME = "my.application.package";
     private static final int DEFAULT_USER_ID = 100;
+
+    private static class TestDisplayWindowListenerBase extends IDisplayWindowListener.Stub {
+        @Override
+        public void onDisplayAdded(int displayId) {}
+
+        @Override
+        public void onDisplayConfigurationChanged(int displayId, Configuration newConfig) {}
+
+        @Override
+        public void onDisplayRemoved(int displayId) {}
+
+        @Override
+        public void onFixedRotationStarted(int displayId, int newRotation) {}
+
+        @Override
+        public void onFixedRotationFinished(int displayId) {}
+
+        @Override
+        public void onKeepClearAreasChanged(int displayId, List<Rect> restricted,
+                List<Rect> unrestricted) {}
+
+        @Override
+        public void onDesktopModeEligibleChanged(int displayId) {}
+
+        @Override
+        public void onDisplayAddSystemDecorations(int displayId) {}
+
+        @Override
+        public void onDisplayRemoveSystemDecorations(int displayId) {}
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -168,14 +206,12 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
         verify(mClientLifecycleManager, never()).scheduleTransactionItem(any(), any());
     }
 
-    @EnableFlags(FLAG_ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT)
     @Test
     public void testDisplayWindowListener() {
         final ArrayList<Integer> added = new ArrayList<>();
         final ArrayList<Integer> changed = new ArrayList<>();
         final ArrayList<Integer> removed = new ArrayList<>();
-        final ArrayList<Integer> desktopModeEligibleChanged = new ArrayList<>();
-        IDisplayWindowListener listener = new IDisplayWindowListener.Stub() {
+        IDisplayWindowListener listener = new TestDisplayWindowListenerBase() {
             @Override
             public void onDisplayAdded(int displayId) {
                 added.add(displayId);
@@ -189,21 +225,6 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
             @Override
             public void onDisplayRemoved(int displayId) {
                 removed.add(displayId);
-            }
-
-            @Override
-            public void onFixedRotationStarted(int displayId, int newRotation) {}
-
-            @Override
-            public void onFixedRotationFinished(int displayId) {}
-
-            @Override
-            public void onKeepClearAreasChanged(int displayId, List<Rect> restricted,
-                    List<Rect> unrestricted) {}
-
-            @Override
-            public void onDesktopModeEligibleChanged(int displayId) {
-                desktopModeEligibleChanged.add(displayId);
             }
         };
         int[] displayIds = mAtm.mWindowManager.registerDisplayWindowListener(listener);
@@ -230,28 +251,73 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
         assertEquals(0, removed.size());
         changed.clear();
 
+        // Check that removal is reported
+        newDisp1.remove();
+        assertEquals(0, added.size());
+        assertEquals(0, changed.size());
+        assertEquals(1, removed.size());
+    }
+
+    @EnableFlags(FLAG_ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT)
+    @Test
+    public void testDisplayWindowListener_desktopModeEligibleChanged() {
+        final ArrayList<Integer> desktopModeEligibleChanged = new ArrayList<>();
+        IDisplayWindowListener listener = new TestDisplayWindowListenerBase() {
+            @Override
+            public void onDesktopModeEligibleChanged(int displayId) {
+                desktopModeEligibleChanged.add(displayId);
+            }
+        };
+        mAtm.mWindowManager.registerDisplayWindowListener(listener);
+        DisplayContent newDisp1 = new TestDisplayContent.Builder(mAtm, 600, 800).build();
+
         // Check adding decoration
         doReturn(true).when(newDisp1).allowContentModeSwitch();
         doReturn(true).when(newDisp1).isSystemDecorationsSupported();
         mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, true);
-        waitHandlerIdle(UiThread.getHandler());
         assertEquals(1, desktopModeEligibleChanged.size());
         assertEquals(newDisp1.mDisplayId, (int) desktopModeEligibleChanged.get(0));
         desktopModeEligibleChanged.clear();
         // Check removing decoration
         doReturn(false).when(newDisp1).isSystemDecorationsSupported();
         mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, false);
-        waitHandlerIdle(UiThread.getHandler());
         assertEquals(1, desktopModeEligibleChanged.size());
         assertEquals(newDisp1.mDisplayId, (int) desktopModeEligibleChanged.get(0));
         desktopModeEligibleChanged.clear();
+    }
 
-        // Check that removal is reported
-        changed.clear();
-        newDisp1.remove();
-        assertEquals(0, added.size());
-        assertEquals(0, changed.size());
-        assertEquals(1, removed.size());
+    @EnableFlags(FLAG_ENABLE_SYS_DECORS_CALLBACKS_VIA_WM)
+    @Test
+    public void testDisplayWindowListener_systemDecorations() {
+        final ArrayList<Integer> displayAddSystemDecorations = new ArrayList<>();
+        final ArrayList<Integer> displayRemoveSystemDecorations = new ArrayList<>();
+        IDisplayWindowListener listener = new TestDisplayWindowListenerBase() {
+            @Override
+            public void onDisplayAddSystemDecorations(int displayId) {
+                displayAddSystemDecorations.add(displayId);
+            }
+
+            @Override
+            public void onDisplayRemoveSystemDecorations(int displayId) {
+                displayRemoveSystemDecorations.add(displayId);
+            }
+        };
+        mAtm.mWindowManager.registerDisplayWindowListener(listener);
+        DisplayContent newDisp1 = new TestDisplayContent.Builder(mAtm, 600, 800).build();
+
+        // Check adding decoration
+        doReturn(true).when(newDisp1).isSystemDecorationsSupported();
+        mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, true);
+        assertEquals(1, displayAddSystemDecorations.size());
+        assertEquals(newDisp1.mDisplayId, (int) displayAddSystemDecorations.get(0));
+        displayAddSystemDecorations.clear();
+
+        // Check removing decoration
+        doReturn(false).when(newDisp1).isSystemDecorationsSupported();
+        mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, false);
+        assertEquals(1, displayRemoveSystemDecorations.size());
+        assertEquals(newDisp1.mDisplayId, (int) displayRemoveSystemDecorations.get(0));
+        displayRemoveSystemDecorations.clear();
     }
 
     @Test
@@ -523,6 +589,29 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
         mAtm.endPowerMode(ActivityTaskManagerService.POWER_MODE_REASON_CHANGE_DISPLAY);
         verify(mWm.mPowerManagerInternal).setPowerMode(
                 PowerManagerInternal.MODE_DISPLAY_CHANGE, false);
+    }
+
+    @Test
+    public void testUpdatePreviousProcess() {
+        final ActivityRecord activity = new ActivityBuilder(mAtm).build();
+        activity.lastVisibleTime = 1;
+        mAtm.mTopApp = mock(WindowProcessController.class);
+        mAtm.updatePreviousProcess(activity);
+
+        assertEquals(activity.app, mAtm.mPreviousProcess);
+
+        final ActivityRecord recentsActivity = new ActivityBuilder(mAtm)
+                .setUid("recents".hashCode()).build();
+        final RecentTasks recentTasks = mAtm.getRecentTasks();
+        spyOn(recentTasks);
+        doReturn(true).when(recentTasks).isRecentsComponent(
+                eq(recentsActivity.mActivityComponent),
+                eq(recentsActivity.info.applicationInfo.uid));
+        recentsActivity.lastVisibleTime = 2;
+        mAtm.updatePreviousProcess(recentsActivity);
+
+        assertEquals("RecentsActivity must not occupy 'previous process'",
+                activity.app, mAtm.mPreviousProcess);
     }
 
     @Test
@@ -1251,5 +1340,61 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
         // Verify this throws a security exception due to no matching UID
         assertThrows(SecurityException.class,
                 () -> mAtm.getTaskDescriptionIcon(filePath, activity.mUserId));
+    }
+
+    @Test
+    public void testRequestEnterPipModeWhenTaskIsDisabledPip_notEnterPip() {
+        final ActivityRecord record = new ActivityBuilder(mAtm).setCreateTask(true).build();
+        PictureInPictureParams params = mock(PictureInPictureParams.class);
+        record.pictureInPictureArgs = params;
+
+        //mock operations in private method ensureValidPictureInPictureActivityParamsLocked()
+        doReturn(true).when(record).supportsPictureInPicture();
+        doReturn(false).when(params).hasSetAspectRatio();
+
+        record.getTask().setDisablePip(true);
+
+        assertFalse(mAtm.mActivityClientController.enterPictureInPictureMode(record.token, params));
+        assertFalse(record.inPinnedWindowingMode());
+    }
+
+    @EnableFlags(FLAG_ENABLE_WINDOW_REPOSITIONING_API)
+    @Test
+    public void testIsTaskMoveAllowedOnDisplay_permissionGranted() {
+        final int displayId = 73;
+
+        MockitoSession session =
+                mockitoSession().spyStatic(ActivityTaskManagerService.class).startMocking();
+        try {
+            doReturn(true).when(mRootWindowContainer).isTaskMoveAllowedOnDisplay(displayId);
+            doReturn(PERMISSION_GRANTED).when(() -> {
+                return ActivityTaskManagerService.checkPermission(
+                        eq(REPOSITION_SELF_WINDOWS), anyInt(), anyInt());
+            });
+
+            assertTrue(mAtm.isTaskMoveAllowedOnDisplay(displayId));
+        } finally {
+            session.finishMocking();
+        }
+    }
+
+    @EnableFlags(FLAG_ENABLE_WINDOW_REPOSITIONING_API)
+    @Test
+    public void testIsTaskMoveAllowedOnDisplay_permissionDenied() {
+        final int displayId = 73;
+
+        MockitoSession session =
+                mockitoSession().spyStatic(ActivityTaskManagerService.class).startMocking();
+        try {
+            doReturn(true).when(mRootWindowContainer).isTaskMoveAllowedOnDisplay(displayId);
+            doReturn(PERMISSION_DENIED).when(() -> {
+                return ActivityTaskManagerService.checkPermission(
+                        eq(REPOSITION_SELF_WINDOWS), anyInt(), anyInt());
+            });
+
+            assertFalse(mAtm.isTaskMoveAllowedOnDisplay(displayId));
+        } finally {
+            session.finishMocking();
+        }
     }
 }

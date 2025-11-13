@@ -270,7 +270,7 @@
     <string name="global_action_logout" msgid="6093581310002476511">"Maliza kipindi"</string>
     <string name="global_action_screenshot" msgid="2610053466156478564">"Picha ya skrini"</string>
     <string name="global_action_standby" msgid="6786920589970257642">"Hali tuli"</string>
-    <string name="bugreport_title" msgid="8549990811777373050">"Ripoti ya hitilafu"</string>
+    <string name="bugreport_title" msgid="8549990811777373050">"Ripoti hitilafu"</string>
     <string name="bugreport_message" msgid="5212529146119624326">"Hii itakusanya maelezo kuhusu hali ya kifaa chako kwa sasa, na itume kama barua pepe. Itachukua muda mfupi tangu ripoti ya hitilafu ianze kuzalishwa hadi iwe tayari kutumwa; vumilia."</string>
     <string name="bugreport_option_interactive_title" msgid="7968287837902871289">"Ripoti ya kushirikiana"</string>
     <string name="bugreport_option_interactive_summary" msgid="8493795476325339542">"Tumia chaguo hili katika hali nyingi. Hukuruhusu kufuatilia jinsi ripoti yako inavyoendelea, kuandika maelezo zaidi kuhusu tatizo na kupiga picha za skrini. Huenda ikaacha baadhi ya sehemu ambazo hazitumiki sana na zinachukua muda mrefu kuripoti."</string>
@@ -354,10 +354,12 @@
     <string name="permgroupdesc_sensors" msgid="2610631290633747752">"fikia data ya kitambuzi kuhusu alama zako muhimu"</string>
     <string name="permgrouplab_notifications" msgid="5472972361980668884">"Arifa"</string>
     <string name="permgroupdesc_notifications" msgid="4608679556801506580">"kuonyesha arifa"</string>
+    <string name="permgrouplab_xr_eye_sensitive" msgid="2099659100156643683">"Data nyeti ya kufuatilia macho katika XR"</string>
+    <string name="permgroupdesc_xr_eye_sensitive" msgid="1414121516133760271">"kufikia data nyeti ya mahali ambako macho yanaangalia"</string>
     <string name="permgrouplab_xr_tracking" msgid="7418994009794287471">"data ya ufuatiliaji wa XR"</string>
     <string name="permgroupdesc_xr_tracking" msgid="6777198859446500821">"kufikia data ya XR kukuhusu na mazingira yaliyo karibu nawe"</string>
-    <string name="permgrouplab_xr_tracking_sensitive" msgid="1194833982988144536">"data nyeti ya ufuatiliaji wa XR"</string>
-    <string name="permgroupdesc_xr_tracking_sensitive" msgid="9178027369004805829">"kufikia data nyeti ya ufuatiliaji, kama vile mahali ambako macho yanaangalia"</string>
+    <string name="permgrouplab_xr_tracking_sensitive" msgid="2993940754322250652">"Data nyeti ya ufuatiliaji katika XR"</string>
+    <string name="permgroupdesc_xr_tracking_sensitive" msgid="8498501397939308918">"kufikia data nyeti ya ufuatiliaji kukuhusu na mazingira yaliyo karibu nawe"</string>
     <string name="capability_title_canRetrieveWindowContent" msgid="7554282892101587296">"Kufikia maudhui ya dirisha"</string>
     <string name="capability_desc_canRetrieveWindowContent" msgid="6195610527625237661">"Kuchunguza maudhui ya dirisha unalotumia."</string>
     <string name="capability_title_canRequestTouchExploration" msgid="327598364696316213">"Kuwasha \'Chunguza kwa Kugusa\'"</string>
@@ -382,6 +384,8 @@
     <string name="permdesc_expandStatusBar" msgid="7180756900448498536">"Inaruhusu programu kupanua au kukunja upau wa hali."</string>
     <string name="permlab_fullScreenIntent" msgid="4310888199502509104">"onyesha arifa kama shughuli za skrini nzima kwenye kifaa kilichofungwa"</string>
     <string name="permdesc_fullScreenIntent" msgid="1100721419406643997">"Huruhusu programu kuonyesha arifa kama shughuli za skrini nzima kwenye kifaa kilichofungwa"</string>
+    <string name="permlab_postPromotedNotifications" msgid="4873499297871691102">"Kuonyesha taarifa za moja kwa moja"</string>
+    <string name="permdesc_postPromotedNotifications" msgid="4530634734172420651">"Huruhusu programu kuonyesha arifa zinazoendelea ambazo zinazingatia muda kwenye sehemu ya arifa na skrini iliyofungwa"</string>
     <string name="permlab_install_shortcut" msgid="7451554307502256221">"kuweka njia za mkato"</string>
     <string name="permdesc_install_shortcut" msgid="4476328467240212503">"Huruhusu programu kuongeza njia za mkato za Skrini ya kwanza bila mtumiaji kuingilia."</string>
     <string name="permlab_uninstall_shortcut" msgid="295263654781900390">"ondoa njia za mikato"</string>
@@ -683,11 +687,11 @@
     <string name="biometric_error_generic" msgid="6784371929985434439">"Hitilafu imetokea wakati wa uthibitishaji"</string>
     <string name="screen_lock_app_setting_name" msgid="6054944352976789228">"Tumia mbinu ya kufunga skrini"</string>
     <string name="screen_lock_dialog_default_subtitle" msgid="120359538048533695">"Weka mbinu yako ya kufunga skrini ili uendelee"</string>
-    <string name="fingerprint_acquired_partial" msgid="4323789264604479684">"Bonyeza kwa uthabiti kwenye kitambuzi"</string>
+    <string name="fingerprint_acquired_partial" msgid="4323789264604479684">"Bonyeza kitambuzi kwa nguvu"</string>
     <string name="fingerprint_acquired_insufficient" msgid="2410176550915730974">"Alama ya kidole haitambuliki. Jaribu tena."</string>
     <string name="fingerprint_acquired_imager_dirty" msgid="1770676120848224250">"Safisha kitambua alama ya kidole kisha ujaribu tena"</string>
     <string name="fingerprint_acquired_imager_dirty_alt" msgid="9169582140486372897">"Safisha kitambuzi kisha ujaribu tena"</string>
-    <string name="fingerprint_acquired_too_fast" msgid="1628459767349116104">"Bonyeza kwa nguvu kwenye kitambuzi"</string>
+    <string name="fingerprint_acquired_too_fast" msgid="1628459767349116104">"Bonyeza kitambuzi kwa nguvu"</string>
     <string name="fingerprint_acquired_too_slow" msgid="6683510291554497580">"Kidole kilisogezwa polepole zaidi. Tafadhali jaribu tena."</string>
     <string name="fingerprint_acquired_already_enrolled" msgid="2285166003936206785">"Jaribu alama nyingine ya kidole"</string>
     <string name="fingerprint_acquired_too_bright" msgid="3863560181670915607">"Inang\'aa mno"</string>
@@ -1182,22 +1186,8 @@
     <string name="duration_hours_shortest_future" msgid="2979276794547981674">"baada ya saa <xliff:g id="COUNT">%d</xliff:g>"</string>
     <string name="duration_days_shortest_future" msgid="3392722163935571543">"baada ya siku <xliff:g id="COUNT">%d</xliff:g>"</string>
     <string name="duration_years_shortest_future" msgid="5537464088352970388">"baada ya mwaka <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_minutes_shortest_past" msgid="1740022450020492407">"dak <xliff:g id="COUNT">%d</xliff:g> zilizopita"</string>
-    <string name="duration_hours_shortest_past" msgid="2098397414186628489">"saa <xliff:g id="COUNT">%d</xliff:g> zilizopita"</string>
-    <string name="duration_days_shortest_past" msgid="1832006037955897625">"siku <xliff:g id="COUNT">%d</xliff:g> zilizopita"</string>
-    <string name="duration_years_shortest_past" msgid="6168256514200469291">"miaka <xliff:g id="COUNT">%d</xliff:g> iliyopita"</string>
     <string name="duration_minutes_medium" msgid="5891933490342643944">"dak <xliff:g id="COUNT">%d</xliff:g>"</string>
     <string name="duration_hours_medium" msgid="1465359726485910115">"saa <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_days_medium" msgid="5994225628248661388">"siku <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_years_medium" msgid="734023884353592526">"miaka <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_minutes_medium_future" msgid="2750894988731934402">"ndani ya dak <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_hours_medium_future" msgid="6050833881463849764">"ndani ya saa <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_days_medium_future" msgid="1700821545602729963">"ndani ya siku <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_years_medium_future" msgid="3281018940397120166">"ndani ya miaka <xliff:g id="COUNT">%d</xliff:g>"</string>
-    <string name="duration_minutes_medium_past" msgid="7400424340181947714">"dak <xliff:g id="COUNT">%d</xliff:g> zilizopita"</string>
-    <string name="duration_hours_medium_past" msgid="6709441336035202617">"saa <xliff:g id="COUNT">%d</xliff:g> zilizopita"</string>
-    <string name="duration_days_medium_past" msgid="5748156261134344532">"siku <xliff:g id="COUNT">%d</xliff:g> zilizopita"</string>
-    <string name="duration_years_medium_past" msgid="893797065424596243">"miaka <xliff:g id="COUNT">%d</xliff:g> iliyopita"</string>
     <string name="duration_minutes_relative" msgid="8620337701051015593">"{count,plural, =1{Dakika # iliyopita}other{Dakika # zilizopita}}"</string>
     <string name="duration_hours_relative" msgid="4836449961693180253">"{count,plural, =1{Saa # iliyopita}other{Saa # zilizopita}}"</string>
     <string name="duration_days_relative" msgid="621965767567258302">"{count,plural, =1{Siku # iliyopita}other{Siku # zilizopita}}"</string>
@@ -1709,6 +1699,12 @@
     <string name="default_audio_route_name_external_device" msgid="8124229858618975">"Kifaa cha Nje"</string>
     <string name="default_audio_route_name_headphones" msgid="6954070994792640762">"Vipokeasauti"</string>
     <string name="default_audio_route_name_usb" msgid="895668743163316932">"USB"</string>
+    <string name="default_audio_route_name_hdmi_tv" msgid="1629608564121895625">"Sauti ya Televisheni"</string>
+    <string name="default_audio_route_name_arc" msgid="5117738492549798911">"ARC"</string>
+    <string name="default_audio_route_name_earc" msgid="5869527419074773683">"eARC"</string>
+    <string name="default_audio_route_name_analog" msgid="7781645558035374980">"Analogi"</string>
+    <string name="default_audio_route_name_digital" msgid="6959855552809654826">"Dijitali"</string>
+    <string name="default_audio_route_name_aux" msgid="7432808125413299672">"AUX"</string>
     <string name="default_audio_route_category_name" msgid="5241740395748134483">"Mfumo"</string>
     <string name="bluetooth_a2dp_audio_route_name" msgid="4214648773120426288">"Sauti ya Bluetooth"</string>
     <string name="wireless_display_route_description" msgid="8297563323032966831">"Uonyeshaji usiotumia waya"</string>
@@ -1801,10 +1797,11 @@
     <string name="leave_accessibility_shortcut_on" msgid="6543362062336990814">"Tumia Njia ya Mkato"</string>
     <string name="color_inversion_feature_name" msgid="2672824491933264951">"Ugeuzaji rangi"</string>
     <string name="color_correction_feature_name" msgid="7975133554160979214">"Usahihishaji wa rangi"</string>
-    <string name="one_handed_mode_feature_name" msgid="2334330034828094891">"Hali ya kutumia kwa mkono mmoja"</string>
+    <string name="one_handed_mode_feature_name" msgid="2334330034828094891">"Kutumia kwa mkono mmoja"</string>
     <string name="reduce_bright_colors_feature_name" msgid="3222994553174604132">"Kipunguza mwangaza zaidi"</string>
     <string name="hearing_aids_feature_name" msgid="1125892105105852542">"Vifaa vya kusaidia kusikia"</string>
-    <string name="autoclick_feature_name" msgid="8149248738736949630">"Kubofya kiotomatiki"</string>
+    <string name="autoclick_feature_name" msgid="4056260617171267864">"Kubofya kiotomatiki (muda kabla ya kubofya kiotomatiki)"</string>
+    <string name="mouse_keys_feature_name" msgid="3362643216513384542">"Vitufe vya kipanya"</string>
     <string name="hearing_device_status_disconnected" msgid="497547752953543832">"Haijaunganishwa"</string>
     <string name="hearing_device_status_connected" msgid="2149385149669918764">"Imeunganishwa"</string>
     <string name="hearing_device_status_active" msgid="4770378695482566032">"Inatumika"</string>
@@ -1829,6 +1826,7 @@
     <string name="user_logging_out_message" msgid="7216437629179710359">"Inamwondoa <xliff:g id="NAME">%1$s</xliff:g>…"</string>
     <string name="owner_name" msgid="8713560351570795743">"Mmiliki"</string>
     <string name="guest_name" msgid="8502103277839834324">"Mgeni"</string>
+    <string name="headless_system_user_name" msgid="1849150903255530049">"Mtumiaji wa Mfumo"</string>
     <string name="error_message_title" msgid="4082495589294631966">"Hitilafu"</string>
     <string name="error_message_change_not_allowed" msgid="843159705042381454">"Mabadiliko haya hayaruhusiwi na msimamizi wako"</string>
     <string name="app_not_found" msgid="3429506115332341800">"Hakuna programu iliyopatikana ili kushughulikia kitendo hiki"</string>
@@ -2043,7 +2041,7 @@
     <string name="promotional_notification_channel_label" msgid="7414844730492860233">"Matoleo"</string>
     <string name="social_notification_channel_label" msgid="106520267132019945">"Mitandao Jamii"</string>
     <string name="news_notification_channel_label" msgid="4299937455247883311">"Habari"</string>
-    <string name="recs_notification_channel_label" msgid="4945985121418684297">"Mapendekezo"</string>
+    <string name="recs_notification_channel_label" msgid="4731685669194175453">"Zinazopendekezwa"</string>
     <string name="importance_from_user" msgid="2782756722448800447">"Uliweka mipangilio ya umuhimu wa arifa hizi."</string>
     <string name="importance_from_person" msgid="4235804979664465383">"Hii ni muhimu kwa sababu ya watu waliohusika."</string>
     <string name="notification_history_title_placeholder" msgid="7748630986182249599">"Arifa ya programu maalum"</string>
@@ -2266,19 +2264,21 @@
     <string name="accessibility_system_action_dpad_left_label" msgid="6557647179116479152">"Kitufe cha kushoto cha Dpad"</string>
     <string name="accessibility_system_action_dpad_right_label" msgid="9180196950365804081">"Kitufe cha kulia cha Dpad"</string>
     <string name="accessibility_system_action_dpad_center_label" msgid="8149791419358224893">"Kitufe cha katikati cha Dpad"</string>
-    <string name="accessibility_autoclick_type_settings_panel_title" msgid="7354373370578758696">"Kidirisha cha mipangilio ya aina ya kubofya kiotomatiki"</string>
-    <string name="accessibility_autoclick_left_click" msgid="2301793352260551080">"Bofya kushoto"</string>
-    <string name="accessibility_autoclick_right_click" msgid="4353495816526181293">"Bofya kulia"</string>
-    <string name="accessibility_autoclick_double_click" msgid="2103826849116176478">"Bofya mara mbili"</string>
+    <string name="accessibility_autoclick_type_settings_panel_title" msgid="2153131135765368397">"Menyu ya chaguo za kubofya kiotomatiki"</string>
+    <string name="accessibility_autoclick_left_click" msgid="8241237237588793835">"Bofya kushoto"</string>
+    <string name="accessibility_autoclick_right_click" msgid="6208390123529830506">"Bofya kulia"</string>
+    <string name="accessibility_autoclick_double_click" msgid="2800154470129612873">"Bofya mara mbili"</string>
     <string name="accessibility_autoclick_drag" msgid="1499559489796843224">"Buruta"</string>
     <string name="accessibility_autoclick_scroll" msgid="3499385943728726933">"Sogeza"</string>
+    <string name="accessibility_autoclick_long_press" msgid="6241367542788162585">"Gusa na ushikilie"</string>
     <string name="accessibility_autoclick_pause" msgid="3272200156172573568">"Sitisha"</string>
-    <string name="accessibility_autoclick_position" msgid="2933660969907663545">"Nafasi"</string>
-    <string name="accessibility_autoclick_scroll_up" msgid="2044948780797117443">"Sogeza Juu"</string>
-    <string name="accessibility_autoclick_scroll_down" msgid="3733401063292018116">"Sogeza Chini"</string>
-    <string name="accessibility_autoclick_scroll_left" msgid="8564421367992824198">"Sogeza Kushoto"</string>
-    <string name="accessibility_autoclick_scroll_right" msgid="8932417330753984265">"Sogeza Kulia"</string>
-    <string name="accessibility_autoclick_scroll_exit" msgid="3788610039146769696">"Funga Hali ya Kusogeza"</string>
+    <string name="accessibility_autoclick_resume" msgid="3213396544455349247">"Endelea"</string>
+    <string name="accessibility_autoclick_position" msgid="5952428999227490977">"Badilisha nafasi ilipo menyu"</string>
+    <string name="accessibility_autoclick_scroll_up" msgid="4018950185625702489">"Sogeza juu"</string>
+    <string name="accessibility_autoclick_scroll_down" msgid="7055049493005995473">"Sogeza chini"</string>
+    <string name="accessibility_autoclick_scroll_left" msgid="7469540382570551732">"Sogeza kushoto"</string>
+    <string name="accessibility_autoclick_scroll_right" msgid="8395851755038161912">"Sogeza kulia"</string>
+    <string name="accessibility_autoclick_scroll_exit" msgid="8766731873098339511">"Funga hali ya kusogeza"</string>
     <string name="accessibility_autoclick_scroll_panel_title" msgid="7120598166296447036">"Sogeza Kidirisha"</string>
     <string name="as_app_forced_to_restricted_bucket" msgid="8233871289353898964">"<xliff:g id="PACKAGE_NAME">%1$s</xliff:g> kimewekwa katika kikundi KILICHODHIBITIWA"</string>
     <string name="conversation_single_line_name_display" msgid="8958948312915255999">"<xliff:g id="SENDER_NAME">%1$s</xliff:g>:"</string>
@@ -2555,8 +2555,17 @@
     <string name="keyboard_shortcut_group_applications_maps" msgid="7950000659522589471">"Ramani"</string>
     <string name="keyboard_shortcut_group_applications" msgid="3010389163951364798">"Programu"</string>
     <string name="fingerprint_loe_notification_msg" msgid="3927447270148854546">"Alama zako za vidole hazitambuliki tena. Weka tena mipangilio ya Kufungua kwa Alama ya Kidole."</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="468577168569874967">"Kifaa cha USB kimechomekwa wakati Android imefungwa"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="6695268246267993166">"Kifaa cha USB huchomekwa wakati Android imefungwa. Tafadhali fungua kwanza Android kisha uweke upya kifaa cha USB ili ukitumie."</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title" msgid="285421860627714333">"Usalama na faragha"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="5205863500921477220">"Ulinzi wa Hali ya Juu wa USB"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="2147694109838597680">"Fungua kifaa ili kihamishe data"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text" msgid="1979414895616432005">"Huenda ukahitaji kufungua na kuunganisha upya kifaa chako ili kihamishe data"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text" msgid="5974307859193807824">"Fungua kifaa ili kihamishe data na kichaji kwa kasi"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text" msgid="9045166614060168068">"Huenda ukahitaji kufungua na kuunganisha upya kifaa chako ili kihamishe data na kichaji kwa kasi"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text" msgid="5538918232374470393">"Fungua kifaa ili kichaji kwa kasi"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text" msgid="4301626745704703517">"Huenda ukahitaji kufungua na kuunganisha upya kifaa chako ili kichaji kwa kasi"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text" msgid="5495539757631669634">"Zima sauti"</string>
+    <string name="usb_apm_usb_notification_silenced_title" msgid="7883902869771699533">"Sauti ya arifa imezimwa"</string>
+    <string name="usb_apm_usb_notification_silenced_text" msgid="7154391495952217529">"Sauti imezimwa hadi utakapozima kisha uwashe kifaa chako"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_title" msgid="3461195995882871461">"Shughuli za USB za kutilia shaka"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_text" msgid="6537085605929303187">"Kiashiria cha data cha USB kimezimwa."</string>
     <string name="fingerprint_frr_notification_title" msgid="3668331918920659093">"Je, unatatizwa na kipengele cha Kufungua kwa Alama ya Kidole?"</string>

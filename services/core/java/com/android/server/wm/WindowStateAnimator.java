@@ -16,6 +16,9 @@
 
 package com.android.server.wm;
 
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowStateAnimatorProto.DRAW_STATE;
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowStateAnimatorProto.SURFACE;
+import static android.internal.perfetto.protos.Windowmanagerservice.WindowSurfaceControllerProto.SHOWN;
 import static android.os.Trace.TRACE_TAG_WINDOW_MANAGER;
 import static android.view.SurfaceControl.METADATA_OWNER_PID;
 import static android.view.SurfaceControl.METADATA_OWNER_UID;
@@ -35,7 +38,6 @@ import static com.android.internal.protolog.WmProtoLogGroups.WM_SHOW_TRANSACTION
 import static com.android.server.policy.WindowManagerPolicy.FINISH_LAYOUT_REDO_ANIM;
 import static com.android.server.policy.WindowManagerPolicy.FINISH_LAYOUT_REDO_WALLPAPER;
 import static com.android.server.wm.SurfaceAnimator.ANIMATION_TYPE_WINDOW_ANIMATION;
-import static com.android.server.wm.WindowContainer.AnimationFlags.TRANSITION;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_LAYOUT_REPEATS;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_STARTING_WINDOW_VERBOSE;
@@ -44,15 +46,10 @@ import static com.android.server.wm.WindowManagerDebugConfig.SHOW_LIGHT_TRANSACT
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WITH_CLASS_NAME;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
 import static com.android.server.wm.WindowManagerService.logWithStack;
-import static com.android.server.wm.WindowStateAnimatorProto.DRAW_STATE;
-import static com.android.server.wm.WindowStateAnimatorProto.SURFACE;
-import static com.android.server.wm.WindowStateAnimatorProto.SYSTEM_DECOR_RECT;
-import static com.android.server.wm.WindowSurfaceControllerProto.SHOWN;
 import static com.android.window.flags.Flags.setScPropertiesInClient;
 
 import android.content.Context;
 import android.graphics.PixelFormat;
-import android.graphics.Rect;
 import android.os.Debug;
 import android.os.Trace;
 import android.util.EventLog;
@@ -110,12 +107,6 @@ class WindowStateAnimator {
     float mShownAlpha = 0;
     float mAlpha = 0;
     float mLastAlpha = 0;
-
-    /**
-     * This is rectangle of the window's surface that is not covered by
-     * system decorations.
-     */
-    private final Rect mSystemDecorRect = new Rect();
 
     // Set to true if, when the window gets displayed, it should perform
     // an enter animation.
@@ -285,10 +276,7 @@ class WindowStateAnimator {
         if (mWin.mActivityRecord == null) {
             return;
         }
-
-        if (!mWin.mActivityRecord.isAnimating(TRANSITION)) {
-            mWin.mActivityRecord.clearAllDrawn();
-        }
+        mWin.mActivityRecord.clearAllDrawn();
     }
 
     SurfaceControl createSurfaceLocked() {
@@ -399,14 +387,10 @@ class WindowStateAnimator {
                         + mSurfaceControl + ", session " + mSession);
             }
             ProtoLog.i(WM_SHOW_SURFACE_ALLOC, "SURFACE DESTROY: %s. %s",
-                    mWin, new RuntimeException().fillInStackTrace());
+                    mWin, new RuntimeException());
             destroySurface(t);
-            if (mService.mFlags.mEnsureWallpaperInTransitions) {
-                if (mWallpaperControllerLocked.isWallpaperTarget(mWin)) {
-                    mWin.requestUpdateWallpaperIfNeeded();
-                }
-            } else {
-                mWallpaperControllerLocked.hideWallpapers(mWin);
+            if (mWallpaperControllerLocked.isWallpaperTarget(mWin)) {
+                mWin.requestUpdateWallpaperIfNeeded();
             }
         } catch (RuntimeException e) {
             Slog.w(TAG, "Exception thrown when destroying Window " + this
@@ -425,7 +409,7 @@ class WindowStateAnimator {
 
         if (!w.isOnScreen()) {
             hide(t, "prepareSurfaceLocked");
-            if (!w.mIsWallpaper || !mService.mFlags.mEnsureWallpaperInTransitions) {
+            if (!w.mIsWallpaper) {
                 mWallpaperControllerLocked.hideWallpapers(w);
             }
         } else if (mLastAlpha != mShownAlpha
@@ -527,7 +511,7 @@ class WindowStateAnimator {
             }
         }
 
-        if (mWin.mControllableInsetProvider != null) {
+        if (mWin.getControllableInsetProvider() != null) {
             // All our animations should be driven by the insets control target.
             return false;
         }
@@ -596,7 +580,6 @@ class WindowStateAnimator {
             proto.end(dumpToken);
         }
         proto.write(DRAW_STATE, mDrawState);
-        mSystemDecorRect.dumpDebug(proto, SYSTEM_DECOR_RECT);
         proto.end(token);
     }
 
@@ -614,7 +597,6 @@ class WindowStateAnimator {
             pw.print(prefix); pw.print("mDrawState="); pw.print(drawStateToString());
             pw.print(prefix); pw.print(" mLastHidden="); pw.println(mLastHidden);
             pw.print(prefix); pw.print("mEnterAnimationPending=" + mEnterAnimationPending);
-            pw.print(prefix); pw.print("mSystemDecorRect="); mSystemDecorRect.printShortString(pw);
 
             pw.println();
         }

@@ -22,6 +22,8 @@ import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.android.app.tracing.coroutines.launchTraced as launch
+import com.android.systemui.deviceentry.ui.view.UdfpsAccessibilityOverlayOverlappingView
 import com.android.systemui.keyguard.ui.viewmodel.AccessibilityActionsViewModel
 import com.android.systemui.lifecycle.repeatWhenAttached
 import com.android.systemui.res.R
@@ -31,7 +33,7 @@ import com.android.app.tracing.coroutines.launchTraced as launch
 /** View binder for accessibility actions placeholder on keyguard. */
 object AccessibilityActionsViewBinder {
     fun bind(
-        view: View,
+        view: UdfpsAccessibilityOverlayOverlappingView,
         viewModel: AccessibilityActionsViewModel,
     ): DisposableHandle {
         val disposableHandle =
@@ -90,6 +92,13 @@ object AccessibilityActionsViewBinder {
                                         } else super.performAccessibilityAction(host, action, args)
                                     }
                                 }
+                        }
+
+                        launch {
+                            viewModel.accessibilityOverlayBoundsWhenListeningForUdfps.collect {
+                                bounds ->
+                                view.setOverlappingAccessibilityViewBounds(bounds)
+                            }
                         }
                     }
                 }

@@ -41,6 +41,7 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalKairosApi::class, ExperimentalCoroutinesApi::class)
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class MobileIconInteractorKairosAdapterTest : MobileIconInteractorTestBase() {
 
     var job: Job? = null
@@ -101,7 +102,7 @@ class MobileIconInteractorKairosAdapterTest : MobileIconInteractorTestBase() {
             activeDataConnectionHasDataEnabled =
                 interactor.activeDataConnectionHasDataEnabled.toState(),
             activeDataIconInteractor =
-                interactor.activeDataIconInteractor.toState().mapLatestBuild {
+                interactor.activeDataIconInteractor.toState().mapLatestBuild() {
                     it?.let { wrap(it) }
                 },
             alwaysShowDataRatIcon = interactor.alwaysShowDataRatIcon.toState(),

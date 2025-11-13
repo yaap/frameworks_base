@@ -18,15 +18,17 @@ package com.android.packageinstaller.v2.ui.fragments;
 
 import static com.android.packageinstaller.v2.model.PackageUtil.ARGS_ACTION_REASON;
 import static com.android.packageinstaller.v2.model.PackageUtil.ARGS_APP_SNIPPET;
-import static com.android.packageinstaller.v2.model.PackageUtil.ARGS_IS_UPDATING;
-import static com.android.packageinstaller.v2.model.PackageUtil.ARGS_SOURCE_APP;
+import static com.android.packageinstaller.v2.model.PackageUtil.ARGS_SOURCE_PKG;
 
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -36,6 +38,7 @@ import com.android.packageinstaller.R;
 import com.android.packageinstaller.v2.model.InstallUserActionRequired;
 import com.android.packageinstaller.v2.model.PackageUtil.AppSnippet;
 import com.android.packageinstaller.v2.ui.InstallActionListener;
+import com.android.packageinstaller.v2.ui.UiUtil;
 
 /**
  * Dialog to show when the installing app is an unknown source and needs AppOp grant to install
@@ -49,7 +52,7 @@ public class ExternalSourcesBlockedFragment extends DialogFragment {
     @NonNull
     private InstallActionListener mInstallActionListener;
     @NonNull
-    private AlertDialog mDialog;
+    private Dialog mDialog;
 
     public ExternalSourcesBlockedFragment() {
         // Required for DialogFragment
@@ -59,7 +62,7 @@ public class ExternalSourcesBlockedFragment extends DialogFragment {
      * Creates a new instance of this fragment with necessary data set as fragment arguments
      *
      * @param dialogData {@link InstallUserActionRequired} object containing data to display
-     *         in the dialog
+     *                   in the dialog
      * @return an instance of the fragment
      */
     public static ExternalSourcesBlockedFragment newInstance(
@@ -67,8 +70,7 @@ public class ExternalSourcesBlockedFragment extends DialogFragment {
         Bundle args = new Bundle();
         args.putInt(ARGS_ACTION_REASON, dialogData.getActionReason());
         args.putParcelable(ARGS_APP_SNIPPET, dialogData.getAppSnippet());
-        args.putBoolean(ARGS_IS_UPDATING, dialogData.isAppUpdating());
-        args.putString(ARGS_SOURCE_APP, dialogData.getSourceApp());
+        args.putString(ARGS_SOURCE_PKG, dialogData.getUnknownSourcePackageName());
 
         ExternalSourcesBlockedFragment fragment = new ExternalSourcesBlockedFragment();
         fragment.setArguments(args);
@@ -86,18 +88,28 @@ public class ExternalSourcesBlockedFragment extends DialogFragment {
     public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
         setDialogData(requireArguments());
 
+        View dialogView = getLayoutInflater().inflate(
+                UiUtil.getInstallationLayoutResId(requireContext()), null);
+
+        dialogView.requireViewById(R.id.app_snippet).setVisibility(View.VISIBLE);
+        ((ImageView) dialogView.requireViewById(R.id.app_icon))
+                .setImageDrawable(mDialogData.getAppIcon());
+        ((TextView) dialogView.requireViewById(R.id.app_label)).setText(mDialogData.getAppLabel());
+
+        TextView customMessage = dialogView.requireViewById(R.id.custom_message);
+        customMessage.setText(R.string.message_external_source_blocked);
+        customMessage.setVisibility(View.VISIBLE);
+
         Log.i(LOG_TAG, "Creating " + LOG_TAG + "\n" + mDialogData);
-        mDialog = new AlertDialog.Builder(requireContext())
-            .setTitle(mDialogData.getAppLabel())
-            .setIcon(mDialogData.getAppIcon())
-            .setMessage(R.string.untrusted_external_source_warning)
-            .setPositiveButton(R.string.external_sources_settings,
+
+        mDialog = UiUtil.getAlertDialog(requireContext(),
+                getString(R.string.title_unknown_source_blocked), dialogView,
+                R.string.external_sources_settings, R.string.cancel,
                 (dialog, which) -> mInstallActionListener.sendUnknownAppsIntent(
-                    mDialogData.getSourceApp()))
-            .setNegativeButton(R.string.cancel,
+                        mDialogData.getUnknownSourcePackageName()),
                 (dialog, which) -> mInstallActionListener.onNegativeResponse(
-                    mDialogData.getStageCode()))
-            .create();
+                        mDialogData.getStageCode()),
+                UiUtil.getTextButtonThemeResId(requireContext()));
         return mDialog;
     }
 
@@ -110,7 +122,10 @@ public class ExternalSourcesBlockedFragment extends DialogFragment {
     @Override
     public void onStart() {
         super.onStart();
-        mDialog.getButton(DialogInterface.BUTTON_POSITIVE).setFilterTouchesWhenObscured(true);
+        Button button = UiUtil.getAlertDialogPositiveButton(mDialog);
+        if (button != null) {
+            button.setFilterTouchesWhenObscured(true);
+        }
     }
 
     @Override
@@ -118,22 +133,27 @@ public class ExternalSourcesBlockedFragment extends DialogFragment {
         super.onPause();
         // This prevents tapjacking since an overlay activity started in front of Pia will
         // cause Pia to be paused.
-        mDialog.getButton(DialogInterface.BUTTON_POSITIVE).setEnabled(false);
+        Button button = UiUtil.getAlertDialogPositiveButton(mDialog);
+        if (button != null) {
+            button.setEnabled(false);
+        }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        mDialog.getButton(DialogInterface.BUTTON_POSITIVE).setEnabled(true);
+        Button button = UiUtil.getAlertDialogPositiveButton(mDialog);
+        if (button != null) {
+            button.setEnabled(true);
+        }
     }
 
     private void setDialogData(Bundle args) {
         int actionReason = args.getInt(ARGS_ACTION_REASON);
         AppSnippet appSnippet = args.getParcelable(ARGS_APP_SNIPPET, AppSnippet.class);
-        boolean isUpdating = args.getBoolean(ARGS_IS_UPDATING);
-        String sourceApp = args.getString(ARGS_SOURCE_APP);
+        String sourcePkg = args.getString(ARGS_SOURCE_PKG);
 
-        mDialogData = new InstallUserActionRequired(actionReason, appSnippet, isUpdating,
-                sourceApp);
+        mDialogData = new InstallUserActionRequired(actionReason, appSnippet, false, null, null,
+            sourcePkg);
     }
 }

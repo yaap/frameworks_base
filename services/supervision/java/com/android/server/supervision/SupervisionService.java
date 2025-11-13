@@ -21,6 +21,8 @@ import static android.Manifest.permission.MANAGE_ROLE_HOLDERS;
 import static android.Manifest.permission.MANAGE_USERS;
 import static android.Manifest.permission.QUERY_USERS;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.provider.Settings.Secure.BROWSER_CONTENT_FILTERS_ENABLED;
+import static android.provider.Settings.Secure.SEARCH_CONTENT_FILTERS_ENABLED;
 
 import static com.android.internal.util.Preconditions.checkCallAuthorization;
 
@@ -31,8 +33,10 @@ import android.annotation.UserIdInt;
 import android.app.KeyguardManager;
 import android.app.admin.DevicePolicyManager;
 import android.app.admin.DevicePolicyManagerInternal;
+import android.app.supervision.ISupervisionListener;
 import android.app.supervision.ISupervisionManager;
 import android.app.supervision.SupervisionManagerInternal;
+import android.app.supervision.SupervisionRecoveryInfo;
 import android.app.supervision.flags.Flags;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -42,30 +46,37 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.UserInfo;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.os.ResultReceiver;
 import android.os.ShellCallback;
 import android.os.UserHandle;
+import android.provider.Settings;
+import android.text.TextUtils;
+import android.util.Slog;
 import android.util.SparseArray;
 
 import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.DumpUtils;
+import com.android.internal.util.FunctionalUtils.RemoteExceptionIgnoringConsumer;
 import com.android.internal.util.IndentingPrintWriter;
 import com.android.server.LocalServices;
 import com.android.server.SystemService;
+import com.android.server.appbinding.AppBindingService;
+import com.android.server.appbinding.AppServiceConnection;
+import com.android.server.appbinding.finders.SupervisionAppServiceFinder;
 import com.android.server.pm.UserManagerInternal;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Service for handling system supervision. */
 public class SupervisionService extends ISupervisionManager.Stub {
-    private static final String LOG_TAG = "SupervisionService";
-
     /**
      * Activity action: Requests user confirmation of supervision credentials.
      *
@@ -86,12 +97,17 @@ public class SupervisionService extends ISupervisionManager.Stub {
 
     private final Context mContext;
     private final Injector mInjector;
+    @VisibleForTesting final ArrayList<ISupervisionListener> mSupervisionListeners;
     final SupervisionManagerInternal mInternal = new SupervisionManagerInternalImpl();
 
+    @GuardedBy("getLockObject()")
+    final SupervisionSettings mSupervisionSettings = SupervisionSettings.getInstance();
+
     public SupervisionService(Context context) {
-        mContext = context.createAttributionContext(LOG_TAG);
+        mContext = context.createAttributionContext(SupervisionLog.TAG);
         mInjector = new Injector(context);
         mInjector.getUserManagerInternal().addUserLifecycleListener(new UserLifecycleListener());
+        mSupervisionListeners = new ArrayList<>();
     }
 
     /**
@@ -120,6 +136,13 @@ public class SupervisionService extends ISupervisionManager.Stub {
         setSupervisionEnabledForUserInternal(userId, enabled, getSystemSupervisionPackage());
     }
 
+    private List<AppServiceConnection> getSupervisionAppServiceConnections(@UserIdInt int userId) {
+        AppBindingService abs = mInjector.getAppBindingService();
+        return abs != null
+                ? abs.getAppServiceConnections(SupervisionAppServiceFinder.class, userId)
+                : new ArrayList<>();
+    }
+
     /**
      * Returns the package name of the active supervision app or null if supervision is disabled.
      */
@@ -135,8 +158,9 @@ public class SupervisionService extends ISupervisionManager.Stub {
     }
 
     /**
-     * Creates an {@link Intent} that can be used with {@link Context#startActivity(Intent)} to
-     * launch the activity to verify supervision credentials.
+     * Creates an {@link Intent} that can be used with
+     * {@link Context#startActivityForResult(String, Intent, int, Bundle)} to launch the activity to
+     * verify supervision credentials.
      *
      * <p>A valid {@link Intent} is always returned if supervision is enabled at the time this
      * method is called, the launched activity still need to perform validity checks as the
@@ -148,27 +172,38 @@ public class SupervisionService extends ISupervisionManager.Stub {
      */
     @Override
     @Nullable
-    public Intent createConfirmSupervisionCredentialsIntent() {
+    public Intent createConfirmSupervisionCredentialsIntent(@UserIdInt int userId) {
         enforceAnyPermission(QUERY_USERS, MANAGE_USERS);
-        if (!isSupervisionEnabledForUser(mContext.getUserId())) {
-            return null;
+        if (UserHandle.getUserId(Binder.getCallingUid()) != userId) {
+            enforcePermission(INTERACT_ACROSS_USERS);
         }
-        // Verify the supervising user profile exists and has a secure credential set.
-        final int supervisingUserId = mInjector.getUserManagerInternal().getSupervisingProfileId();
-        final long token = Binder.clearCallingIdentity();
-        try {
-            if (supervisingUserId == UserHandle.USER_NULL
-                    || !mInjector.getKeyguardManager().isDeviceSecure(supervisingUserId)) {
-                return null;
-            }
-        } finally {
-            Binder.restoreCallingIdentity(token);
+        if (!isSupervisionEnabledForUser(userId) || !hasSupervisionCredentials()) {
+            return null;
         }
         final Intent intent = new Intent(ACTION_CONFIRM_SUPERVISION_CREDENTIALS);
         // explicitly set the package for security
         intent.setPackage("com.android.settings");
 
         return intent;
+    }
+
+    /** Set the Supervision Recovery Info. */
+    @Override
+    public void setSupervisionRecoveryInfo(SupervisionRecoveryInfo recoveryInfo) {
+        if (Flags.persistentSupervisionSettings()) {
+            mSupervisionSettings.saveRecoveryInfo(recoveryInfo);
+        } else {
+            SupervisionRecoveryInfoStorage.getInstance(mContext).saveRecoveryInfo(recoveryInfo);
+        }
+    }
+
+    /** Returns the Supervision Recovery Info or null if recovery is not set. */
+    @Override
+    public SupervisionRecoveryInfo getSupervisionRecoveryInfo() {
+        if (Flags.persistentSupervisionSettings()) {
+            return mSupervisionSettings.getRecoveryInfo();
+        }
+        return SupervisionRecoveryInfoStorage.getInstance(mContext).loadRecoveryInfo();
     }
 
     @Override
@@ -180,9 +215,15 @@ public class SupervisionService extends ISupervisionManager.Stub {
         }
 
         synchronized (getLockObject()) {
-            for (int i = 0; i < mUserData.size(); i++) {
-                if (mUserData.valueAt(i).supervisionEnabled) {
+            if (Flags.persistentSupervisionSettings()) {
+                if (mSupervisionSettings.anySupervisedUser()) {
                     return false;
+                }
+            } else {
+                for (int i = 0; i < mUserData.size(); i++) {
+                    if (mUserData.valueAt(i).supervisionEnabled) {
+                        return false;
+                    }
                 }
             }
         }
@@ -190,10 +231,44 @@ public class SupervisionService extends ISupervisionManager.Stub {
         return true;
     }
 
+    @Override
+    public boolean hasSupervisionCredentials() {
+        enforceAnyPermission(QUERY_USERS, MANAGE_USERS);
+
+        // Verify the supervising user profile exists and has a secure credential set.
+        final int supervisingUserId = mInjector.getUserManagerInternal().getSupervisingProfileId();
+        final long token = Binder.clearCallingIdentity();
+        try {
+            if (supervisingUserId == UserHandle.USER_NULL
+                    || !mInjector.getKeyguardManager().isDeviceSecure(supervisingUserId)) {
+                return false;
+            }
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+        return true;
+    }
+
+    @Override
+    public void registerSupervisionListener(@NonNull ISupervisionListener listener) {
+        synchronized (getLockObject()) {
+            if (!mSupervisionListeners.contains(listener)) {
+                mSupervisionListeners.add(listener);
+            }
+        }
+    }
+
+    @Override
+    public void unregisterSupervisionListener(@NonNull ISupervisionListener listener) {
+        synchronized (getLockObject()) {
+            mSupervisionListeners.remove(listener);
+        }
+    }
+
     /**
      * Returns true if there are any non-default non-test users.
      *
-     * This excludes the system and main user(s) as those users are created by default.
+     * <p>This excludes the system and main user(s) as those users are created by default.
      */
     private boolean hasNonTestDefaultUsers() {
         List<UserInfo> users = mInjector.getUserManagerInternal().getUsers(true);
@@ -225,7 +300,7 @@ public class SupervisionService extends ISupervisionManager.Stub {
     @Override
     protected void dump(
             @NonNull FileDescriptor fd, @NonNull PrintWriter printWriter, @Nullable String[] args) {
-        if (!DumpUtils.checkDumpPermission(mContext, LOG_TAG, printWriter)) return;
+        if (!DumpUtils.checkDumpPermission(mContext, SupervisionLog.TAG, printWriter)) return;
 
         try (var pw = new IndentingPrintWriter(printWriter, "  ")) {
             pw.println("SupervisionService state:");
@@ -248,13 +323,17 @@ public class SupervisionService extends ISupervisionManager.Stub {
     @NonNull
     @GuardedBy("getLockObject()")
     SupervisionUserData getUserDataLocked(@UserIdInt int userId) {
-        SupervisionUserData data = mUserData.get(userId);
-        if (data == null) {
-            // TODO(b/362790738): Do not create user data for nonexistent users.
-            data = new SupervisionUserData(userId);
-            mUserData.append(userId, data);
+        if (Flags.persistentSupervisionSettings()) {
+            return mSupervisionSettings.getUserData(userId);
+        } else {
+            SupervisionUserData data = mUserData.get(userId);
+            if (data == null) {
+                // TODO(b/362790738): Do not create user data for nonexistent users.
+                data = new SupervisionUserData(userId);
+                mUserData.append(userId, data);
+            }
+            return data;
         }
-        return data;
     }
 
     /**
@@ -267,6 +346,89 @@ public class SupervisionService extends ISupervisionManager.Stub {
             SupervisionUserData data = getUserDataLocked(userId);
             data.supervisionEnabled = enabled;
             data.supervisionAppPackage = enabled ? supervisionAppPackage : null;
+            if (Flags.persistentSupervisionSettings()) {
+                mSupervisionSettings.saveUserData();
+            }
+        }
+        final long token = Binder.clearCallingIdentity();
+        try {
+            updateWebContentFilters(userId, enabled);
+
+            if (Flags.enableSupervisionAppService()) {
+                List<AppServiceConnection> connections =
+                        getSupervisionAppServiceConnections(userId);
+                for (AppServiceConnection conn : connections) {
+                    String targetPackage = conn.getFinder().getTargetPackage(userId);
+                    ISupervisionListener binder = (ISupervisionListener) conn.getServiceBinder();
+                    if (binder == null) {
+                        Slog.d(
+                                SupervisionLog.TAG,
+                                TextUtils.formatSimple(
+                                        "Unable to toggle supervision for package %s. Binder is"
+                                                + " null.",
+                                        targetPackage));
+                        continue;
+                    }
+                    try {
+                        binder.onSetSupervisionEnabled(userId, enabled);
+                    } catch (RemoteException e) {
+                        Slog.d(
+                                SupervisionLog.TAG,
+                                TextUtils.formatSimple(
+                                        "Unable to toggle supervision for package %s. e = %s",
+                                        targetPackage, e));
+                    }
+                }
+                dispatchSupervisionListenerEvent(
+                        listener -> listener.onSetSupervisionEnabled(userId, enabled));
+            }
+            DevicePolicyManagerInternal dpmi = mInjector.getDpmInternal();
+            if (Flags.enableRemovePoliciesOnSupervisionDisable() && !enabled &&
+                    dpmi != null && supervisionAppPackage != null) {
+                dpmi.removePoliciesForAdmins(supervisionAppPackage, userId);
+            }
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
+    /**
+     * Updates Web Content Filters when supervision status is updated.
+     *
+     * <p>Only change the content filter value if it is not in sync with the supervision state.
+     * Disable the filter when disabling supervision and re-set to original value when re-enabling
+     * supervision. (If the filter is already enabled when enabling supervision, do not disable it).
+     */
+    private void updateWebContentFilters(@UserIdInt int userId, boolean enabled) {
+        try {
+            int browserValue =
+                    Settings.Secure.getIntForUser(
+                            mContext.getContentResolver(), BROWSER_CONTENT_FILTERS_ENABLED, userId);
+
+            if (!enabled || browserValue != 1) {
+                Settings.Secure.putIntForUser(
+                        mContext.getContentResolver(),
+                        BROWSER_CONTENT_FILTERS_ENABLED,
+                        browserValue * -1,
+                        userId);
+            }
+        } catch (Settings.SettingNotFoundException ignored) {
+            // Ignore the exception and do not change the value as no value has been set.
+        }
+        try {
+            int searchValue =
+                    Settings.Secure.getIntForUser(
+                            mContext.getContentResolver(), SEARCH_CONTENT_FILTERS_ENABLED, userId);
+
+            if (!enabled || searchValue != 1) {
+                Settings.Secure.putIntForUser(
+                        mContext.getContentResolver(),
+                        SEARCH_CONTENT_FILTERS_ENABLED,
+                        searchValue * -1,
+                        userId);
+            }
+        } catch (Settings.SettingNotFoundException ignored) {
+            // Ignore the exception and do not change the value as no value has been set.
         }
     }
 
@@ -325,16 +487,36 @@ public class SupervisionService extends ISupervisionManager.Stub {
         checkCallAuthorization(authorized);
     }
 
+    private void dispatchSupervisionListenerEvent(
+            @NonNull RemoteExceptionIgnoringConsumer<ISupervisionListener> action) {
+        List<ISupervisionListener> immutableListener;
+        synchronized (getLockObject()) {
+            immutableListener = List.copyOf(mSupervisionListeners);
+        }
+        for (ISupervisionListener listener : immutableListener) {
+            Binder.withCleanCallingIdentity(() -> action.accept(listener));
+        }
+    }
+
     /** Provides local services in a lazy manner. */
     static class Injector {
         private final Context mContext;
         private DevicePolicyManagerInternal mDpmInternal;
+        private AppBindingService mAppBindingService;
         private KeyguardManager mKeyguardManager;
         private PackageManager mPackageManager;
         private UserManagerInternal mUserManagerInternal;
 
         Injector(Context context) {
             mContext = context;
+        }
+
+        @Nullable
+        AppBindingService getAppBindingService() {
+            if (mAppBindingService == null) {
+                mAppBindingService = LocalServices.getService(AppBindingService.class);
+            }
+            return mAppBindingService;
         }
 
         @Nullable
@@ -465,6 +647,9 @@ public class SupervisionService extends ISupervisionManager.Stub {
                 SupervisionUserData data = getUserDataLocked(userId);
                 data.supervisionLockScreenEnabled = enabled;
                 data.supervisionLockScreenOptions = options;
+                if (Flags.persistentSupervisionSettings()) {
+                    mSupervisionSettings.saveUserData();
+                }
             }
         }
     }
@@ -474,7 +659,11 @@ public class SupervisionService extends ISupervisionManager.Stub {
         @Override
         public void onUserRemoved(UserInfo user) {
             synchronized (getLockObject()) {
-                mUserData.remove(user.id);
+                if (Flags.persistentSupervisionSettings()) {
+                    mSupervisionSettings.removeUserData(user.id);
+                } else {
+                    mUserData.remove(user.id);
+                }
             }
         }
     }

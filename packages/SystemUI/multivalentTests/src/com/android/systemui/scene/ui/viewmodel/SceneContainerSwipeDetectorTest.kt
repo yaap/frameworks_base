@@ -42,6 +42,7 @@ import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class SceneContainerSwipeDetectorTest : SysuiTestCase() {
 
     private val edgeSize = 40
@@ -109,6 +110,12 @@ class SceneContainerSwipeDetectorTest : SysuiTestCase() {
         val detectedEdge =
             swipeVerticallyFrom(x = screenWidth / 3, y = screenHeight - (edgeSize / 2))
         assertThat(detectedEdge).isEqualTo(BottomEdge)
+    }
+
+    @Test
+    fun source_swipeVerticallyAboveBottomEdge_detectsLeftHalf() {
+        val detectedEdge = swipeVerticallyFrom(x = screenWidth / 3, y = screenHeight - edgeSize - 1)
+        assertThat(detectedEdge).isEqualTo(LeftHalf)
     }
 
     @Test
@@ -199,7 +206,7 @@ class SceneContainerSwipeDetectorTest : SysuiTestCase() {
         return swipeFrom(x, y, Orientation.Horizontal)
     }
 
-    private fun swipeFrom(x: Int, y: Int, orientation: Orientation): SceneContainerArea.Resolved? {
+    private fun swipeFrom(x: Int, y: Int, orientation: Orientation): SceneContainerArea.Resolved {
         return underTest.source(
             layoutSize = IntSize(width = screenWidth, height = screenHeight),
             position = IntOffset(x, y),

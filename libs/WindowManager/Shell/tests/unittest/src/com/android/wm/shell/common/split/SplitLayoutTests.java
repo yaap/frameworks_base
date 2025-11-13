@@ -47,6 +47,10 @@ import com.android.wm.shell.ShellTestCase;
 import com.android.wm.shell.TestRunningTaskInfoBuilder;
 import com.android.wm.shell.common.DisplayController;
 import com.android.wm.shell.common.DisplayImeController;
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState;
+import com.android.wm.shell.splitscreen.SplitStatusBarHider;
+
+import com.google.android.msdl.domain.MSDLPlayer;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -67,13 +71,17 @@ public class SplitLayoutTests extends ShellTestCase {
     @Mock ShellTaskOrganizer mTaskOrganizer;
     @Mock WindowContainerTransaction mWct;
     @Mock SplitState mSplitState;
+    @Mock SplitStatusBarHider mStatusBarHider;
     @Mock Handler mHandler;
+    @Mock MSDLPlayer mMSDLPlayer;
     @Captor ArgumentCaptor<Runnable> mRunnableCaptor;
     private SplitLayout mSplitLayout;
+    private FakeDesktopState mDesktopState;
 
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+        mDesktopState = new FakeDesktopState();
         mSplitLayout = spy(new SplitLayout(
                 "TestSplitLayout",
                 mContext,
@@ -85,7 +93,10 @@ public class SplitLayoutTests extends ShellTestCase {
                 mTaskOrganizer,
                 SplitLayout.PARALLAX_NONE,
                 mSplitState,
-                mHandler));
+                mHandler,
+                mStatusBarHider,
+                mDesktopState,
+                mMSDLPlayer));
     }
 
     @Test

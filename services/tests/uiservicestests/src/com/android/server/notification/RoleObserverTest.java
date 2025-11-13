@@ -67,8 +67,10 @@ import androidx.test.filters.SmallTest;
 import com.android.internal.config.sysui.TestableFlagResolver;
 import com.android.internal.logging.InstanceIdSequence;
 import com.android.internal.logging.InstanceIdSequenceFake;
+import com.android.internal.logging.UiEventLogger;
 import com.android.server.LocalServices;
 import com.android.server.UiServiceTestCase;
+import com.android.server.bitmapoffload.BitmapOffloadInternal;
 import com.android.server.lights.LightsManager;
 import com.android.server.notification.NotificationManagerService.NotificationAssistants;
 import com.android.server.notification.NotificationManagerService.NotificationListeners;
@@ -171,7 +173,9 @@ public class RoleObserverTest extends UiServiceTestCase {
                     mock(NotificationChannelLogger.class), new TestableFlagResolver(),
                     mock(PermissionManager.class),
                     mock(PowerManager.class),
-                    new NotificationManagerService.PostNotificationTrackerFactory() {});
+                    new NotificationManagerService.PostNotificationTrackerFactory() {},
+                    mock(UiEventLogger.class),
+                    mock(BitmapOffloadInternal.class));
         } catch (SecurityException e) {
             if (!e.getMessage().contains("Permission Denial: not allowed to send broadcast")) {
                 throw e;

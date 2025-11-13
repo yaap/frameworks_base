@@ -16,13 +16,19 @@
 
 package com.android.systemui.statusbar.phone
 
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Insets
 import android.graphics.Rect
+import android.hardware.display.DisplayManagerGlobal
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
+import android.platform.test.annotations.FlakyTest
 import android.testing.TestableLooper.RunWithLooper
+import android.view.Display
+import android.view.DisplayAdjustments.DEFAULT_DISPLAY_ADJUSTMENTS
 import android.view.DisplayCutout
+import android.view.DisplayInfo
 import android.view.DisplayShape
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -32,55 +38,154 @@ import android.view.View
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.test.filters.SmallTest
-import com.android.systemui.Flags.FLAG_STATUS_BAR_STOP_UPDATING_WINDOW_HEIGHT
 import com.android.systemui.Flags.FLAG_STATUS_BAR_SWIPE_OVER_CHIP
 import com.android.systemui.Gefingerpoken
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.SysuiTestableContext
 import com.android.systemui.res.R
+import com.android.systemui.shade.StatusBarLongPressGestureDetector
+import com.android.systemui.shared.Flags.FLAG_STATUS_BAR_CONNECTED_DISPLAYS
 import com.android.systemui.statusbar.window.StatusBarWindowController
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore
-import com.android.systemui.util.mockito.mock
-import com.android.systemui.util.mockito.whenever
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Test
+import org.mockito.Mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.spy
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
+import org.mockito.MockitoAnnotations
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.whenever
 
+@FlakyTest(bugId = 406551872)
 @SmallTest
 @RunWithLooper(setAsMainLooper = true)
 class PhoneStatusBarViewTest : SysuiTestCase() {
 
     private lateinit var view: PhoneStatusBarView
+    private lateinit var viewForSecondaryDisplay: PhoneStatusBarView
     private val systemIconsContainer: View
         get() = view.requireViewById(R.id.system_icons)
 
-    private val windowController = mock<StatusBarWindowController>()
-    private val windowControllerStore = mock<StatusBarWindowControllerStore>()
+    @Mock private lateinit var windowController: StatusBarWindowController
+    @Mock private lateinit var windowControllerStore: StatusBarWindowControllerStore
+    @Mock private lateinit var longPressGestureDetector: StatusBarLongPressGestureDetector
 
     @Before
     fun setUp() {
+        MockitoAnnotations.initMocks(this)
         whenever(windowControllerStore.defaultDisplay).thenReturn(windowController)
         mDependency.injectTestDependency(
             StatusBarWindowControllerStore::class.java,
             windowControllerStore,
         )
         context.ensureTestableResources()
-        view = spy(createStatusBarView())
+        view = spy(createStatusBarView(context))
         whenever(view.rootWindowInsets).thenReturn(emptyWindowInsets())
+
+        val contextForSecondaryDisplay =
+            SysuiTestableContext(
+                mContext.createDisplayContext(
+                    Display(
+                        DisplayManagerGlobal.getInstance(),
+                        2,
+                        DisplayInfo(),
+                        DEFAULT_DISPLAY_ADJUSTMENTS,
+                    )
+                )
+            )
+        viewForSecondaryDisplay = spy(createStatusBarView(contextForSecondaryDisplay))
     }
 
     @Test
-    fun onTouchEvent_listenerNotified() {
+    fun dispatchTouchEvent_noInteractionGate_listenersNotified() {
+        val handler = TestTouchEventHandler()
+        viewForSecondaryDisplay.setTouchEventHandler(handler)
+        viewForSecondaryDisplay.setLongPressGestureDetector(longPressGestureDetector)
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
+        viewForSecondaryDisplay.dispatchTouchEvent(event)
+
+        assertThat(handler.lastInterceptEvent).isEqualTo(event)
+        assertThat(handler.lastEvent).isEqualTo(event)
+        verify(longPressGestureDetector).handleTouch(eq(event))
+    }
+
+    @Test
+    fun dispatchTouchEvent_shouldAllowInteractions_listenersNotified() {
+        val handler = TestTouchEventHandler()
+        viewForSecondaryDisplay.setTouchEventHandler(handler)
+        viewForSecondaryDisplay.setLongPressGestureDetector(longPressGestureDetector)
+        viewForSecondaryDisplay.setIsStatusBarInteractiveSupplier { true }
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
+        viewForSecondaryDisplay.dispatchTouchEvent(event)
+
+        assertThat(handler.lastInterceptEvent).isEqualTo(event)
+        assertThat(handler.lastEvent).isEqualTo(event)
+        verify(longPressGestureDetector).handleTouch(eq(event))
+    }
+
+    @Test
+    fun dispatchTouchEvent_shouldNotAllowInteractions_consumesEventAndListenersNotNotified() {
+        val handler = TestTouchEventHandler()
+        viewForSecondaryDisplay.setTouchEventHandler(handler)
+        viewForSecondaryDisplay.setLongPressGestureDetector(longPressGestureDetector)
+        viewForSecondaryDisplay.setIsStatusBarInteractiveSupplier { false }
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
+
+        assertThat(viewForSecondaryDisplay.dispatchTouchEvent(event)).isEqualTo(true)
+        assertThat(handler.lastInterceptEvent).isNull()
+        assertThat(handler.lastEvent).isNull()
+        verify(longPressGestureDetector, never()).handleTouch(eq(event))
+    }
+
+    @Test
+    fun dispatchHoverEvent_noInteractionGate_doesntConsumeEvent() {
+        val handler = TestTouchEventHandler()
+        viewForSecondaryDisplay.setTouchEventHandler(handler)
+        viewForSecondaryDisplay.setLongPressGestureDetector(longPressGestureDetector)
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
+        assertThat(viewForSecondaryDisplay.dispatchHoverEvent(event)).isEqualTo(false)
+    }
+
+    @Test
+    fun dispatchHoverEvent_shouldAllowInteractions_doesntConsumeEvent() {
+        val handler = TestTouchEventHandler()
+        viewForSecondaryDisplay.setTouchEventHandler(handler)
+        viewForSecondaryDisplay.setLongPressGestureDetector(longPressGestureDetector)
+        viewForSecondaryDisplay.setIsStatusBarInteractiveSupplier { true }
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
+        assertThat(viewForSecondaryDisplay.dispatchHoverEvent(event)).isEqualTo(false)
+    }
+
+    @Test
+    fun dispatchHoverEvent_shouldNotAllowInteractions_consumesEvent() {
+        val handler = TestTouchEventHandler()
+        viewForSecondaryDisplay.setTouchEventHandler(handler)
+        viewForSecondaryDisplay.setLongPressGestureDetector(longPressGestureDetector)
+        viewForSecondaryDisplay.setIsStatusBarInteractiveSupplier { false }
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
+        assertThat(viewForSecondaryDisplay.dispatchHoverEvent(event)).isEqualTo(true)
+    }
+
+    @Test
+    fun onTouchEvent_listenersNotified() {
         val handler = TestTouchEventHandler()
         view.setTouchEventHandler(handler)
+        view.setLongPressGestureDetector(longPressGestureDetector)
 
         val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
         view.onTouchEvent(event)
 
         assertThat(handler.lastEvent).isEqualTo(event)
+        verify(longPressGestureDetector).handleTouch(eq(event))
     }
 
     @Test
@@ -184,40 +289,24 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     }
 
     @Test
-    @DisableFlags(FLAG_STATUS_BAR_STOP_UPDATING_WINDOW_HEIGHT)
-    fun onAttachedToWindow_flagOff_updatesWindowHeight() {
+    @DisableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
+    fun onAttachedToWindow_connectedDisplayFlagOff_updatesWindowHeight() {
         view.onAttachedToWindow()
 
         verify(windowController).refreshStatusBarHeight()
     }
 
     @Test
-    @EnableFlags(FLAG_STATUS_BAR_STOP_UPDATING_WINDOW_HEIGHT)
-    fun onAttachedToWindow_flagOn_doesNotUpdateWindowHeight() {
+    @EnableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
+    fun onAttachedToWindow_connectedDisplayFlagOn_doesNotUpdateWindowHeight() {
         view.onAttachedToWindow()
 
         verify(windowController, never()).refreshStatusBarHeight()
     }
 
     @Test
-    @DisableFlags(FLAG_STATUS_BAR_STOP_UPDATING_WINDOW_HEIGHT)
-    fun onConfigurationChanged_flagOff_updatesWindowHeight() {
-        view.onConfigurationChanged(Configuration())
-
-        verify(windowController).refreshStatusBarHeight()
-    }
-
-    @Test
-    @EnableFlags(FLAG_STATUS_BAR_STOP_UPDATING_WINDOW_HEIGHT)
-    fun onConfigurationChanged_flagOn_doesNotUpdateWindowHeight() {
-        view.onConfigurationChanged(Configuration())
-
-        verify(windowController, never()).refreshStatusBarHeight()
-    }
-
-    @Test
-    @DisableFlags(FLAG_STATUS_BAR_STOP_UPDATING_WINDOW_HEIGHT)
-    fun onConfigurationChanged_multipleCalls_flagOff_updatesWindowHeightMultipleTimes() {
+    @DisableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
+    fun onConfigurationChanged_connectedDisplayFlagOff_updatesWindowHeight() {
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
@@ -227,8 +316,8 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     }
 
     @Test
-    @EnableFlags(FLAG_STATUS_BAR_STOP_UPDATING_WINDOW_HEIGHT)
-    fun onConfigurationChanged_multipleCalls_flagOn_neverUpdatesWindowHeight() {
+    @EnableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
+    fun onConfigurationChanged_connectedDisplayFlagOn_neverUpdatesWindowHeight() {
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
@@ -279,7 +368,6 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
         assertThat(view.paddingBottom).isEqualTo(0)
     }
 
-
     @Test
     fun onConfigurationChanged_updatesLeftTopRightPaddingsBasedOnInsets() {
         val insets = Insets.of(/* left= */ 40, /* top= */ 30, /* right= */ 20, /* bottom= */ 10)
@@ -314,13 +402,14 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
         val newInsets = Insets.NONE
 
         var useNewInsets = false
-        val insetsFetcher = PhoneStatusBarView.InsetsFetcher {
-            if (useNewInsets) {
-                newInsets
-            } else {
-                previousInsets
+        val insetsFetcher =
+            PhoneStatusBarView.InsetsFetcher {
+                if (useNewInsets) {
+                    newInsets
+                } else {
+                    previousInsets
+                }
             }
-        }
         view.setInsetsFetcher(insetsFetcher)
 
         context.orCreateTestableResources.overrideConfiguration(Configuration())
@@ -342,13 +431,14 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
         val newInsets = Insets.NONE
 
         var useNewInsets = false
-        val insetsFetcher = PhoneStatusBarView.InsetsFetcher {
-            if (useNewInsets) {
-                newInsets
-            } else {
-                previousInsets
+        val insetsFetcher =
+            PhoneStatusBarView.InsetsFetcher {
+                if (useNewInsets) {
+                    newInsets
+                } else {
+                    previousInsets
+                }
             }
-        }
         view.setInsetsFetcher(insetsFetcher)
 
         val configuration = Configuration()
@@ -373,13 +463,14 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
         val newInsets = Insets.NONE
 
         var useNewInsets = false
-        val insetsFetcher = PhoneStatusBarView.InsetsFetcher {
-            if (useNewInsets) {
-                newInsets
-            } else {
-                previousInsets
+        val insetsFetcher =
+            PhoneStatusBarView.InsetsFetcher {
+                if (useNewInsets) {
+                    newInsets
+                } else {
+                    previousInsets
+                }
             }
-        }
         view.setInsetsFetcher(insetsFetcher)
 
         val configuration = Configuration()
@@ -402,7 +493,7 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
         val newHeight = 123456
         context.orCreateTestableResources.addOverride(
             R.dimen.status_bar_system_icons_height,
-            newHeight
+            newHeight,
         )
 
         view.onConfigurationChanged(Configuration())
@@ -439,12 +530,12 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
         }
     }
 
-    private fun createStatusBarView() =
+    private fun createStatusBarView(context: Context) =
         LayoutInflater.from(context)
             .inflate(
                 R.layout.status_bar,
                 /* root= */ FrameLayout(context),
-                /* attachToRoot = */ false
+                /* attachToRoot = */ false,
             ) as PhoneStatusBarView
 
     private fun emptyWindowInsets() =
@@ -465,6 +556,6 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
             /* typeBoundingRectsMap = */ arrayOf(),
             /* typeMaxBoundingRectsMap = */ arrayOf(),
             /* frameWidth = */ 0,
-            /* frameHeight = */ 0
+            /* frameHeight = */ 0,
         )
 }

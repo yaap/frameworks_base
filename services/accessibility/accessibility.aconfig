@@ -55,16 +55,6 @@ flag {
 }
 
 flag {
-    name: "clear_shortcuts_when_activity_updates_to_service"
-    namespace: "accessibility"
-    description: "When an a11y activity is updated to an a11y service, clears the associated shortcuts so that we don't skip the AccessibilityServiceWarning."
-    bug: "358092445"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "deprecate_package_list_observer"
     namespace: "accessibility"
     description: "Stops using the deprecated PackageListObserver."
@@ -100,6 +90,13 @@ flag {
     namespace: "accessibility"
     description: "Whether to identify and log app a11y issues."
     bug: "325420273"
+}
+
+flag {
+    name: "enable_braille_suw_immediate_connections"
+    namespace: "accessibility"
+    description: "Whether to allow Braille devices to connect automatically in the SUW."
+    bug: "400776305"
 }
 
 flag {
@@ -152,10 +149,24 @@ flag {
 }
 
 flag {
+    name: "enable_magnification_magnify_nav_bar_and_ime"
+    namespace: "accessibility"
+    description: "Whether to enable magnify navigation bar and ime on full screen"
+    bug: "342509709"
+}
+
+flag {
     name: "enable_magnification_keyboard_control"
     namespace: "accessibility"
     description: "Whether to enable keyboard control for magnification"
     bug: "355487062"
+}
+
+flag {
+    name: "enable_mouse_key_enhancement"
+    namespace: "accessibility"
+    description: "Whether user can change mouse key acceleration, speed and use numeric keypad."
+    bug: "409330539"
 }
 
 flag {
@@ -203,26 +214,6 @@ flag {
 }
 
 flag {
-    name: "magnification_enlarge_pointer_bugfix"
-    namespace: "accessibility"
-    description: "When fullscreen magnification is enabled, pointer icon is enlarged"
-    bug: "355734856"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "manager_avoid_receiver_timeout"
-    namespace: "accessibility"
-    description: "Register receivers on background handler so they have more time to complete"
-    bug: "333890389"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "manager_lifecycle_user_change"
     namespace: "accessibility"
     description: "Use A11yManagerService's Lifecycle to change users, instead of listening for user changed events."
@@ -253,20 +244,13 @@ flag {
 }
 
 flag {
-    name: "manager_package_monitor_logic_fix"
+    name: "only_reset_magnification_if_needed_when_destroy_handler"
     namespace: "accessibility"
-    description: "Corrects the return values of the HandleForceStop function"
-    bug: "337392123"
+    description: "Don't reset the activated magnification if the magnification feature is still enabled when AccessibilityInputFilter recreates gesture handler."
+    bug: "417633371"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
-}
-
-flag {
-    name: "pinch_zoom_zero_min_span"
-    namespace: "accessibility"
-    description: "Whether to set min span of ScaleGestureDetector to zero."
-    bug: "295327792"
 }
 
 flag {
@@ -307,16 +291,6 @@ flag {
 }
 
 flag {
-    name: "reset_input_dispatcher_before_first_touch_exploration"
-    namespace: "accessibility"
-    description: "Resets InputDispatcher state by sending ACTION_CANCEL before the first TouchExploration hover events"
-    bug: "364408887"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "scan_packages_without_lock"
     namespace: "accessibility"
     description: "Scans packages for accessibility service/activity info without holding the A11yMS lock"
@@ -348,20 +322,10 @@ flag {
 }
 
 flag {
-    name: "skip_package_change_before_user_switch"
+    name: "touch_explorer_use_virtual_device_id"
     namespace: "accessibility"
-    description: "Skip onSomePackageChanged callback if the SwitchUser signal is not received yet."
-    bug: "340927041"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "hearing_input_change_when_comm_device"
-    namespace: "accessibility"
-    description: "Listen to the CommunicationDeviceChanged to show hearing device input notification."
-    bug: "394070235"
+    description: "Use a VIRTUAL device id for injected TouchExplorer events to avoid temporary conflicts with real pointer touches still on the screen when TouchExplorer starts up."
+    bug: "364408887"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

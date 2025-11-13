@@ -18,11 +18,14 @@ package com.android.systemui.shade
 
 import android.content.Context
 import android.content.res.Resources
+import android.os.Bundle
+import android.view.Display
 import android.view.LayoutInflater
 import android.view.WindowManager
 import android.view.WindowManager.LayoutParams
 import android.view.WindowManager.LayoutParams.TYPE_NOTIFICATION_SHADE
 import android.window.WindowContext
+import android.window.WindowProvider.KEY_REPARENT_TO_DEFAULT_DISPLAY_WITH_DISPLAY_REMOVAL
 import com.android.app.tracing.TrackGroupUtils.trackGroup
 import com.android.systemui.CoreStartable
 import com.android.systemui.common.ui.ConfigurationState
@@ -45,21 +48,27 @@ import com.android.systemui.shade.data.repository.ShadeDisplaysRepositoryImpl
 import com.android.systemui.shade.display.ShadeDisplayPolicyModule
 import com.android.systemui.shade.domain.interactor.ShadeDialogContextInteractor
 import com.android.systemui.shade.domain.interactor.ShadeDialogContextInteractorImpl
+import com.android.systemui.shade.domain.interactor.ShadeDisplaysDialogInteractor
 import com.android.systemui.shade.domain.interactor.ShadeDisplaysInteractor
+import com.android.systemui.shade.domain.interactor.ShadeDisplaysInteractorImpl
 import com.android.systemui.shade.shared.flag.ShadeWindowGoesAround
 import com.android.systemui.statusbar.notification.stack.NotificationStackRebindingHider
 import com.android.systemui.statusbar.notification.stack.NotificationStackRebindingHiderImpl
 import com.android.systemui.statusbar.phone.ConfigurationControllerImpl
 import com.android.systemui.statusbar.phone.ConfigurationForwarder
+import com.android.systemui.statusbar.phone.domain.interactor.ShadeDarkIconInteractor
+import com.android.systemui.statusbar.phone.domain.interactor.ShadeDarkIconInteractorImpl
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.utils.windowmanager.WindowManagerProvider
-import com.android.systemui.utils.windowmanager.WindowManagerUtils
+import com.android.window.flags.Flags
 import dagger.Module
 import dagger.Provides
 import dagger.multibindings.ClassKey
 import dagger.multibindings.IntoMap
 import javax.inject.Provider
 import javax.inject.Qualifier
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Module responsible for managing display-specific components and resources for the notification
@@ -80,15 +89,36 @@ object ShadeDisplayAwareModule {
     @Provides
     @ShadeDisplayAware
     @SysUISingleton
-    fun provideShadeDisplayAwareContext(context: Context): Context {
+    fun provideShadeDisplayAwareContext(
+        context: Context,
+        @ShadeDisplayAware shadeContextBuildOptions: Bundle?,
+    ): Context {
         return if (ShadeWindowGoesAround.isEnabled) {
             context
-                .createWindowContext(context.display, TYPE_NOTIFICATION_SHADE, /* options= */ null)
+                .createWindowContext(
+                    context.display,
+                    TYPE_NOTIFICATION_SHADE,
+                    shadeContextBuildOptions,
+                )
                 .apply { setTheme(R.style.Theme_SystemUI) }
         } else {
             context
         }
     }
+
+    @Provides
+    @ShadeDisplayAware
+    @SysUISingleton
+    fun provideShadeContextBuildOptions(): Bundle? =
+        if (Flags.reparentToDefaultWithDisplayRemoval()) {
+            // Enables to reparent this WindowContext to the default display if the currently
+            // attached display is removed.
+            Bundle().apply {
+                putBoolean(KEY_REPARENT_TO_DEFAULT_DISPLAY_WITH_DISPLAY_REMOVAL, true)
+            }
+        } else {
+            null
+        }
 
     @Provides
     @ShadeDisplayAware
@@ -116,7 +146,7 @@ object ShadeDisplayAwareModule {
     fun provideShadeWindowManager(
         defaultWindowManager: WindowManager,
         @ShadeDisplayAware context: Context,
-        windowManagerProvider: WindowManagerProvider
+        windowManagerProvider: WindowManagerProvider,
     ): WindowManager {
         return if (ShadeWindowGoesAround.isEnabled) {
             windowManagerProvider.getWindowManager(context)
@@ -283,15 +313,40 @@ object ShadeDisplayAwareModule {
             systraceTrackName = trackGroup("shade", logBufferName),
         )
     }
-}
 
-/** Module that should be included only if the shade window [WindowRootView] is available. */
-@Module
-object ShadeDisplayAwareWithShadeWindowModule {
     @Provides
     @IntoMap
-    @ClassKey(ShadeDisplaysInteractor::class)
-    fun provideShadeDisplaysInteractor(impl: Provider<ShadeDisplaysInteractor>): CoreStartable {
+    @ClassKey(ShadeDisplaysDialogInteractor::class)
+    fun provideShadeDisplayDialogInteractor(
+        impl: Provider<ShadeDisplaysDialogInteractor>
+    ): CoreStartable {
+        return if (ShadeWindowGoesAround.isEnabled) {
+            impl.get()
+        } else {
+            CoreStartable.NOP
+        }
+    }
+}
+
+/**
+ * Module that should be included only if the shade window [WindowRootView] is available.
+ *
+ * This includes SystemUIGoogle variant.
+ */
+@Module
+object ShadeDisplayAwareWithShadeWindowModule {
+
+    @Provides
+    @SysUISingleton
+    fun bindShadeDisplaysInteractor(impl: ShadeDisplaysInteractorImpl): ShadeDisplaysInteractor =
+        impl
+
+    @Provides
+    @IntoMap
+    @ClassKey(ShadeDisplaysInteractorImpl::class)
+    fun provideShadeDisplaysInteractorCoreStartable(
+        impl: Provider<ShadeDisplaysInteractorImpl>
+    ): CoreStartable {
         return if (ShadeWindowGoesAround.isEnabled) {
             impl.get()
         } else {
@@ -304,6 +359,41 @@ object ShadeDisplayAwareWithShadeWindowModule {
     fun bindNotificationStackRebindingHider(
         impl: NotificationStackRebindingHiderImpl
     ): NotificationStackRebindingHider = impl
+
+    @Provides
+    @SysUISingleton
+    fun bindShadeDarkIconInteractor(impl: ShadeDarkIconInteractorImpl): ShadeDarkIconInteractor =
+        impl
+}
+
+/**
+ * Dagger module to be included in Android variants where the `WindowRootView` (responsible for the
+ * movable shade window) is NOT present, such as Wear OS or Android TV.
+ *
+ * Since `SystemUIModule` is common to all variants, some of its bound classes may have dependencies
+ * expecting the shade window. This module ensures these dependencies are satisfied with no-op
+ * implementations when the shade window is unavailable.
+ *
+ * Ideally, classes having WindowRootView dependencies shouldn't be instantiated at all in variants
+ * that don't provide it, but sometimes this is not possible or too complicated.
+ *
+ * Making a concrete example might help understanding this: the Wear of sysui seems to be including
+ * [SceneContainerFrameworkModule] that has some classes depending to the shade window and its
+ * position. While it's unclear why Wear needs to depend on the Scene container, providing here a
+ * no-op [ShadeDisplaysInteractor] will guarantee no classes depending on the WindowRootView are
+ * created (as the window root view is not available).
+ */
+@Module
+object ShadeDisplayAwareWindowWithoutShadeModule {
+
+    @Provides
+    @SysUISingleton
+    fun bindShadeDisplaysInteractor(): ShadeDisplaysInteractor =
+        object : ShadeDisplaysInteractor {
+            override val displayId: StateFlow<Int> = MutableStateFlow(Display.DEFAULT_DISPLAY)
+            override val pendingDisplayId: StateFlow<Int> =
+                MutableStateFlow(Display.DEFAULT_DISPLAY)
+        }
 }
 
 /**

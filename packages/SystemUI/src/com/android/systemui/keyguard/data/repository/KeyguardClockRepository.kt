@@ -20,6 +20,7 @@ import android.content.Context
 import android.os.UserHandle
 import android.provider.Settings
 import com.android.keyguard.ClockEventController
+import com.android.systemui.animation.GSFAxes
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Background
@@ -65,9 +66,9 @@ interface KeyguardClockRepository {
     /** clock id, selected from clock carousel in wallpaper picker */
     val currentClockId: Flow<ClockId>
 
-    val currentClock: StateFlow<ClockController?>
+    val currentClockFontAxesWidth: Float?
 
-    val previewClock: Flow<ClockController>
+    val currentClock: StateFlow<ClockController?>
 
     val clockEventController: ClockEventController
 
@@ -130,10 +131,13 @@ constructor(
             }
             .mapNotNull { it }
 
+    override val currentClockFontAxesWidth: Float?
+        get() = clockRegistry.settings?.axes?.get(GSFAxes.WIDTH.tag)
+
     override val currentClock: StateFlow<ClockController?> =
         currentClockId
             .map {
-                clockEventController.clock = clockRegistry.createCurrentClock()
+                clockEventController.clock = clockRegistry.createCurrentClock(context)
                 clockEventController.clock
             }
             .stateIn(
@@ -141,14 +145,6 @@ constructor(
                 started = SharingStarted.WhileSubscribed(),
                 initialValue = null,
             )
-
-    override val previewClock: Flow<ClockController> =
-        currentClockId.map {
-            // We should create a new instance for each collect call
-            // cause in preview, the same clock will be attached to different view
-            // at the same time
-            clockRegistry.createCurrentClock()
-        }
 
     override val shouldForceSmallClock: Boolean
         get() =
@@ -160,7 +156,9 @@ constructor(
         return ClockSizeSetting.fromSettingValue(
             secureSettings.getIntForUser(
                 Settings.Secure.LOCKSCREEN_USE_DOUBLE_LINE_CLOCK,
-                /* defaultValue= */ 1,
+                context.resources.getInteger(
+                    com.android.internal.R.integer.config_doublelineClockDefault
+                ),
                 UserHandle.USER_CURRENT,
             )
         )

@@ -567,9 +567,6 @@ class KeyguardTransitionScenariosTest(flags: FlagsParameterization?) : SysuiTest
     @DisableSceneContainer
     fun goneToDreaming() =
         testScope.runTest {
-            // Setup - Move past initial delay with [KeyguardInteractor#isAbleToDream]
-            advanceTimeBy(600L)
-
             // GIVEN a prior transition has run to GONE
             runTransitionAndSetWakefulness(KeyguardState.LOCKSCREEN, KeyguardState.GONE)
 
@@ -1344,7 +1341,10 @@ class KeyguardTransitionScenariosTest(flags: FlagsParameterization?) : SysuiTest
             reset(transitionRepository)
 
             // ...AND WHEN the camera gesture is detected quickly afterwards
-            keyguardInteractor.onCameraLaunchDetected(CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP)
+            keyguardInteractor.onCameraLaunchDetected(
+                CAMERA_LAUNCH_SOURCE_POWER_DOUBLE_TAP,
+                isSecureCamera = true,
+            )
             runCurrent()
 
             // THEN a transition from DOZING => OCCLUDED should occur

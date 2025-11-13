@@ -38,7 +38,6 @@ import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.CrossFadeHelper;
 import com.android.systemui.statusbar.HeadsUpStatusBarView;
 import com.android.systemui.statusbar.StatusBarState;
-import com.android.systemui.statusbar.chips.notification.shared.StatusBarNotifChips;
 import com.android.systemui.statusbar.core.StatusBarRootModernization;
 import com.android.systemui.statusbar.headsup.shared.StatusBarNoHunBehavior;
 import com.android.systemui.statusbar.notification.NotificationWakeUpCoordinator;
@@ -48,6 +47,7 @@ import com.android.systemui.statusbar.notification.domain.interactor.HeadsUpNoti
 import com.android.systemui.statusbar.notification.headsup.HeadsUpManager;
 import com.android.systemui.statusbar.notification.headsup.OnHeadsUpChangedListener;
 import com.android.systemui.statusbar.notification.headsup.PinnedStatus;
+import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi;
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
 import com.android.systemui.statusbar.notification.row.shared.AsyncGroupHeaderViewInflation;
 import com.android.systemui.statusbar.notification.stack.NotificationRoundnessManager;
@@ -255,7 +255,7 @@ public class HeadsUpAppearanceController extends ViewController<HeadsUpStatusBar
         if (newEntry == null) {
             return null;
         }
-        if (StatusBarNotifChips.isEnabled()) {
+        if (PromotedNotificationUi.isEnabled()) {
             // If the flag is on, only show the isolated icon if the HUN is pinned by the
             // *system*. (If the HUN was pinned by the user, then the user tapped the
             // notification status bar chip and we want to keep the chip showing.)
@@ -280,7 +280,7 @@ public class HeadsUpAppearanceController extends ViewController<HeadsUpStatusBar
             boolean isRightClock = clockView.getId() == R.id.clock_right;
             mPinnedStatus = pinnedStatus;
 
-            boolean shouldShowHunStatusBar = StatusBarNotifChips.isEnabled()
+            boolean shouldShowHunStatusBar = PromotedNotificationUi.isEnabled()
                     ? mPinnedStatus == PinnedStatus.PinnedBySystem
                     // If the flag isn't enabled, all HUNs get the normal treatment.
                     : mPinnedStatus.isPinned();
@@ -407,7 +407,7 @@ public class HeadsUpAppearanceController extends ViewController<HeadsUpStatusBar
             return false;
         }
 
-        if (StatusBarNotifChips.isEnabled()) {
+        if (PromotedNotificationUi.isEnabled()) {
             return canShowHeadsUp()
                     && mHeadsUpManager.pinnedHeadsUpStatus() == PinnedStatus.PinnedBySystem;
             // Note: This means that if mHeadsUpManager.pinnedHeadsUpStatus() == PinnedByUser,

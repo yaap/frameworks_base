@@ -21,6 +21,8 @@ import android.content.DialogInterface
 import androidx.annotation.VisibleForTesting
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -73,6 +77,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -80,6 +85,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,6 +115,8 @@ import com.android.systemui.compose.modifiers.sysuiResTag
 import com.android.systemui.fold.ui.composable.foldPosture
 import com.android.systemui.fold.ui.helper.FoldPosture
 import com.android.systemui.res.R
+import com.android.systemui.scene.shared.model.Overlays
+import com.android.systemui.scene.ui.composable.transitions.BOUNCER_INITIAL_TRANSLATION
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.pow
@@ -117,7 +125,7 @@ import platform.test.motion.compose.values.MotionTestValues
 import platform.test.motion.compose.values.motionTestValues
 
 @Composable
-fun BouncerContent(
+fun ContentScope.BouncerContent(
     viewModel: BouncerOverlayContentViewModel,
     dialogFactory: BouncerDialogFactory,
     modifier: Modifier = Modifier,
@@ -125,12 +133,100 @@ fun BouncerContent(
     val isOneHandedModeSupported by viewModel.isOneHandedModeSupported.collectAsStateWithLifecycle()
     val layout = calculateLayout(isOneHandedModeSupported = isOneHandedModeSupported)
 
-    BouncerContent(layout, viewModel, dialogFactory, modifier)
+    fun isDraggingToBouncer(): Boolean {
+        val currentTransition = layoutState.currentTransition
+        return currentTransition != null &&
+            currentTransition.isTransitioning(to = Overlays.Bouncer) &&
+            currentTransition.gestureContext != null
+    }
+
+    // Custom handle the BouncerContent toBouncer transition here.
+    // fromBouncer transitions are handled by the Scene transitions.
+
+    // Give an extra delay for showing BouncerContent if face auth or active unlock may run.
+    // This gives passive auth methods an opportunity to succeed before showing bouncer contents.
+    val appearAnimationInterpolator = FastOutSlowInEasing
+    val appearAnimationDuration = 250
+    var appearAnimationDelay: Int by remember { mutableIntStateOf(0) }
+    var startAppearAnimation: Boolean by remember { mutableStateOf(false) }
+    val animatedAlpha: Float by
+        animateFloatAsState(
+            animationSpec =
+                tween(
+                    durationMillis = appearAnimationDuration,
+                    delayMillis = appearAnimationDelay,
+                    easing = appearAnimationInterpolator,
+                ),
+            targetValue =
+                if (startAppearAnimation) {
+                    1f
+                } else {
+                    // init alpha to 0f before anim begins
+                    0f
+                },
+            label = "alpha",
+        )
+
+    val animatedOffsetY by
+        animateDpAsState(
+            animationSpec =
+                tween(
+                    durationMillis = appearAnimationDuration,
+                    delayMillis = appearAnimationDelay,
+                    easing = appearAnimationInterpolator,
+                ),
+            targetValue =
+                if (startAppearAnimation) {
+                    0.dp
+                } else {
+                    // init to BOUNCER_INITIAL_TRANSLATION before anim begins
+                    BOUNCER_INITIAL_TRANSLATION
+                },
+            label = "offsetY",
+        )
+
+    LaunchedEffect(Unit) {
+        appearAnimationDelay =
+            BOUNCER_CONTENTS_PASSIVE_AUTH_DELAY.takeIf { viewModel.shouldDelayBouncerContent() }
+                ?: 0
+        startAppearAnimation = true
+    }
+
+    BouncerContent(
+        layout,
+        viewModel,
+        dialogFactory,
+        modifier =
+            modifier
+                .offset {
+                    val yOffset =
+                        if (isDraggingToBouncer()) {
+                            ((1 -
+                                    appearAnimationInterpolator.transform(
+                                        layoutState.currentTransition!!.progress
+                                    )) * BOUNCER_INITIAL_TRANSLATION)
+                                .toPx()
+                        } else {
+                            animatedOffsetY.value
+                        }
+                    IntOffset(x = 0, y = yOffset.toInt())
+                }
+                .graphicsLayer {
+                    alpha =
+                        if (isDraggingToBouncer()) {
+                            appearAnimationInterpolator.transform(
+                                layoutState.currentTransition!!.progress
+                            )
+                        } else {
+                            animatedAlpha
+                        }
+                },
+    )
 }
 
 @Composable
 @VisibleForTesting
-fun BouncerContent(
+fun ContentScope.BouncerContent(
     layout: BouncerOverlayLayout,
     viewModel: BouncerOverlayContentViewModel,
     dialogFactory: BouncerDialogFactory,
@@ -402,7 +498,10 @@ private fun BesideUserSwitcherLayout(
                 .motionTestValues { animatedAlpha(animatedOffset) exportAs MotionTestValues.alpha }
         }
 
-        UserSwitcher(viewModel = viewModel, modifier = Modifier.weight(1f).swappable())
+        UserSwitcher(
+            viewModel = viewModel,
+            modifier = Modifier.fillMaxHeight().weight(1f).swappable(),
+        )
 
         FoldAware(
             modifier = Modifier.weight(1f).swappable(inversed = true).testTag("FoldAware"),
@@ -765,6 +864,8 @@ private fun UserSwitcher(viewModel: BouncerOverlayContentViewModel, modifier: Mo
 
     val selectedUserImage by viewModel.selectedUserImage.collectAsStateWithLifecycle(null)
     val dropdownItems by viewModel.userSwitcherDropdown.collectAsStateWithLifecycle(emptyList())
+    val userSwitcherIconSize = dimensionResource(R.dimen.bouncer_user_switcher_icon_size)
+    val dropDownWidth = userSwitcherIconSize + UserSwitcherDropdownExtraWidth
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -775,7 +876,7 @@ private fun UserSwitcher(viewModel: BouncerOverlayContentViewModel, modifier: Mo
             Image(
                 bitmap = it.asImageBitmap(),
                 contentDescription = null,
-                modifier = Modifier.size(SelectedUserImageSize).sysuiResTag("user_icon"),
+                modifier = Modifier.size(userSwitcherIconSize).sysuiResTag("user_icon"),
             )
         }
 
@@ -790,7 +891,7 @@ private fun UserSwitcher(viewModel: BouncerOverlayContentViewModel, modifier: Mo
                         Modifier
                             // Remove the built-in padding applied inside PlatformButton:
                             .padding(vertical = 0.dp)
-                            .width(UserSwitcherDropdownWidth)
+                            .width(dropDownWidth)
                             .height(UserSwitcherDropdownHeight),
                     colors =
                         ButtonDefaults.buttonColors(
@@ -819,6 +920,7 @@ private fun UserSwitcher(viewModel: BouncerOverlayContentViewModel, modifier: Mo
                 UserSwitcherDropdownMenu(
                     isExpanded = isDropdownExpanded,
                     items = dropdownItems,
+                    dropDownWidth = dropDownWidth,
                     onDismissed = { setDropdownExpanded(false) },
                 )
             }
@@ -834,6 +936,7 @@ private fun UserSwitcher(viewModel: BouncerOverlayContentViewModel, modifier: Mo
 private fun UserSwitcherDropdownMenu(
     isExpanded: Boolean,
     items: List<BouncerOverlayContentViewModel.UserSwitcherDropdownItemViewModel>,
+    dropDownWidth: Dp,
     onDismissed: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -850,7 +953,7 @@ private fun UserSwitcherDropdownMenu(
             expanded = isExpanded,
             onDismissRequest = onDismissed,
             offset = DpOffset(x = 0.dp, y = -UserSwitcherDropdownHeight),
-            modifier = Modifier.width(UserSwitcherDropdownWidth).sysuiResTag("user_list_dropdown"),
+            modifier = Modifier.width(dropDownWidth).sysuiResTag("user_list_dropdown"),
         ) {
             items.forEach { userSwitcherDropdownItem ->
                 DropdownMenuItem(
@@ -906,8 +1009,7 @@ private fun animatedAlpha(offset: Float): Float {
     return max(0f, (a * (abs(offset) - m).pow(2) + b).toFloat())
 }
 
-private val SelectedUserImageSize = 190.dp
-private val UserSwitcherDropdownWidth = SelectedUserImageSize + 2 * 29.dp
+private val UserSwitcherDropdownExtraWidth = 2 * 29.dp
 private val UserSwitcherDropdownHeight = 60.dp
 
 private object SceneKeys {
@@ -928,3 +1030,5 @@ private val SceneTransitions = transitions {
 object BouncerMotionTestKeys {
     val swapAnimationEnd = MotionTestValueKey<Boolean>("swapAnimationEnd")
 }
+
+private const val BOUNCER_CONTENTS_PASSIVE_AUTH_DELAY = 500

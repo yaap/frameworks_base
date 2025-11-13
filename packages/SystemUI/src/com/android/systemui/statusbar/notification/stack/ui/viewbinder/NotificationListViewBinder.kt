@@ -17,7 +17,6 @@
 package com.android.systemui.statusbar.notification.stack.ui.viewbinder
 
 import android.view.LayoutInflater
-import android.view.View
 import androidx.lifecycle.lifecycleScope
 import com.android.app.tracing.TraceUtils.traceAsync
 import com.android.app.tracing.coroutines.launchTraced as launch
@@ -33,11 +32,12 @@ import com.android.systemui.res.R
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.statusbar.NotificationShelf
-import com.android.systemui.statusbar.chips.notification.shared.StatusBarNotifChips
+import com.android.systemui.statusbar.notification.Bundles
 import com.android.systemui.statusbar.notification.NotificationActivityStarter
+import com.android.systemui.statusbar.notification.OnboardingAffordanceManager
+import com.android.systemui.statusbar.notification.Summarization
 import com.android.systemui.statusbar.notification.collection.render.SectionHeaderController
 import com.android.systemui.statusbar.notification.dagger.SilentHeader
-import com.android.systemui.statusbar.notification.emptyshade.shared.ModesEmptyShadeFix
 import com.android.systemui.statusbar.notification.emptyshade.ui.view.EmptyShadeView
 import com.android.systemui.statusbar.notification.emptyshade.ui.viewbinder.EmptyShadeViewBinder
 import com.android.systemui.statusbar.notification.emptyshade.ui.viewmodel.EmptyShadeViewModel
@@ -46,20 +46,28 @@ import com.android.systemui.statusbar.notification.footer.ui.view.FooterView
 import com.android.systemui.statusbar.notification.footer.ui.viewbinder.FooterViewBinder
 import com.android.systemui.statusbar.notification.footer.ui.viewmodel.FooterViewModel
 import com.android.systemui.statusbar.notification.icon.ui.viewbinder.NotificationIconContainerShelfViewBinder
+import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi
+import com.android.systemui.statusbar.notification.shared.NotificationBundleUi
+import com.android.systemui.statusbar.notification.shared.NotificationSummarizationOnboardingUi
 import com.android.systemui.statusbar.notification.shared.NotificationsLiveDataStoreRefactor
 import com.android.systemui.statusbar.notification.shelf.ui.viewbinder.NotificationShelfViewBinder
 import com.android.systemui.statusbar.notification.stack.DisplaySwitchNotificationsHiderTracker
 import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout
 import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayoutController
+import com.android.systemui.statusbar.notification.stack.OnboardingAffordanceView
 import com.android.systemui.statusbar.notification.stack.ui.view.NotificationStatsLogger
 import com.android.systemui.statusbar.notification.stack.ui.viewbinder.HideNotificationsBinder.bindHideList
+import com.android.systemui.statusbar.notification.stack.ui.viewmodel.BundleOnboardingViewModel
 import com.android.systemui.statusbar.notification.stack.ui.viewmodel.NotificationListViewModel
+import com.android.systemui.statusbar.notification.stack.ui.viewmodel.SummarizationOnboardingViewModel
 import com.android.systemui.statusbar.notification.ui.viewbinder.HeadsUpNotificationViewBinder
 import com.android.systemui.util.kotlin.awaitCancellationThenDispose
 import com.android.systemui.util.kotlin.getOrNull
+import com.android.systemui.util.time.SystemClock
 import com.android.systemui.util.ui.isAnimating
 import com.android.systemui.util.ui.stopAnimating
 import com.android.systemui.util.ui.value
+import com.android.systemui.utils.coroutines.flow.flatMapLatestConflated
 import java.util.Optional
 import javax.inject.Inject
 import javax.inject.Provider
@@ -69,7 +77,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 
@@ -89,6 +97,11 @@ constructor(
     private val notificationActivityStarter: Provider<NotificationActivityStarter>,
     @SilentHeader private val silentHeaderController: SectionHeaderController,
     private val viewModel: NotificationListViewModel,
+    private val systemClock: SystemClock,
+    private val bundleOnboardingBinder: Provider<BundleOnboardingViewBinder>,
+    private val summarizationOnboardingBinder: Provider<SummarizationOnboardingViewBinder>,
+    @Bundles private val bundleOnboardingMgr: OnboardingAffordanceManager,
+    @Summarization private val summarizationOnboardingMgr: OnboardingAffordanceManager,
 ) {
 
     fun bindWhileAttached(
@@ -120,13 +133,7 @@ constructor(
                         hasNonClearableSilentNotifications,
                     )
                 }
-                launch {
-                    if (ModesEmptyShadeFix.isEnabled) {
-                        reinflateAndBindEmptyShade(emptyShadeViewModel, view)
-                    } else {
-                        bindEmptyShadeLegacy(emptyShadeViewModel, view)
-                    }
-                }
+                launch { reinflateAndBindEmptyShade(emptyShadeViewModel, view) }
                 launch { bindSilentHeaderClickListener(view, hasNonClearableSilentNotifications) }
                 launch {
                     viewModel.isImportantForAccessibility.collect { isImportantForAccessibility ->
@@ -134,12 +141,20 @@ constructor(
                     }
                 }
 
-                if (StatusBarNotifChips.isEnabled) {
+                if (PromotedNotificationUi.isEnabled) {
                     launch {
-                        viewModel.visibleStatusBarChipKeys.collect { keys ->
-                            viewController.updateStatusBarChipKeys(keys)
+                        viewModel.visibleStatusBarChips.collect { chips ->
+                            viewController.updateVisibleStatusBarChips(chips)
                         }
                     }
+                }
+
+                if (NotificationBundleUi.isEnabled) {
+                    launch { bindBundleOnboarding(view) }
+                }
+
+                if (NotificationSummarizationOnboardingUi.isEnabled) {
+                    launch { bindSummarizationOnboarding(view) }
                 }
 
                 launch { bindLogger(view) }
@@ -199,8 +214,6 @@ constructor(
                         hideSilentSection = !hasNonClearableSilentNotifications.value,
                     )
                 },
-                launchNotificationSettings,
-                launchNotificationHistory,
                 notificationActivityStarter.get(),
             )
         if (SceneContainerFlag.isEnabled) {
@@ -228,19 +241,10 @@ constructor(
         disposableHandle.awaitCancellationThenDispose()
     }
 
-    private val launchNotificationSettings: (View) -> Unit = { view: View ->
-        notificationActivityStarter.get().startHistoryIntent(view, /* showHistory= */ false)
-    }
-
-    private val launchNotificationHistory: (View) -> Unit = { view ->
-        notificationActivityStarter.get().startHistoryIntent(view, /* showHistory= */ true)
-    }
-
     private suspend fun reinflateAndBindEmptyShade(
         emptyShadeViewModel: EmptyShadeViewModel,
         parentView: NotificationStackScrollLayout,
     ) {
-        ModesEmptyShadeFix.unsafeAssertInNewMode()
         // The empty shade needs to be re-inflated every time the theme or the font size
         // changes.
         configuration
@@ -258,27 +262,10 @@ constructor(
             }
     }
 
-    private suspend fun bindEmptyShadeLegacy(
-        emptyShadeViewModel: EmptyShadeViewModel,
-        parentView: NotificationStackScrollLayout,
-    ) {
-        ModesEmptyShadeFix.assertInLegacyMode()
-        combine(
-                viewModel.shouldShowEmptyShadeView,
-                emptyShadeViewModel.areNotificationsHiddenInShade,
-                emptyShadeViewModel.hasFilteredOutSeenNotifications,
-                ::Triple,
-            )
-            .collect { (shouldShow, areNotifsHidden, hasFilteredNotifs) ->
-                parentView.updateEmptyShadeView(shouldShow, areNotifsHidden, hasFilteredNotifs)
-            }
-    }
-
     private suspend fun bindEmptyShade(
         emptyShadeView: EmptyShadeView,
         emptyShadeViewModel: EmptyShadeViewModel,
     ): Unit = coroutineScope {
-        ModesEmptyShadeFix.unsafeAssertInNewMode()
         launch {
             emptyShadeView.repeatWhenAttachedToWindow {
                 EmptyShadeViewBinder.bind(
@@ -289,7 +276,7 @@ constructor(
             }
         }
         launch {
-            viewModel.shouldShowEmptyShadeViewAnimated.collect { shouldShow ->
+            viewModel.shouldShowEmptyShadeView.collect { shouldShow ->
                 emptyShadeView.setVisible(shouldShow.value, shouldShow.isAnimating) {
                     shouldShow.stopAnimating()
                 }
@@ -340,9 +327,60 @@ constructor(
         if (NotificationsLiveDataStoreRefactor.isEnabled) {
             viewModel.logger.getOrNull()?.let { viewModel ->
                 loggerOptional.getOrNull()?.let { logger ->
-                    NotificationStatsLoggerBinder.bindLogger(view, logger, viewModel)
+                    NotificationStatsLoggerBinder.bindLogger(view, logger, viewModel, systemClock)
                 }
             }
         }
+    }
+
+    private suspend fun bindBundleOnboarding(parentView: NotificationStackScrollLayout) {
+        if (NotificationBundleUi.isUnexpectedlyInLegacyMode()) return
+        val onboardingViewModel: BundleOnboardingViewModel = viewModel.bundleOnboarding
+        onboardingViewModel.showAffordance
+            .flatMapLatestConflated { show ->
+                if (show) {
+                    configuration
+                        .inflateLayout<OnboardingAffordanceView>(
+                            R.layout.onboarding_bundles_affordance,
+                            parentView,
+                            attachToRoot = false,
+                        )
+                        .flowOn(inflationDispatcher)
+                } else {
+                    flowOf(null)
+                }
+            }
+            .collectLatest { onboardingView ->
+                bundleOnboardingMgr.view.value = onboardingView
+                onboardingView?.let {
+                    bundleOnboardingBinder.get().bind(onboardingViewModel, onboardingView)
+                }
+            }
+    }
+
+    private suspend fun bindSummarizationOnboarding(parentView: NotificationStackScrollLayout) {
+        if (NotificationSummarizationOnboardingUi.isUnexpectedlyInLegacyMode()) return
+        val summarizationViewModel: SummarizationOnboardingViewModel =
+            viewModel.summarizationOnboarding
+        summarizationViewModel.showAffordance
+            .flatMapLatestConflated { show ->
+                if (show) {
+                    configuration
+                        .inflateLayout<OnboardingAffordanceView>(
+                            R.layout.onboarding_summaries_affordance,
+                            parentView,
+                            attachToRoot = false,
+                        )
+                        .flowOn(inflationDispatcher)
+                } else {
+                    flowOf(null)
+                }
+            }
+            .collectLatest { summariesView ->
+                summarizationOnboardingMgr.view.value = summariesView
+                summariesView?.let {
+                    summarizationOnboardingBinder.get().bind(summarizationViewModel, summariesView)
+                }
+            }
     }
 }

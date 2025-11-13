@@ -28,6 +28,8 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mock;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
 
+import static org.mockito.ArgumentMatchers.anyInt;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
@@ -40,7 +42,6 @@ import android.view.DisplayCutout;
 import android.view.DisplayInfo;
 
 import com.android.server.wm.DisplayWindowSettings.SettingsProvider.SettingsEntry;
-import com.android.window.flags.Flags;
 
 class TestDisplayContent extends DisplayContent {
 
@@ -78,15 +79,13 @@ class TestDisplayContent extends DisplayContent {
         doNothing().when(inputMonitor).resumeDispatchingLw(any());
 
         final InsetsPolicy insetsPolicy = getInsetsPolicy();
-        WindowTestsBase.suppressInsetsAnimation(insetsPolicy.getPermanentControlTarget());
-        WindowTestsBase.suppressInsetsAnimation(insetsPolicy.getTransientControlTarget());
+        WindowTestsBase.suppressInsetsAnimation(insetsPolicy.getShowingPermanentControlTarget());
+        WindowTestsBase.suppressInsetsAnimation(insetsPolicy.getShowingTransientControlTarget());
 
-        if (Flags.trackSystemUiContextBeforeWms()) {
-            final Context uiContext = getDisplayUiContext();
-            spyOn(uiContext);
-            doNothing().when(uiContext).registerComponentCallbacks(any());
-            doNothing().when(uiContext).unregisterComponentCallbacks(any());
-        }
+        final Context uiContext = getDisplayUiContext();
+        spyOn(uiContext);
+        doNothing().when(uiContext).registerComponentCallbacks(any());
+        doNothing().when(uiContext).unregisterComponentCallbacks(any());
 
         // For devices that set the sysprop ro.bootanim.set_orientation_<display_id>
         // See DisplayRotation#readDefaultDisplayRotation for context.
@@ -147,6 +146,14 @@ class TestDisplayContent extends DisplayContent {
         }
         Builder setType(int type) {
             mInfo.type = type;
+            return this;
+        }
+        Builder addFlags(int flags) {
+            mInfo.flags |= flags;
+            return this;
+        }
+        Builder removeFlags(int flags) {
+            mInfo.flags &= ~flags;
             return this;
         }
         Builder setOwnerUid(int ownerUid) {
@@ -221,6 +228,7 @@ class TestDisplayContent extends DisplayContent {
                 doReturn(false).when(displayPolicy).hasStatusBar();
                 doReturn(false).when(newDisplay).isSystemDecorationsSupported();
             }
+            doReturn(true).when(newDisplay).isWindowingModeSupported(anyInt());
             // Update the display policy to make the screen fully turned on so animation is allowed
             displayPolicy.screenTurningOn(null /* screenOnListener */);
             displayPolicy.finishKeyguardDrawn();

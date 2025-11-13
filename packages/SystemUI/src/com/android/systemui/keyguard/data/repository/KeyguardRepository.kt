@@ -16,6 +16,7 @@
 
 package com.android.systemui.keyguard.data.repository
 
+import android.annotation.SuppressLint
 import android.graphics.Point
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.internal.widget.LockPatternUtils
@@ -24,7 +25,6 @@ import com.android.keyguard.KeyguardUpdateMonitorCallback
 import com.android.systemui.biometrics.AuthController
 import com.android.systemui.biometrics.data.repository.FacePropertyRepository
 import com.android.systemui.common.coroutine.ChannelExt.trySendWithFailureLogging
-import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Main
@@ -46,9 +46,11 @@ import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.settings.UserTracker
 import com.android.systemui.statusbar.policy.KeyguardStateController
 import com.android.systemui.util.time.SystemClock
+import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -58,7 +60,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
@@ -100,6 +101,12 @@ interface KeyguardRepository {
     val isKeyguardDismissible: StateFlow<Boolean>
 
     /**
+     * Whether device entry believes the device is trusted. This can be true or false when keyguard
+     * has been dismissed depending on biometric and trust states.
+     */
+    val hasTrust: StateFlow<Boolean>
+
+    /**
      * Observable for the signal that keyguard is about to go away.
      *
      * TODO(b/278086361): Remove once KEYGUARD_WM_STATE_REFACTOR flag is removed.
@@ -109,7 +116,7 @@ interface KeyguardRepository {
             "away' is isInTransitionToState(GONE), but consider using more specific flows " +
             "whenever possible."
     )
-    val isKeyguardGoingAway: MutableStateFlow<Boolean>
+    val isKeyguardGoingAway: MutableSharedFlow<Boolean>
 
     /**
      * Whether the keyguard is enabled, per [KeyguardService]. If the keyguard is not enabled, the
@@ -158,10 +165,6 @@ interface KeyguardRepository {
      *
      * Doze state is the same as "Always on Display" or "AOD". It is the state that the device can
      * enter to conserve battery when the device is locked and inactive.
-     *
-     * Note that it is possible for the system to be transitioning into doze while this flow still
-     * returns `false`. In order to account for that, observers should also use the
-     * [linearDozeAmount] flow to check if it's greater than `0`
      */
     val isDozing: StateFlow<Boolean>
 
@@ -178,18 +181,6 @@ interface KeyguardRepository {
 
     /** Observable for whether the device is dreaming with an overlay, see [DreamOverlayService] */
     val isDreamingWithOverlay: Flow<Boolean>
-
-    /**
-     * Observable for the amount of doze we are currently in.
-     *
-     * While in doze state, this amount can change - driving a cycle of animations designed to avoid
-     * pixel burn-in, etc.
-     *
-     * Also note that the value here may be greater than `0` while [isDozing] is still `false`, this
-     * happens during an animation/transition into doze mode. An observer would be wise to account
-     * for both flows if needed.
-     */
-    val linearDozeAmount: Flow<Float>
 
     /** Doze state information, as it transitions */
     val dozeTransitionModel: Flow<DozeTransitionModel>
@@ -390,8 +381,15 @@ constructor(
     override val isKeyguardDismissible: MutableStateFlow<Boolean> =
         MutableStateFlow(keyguardStateController.isUnlocked)
 
-    override val isKeyguardGoingAway: MutableStateFlow<Boolean> =
-        MutableStateFlow(keyguardStateController.isKeyguardGoingAway)
+    override val hasTrust: MutableStateFlow<Boolean> =
+        MutableStateFlow(keyguardStateController.canDismissLockScreen())
+
+    @SuppressLint("SharedFlowCreation")
+    override val isKeyguardGoingAway: MutableSharedFlow<Boolean> =
+        MutableSharedFlow<Boolean>(
+            extraBufferCapacity = 3,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
 
     private val _isKeyguardEnabled =
         MutableStateFlow(!lockPatternUtils.isLockScreenDisabled(userTracker.userId))
@@ -461,35 +459,6 @@ constructor(
             .distinctUntilChanged()
 
     override val isDreaming: MutableStateFlow<Boolean> = MutableStateFlow(false)
-
-    private val _preSceneLinearDozeAmount: Flow<Float> =
-        if (SceneContainerFlag.isEnabled) {
-            emptyFlow()
-        } else {
-            conflatedCallbackFlow {
-                val callback =
-                    object : StatusBarStateController.StateListener {
-                        override fun onDozeAmountChanged(linear: Float, eased: Float) {
-                            trySendWithFailureLogging(linear, TAG, "updated dozeAmount")
-                        }
-                    }
-
-                statusBarStateController.addCallback(callback)
-                trySendWithFailureLogging(
-                    statusBarStateController.dozeAmount,
-                    TAG,
-                    "initial dozeAmount",
-                )
-
-                awaitClose { statusBarStateController.removeCallback(callback) }
-            }
-        }
-
-    override val linearDozeAmount: Flow<Float>
-        get() {
-            SceneContainerFlag.assertInLegacyMode()
-            return _preSceneLinearDozeAmount
-        }
 
     override val dozeTransitionModel: Flow<DozeTransitionModel> = conflatedCallbackFlow {
         val callback =
@@ -616,6 +585,7 @@ constructor(
                 }
 
                 override fun onUnlockedChanged() {
+                    hasTrust.value = keyguardStateController.canDismissLockScreen()
                     isKeyguardDismissible.value = keyguardStateController.isUnlocked
                 }
             }
@@ -695,6 +665,7 @@ constructor(
             DozeMachine.State.DOZE_AOD_PAUSED -> DozeStateModel.DOZE_AOD_PAUSED
             DozeMachine.State.DOZE_AOD_PAUSING -> DozeStateModel.DOZE_AOD_PAUSING
             DozeMachine.State.DOZE_AOD_DOCKED -> DozeStateModel.DOZE_AOD_DOCKED
+            DozeMachine.State.DOZE_AOD_MINMODE -> DozeStateModel.DOZE_AOD_MINMODE
             else -> throw IllegalArgumentException("Invalid DozeMachine.State: state")
         }
     }

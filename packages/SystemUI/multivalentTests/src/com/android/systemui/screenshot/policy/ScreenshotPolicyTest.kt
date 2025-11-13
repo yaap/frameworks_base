@@ -16,10 +16,13 @@
 
 package com.android.systemui.screenshot.policy
 
+import android.app.ActivityTaskManager
 import android.content.ComponentName
 import android.graphics.Rect
 import android.os.UserHandle
+import android.platform.test.annotations.DisabledOnRavenwood
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.systemui.SysuiTestCase
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.screenshot.data.model.DisplayContentScenarios.ActivityNames.FILES
 import com.android.systemui.screenshot.data.model.DisplayContentScenarios.ActivityNames.MESSAGES
@@ -45,7 +48,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class ScreenshotPolicyTest {
+@DisabledOnRavenwood(blockedBy = [ActivityTaskManager.RootTaskInfo::class])
+class ScreenshotPolicyTest : SysuiTestCase() {
     private val kosmos = Kosmos()
 
     private val defaultComponent = ComponentName("default", "default")

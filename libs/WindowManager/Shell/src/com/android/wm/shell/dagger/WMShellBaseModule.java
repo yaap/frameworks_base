@@ -22,12 +22,15 @@ import static com.android.wm.shell.compatui.CompatUIStatusManager.COMPAT_UI_EDUC
 import static com.android.wm.shell.onehanded.OneHandedController.SUPPORT_ONE_HANDED_MODE;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.ActivityTaskManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManager;
 import android.os.Handler;
 import android.os.SystemProperties;
+import android.os.UserManager;
+import android.os.Vibrator;
 import android.provider.Settings;
 import android.view.IWindowManager;
 import android.view.accessibility.AccessibilityManager;
@@ -116,8 +119,11 @@ import com.android.wm.shell.shared.TransactionPool;
 import com.android.wm.shell.shared.annotations.ShellAnimationThread;
 import com.android.wm.shell.shared.annotations.ShellMainThread;
 import com.android.wm.shell.shared.annotations.ShellSplashscreenThread;
+import com.android.wm.shell.shared.desktopmode.DesktopConfig;
+import com.android.wm.shell.shared.desktopmode.DesktopConfigImpl;
 import com.android.wm.shell.shared.desktopmode.DesktopModeCompatPolicy;
-import com.android.wm.shell.shared.desktopmode.DesktopModeStatus;
+import com.android.wm.shell.shared.desktopmode.DesktopState;
+import com.android.wm.shell.shared.desktopmode.DesktopStateImpl;
 import com.android.wm.shell.splitscreen.SplitScreen;
 import com.android.wm.shell.splitscreen.SplitScreenController;
 import com.android.wm.shell.startingsurface.StartingSurface;
@@ -140,6 +146,10 @@ import com.android.wm.shell.unfold.ShellUnfoldProgressProvider;
 import com.android.wm.shell.unfold.UnfoldAnimationController;
 import com.android.wm.shell.unfold.UnfoldTransitionHandler;
 import com.android.wm.shell.windowdecor.WindowDecorViewModel;
+import com.android.wm.shell.windowdecor.viewholder.AppHandleNotifier;
+import com.android.wm.shell.windowdecor.viewholder.AppHandles;
+
+import com.google.android.msdl.domain.MSDLPlayer;
 
 import dagger.BindsOptionalOf;
 import dagger.Lazy;
@@ -147,6 +157,7 @@ import dagger.Module;
 import dagger.Provides;
 
 import java.util.Optional;
+import java.util.concurrent.Executors;
 
 /**
  * Provides basic dependencies from {@link com.android.wm.shell}, these dependencies are only
@@ -180,8 +191,10 @@ public abstract class WMShellBaseModule {
             IWindowManager wmService,
             ShellInit shellInit,
             @ShellMainThread ShellExecutor mainExecutor,
-            DisplayManager displayManager) {
-        return new DisplayController(context, wmService, shellInit, mainExecutor, displayManager);
+            DisplayManager displayManager,
+            DesktopState desktopState) {
+        return new DisplayController(context, wmService, shellInit, mainExecutor, displayManager,
+                desktopState);
     }
 
     @WMSingleton
@@ -234,6 +247,16 @@ public abstract class WMShellBaseModule {
             @ShellMainThread ShellExecutor mainExecutor) {
         return new TabletopModeController(
                 context, shellInit, postureController, displayController, mainExecutor);
+    }
+
+    @WMSingleton
+    @Provides
+    static MSDLPlayer provideMSDLPlayer(@Nullable Vibrator vibrator) {
+        return MSDLPlayer.Companion.createPlayer(
+                vibrator,
+                Executors.newSingleThreadExecutor(),
+                null /* useHapticFeedbackForToken */
+        );
     }
 
     @WMSingleton
@@ -292,7 +315,8 @@ public abstract class WMShellBaseModule {
             @NonNull CompatUIState compatUIState,
             @NonNull CompatUIComponentIdGenerator componentIdGenerator,
             @NonNull CompatUIComponentFactory compatUIComponentFactory,
-            CompatUIStatusManager compatUIStatusManager) {
+            CompatUIStatusManager compatUIStatusManager,
+            DesktopState desktopState) {
         if (!context.getResources().getBoolean(R.bool.config_enableCompatUIController)) {
             return Optional.empty();
         }
@@ -317,7 +341,8 @@ public abstract class WMShellBaseModule {
                         compatUIShellCommandHandler.get(),
                         accessibilityManager.get(),
                         compatUIStatusManager,
-                        desktopUserRepositories));
+                        desktopUserRepositories,
+                        desktopState));
     }
 
     @WMSingleton
@@ -537,8 +562,9 @@ public abstract class WMShellBaseModule {
 
     @WMSingleton
     @Provides
-    static PhonePipKeepClearAlgorithm providePhonePipKeepClearAlgorithm(Context context) {
-        return new PhonePipKeepClearAlgorithm(context);
+    static PhonePipKeepClearAlgorithm providePhonePipKeepClearAlgorithm(Context context,
+            PipDisplayLayoutState pipDisplayLayoutState) {
+        return new PhonePipKeepClearAlgorithm(context, pipDisplayLayoutState);
     }
 
     @WMSingleton
@@ -661,8 +687,8 @@ public abstract class WMShellBaseModule {
     @Provides
     static Optional<FreeformComponents> provideFreeformComponents(
             @DynamicOverride Optional<FreeformComponents> freeformComponents,
-            Context context) {
-        if (FreeformComponents.requiresFreeformComponents(context)) {
+            DesktopState desktopState) {
+        if (FreeformComponents.requiresFreeformComponents(desktopState)) {
             return freeformComponents;
         }
         return Optional.empty();
@@ -732,12 +758,14 @@ public abstract class WMShellBaseModule {
             ActivityTaskManager activityTaskManager,
             Optional<DesktopUserRepositories> desktopUserRepositories,
             TaskStackTransitionObserver taskStackTransitionObserver,
-            @ShellMainThread ShellExecutor mainExecutor
+            @ShellMainThread ShellExecutor mainExecutor,
+            DesktopState desktopState
     ) {
         return Optional.ofNullable(
                 RecentTasksController.create(context, shellInit, shellController,
                         shellCommandHandler, taskStackListener, activityTaskManager,
-                        desktopUserRepositories, taskStackTransitionObserver, mainExecutor));
+                        desktopUserRepositories, taskStackTransitionObserver, mainExecutor,
+                        desktopState));
     }
 
     @BindsOptionalOf
@@ -766,17 +794,12 @@ public abstract class WMShellBaseModule {
             @ShellMainThread ShellExecutor mainExecutor,
             @ShellMainThread Handler mainHandler,
             @ShellAnimationThread ShellExecutor animExecutor,
-            @ShellAnimationThread Handler animHandler,
             RootTaskDisplayAreaOrganizer rootTaskDisplayAreaOrganizer,
             HomeTransitionObserver homeTransitionObserver,
             FocusTransitionObserver focusTransitionObserver) {
-        if (!context.getResources().getBoolean(R.bool.config_registerShellTransitionsOnInit)) {
-            // TODO(b/238217847): Force override shell init if registration is disabled
-            shellInit = new ShellInit(mainExecutor);
-        }
         return new Transitions(context, shellInit, shellCommandHandler, shellController, organizer,
                 pool, displayController, displayInsetsController, mainExecutor, mainHandler,
-                animExecutor, animHandler, rootTaskDisplayAreaOrganizer, homeTransitionObserver,
+                animExecutor, rootTaskDisplayAreaOrganizer, homeTransitionObserver,
                 focusTransitionObserver);
     }
 
@@ -933,9 +956,11 @@ public abstract class WMShellBaseModule {
             ShellTaskOrganizer shellTaskOrganizer,
             @ShellSplashscreenThread ShellExecutor splashScreenExecutor,
             StartingWindowTypeAlgorithm startingWindowTypeAlgorithm, IconProvider iconProvider,
-            TransactionPool pool) {
+            TransactionPool pool, @ShellMainThread ShellExecutor mainExecutor,
+            Transitions transitions) {
         return new StartingWindowController(context, shellInit, shellController, shellTaskOrganizer,
-                splashScreenExecutor, startingWindowTypeAlgorithm, iconProvider, pool);
+                splashScreenExecutor, startingWindowTypeAlgorithm, iconProvider, pool, mainExecutor,
+                transitions);
     }
 
     // Workaround for dynamic overriding with a default implementation, see {@link DynamicOverride}
@@ -1010,9 +1035,10 @@ public abstract class WMShellBaseModule {
             ShellInit shellInit,
             ShellCommandHandler shellCommandHandler,
             DisplayInsetsController displayInsetsController,
+            UserManager userManager,
             @ShellMainThread ShellExecutor mainExecutor) {
         return new ShellController(context, shellInit, shellCommandHandler,
-                displayInsetsController, mainExecutor);
+                displayInsetsController, userManager, mainExecutor);
     }
 
     //
@@ -1033,13 +1059,14 @@ public abstract class WMShellBaseModule {
 
     @WMSingleton
     @Provides
-    static Optional<DesktopTasksController> providesDesktopTasksController(Context context,
+    static Optional<DesktopTasksController> providesDesktopTasksController(
+            DesktopState desktopState,
             @DynamicOverride Optional<Lazy<DesktopTasksController>> desktopTasksController) {
         // Use optional-of-lazy for the dependency that this provider relies on.
         // Lazy ensures that this provider will not be the cause the dependency is created
         // when it will not be returned due to the condition below.
         return desktopTasksController.flatMap((lazy) -> {
-            if (DesktopModeStatus.canEnterDesktopModeOrShowAppHandle(context)) {
+            if (desktopState.canEnterDesktopModeOrShowAppHandle()) {
                 return Optional.of(lazy.get());
             }
             return Optional.empty();
@@ -1052,13 +1079,14 @@ public abstract class WMShellBaseModule {
 
     @WMSingleton
     @Provides
-    static Optional<DesktopUserRepositories> provideDesktopUserRepositories(Context context,
+    static Optional<DesktopUserRepositories> provideDesktopUserRepositories(
+            DesktopState desktopState,
             @DynamicOverride Optional<Lazy<DesktopUserRepositories>> desktopUserRepositories) {
         // Use optional-of-lazy for the dependency that this provider relies on.
         // Lazy ensures that this provider will not be the cause the dependency is created
         // when it will not be returned due to the condition below.
         return desktopUserRepositories.flatMap((lazy) -> {
-            if (DesktopModeStatus.canEnterDesktopMode(context)) {
+            if (desktopState.canEnterDesktopMode()) {
                 return Optional.of(lazy.get());
             }
             return Optional.empty();
@@ -1099,6 +1127,19 @@ public abstract class WMShellBaseModule {
     }
 
     //
+    // AppHandle
+    //
+
+    @WMSingleton
+    @Provides
+    static Optional<AppHandles> provideAppHandles(Optional<AppHandleNotifier> appHandleNotifier) {
+        return appHandleNotifier.map(AppHandleNotifier::asAppHandleImpl);
+    }
+
+    @BindsOptionalOf
+    abstract AppHandleNotifier getAppHandleNotifier();
+
+    //
     // Misc
     //
 
@@ -1127,6 +1168,7 @@ public abstract class WMShellBaseModule {
             Optional<RecentsTransitionHandler> recentsTransitionHandlerOptional,
             Optional<OneHandedController> oneHandedControllerOptional,
             Optional<AppZoomOutController> appZoomOutControllerOptional,
+            Optional<AppHandles> appHandlesOptional,
             Optional<HideDisplayCutoutController> hideDisplayCutoutControllerOptional,
             Optional<ActivityEmbeddingController> activityEmbeddingOptional,
             Optional<MixedTransitionHandler> mixedTransitionHandler,
@@ -1155,5 +1197,24 @@ public abstract class WMShellBaseModule {
             ShellInit shellInit,
             ShellCommandHandler shellCommandHandler) {
         return new ProtoLogController(shellInit, shellCommandHandler);
+    }
+
+    @WMSingleton
+    @Provides
+    static DesktopConfig provideDesktopConfig(Context context,
+            DesktopState features) {
+        return new DesktopConfigImpl(context, features);
+    }
+
+    @WMSingleton
+    @Provides
+    static DesktopState provideDesktopState(Context context) {
+        return new DesktopStateImpl(context);
+    }
+
+    @Provides
+    static Optional<DesktopState> provideOptionalDesktopState(
+            DesktopState desktopState) {
+        return Optional.of(desktopState);
     }
 }

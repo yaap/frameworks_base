@@ -35,7 +35,7 @@ interface ClockFaceController {
 
     @get:SimpleProperty
     /** Current theme information the clock is using */
-    val theme: ThemeConfig
+    var theme: ThemeConfig
 
     @get:SimpleProperty
     /** Events specific to this clock face */
@@ -44,4 +44,19 @@ interface ClockFaceController {
     @get:SimpleProperty
     /** Triggers for various animations */
     val animations: ClockAnimations
+
+    companion object {
+        fun ClockFaceController.updateTheme(mutateTheme: (ThemeConfig) -> ThemeConfig) {
+            val theme = mutateTheme(this.theme)
+
+            // Themes with null seeds are always considered to have changed since we don't know
+            // at this point if the context's color theme has been updated externally.
+            // TODO(b/364680879): Capture context's color and compare when applicable.
+            val hasChanged = this.theme != theme || theme.seedColor == null
+            if (!hasChanged) return
+
+            events.onThemeChanged(theme)
+            this.theme = theme
+        }
+    }
 }

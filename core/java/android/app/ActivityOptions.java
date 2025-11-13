@@ -180,11 +180,13 @@ public class ActivityOptions extends ComponentOptions {
     public static final String KEY_PACKAGE_NAME = "android:activity.packageName";
 
     /**
-     * The bounds (window size) that the activity should be launched in. Set to null explicitly for
-     * full screen. If the key is not found, previous bounds will be preserved.
+     * The bounds (window size) that the activity should be launched in.
+     * If the key is not found, previous bounds will be preserved.
      * NOTE: This value is ignored on devices that don't have
      * {@link android.content.pm.PackageManager#FEATURE_FREEFORM_WINDOW_MANAGEMENT} or
-     * {@link android.content.pm.PackageManager#FEATURE_PICTURE_IN_PICTURE} enabled.
+     * {@link android.content.pm.PackageManager#FEATURE_PICTURE_IN_PICTURE} enabled, and on displays
+     * that don't support {@link WindowConfiguration#WINDOWING_MODE_FREEFORM} and
+     * {@link WindowConfiguration#WINDOWING_MODE_PINNED}.
      * @hide
      */
     public static final String KEY_LAUNCH_BOUNDS = "android:activity.launchBounds";
@@ -382,6 +384,12 @@ public class ActivityOptions extends ComponentOptions {
     private static final String KEY_TASK_ALWAYS_ON_TOP = "android.activity.alwaysOnTop";
 
     /**
+     * See {@link #setReparentLeafTaskToTda}
+     */
+    private static final String KEY_REPARENT_LEAF_TASK_TO_TDA =
+            "android.activity.reparentLeafTaskToTda";
+
+    /**
      * See {@link #setTaskOverlay}.
      * @hide
      */
@@ -459,9 +467,14 @@ public class ActivityOptions extends ComponentOptions {
     /** See {@link #setRemoveWithTaskOrganizer(boolean)}. */
     private static final String KEY_REMOVE_WITH_TASK_ORGANIZER =
             "android.activity.removeWithTaskOrganizer";
+
     /** See {@link #setLaunchedFromBubble(boolean)}. */
     private static final String KEY_LAUNCHED_FROM_BUBBLE =
             "android.activity.launchTypeBubble";
+
+    /** See {@link #setLaunchNextToBubble(boolean)} */
+    private static final String KEY_LAUNCH_NEXT_TO_BUBBLE =
+            "android.activity.launchNextToBubble";
 
     /** See {@link #setSplashScreenStyle(int)}. */
     private static final String KEY_SPLASH_SCREEN_STYLE =
@@ -565,6 +578,7 @@ public class ActivityOptions extends ComponentOptions {
     private boolean mApplyMultipleTaskFlagForShortcut;
     private boolean mApplyNoUserActionFlagForShortcut;
     private boolean mTaskAlwaysOnTop;
+    private boolean mReparentLeafTaskToTda;
     private boolean mTaskOverlay;
     private boolean mTaskOverlayCanResume;
     private boolean mAvoidMoveToFront;
@@ -584,6 +598,8 @@ public class ActivityOptions extends ComponentOptions {
     private boolean mIsEligibleForLegacyPermissionPrompt;
     private boolean mRemoveWithTaskOrganizer;
     private boolean mLaunchedFromBubble;
+    // TODO(b/407669465): remove it once migrated to the new approach
+    private boolean mLaunchNextToBubble;
     private boolean mTransientLaunch;
     private PictureInPictureParams mLaunchIntoPipParams;
     private boolean mDismissKeyguardIfInsecure;
@@ -1326,6 +1342,7 @@ public class ActivityOptions extends ComponentOptions {
         final ActivityOptions opts = new ActivityOptions();
         opts.mLaunchIntoPipParams = new PictureInPictureParams.Builder(pictureInPictureParams)
                 .setIsLaunchIntoPip(true)
+                .setAutoEnterEnabled(true)
                 .build();
         return opts;
     }
@@ -1408,6 +1425,7 @@ public class ActivityOptions extends ComponentOptions {
         mLaunchTaskId = opts.getInt(KEY_LAUNCH_TASK_ID, -1);
         mPendingIntentLaunchFlags = opts.getInt(KEY_PENDING_INTENT_LAUNCH_FLAGS, 0);
         mTaskAlwaysOnTop = opts.getBoolean(KEY_TASK_ALWAYS_ON_TOP, false);
+        mReparentLeafTaskToTda = opts.getBoolean(KEY_REPARENT_LEAF_TASK_TO_TDA, false);
         mTaskOverlay = opts.getBoolean(KEY_TASK_OVERLAY, false);
         mTaskOverlayCanResume = opts.getBoolean(KEY_TASK_OVERLAY_CAN_RESUME, false);
         mAvoidMoveToFront = opts.getBoolean(KEY_AVOID_MOVE_TO_FRONT, false);
@@ -1445,6 +1463,7 @@ public class ActivityOptions extends ComponentOptions {
         mSplashScreenThemeResName = opts.getString(KEY_SPLASH_SCREEN_THEME);
         mRemoveWithTaskOrganizer = opts.getBoolean(KEY_REMOVE_WITH_TASK_ORGANIZER);
         mLaunchedFromBubble = opts.getBoolean(KEY_LAUNCHED_FROM_BUBBLE);
+        mLaunchNextToBubble = opts.getBoolean(KEY_LAUNCH_NEXT_TO_BUBBLE);
         mTransientLaunch = opts.getBoolean(KEY_TRANSIENT_LAUNCH);
         mSplashScreenStyle = opts.getInt(KEY_SPLASH_SCREEN_STYLE);
         mLaunchIntoPipParams = opts.getParcelable(KEY_LAUNCH_INTO_PIP_PARAMS, android.app.PictureInPictureParams.class);
@@ -1464,12 +1483,12 @@ public class ActivityOptions extends ComponentOptions {
     /**
      * Sets the bounds (window size and position) that the activity should be launched in.
      * Rect position should be provided in pixels and in screen coordinates.
-     * Set to {@code null} to explicitly launch fullscreen.
      * <p>
      * <strong>NOTE:</strong> This value is ignored on devices that don't have
      * {@link android.content.pm.PackageManager#FEATURE_FREEFORM_WINDOW_MANAGEMENT} or
-     * {@link android.content.pm.PackageManager#FEATURE_PICTURE_IN_PICTURE} enabled.
-     * @param screenSpacePixelRect launch bounds or {@code null} for fullscreen
+     * {@link android.content.pm.PackageManager#FEATURE_PICTURE_IN_PICTURE} enabled, and on displays
+     * that don't support freeform and PiP windows.
+     * @param screenSpacePixelRect launch bounds
      * @return {@code this} {@link ActivityOptions} instance
      */
     public ActivityOptions setLaunchBounds(@Nullable Rect screenSpacePixelRect) {
@@ -1990,10 +2009,27 @@ public class ActivityOptions extends ComponentOptions {
     }
 
     /**
+     * Similar to {@link WindowContainerTransaction#setReparentLeafTaskToTda(boolean)}, requests
+     * that the given launch should reparent the leaf task to the ancestor TaskDisplayArea if it
+     * is not currently parented there.
+     * @hide
+     */
+    public void setReparentLeafTaskToTda(boolean reparent) {
+        mReparentLeafTaskToTda = reparent;
+    }
+
+    /**
      * @hide
      */
     public boolean getTaskAlwaysOnTop() {
         return mTaskAlwaysOnTop;
+    }
+
+    /**
+     * @hide
+     */
+    public boolean getReparentLeafTaskToTda() {
+        return mReparentLeafTaskToTda;
     }
 
     /**
@@ -2284,6 +2320,23 @@ public class ActivityOptions extends ComponentOptions {
     }
 
     /**
+     * Sets the policy of this launching Task that the new Tasks launched from it will be a Bubble.
+     * @hide
+     */
+    public ActivityOptions setLaunchNextToBubble(boolean launchNextToBubble) {
+        mLaunchNextToBubble = launchNextToBubble;
+        return this;
+    }
+
+    /**
+     * @return whether the new Tasks that are launched from this launching Task should be a Bubble.
+     * @hide
+     */
+    public boolean getLaunchNextToBubble() {
+        return mLaunchNextToBubble;
+    }
+
+    /**
      * Sets whether the activity launch is part of a transient operation. If it is, it will not
      * cause lifecycle changes in existing activities even if it were to occlude them (ie. other
      * activities occluded by this one will not be paused or stopped until the launch is committed).
@@ -2537,6 +2590,9 @@ public class ActivityOptions extends ComponentOptions {
         if (mTaskAlwaysOnTop) {
             b.putBoolean(KEY_TASK_ALWAYS_ON_TOP, mTaskAlwaysOnTop);
         }
+        if (mReparentLeafTaskToTda) {
+            b.putBoolean(KEY_REPARENT_LEAF_TASK_TO_TDA, mReparentLeafTaskToTda);
+        }
         if (mTaskOverlay) {
             b.putBoolean(KEY_TASK_OVERLAY, mTaskOverlay);
         }
@@ -2601,6 +2657,9 @@ public class ActivityOptions extends ComponentOptions {
         }
         if (mLaunchedFromBubble) {
             b.putBoolean(KEY_LAUNCHED_FROM_BUBBLE, mLaunchedFromBubble);
+        }
+        if (mLaunchNextToBubble) {
+            b.putBoolean(KEY_LAUNCH_NEXT_TO_BUBBLE, mLaunchNextToBubble);
         }
         if (mTransientLaunch) {
             b.putBoolean(KEY_TRANSIENT_LAUNCH, mTransientLaunch);
@@ -2822,12 +2881,22 @@ public class ActivityOptions extends ComponentOptions {
         public static final int TYPE_RECENTS_ANIMATION = 4;
         /** Launched from desktop's transition handler. */
         public static final int TYPE_DESKTOP_ANIMATION = 5;
+        /** Launched from QSS (Quick Settings Shade). */
+        public static final int TYPE_QSS = 6;
+        /** Launched from a Wear OS tile. */
+        public static final int TYPE_TILE = 7;
+        /** Launched from a Wear OS complication. */
+        public static final int TYPE_COMPLICATION = 8;
 
         @IntDef(prefix = { "TYPE_" }, value = {
                 TYPE_LAUNCHER,
                 TYPE_NOTIFICATION,
                 TYPE_LOCKSCREEN,
-                TYPE_DESKTOP_ANIMATION
+                TYPE_RECENTS_ANIMATION,
+                TYPE_DESKTOP_ANIMATION,
+                TYPE_QSS,
+                TYPE_TILE,
+                TYPE_COMPLICATION
         })
         @Retention(RetentionPolicy.SOURCE)
         public @interface SourceType {}

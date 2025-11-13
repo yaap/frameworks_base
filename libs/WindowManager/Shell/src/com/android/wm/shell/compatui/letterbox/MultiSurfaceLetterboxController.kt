@@ -19,6 +19,7 @@ package com.android.wm.shell.compatui.letterbox
 import android.graphics.Rect
 import android.view.SurfaceControl
 import android.view.SurfaceControl.Transaction
+import android.window.WindowContainerToken
 import com.android.internal.protolog.ProtoLog
 import com.android.wm.shell.compatui.letterbox.LetterboxUtils.Maps.runOnItem
 import com.android.wm.shell.compatui.letterbox.LetterboxUtils.Transactions.moveAndCrop
@@ -39,12 +40,13 @@ class MultiSurfaceLetterboxController @Inject constructor(
         private val TAG = "MultiSurfaceLetterboxController"
     }
 
-    private val letterboxMap = mutableMapOf<LetterboxKey, LetterboxSurfaces>()
+    private val letterboxMap = mutableMapOf<Int, LetterboxSurfaces>()
 
     override fun createLetterboxSurface(
         key: LetterboxKey,
         transaction: Transaction,
-        parentLeash: SurfaceControl
+        parentLeash: SurfaceControl,
+        token: WindowContainerToken?
     ) {
         val surfaceBuilderFn = { position: String ->
             letterboxBuilder.createSurface(
@@ -54,7 +56,7 @@ class MultiSurfaceLetterboxController @Inject constructor(
                 "MultiSurfaceLetterboxController#createLetterboxSurface"
             )
         }
-        letterboxMap.runOnItem(key, onMissed = { k, m ->
+        letterboxMap.runOnItem(key.taskId, onMissed = { k, m ->
             m[k] = LetterboxSurfaces(
                 leftSurface = surfaceBuilderFn("Left"),
                 topSurface = surfaceBuilderFn("Top"),
@@ -68,12 +70,12 @@ class MultiSurfaceLetterboxController @Inject constructor(
         key: LetterboxKey,
         transaction: Transaction
     ) {
-        letterboxMap.runOnItem(key, onFound = { item ->
+        letterboxMap.runOnItem(key.taskId, onFound = { item ->
             item.forEach { s ->
                 s.remove(transaction)
             }
         })
-        letterboxMap.remove(key)
+        letterboxMap.remove(key.taskId)
     }
 
     override fun updateLetterboxSurfaceVisibility(
@@ -81,7 +83,7 @@ class MultiSurfaceLetterboxController @Inject constructor(
         transaction: Transaction,
         visible: Boolean
     ) {
-        letterboxMap.runOnItem(key, onFound = { item ->
+        letterboxMap.runOnItem(key.taskId, onFound = { item ->
             item.forEach { s ->
                 s.setVisibility(transaction, visible)
             }
@@ -94,7 +96,7 @@ class MultiSurfaceLetterboxController @Inject constructor(
         taskBounds: Rect,
         activityBounds: Rect
     ) {
-        letterboxMap.runOnItem(key, onFound = { item ->
+        letterboxMap.runOnItem(key.taskId, onFound = { item ->
             item.updateSurfacesBounds(transaction, taskBounds, activityBounds)
         })
     }

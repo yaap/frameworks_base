@@ -1208,6 +1208,22 @@ public abstract class ContentProvider implements ContentInterface, ComponentCall
     }
 
     /**
+     * Returns the device id associated with the {@link Context} of the caller.
+     *
+     * @see Context#getDeviceId()
+     * @hide
+     */
+    public final int getCallingDeviceId() {
+        if (android.permission.flags.Flags.deviceAwarePermissionApisEnabled()) {
+            final AttributionSource attributionSource = mCallingAttributionSource.get();
+            if (attributionSource != null) {
+                return attributionSource.getDeviceId();
+            }
+        }
+        return Context.DEVICE_ID_DEFAULT;
+    }
+
+    /**
      * @removed
      */
     @Deprecated
@@ -2781,8 +2797,7 @@ public abstract class ContentProvider implements ContentInterface, ComponentCall
             if (userId != UserHandle.USER_CURRENT
                     // getUserIdFromAuthority can return USER_NULL when can't cast the userId to
                     // an int, which can cause high volume of binder calls.
-                    && (!android.multiuser.Flags.fixGetUserPropertyCache()
-                        || userId != UserHandle.USER_NULL)
+                    && userId != UserHandle.USER_NULL
                     && userId != mContext.getUserId()
                     // Since userId specified in content uri, the provider userId would be
                     // determined from it.

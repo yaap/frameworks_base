@@ -16,6 +16,9 @@
 
 package com.android.systemui.accessibility.hearingaid;
 
+import static android.bluetooth.AudioInputControl.MUTE_DISABLED;
+import static android.bluetooth.AudioInputControl.MUTE_MUTED;
+import static android.bluetooth.AudioInputControl.MUTE_NOT_MUTED;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
@@ -78,8 +81,7 @@ public class AmbientVolumeLayoutTest extends SysuiTestCase {
     public void setUp() {
         mLayout = new AmbientVolumeLayout(mContext);
         mLayout.setListener(mListener);
-        mLayout.setExpandable(true);
-        mLayout.setMutable(true);
+        mLayout.setControlExpandable(true);
 
         prepareDevices();
         mLayout.setupSliders(mSideToDeviceMap);
@@ -100,65 +102,36 @@ public class AmbientVolumeLayoutTest extends SysuiTestCase {
     }
 
     @Test
-    public void setExpandable_expandable_expandIconVisible() {
-        mLayout.setExpandable(true);
+    public void setControlExpandable_expandable_expandIconVisible() {
+        mLayout.setControlExpandable(true);
 
         assertThat(mExpandIcon.getVisibility()).isEqualTo(VISIBLE);
     }
 
     @Test
-    public void setExpandable_notExpandable_expandIconGone() {
-        mLayout.setExpandable(false);
+    public void setControlExpandable_notExpandable_expandIconGone() {
+        mLayout.setControlExpandable(false);
 
         assertThat(mExpandIcon.getVisibility()).isEqualTo(View.GONE);
     }
 
     @Test
-    public void setExpanded_expanded_assertControlUiCorrect() {
-        mLayout.setExpanded(true);
+    public void setControlExpanded_expanded_assertControlUiCorrect() {
+        mLayout.setControlExpanded(true);
 
         assertControlUiCorrect();
     }
 
     @Test
-    public void setExpanded_notExpanded_assertControlUiCorrect() {
-        mLayout.setExpanded(false);
+    public void setControlExpanded_notExpanded_assertControlUiCorrect() {
+        mLayout.setControlExpanded(false);
 
         assertControlUiCorrect();
     }
 
     @Test
-    public void setMutable_mutable_clickOnMuteIconChangeMuteState() {
-        mLayout.setMutable(true);
-        mLayout.setMuted(false);
-
-        mVolumeIcon.callOnClick();
-
-        assertThat(mLayout.isMuted()).isTrue();
-    }
-
-    @Test
-    public void setMutable_notMutable_clickOnMuteIconWontChangeMuteState() {
-        mLayout.setMutable(false);
-        mLayout.setMuted(false);
-
-        mVolumeIcon.callOnClick();
-
-        assertThat(mLayout.isMuted()).isFalse();
-    }
-
-    @Test
-    public void updateLayout_mute_volumeIconIsCorrect() {
-        mLayout.setMuted(true);
-        mLayout.updateLayout();
-
-        assertThat(mVolumeIcon.getDrawable().getLevel()).isEqualTo(0);
-    }
-
-    @Test
-    public void updateLayout_unmuteAndExpanded_volumeIconIsCorrect() {
-        mLayout.setMuted(false);
-        mLayout.setExpanded(true);
+    public void updateLayout_expanded_volumeIconIsCorrect() {
+        mLayout.setControlExpanded(true);
         mLayout.updateLayout();
 
         int expectedLevel = calculateVolumeLevel(TEST_LEFT_VOLUME_LEVEL, TEST_RIGHT_VOLUME_LEVEL);
@@ -166,9 +139,8 @@ public class AmbientVolumeLayoutTest extends SysuiTestCase {
     }
 
     @Test
-    public void updateLayout_unmuteAndNotExpanded_volumeIconIsCorrect() {
-        mLayout.setMuted(false);
-        mLayout.setExpanded(false);
+    public void updateLayout_notExpanded_volumeIconIsCorrect() {
+        mLayout.setControlExpanded(false);
         mLayout.updateLayout();
 
         int expectedLevel = calculateVolumeLevel(TEST_UNIFIED_VOLUME_LEVEL,
@@ -178,7 +150,7 @@ public class AmbientVolumeLayoutTest extends SysuiTestCase {
 
     @Test
     public void setSliderEnabled_expandedAndLeftIsDisabled_volumeIconIsCorrect() {
-        mLayout.setExpanded(true);
+        mLayout.setControlExpanded(true);
         mLayout.setSliderEnabled(SIDE_LEFT, false);
 
         int expectedLevel = calculateVolumeLevel(0, TEST_RIGHT_VOLUME_LEVEL);
@@ -187,10 +159,62 @@ public class AmbientVolumeLayoutTest extends SysuiTestCase {
 
     @Test
     public void setSliderValue_expandedAndLeftValueChanged_volumeIconIsCorrect() {
-        mLayout.setExpanded(true);
+        mLayout.setControlExpanded(true);
         mLayout.setSliderValue(SIDE_LEFT, 4);
 
         int expectedLevel = calculateVolumeLevel(4, TEST_RIGHT_VOLUME_LEVEL);
+        assertThat(mVolumeIcon.getDrawable().getLevel()).isEqualTo(expectedLevel);
+    }
+
+    @Test
+    public void isMutable_bothSideNotMutable_returnFalse() {
+        mLayout.setSliderMuteState(SIDE_LEFT, MUTE_DISABLED);
+        mLayout.setSliderMuteState(SIDE_RIGHT, MUTE_DISABLED);
+
+        assertThat(mLayout.isMutable()).isFalse();
+    }
+
+    @Test
+    public void isMutable_oneSideMutable_returnTrue() {
+        mLayout.setSliderMuteState(SIDE_LEFT, MUTE_DISABLED);
+        mLayout.setSliderMuteState(SIDE_RIGHT, MUTE_NOT_MUTED);
+
+        assertThat(mLayout.isMutable()).isTrue();
+    }
+
+    @Test
+    public void isMuted_bothSideMuted_returnTrue() {
+        mLayout.setSliderMuteState(SIDE_LEFT, MUTE_MUTED);
+        mLayout.setSliderMuteState(SIDE_RIGHT, MUTE_MUTED);
+
+        assertThat(mLayout.isMuted()).isTrue();
+    }
+
+    @Test
+    public void isMuted_oneSideNotMuted_returnFalse() {
+        mLayout.setSliderMuteState(SIDE_LEFT, MUTE_MUTED);
+        mLayout.setSliderMuteState(SIDE_RIGHT, MUTE_NOT_MUTED);
+
+        assertThat(mLayout.isMuted()).isFalse();
+    }
+
+    @Test
+    public void setSliderMuteState_muteLeft_volumeIconIsCorrect() {
+        mLayout.setControlExpanded(true);
+        mLayout.setSliderMuteState(SIDE_LEFT, MUTE_MUTED);
+        mLayout.setSliderMuteState(SIDE_RIGHT, MUTE_NOT_MUTED);
+
+        int expectedLevel = calculateVolumeLevel(0, TEST_RIGHT_VOLUME_LEVEL);
+        assertThat(mVolumeIcon.getDrawable().getLevel()).isEqualTo(expectedLevel);
+    }
+
+    @Test
+    public void setSliderMuteState_muteLeftAndRight_volumeIconIsCorrect() {
+        mLayout.setControlExpanded(true);
+        mLayout.setSliderMuteState(SIDE_LEFT, MUTE_MUTED);
+        mLayout.setSliderMuteState(SIDE_RIGHT, MUTE_MUTED);
+
+        int expectedLevel = calculateVolumeLevel(0, 0);
         assertThat(mVolumeIcon.getDrawable().getLevel()).isEqualTo(expectedLevel);
     }
 
@@ -199,7 +223,7 @@ public class AmbientVolumeLayoutTest extends SysuiTestCase {
     }
 
     private void assertControlUiCorrect() {
-        final boolean expanded = mLayout.isExpanded();
+        final boolean expanded = mLayout.isControlExpanded();
         final Map<Integer, AmbientVolumeSlider> sliders = mLayout.getSliders();
         if (expanded) {
             assertThat(sliders.get(SIDE_UNIFIED).getVisibility()).isEqualTo(GONE);

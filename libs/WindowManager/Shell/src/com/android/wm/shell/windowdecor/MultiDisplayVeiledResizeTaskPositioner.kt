@@ -35,6 +35,7 @@ import com.android.wm.shell.common.DisplayController
 import com.android.wm.shell.common.MultiDisplayDragMoveBoundsCalculator
 import com.android.wm.shell.common.MultiDisplayDragMoveIndicatorController
 import com.android.wm.shell.shared.annotations.ShellMainThread
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import com.android.wm.shell.transition.Transitions
 import java.util.concurrent.TimeUnit
 
@@ -49,13 +50,14 @@ class MultiDisplayVeiledResizeTaskPositioner(
     private val taskOrganizer: ShellTaskOrganizer,
     private val desktopWindowDecoration: DesktopModeWindowDecoration,
     private val displayController: DisplayController,
-    dragEventListener: DragPositioningCallbackUtility.DragEventListener,
     private val transactionSupplier: () -> SurfaceControl.Transaction,
     private val transitions: Transitions,
     private val interactionJankMonitor: InteractionJankMonitor,
     @ShellMainThread private val handler: Handler,
     private val multiDisplayDragMoveIndicatorController: MultiDisplayDragMoveIndicatorController,
+    private val desktopState: DesktopState,
 ) : TaskPositioner, Transitions.TransitionHandler, DisplayController.OnDisplaysChangedListener {
+
     private val dragEventListeners =
         mutableListOf<DragPositioningCallbackUtility.DragEventListener>()
     private val stableBounds = Rect()
@@ -79,25 +81,24 @@ class MultiDisplayVeiledResizeTaskPositioner(
         taskOrganizer: ShellTaskOrganizer,
         windowDecoration: DesktopModeWindowDecoration,
         displayController: DisplayController,
-        dragEventListener: DragPositioningCallbackUtility.DragEventListener,
         transitions: Transitions,
         interactionJankMonitor: InteractionJankMonitor,
         @ShellMainThread handler: Handler,
         multiDisplayDragMoveIndicatorController: MultiDisplayDragMoveIndicatorController,
+        desktopState: DesktopState,
     ) : this(
         taskOrganizer,
         windowDecoration,
         displayController,
-        dragEventListener,
         { SurfaceControl.Transaction() },
         transitions,
         interactionJankMonitor,
         handler,
         multiDisplayDragMoveIndicatorController,
+        desktopState,
     )
 
     init {
-        dragEventListeners.add(dragEventListener)
         displayController.addDisplayWindowListener(this)
     }
 
@@ -122,9 +123,6 @@ class MultiDisplayVeiledResizeTaskPositioner(
                 )
                 taskOrganizer.applyTransaction(wct)
             }
-        }
-        for (dragEventListener in dragEventListeners) {
-            dragEventListener.onDragStart(desktopWindowDecoration.mTaskInfo.taskId)
         }
         repositionTaskBounds.set(taskBoundsAtDragStart)
         val rotation =
@@ -153,6 +151,7 @@ class MultiDisplayVeiledResizeTaskPositioner(
                     delta,
                     displayController,
                     desktopWindowDecoration,
+                    desktopState.canEnterDesktopMode,
                 )
         ) {
             if (!isResizingOrAnimatingResize) {
@@ -204,7 +203,9 @@ class MultiDisplayVeiledResizeTaskPositioner(
 
                 multiDisplayDragMoveIndicatorController.onDragMove(
                     boundsDp,
+                    displayId,
                     startDisplayId,
+                    desktopWindowDecoration.leash,
                     desktopWindowDecoration.mTaskInfo,
                     displayIds,
                     transactionSupplier,
@@ -215,6 +216,14 @@ class MultiDisplayVeiledResizeTaskPositioner(
                     repositionTaskBounds.left.toFloat(),
                     repositionTaskBounds.top.toFloat(),
                 )
+                // Make the window translucent in the case when the cursor moves to another display.
+                val alpha =
+                    if (startDisplayId == displayId) {
+                        ALPHA_FOR_WINDOW_ON_DISPLAY_WITH_CURSOR
+                    } else {
+                        ALPHA_FOR_WINDOW_ON_NON_CURSOR_DISPLAY
+                    }
+                t.setAlpha(desktopWindowDecoration.leash, alpha)
             }
             t.setFrameTimeline(Choreographer.getInstance().vsyncId)
             t.apply()
@@ -234,6 +243,7 @@ class MultiDisplayVeiledResizeTaskPositioner(
                     delta,
                     displayController,
                     desktopWindowDecoration,
+                    desktopState.canEnterDesktopMode,
                 )
                 desktopWindowDecoration.updateResizeVeil(repositionTaskBounds)
                 val wct = WindowContainerTransaction()
@@ -249,8 +259,11 @@ class MultiDisplayVeiledResizeTaskPositioner(
             val startDisplayLayout = displayController.getDisplayLayout(startDisplayId)
             val currentDisplayLayout = displayController.getDisplayLayout(displayId)
 
-            if (startDisplayId == displayId
-                || startDisplayLayout == null || currentDisplayLayout == null) {
+            if (
+                startDisplayId == displayId ||
+                    startDisplayLayout == null ||
+                    currentDisplayLayout == null
+            ) {
                 // Fall back to single-display drag behavior if:
                 // 1. The drag destination display is the same as the start display. This prevents
                 // unnecessary animations caused by minor width/height changes due to DPI scaling.
@@ -325,6 +338,10 @@ class MultiDisplayVeiledResizeTaskPositioner(
         finishCallback: Transitions.TransitionFinishCallback,
     ): Boolean {
         for (change in info.changes) {
+            if (change.taskInfo == null) {
+                // Ignore non-task (e.g., display, activity) changes.
+                continue
+            }
             val sc = change.leash
             val endBounds = change.endAbsBounds
             val endPosition = change.endRelOffset
@@ -375,13 +392,15 @@ class MultiDisplayVeiledResizeTaskPositioner(
 
         displayIds.clear()
         if (topology == null) return
-        val displayBounds = topology.getAbsoluteBounds()
-        displayIds.addAll(List(displayBounds.size()) { displayBounds.keyAt(it) })
+        displayIds.addAll(topology.allNodesIdMap().keys)
     }
 
     companion object {
         // Timeout used for resize and drag CUJs, this is longer than the default timeout to avoid
         // timing out in the middle of a resize or drag action.
         private val LONG_CUJ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(/* duration= */ 10L)
+
+        private val ALPHA_FOR_WINDOW_ON_DISPLAY_WITH_CURSOR = 1.0f
+        private val ALPHA_FOR_WINDOW_ON_NON_CURSOR_DISPLAY = 0.7f
     }
 }

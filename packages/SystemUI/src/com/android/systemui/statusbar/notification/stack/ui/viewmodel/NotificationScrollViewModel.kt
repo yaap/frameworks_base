@@ -38,6 +38,8 @@ import com.android.systemui.shade.domain.interactor.ShadeInteractor
 import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
 import com.android.systemui.shade.shared.model.ShadeMode
 import com.android.systemui.statusbar.domain.interactor.RemoteInputInteractor
+import com.android.systemui.statusbar.notification.stack.domain.interactor.LockscreenDisplayConfig
+import com.android.systemui.statusbar.notification.stack.domain.interactor.LockscreenNotificationDisplayConfigInteractor
 import com.android.systemui.statusbar.notification.stack.domain.interactor.NotificationStackAppearanceInteractor
 import com.android.systemui.statusbar.notification.stack.shared.model.AccessibilityScrollEvent
 import com.android.systemui.statusbar.notification.stack.shared.model.ShadeScrimClipping
@@ -55,7 +57,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -70,6 +71,7 @@ class NotificationScrollViewModel
 constructor(
     dumpManager: DumpManager,
     private val stackAppearanceInteractor: NotificationStackAppearanceInteractor,
+    private val lockscreenAppearanceInteractor: LockscreenNotificationDisplayConfigInteractor,
     shadeInteractor: ShadeInteractor,
     shadeModeInteractor: ShadeModeInteractor,
     bouncerInteractor: BouncerInteractor,
@@ -227,16 +229,7 @@ constructor(
         if (SceneContainerFlag.isEnabled) {
             shadeModeInteractor.shadeMode.flatMapLatest { shadeMode ->
                 when (shadeMode) {
-                    ShadeMode.Dual ->
-                        combineTransform(
-                            shadeInteractor.shadeExpansion,
-                            shadeInteractor.qsExpansion,
-                        ) { notificationShadeExpansion, qsExpansion ->
-                            if (notificationShadeExpansion == 0f) {
-                                // Blur out notifications as the QS overlay panel expands
-                                emit(qsExpansion)
-                            }
-                        }
+                    ShadeMode.Dual -> shadeInteractor.qsExpansion
                     else -> flowOf(0f)
                 }
             }
@@ -246,6 +239,23 @@ constructor(
 
     /** Whether we should close any open notification guts. */
     val shouldCloseGuts: Flow<Boolean> = stackAppearanceInteractor.shouldCloseGuts
+
+    /**
+     * When on keyguard, there is limited space to display notifications so calculate how many could
+     * be shown. Otherwise, there is no limit since the vertical space will be scrollable.
+     *
+     * When expanding or when the user is interacting with the shade, keep the count stable; do not
+     * emit a value.
+     */
+    fun getLockscreenDisplayConfig(
+        calculateMaxNotifications: (Int, Boolean) -> Int
+    ): Flow<LockscreenDisplayConfig> {
+        return lockscreenAppearanceInteractor.getLockscreenDisplayConfig {
+            availableSpace,
+            useExtraShelfSpace ->
+            calculateMaxNotifications(availableSpace, useExtraShelfSpace)
+        }
+    }
 
     /** Whether the Notification Stack is visibly on the lockscreen scene. */
     val isShowingStackOnLockscreen: Flow<Boolean> =
@@ -259,14 +269,11 @@ constructor(
     /** The alpha of the Notification Stack for lockscreen fade-in */
     val alphaForLockscreenFadeIn = stackAppearanceInteractor.alphaForLockscreenFadeIn
 
-    private operator fun SceneKey.contains(scene: SceneKey) =
-        sceneInteractor.isSceneInFamily(scene, this)
-
     private val qsAllowsClipping: Flow<Boolean> =
         combine(shadeModeInteractor.shadeMode, shadeInteractor.qsExpansion) { shadeMode, qsExpansion
                 ->
                 when (shadeMode) {
-                    is ShadeMode.Dual,
+                    is ShadeMode.Dual -> false
                     is ShadeMode.Split -> true
                     is ShadeMode.Single -> qsExpansion < 0.5f
                 }
@@ -324,12 +331,9 @@ constructor(
     val accessibilityScrollEventConsumer: (AccessibilityScrollEvent) -> Unit =
         stackAppearanceInteractor::sendAccessibilityScrollEvent
 
-    /**
-     * Receives whether the current touch gesture is overscroll as it has already been consumed by
-     * the stack.
-     */
-    val currentGestureOverscrollConsumer: (Boolean) -> Unit =
-        stackAppearanceInteractor::setCurrentGestureOverscroll
+    /** Receives whether the current touch gesture is has already been consumed by the stack. */
+    val currentGestureExpandingNotifConsumer: (Boolean) -> Unit =
+        stackAppearanceInteractor::setCurrentGestureExpandingNotif
 
     /** Receives whether the current touch gesture is inside any open guts. */
     val currentGestureInGutsConsumer: (Boolean) -> Unit =
@@ -344,7 +348,8 @@ constructor(
         combine(sceneInteractor.currentScene, sceneInteractor.currentOverlays) {
                 currentScene,
                 currentOverlays ->
-                currentScene.showsNotifications() || currentOverlays.any { it.showsNotifications() }
+                currentScene.showsScrollableStack() ||
+                    currentOverlays.any { it.showsScrollableStack() }
             }
             .dumpWhileCollecting("isScrollable")
 
@@ -374,10 +379,9 @@ constructor(
         }
     }
 
-    private fun ContentKey.showsNotifications(): Boolean {
+    private fun ContentKey.showsScrollableStack(): Boolean {
         return when (this) {
             Overlays.NotificationsShade,
-            Scenes.Lockscreen,
             Scenes.Shade -> true
             else -> false
         }

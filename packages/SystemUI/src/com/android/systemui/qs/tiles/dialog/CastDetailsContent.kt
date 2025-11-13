@@ -16,20 +16,44 @@
 
 package com.android.systemui.qs.tiles.dialog
 
+import android.content.Context
+import android.database.DataSetObserver
 import android.view.LayoutInflater
-import androidx.compose.foundation.layout.fillMaxHeight
+import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.ListAdapter
+import android.widget.ListView
+import android.widget.TextView
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.android.compose.ui.graphics.painter.rememberDrawablePainter
 import com.android.internal.R
+import com.android.internal.app.MediaRouteChooserContentManager
 import com.android.internal.app.MediaRouteControllerContentManager
+import com.android.systemui.res.R as SystemUiR
+
+private val MAX_CAST_LIST_HEIGHT = 5000.dp
 
 @Composable
 fun CastDetailsContent(castDetailsViewModel: CastDetailsViewModel) {
     if (castDetailsViewModel.shouldShowChooserDialog()) {
-        // TODO(b/378514236): Show the chooser UI here.
+        val contentManager: MediaRouteChooserContentManager = remember {
+            castDetailsViewModel.createChooserContentManager()
+        }
+        CastChooserView(contentManager, castDetailsViewModel)
         return
     }
 
@@ -37,8 +61,82 @@ fun CastDetailsContent(castDetailsViewModel: CastDetailsViewModel) {
         castDetailsViewModel.createControllerContentManager()
     }
 
+    Column(
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(
+            painter = rememberDrawablePainter(castDetailsViewModel.deviceIcon),
+            // TODO(b/388321032): Replace this string with a string in a translatable xml file.
+            contentDescription = "device icon",
+        )
+        CastControllerView(contentManager)
+        CastControllerDisconnectButton(contentManager)
+    }
+}
+
+@Composable
+fun CastChooserView(
+    contentManager: MediaRouteChooserContentManager,
+    castDetailsViewModel: CastDetailsViewModel,
+) {
+    var dataObserver: DataSetObserver? = null
+    var adapter: ListAdapter? = null
+
     AndroidView(
-        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+        // Use heightIn on this AndroidView to ensure it measures to a non-zero height that works
+        // within the scrollable area in the `TileDetails`.
+        modifier =
+            Modifier.fillMaxWidth()
+                .heightIn(max = MAX_CAST_LIST_HEIGHT)
+                .testTag(CastDetailsViewModel.CHOOSER_VIEW_TEST_TAG),
+        factory = { context ->
+            // Inflate with the existing dialog xml layout
+            val view =
+                LayoutInflater.from(context).inflate(R.layout.media_route_chooser_dialog, null)
+            contentManager.bindViews(view)
+            contentManager.onAttachedToWindow()
+
+            val listView = view.findViewById<ListView>(R.id.media_route_list)
+            (listView.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                weight = 0.0f
+                height = ViewGroup.LayoutParams.WRAP_CONTENT
+                listView.layoutParams = this
+            }
+
+            customizeView(listView)
+
+            // Hide the subtitle TextView in the empty view.
+            val emptyViewSubtitle = view.findViewById<TextView>(R.id.empty_subtitle)
+            emptyViewSubtitle.visibility = View.GONE
+
+            // Listen to the adapter data change and `customizeView` when changes occur.
+            adapter = listView.adapter
+            dataObserver =
+                object : DataSetObserver() {
+                    override fun onChanged() {
+                        super.onChanged()
+                        if (adapter?.count != 0) {
+                            castDetailsViewModel.setMediaRouteDeviceSubTitle("")
+                        }
+                        customizeView(listView)
+                    }
+                }
+            adapter?.registerDataSetObserver(dataObserver)
+
+            view
+        },
+        onRelease = {
+            contentManager.onDetachedFromWindow()
+            adapter?.unregisterDataSetObserver(dataObserver)
+        },
+    )
+}
+
+@Composable
+fun CastControllerView(contentManager: MediaRouteControllerContentManager) {
+    AndroidView(
+        modifier = Modifier.fillMaxWidth().testTag(CastDetailsViewModel.CONTROLLER_VIEW_TEST_TAG),
         factory = { context ->
             // Inflate with the existing dialog xml layout
             val view =
@@ -49,5 +147,71 @@ fun CastDetailsContent(castDetailsViewModel: CastDetailsViewModel) {
             view
         },
         onRelease = { contentManager.onDetachedFromWindow() },
+    )
+}
+
+@Composable
+fun CastControllerDisconnectButton(contentManager: MediaRouteControllerContentManager) {
+    Button(
+        onClick = { contentManager.onDisconnectButtonClick() },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        // TODO(b/388321032): Replace this string with a string in a translatable xml file.
+        Text(text = "Disconnect")
+    }
+}
+
+private fun customizeView(listView: ListView) {
+    val context = listView.context
+    val entryBackgroundStart =
+        context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_start)
+    val entryBackgroundEnd = context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_end)
+    val entryBackgroundMiddle =
+        context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_middle)
+
+    // This code will run after the ListView has had a chance to complete its layout.
+    listView.post {
+        val visibleChildCount = listView.childCount
+        val adapter = listView.adapter
+        val totalItemCount = adapter?.count ?: 0
+
+        if (adapter == null || totalItemCount == 0) {
+            return@post
+        }
+
+        for (i in 0 until visibleChildCount) {
+            val child = listView.getChildAt(i) as LinearLayout
+            val adapterPosition = listView.getPositionForView(child)
+            if (adapterPosition != ListView.INVALID_POSITION) {
+                val entry = child.getChildAt(0) as LinearLayout
+                entry.background =
+                    when (adapterPosition) {
+                        0 -> entryBackgroundStart
+                        totalItemCount - 1 -> entryBackgroundEnd
+                        else -> entryBackgroundMiddle
+                    }
+                setPadding(context, child)
+
+                val titleTextView = entry.requireViewById<TextView>(R.id.text1)
+                titleTextView.setTextAppearance(
+                    SystemUiR.style.TextAppearance_TileDetailsEntryTitle
+                )
+                val subTitleTextView = entry.requireViewById<TextView>(R.id.text2)
+                subTitleTextView.setTextAppearance(
+                    SystemUiR.style.TextAppearance_TileDetailsEntrySubTitle
+                )
+            }
+        }
+    }
+}
+
+private fun setPadding(context: Context, targetBackgroundView: LinearLayout) {
+    val horizontalPadding =
+        context.resources.getDimensionPixelSize(SystemUiR.dimen.tile_details_horizontal_padding)
+    targetBackgroundView.setPadding(
+        horizontalPadding,
+        targetBackgroundView.paddingTop,
+        horizontalPadding,
+        targetBackgroundView.paddingBottom,
     )
 }

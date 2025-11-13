@@ -22,6 +22,7 @@ import android.annotation.Nullable;
 import android.annotation.SystemApi;
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.companion.virtualdevice.flags.Flags;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.ComponentName;
 import android.content.Context;
@@ -132,7 +133,7 @@ public final class MediaSession {
     public @interface SessionFlags { }
 
     private final Object mLock = new Object();
-    private Context mContext;
+    private final Context mContext;
     private final int mMaxBitmapSize;
 
     private final Token mSessionToken;
@@ -542,7 +543,9 @@ public final class MediaSession {
                 mBinder.resetQueue();
             } else {
                 IBinder binder = mBinder.getBinderForSetQueue();
-                ParcelableListBinder.send(binder, queue);
+                if (binder != null) {
+                    ParcelableListBinder.send(binder, queue);
+                }
             }
         } catch (RemoteException e) {
             Log.wtf("Dead object in setQueue.", e);
@@ -949,7 +952,11 @@ public final class MediaSession {
                                 mMediaPlayPauseKeyPending = true;
                                 mSession.dispatchMediaButtonDelayed(
                                         mSession.getCurrentControllerInfo(),
-                                        mediaButtonIntent, ViewConfiguration.getDoubleTapTimeout());
+                                        mediaButtonIntent,
+                                        Flags.viewconfigurationApis()
+                                                ? ViewConfiguration.get(mSession.mContext)
+                                                .getDoubleTapTimeoutMillis()
+                                                : ViewConfiguration.getDoubleTapTimeout());
                             }
                             return true;
                         default:

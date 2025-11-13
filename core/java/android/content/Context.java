@@ -37,6 +37,8 @@ import android.annotation.PermissionMethod;
 import android.annotation.PermissionName;
 import android.annotation.RequiresFeature;
 import android.annotation.RequiresPermission;
+import android.annotation.SpecialUsers.CanBeALL;
+import android.annotation.SpecialUsers.CanBeCURRENT;
 import android.annotation.StringDef;
 import android.annotation.StringRes;
 import android.annotation.StyleRes;
@@ -52,6 +54,7 @@ import android.app.BroadcastOptions;
 import android.app.GameManager;
 import android.app.GrammaticalInflectionManager;
 import android.app.IApplicationThread;
+import android.app.IBinderSession;
 import android.app.IServiceConnection;
 import android.app.VrManager;
 import android.app.ambientcontext.AmbientContextManager;
@@ -92,6 +95,7 @@ import android.provider.E2eeContactKeysManager;
 import android.provider.MediaStore;
 import android.ravenwood.annotation.RavenwoodKeep;
 import android.ravenwood.annotation.RavenwoodKeepPartialClass;
+import android.ravenwood.annotation.RavenwoodSupported.SupportType;
 import android.telephony.TelephonyRegistryManager;
 import android.util.AttributeSet;
 import android.view.Display;
@@ -338,8 +342,6 @@ public abstract class Context {
             BIND_EXTERNAL_SERVICE_LONG,
             // Make sure no flag uses the sign bit (most significant bit) of the long integer,
             // to avoid future confusion.
-            BIND_BYPASS_USER_NETWORK_RESTRICTIONS,
-            BIND_MATCH_QUARANTINED_COMPONENTS,
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface BindServiceFlagsLongBits {}
@@ -746,10 +748,27 @@ public abstract class Context {
 
     /**
      * Flag for {@link #bindService} that allows the bound app to be frozen if it is eligible.
+     * When used, this provides the caller an {@link android.app.IBinderSession} via
+     * {@link ServiceConnection#onServiceConnected(ComponentName, IBinder, IBinderSession)}. This
+     * object can be used to unfreeze the remote process to allow it to process any binder calls
+     * made on the bound service.
+     *
+     * <p> Currently, this is only meant for outgoing bindings from the system process.
      *
      * @hide
      */
     public static final long BIND_ALLOW_FREEZE = 0x4_0000_0000L;
+
+    /**
+     * Flag for {@link #bindService} that enables receiving an {@link android.app.IBinderSession}
+     * via {@link ServiceConnection#onServiceConnected(ComponentName, IBinder, IBinderSession)}.
+     *
+     * This acts as a dry run of {@link #BIND_ALLOW_FREEZE}, where the system will not actually
+     * freeze the remote process even if it is not processing any binder call on the bound service.
+     *
+     * @hide
+     */
+    public static final long BIND_SIMULATE_ALLOW_FREEZE = 0x8_0000_0000L;
 
     /**
      * These bind flags reduce the strength of the binding such that we shouldn't
@@ -758,8 +777,7 @@ public abstract class Context {
      */
     public static final long BIND_REDUCTION_FLAGS =
             Context.BIND_ALLOW_OOM_MANAGEMENT | Context.BIND_WAIVE_PRIORITY
-                    | Context.BIND_NOT_PERCEPTIBLE | Context.BIND_NOT_VISIBLE
-                    | Context.BIND_ALLOW_FREEZE;
+                    | Context.BIND_NOT_PERCEPTIBLE | Context.BIND_NOT_VISIBLE;
 
     /** @hide */
     @IntDef(flag = true, prefix = { "RECEIVER_VISIBLE" }, value = {
@@ -839,6 +857,8 @@ public abstract class Context {
      * @return an AssetManager instance for the application's package
      * @see #getResources()
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract AssetManager getAssets();
 
     /**
@@ -852,9 +872,14 @@ public abstract class Context {
      * @return a Resources instance for the application's package
      * @see #getAssets()
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract Resources getResources();
 
     /** Return PackageManager instance to find global package information. */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext",
+            comment = "Almost no APIS on PackageManager are supported yet")
     public abstract PackageManager getPackageManager();
 
     /** Return a ContentResolver instance for your application's package. */
@@ -871,6 +896,8 @@ public abstract class Context {
      *
      * @return The main looper.
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract Looper getMainLooper();
 
     /**
@@ -878,6 +905,8 @@ public abstract class Context {
      * thread associated with this context. This is the thread used to dispatch
      * calls to application components (activities, services, etc).
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public Executor getMainExecutor() {
         // This is pretty inefficient, which is why ContextImpl overrides it
         return new HandlerExecutor(new Handler(getMainLooper()));
@@ -908,6 +937,8 @@ public abstract class Context {
      * if you forget to unregister, unbind, etc.
      * </ul>
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract Context getApplicationContext();
 
     /** Non-activity related autofill ids are unique in the app */
@@ -1075,6 +1106,8 @@ public abstract class Context {
      *
      * @param resid The style resource describing the theme.
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract void setTheme(@StyleRes int resid);
 
     /** @hide Needed for some internal implementation...  not public because
@@ -1088,6 +1121,8 @@ public abstract class Context {
      * Return the Theme object associated with this Context.
      */
     @ViewDebug.ExportedProperty(deepExport = true)
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract Resources.Theme getTheme();
 
     /**
@@ -1150,9 +1185,13 @@ public abstract class Context {
     /**
      * Return a class loader you can use to retrieve classes in this package.
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract ClassLoader getClassLoader();
 
     /** Return the name of this application's package. */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract String getPackageName();
 
     /**
@@ -1173,6 +1212,8 @@ public abstract class Context {
      * This is not generally intended for third party application developers.
      */
     @NonNull
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public String getOpPackageName() {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
@@ -1184,6 +1225,9 @@ public abstract class Context {
      *
      * @return the attribution tag this context is for or {@code null} if this is the default.
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext",
+            comment = "Always returns null (for now)")
     public @Nullable String getAttributionTag() {
         return null;
     }
@@ -1227,6 +1271,8 @@ public abstract class Context {
      *
      * @return String Path to the resources.
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract String getPackageResourcePath();
 
     /**
@@ -1344,6 +1390,8 @@ public abstract class Context {
      * @see #deleteFile
      * @see java.io.FileInputStream#FileInputStream(String)
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract FileInputStream openFileInput(String name)
         throws FileNotFoundException;
 
@@ -1365,6 +1413,8 @@ public abstract class Context {
      * @see #deleteFile
      * @see java.io.FileOutputStream#FileOutputStream(String)
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract FileOutputStream openFileOutput(String name, @FileMode int mode)
         throws FileNotFoundException;
 
@@ -1383,6 +1433,8 @@ public abstract class Context {
      * @see #fileList
      * @see java.io.File#delete()
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract boolean deleteFile(String name);
 
     /**
@@ -1401,6 +1453,8 @@ public abstract class Context {
      * @see #getFilesDir
      * @see #getDir
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getFileStreamPath(String name);
 
     /**
@@ -1417,6 +1471,8 @@ public abstract class Context {
      * @removed
      */
     @SuppressWarnings("HiddenAbstractMethod")
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getSharedPreferencesPath(String name);
 
     /**
@@ -1434,6 +1490,8 @@ public abstract class Context {
      *
      * @see ApplicationInfo#dataDir
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getDataDir();
 
     /**
@@ -1451,6 +1509,8 @@ public abstract class Context {
      * @see #getFileStreamPath
      * @see #getDir
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getFilesDir();
 
     /**
@@ -1498,6 +1558,8 @@ public abstract class Context {
      * @see #getDir
      * @see android.app.backup.BackupAgent
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getNoBackupFilesDir();
 
     /**
@@ -1802,6 +1864,8 @@ public abstract class Context {
      * @see #getDir
      * @see #getExternalCacheDir
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getCacheDir();
 
     /**
@@ -1823,6 +1887,8 @@ public abstract class Context {
      *
      * @return The path of the directory holding application code cache files.
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getCodeCacheDir();
 
     /**
@@ -2037,6 +2103,8 @@ public abstract class Context {
      *
      * @see #openFileOutput(String, int)
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract File getDir(String name, @FileMode int mode);
 
     /**
@@ -2223,7 +2291,7 @@ public abstract class Context {
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     @SystemApi
     public void startActivityAsUser(@RequiresPermission @NonNull Intent intent,
-            @NonNull UserHandle user) {
+            @NonNull @CanBeCURRENT UserHandle user) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
 
@@ -2271,7 +2339,7 @@ public abstract class Context {
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     @SystemApi
     public void startActivityAsUser(@RequiresPermission @NonNull Intent intent,
-            @Nullable Bundle options, @NonNull UserHandle userId) {
+            @Nullable Bundle options, @NonNull @CanBeCURRENT UserHandle userId) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
 
@@ -2375,7 +2443,8 @@ public abstract class Context {
      * @see PackageManager#resolveActivity
      */
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
-    public int startActivitiesAsUser(Intent[] intents, Bundle options, UserHandle userHandle) {
+    public int startActivitiesAsUser(Intent[] intents, Bundle options,
+            @CanBeCURRENT UserHandle userHandle) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
 
@@ -2636,8 +2705,8 @@ public abstract class Context {
      * @hide
      */
     @SuppressWarnings("HiddenAbstractMethod")
-    public abstract void sendBroadcastAsUserMultiplePermissions(Intent intent, UserHandle user,
-            String[] receiverPermissions);
+    public abstract void sendBroadcastAsUserMultiplePermissions(Intent intent,
+            @CanBeALL @CanBeCURRENT UserHandle user, String[] receiverPermissions);
 
     /**
      * Broadcast the given intent to all interested BroadcastReceivers, allowing
@@ -2847,7 +2916,7 @@ public abstract class Context {
      */
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     public abstract void sendBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user);
+            @CanBeALL @CanBeCURRENT UserHandle user);
 
     /**
      * Version of {@link #sendBroadcast(Intent, String)} that allows you to specify the
@@ -2865,7 +2934,7 @@ public abstract class Context {
      */
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     public abstract void sendBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user, @Nullable String receiverPermission);
+            @CanBeALL @CanBeCURRENT UserHandle user, @Nullable String receiverPermission);
 
     /**
      * Version of {@link #sendBroadcast(Intent, String, Bundle)} that allows you to specify the
@@ -2888,7 +2957,8 @@ public abstract class Context {
     @SystemApi
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     public abstract void sendBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user, @Nullable String receiverPermission, @Nullable Bundle options);
+            @CanBeALL @CanBeCURRENT UserHandle user, @Nullable String receiverPermission,
+            @Nullable Bundle options);
 
     /**
      * Version of {@link #sendBroadcast(Intent, String)} that allows you to specify the
@@ -2911,7 +2981,8 @@ public abstract class Context {
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
     public abstract void sendBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user, @Nullable String receiverPermission, int appOp);
+            @CanBeALL @CanBeCURRENT UserHandle user, @Nullable String receiverPermission,
+            int appOp);
 
     /**
      * Version of
@@ -2944,7 +3015,8 @@ public abstract class Context {
      */
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     public abstract void sendOrderedBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user, @Nullable String receiverPermission, BroadcastReceiver resultReceiver,
+            @CanBeALL @CanBeCURRENT UserHandle user, @Nullable String receiverPermission,
+            BroadcastReceiver resultReceiver,
             @Nullable Handler scheduler, int initialCode, @Nullable String initialData,
             @Nullable  Bundle initialExtras);
 
@@ -2957,10 +3029,10 @@ public abstract class Context {
     @SuppressWarnings("HiddenAbstractMethod")
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
-    public abstract void sendOrderedBroadcastAsUser(Intent intent, UserHandle user,
-            @Nullable String receiverPermission, int appOp, BroadcastReceiver resultReceiver,
-            @Nullable Handler scheduler, int initialCode, @Nullable String initialData,
-            @Nullable  Bundle initialExtras);
+    public abstract void sendOrderedBroadcastAsUser(Intent intent,
+            @CanBeALL @CanBeCURRENT UserHandle user, @Nullable String receiverPermission, int appOp,
+            BroadcastReceiver resultReceiver, @Nullable Handler scheduler, int initialCode,
+            @Nullable String initialData, @Nullable  Bundle initialExtras);
 
     /**
      * Similar to above but takes an appOp as well, to enforce restrictions, and an options Bundle.
@@ -2971,10 +3043,10 @@ public abstract class Context {
     @SuppressWarnings("HiddenAbstractMethod")
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     @UnsupportedAppUsage
-    public abstract void sendOrderedBroadcastAsUser(Intent intent, UserHandle user,
-            @Nullable String receiverPermission, int appOp, @Nullable Bundle options,
-            BroadcastReceiver resultReceiver, @Nullable Handler scheduler, int initialCode,
-            @Nullable String initialData, @Nullable  Bundle initialExtras);
+    public abstract void sendOrderedBroadcastAsUser(Intent intent,
+            @CanBeALL @CanBeCURRENT UserHandle user, @Nullable String receiverPermission, int appOp,
+            @Nullable Bundle options, BroadcastReceiver resultReceiver, @Nullable Handler scheduler,
+            int initialCode, @Nullable String initialData, @Nullable  Bundle initialExtras);
 
     /**
      * Similar to above but takes array of names of permissions that a receiver must hold in order
@@ -2987,8 +3059,8 @@ public abstract class Context {
     @SuppressWarnings("HiddenAbstractMethod")
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     public void sendOrderedBroadcastAsUserMultiplePermissions(Intent intent,
-            UserHandle user, String[] receiverPermissions, int appOp, Bundle options,
-            BroadcastReceiver resultReceiver, Handler scheduler, int initialCode,
+            @CanBeALL @CanBeCURRENT UserHandle user, String[] receiverPermissions, int appOp,
+            Bundle options, BroadcastReceiver resultReceiver, Handler scheduler, int initialCode,
             String initialData, Bundle initialExtras) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
@@ -3239,7 +3311,7 @@ public abstract class Context {
             android.Manifest.permission.BROADCAST_STICKY
     })
     public abstract void sendStickyBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user);
+            @CanBeALL @CanBeCURRENT UserHandle user);
 
     /**
      * @hide
@@ -3252,7 +3324,7 @@ public abstract class Context {
             android.Manifest.permission.BROADCAST_STICKY
     })
     public abstract void sendStickyBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user, Bundle options);
+            @CanBeALL @CanBeCURRENT UserHandle user, Bundle options);
 
     /**
      * <p>Version of
@@ -3292,7 +3364,7 @@ public abstract class Context {
             android.Manifest.permission.BROADCAST_STICKY
     })
     public abstract void sendStickyOrderedBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user, BroadcastReceiver resultReceiver,
+            @CanBeALL @CanBeCURRENT UserHandle user, BroadcastReceiver resultReceiver,
             @Nullable Handler scheduler, int initialCode, @Nullable String initialData,
             @Nullable Bundle initialExtras);
 
@@ -3322,7 +3394,7 @@ public abstract class Context {
             android.Manifest.permission.BROADCAST_STICKY
     })
     public abstract void removeStickyBroadcastAsUser(@RequiresPermission Intent intent,
-            UserHandle user);
+            @CanBeALL @CanBeCURRENT UserHandle user);
 
     /**
      * Register a BroadcastReceiver to be run in the main activity thread.  The
@@ -3646,8 +3718,8 @@ public abstract class Context {
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS_FULL)
     @UnsupportedAppUsage
     public abstract Intent registerReceiverAsUser(BroadcastReceiver receiver,
-            UserHandle user, IntentFilter filter, @Nullable String broadcastPermission,
-            @Nullable Handler scheduler);
+            @CanBeALL @CanBeCURRENT UserHandle user, IntentFilter filter,
+            @Nullable String broadcastPermission, @Nullable Handler scheduler);
 
     /**
      * @hide
@@ -3687,7 +3759,8 @@ public abstract class Context {
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS_FULL)
     @UnsupportedAppUsage
     public abstract Intent registerReceiverAsUser(BroadcastReceiver receiver,
-            UserHandle user, IntentFilter filter, @Nullable String broadcastPermission,
+            @CanBeALL @CanBeCURRENT UserHandle user, IntentFilter filter,
+            @Nullable String broadcastPermission,
             @Nullable Handler scheduler, @RegisterReceiverFlags int flags);
 
     /**
@@ -3871,7 +3944,8 @@ public abstract class Context {
     @SuppressWarnings("HiddenAbstractMethod")
     @Nullable
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
-    public abstract ComponentName startForegroundServiceAsUser(Intent service, UserHandle user);
+    public abstract ComponentName startForegroundServiceAsUser(Intent service,
+            @CanBeCURRENT UserHandle user);
 
     /**
      * Request that a given application service be stopped.  If the service is
@@ -3917,14 +3991,14 @@ public abstract class Context {
     @Nullable
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
     @UnsupportedAppUsage
-    public abstract ComponentName startServiceAsUser(Intent service, UserHandle user);
+    public abstract ComponentName startServiceAsUser(Intent service, @CanBeCURRENT UserHandle user);
 
     /**
      * @hide like {@link #stopService(Intent)} but for a specific user.
      */
     @SuppressWarnings("HiddenAbstractMethod")
     @RequiresPermission(android.Manifest.permission.INTERACT_ACROSS_USERS)
-    public abstract boolean stopServiceAsUser(Intent service, UserHandle user);
+    public abstract boolean stopServiceAsUser(Intent service, @CanBeCURRENT UserHandle user);
 
     /**
      * Connects to an application service, creating it if needed.  This defines
@@ -4122,7 +4196,7 @@ public abstract class Context {
             }, conditional = true)
     public boolean bindServiceAsUser(
             @NonNull @RequiresPermission Intent service, @NonNull ServiceConnection conn, int flags,
-            @NonNull UserHandle user) {
+            @NonNull @CanBeCURRENT UserHandle user) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
 
@@ -4138,7 +4212,7 @@ public abstract class Context {
     }, conditional = true)
     public boolean bindServiceAsUser(
             @NonNull @RequiresPermission Intent service, @NonNull ServiceConnection conn,
-            @NonNull BindServiceFlags flags, @NonNull UserHandle user) {
+            @NonNull BindServiceFlags flags, @NonNull @CanBeCURRENT UserHandle user) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
 
@@ -4154,7 +4228,7 @@ public abstract class Context {
             }, conditional = true)
     @UnsupportedAppUsage(trackingBug = 136728678)
     public boolean bindServiceAsUser(Intent service, ServiceConnection conn, int flags,
-            Handler handler, UserHandle user) {
+            Handler handler, @CanBeCURRENT UserHandle user) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
 
@@ -4170,7 +4244,8 @@ public abstract class Context {
     }, conditional = true)
     @UnsupportedAppUsage(trackingBug = 136728678)
     public boolean bindServiceAsUser(@NonNull Intent service, @NonNull ServiceConnection conn,
-            @NonNull BindServiceFlags flags, @NonNull Handler handler, @NonNull UserHandle user) {
+            @NonNull BindServiceFlags flags, @NonNull Handler handler,
+            @NonNull @CanBeCURRENT UserHandle user) {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
 
@@ -4251,154 +4326,155 @@ public abstract class Context {
             @Nullable String profileFile, @Nullable Bundle arguments);
 
     /** @hide */
-    @StringDef(suffix = { "_SERVICE" }, value = {
-            POWER_SERVICE,
-            //@hide: POWER_STATS_SERVICE,
-            WINDOW_SERVICE,
-            LAYOUT_INFLATER_SERVICE,
-            ACCOUNT_SERVICE,
-            ACTIVITY_SERVICE,
-            ALARM_SERVICE,
-            NOTIFICATION_SERVICE,
-            ACCESSIBILITY_SERVICE,
-            CAPTIONING_SERVICE,
-            KEYGUARD_SERVICE,
-            LOCATION_SERVICE,
-            HEALTHCONNECT_SERVICE,
-            //@hide: COUNTRY_DETECTOR,
-            SEARCH_SERVICE,
-            SENSOR_SERVICE,
-            SENSOR_PRIVACY_SERVICE,
-            STORAGE_SERVICE,
-            STORAGE_STATS_SERVICE,
-            WALLPAPER_SERVICE,
-            VIBRATOR_MANAGER_SERVICE,
-            VIBRATOR_SERVICE,
-            //@hide: STATUS_BAR_SERVICE,
-            THREAD_NETWORK_SERVICE,
-            CONNECTIVITY_SERVICE,
-            TETHERING_SERVICE,
-            PAC_PROXY_SERVICE,
-            VCN_MANAGEMENT_SERVICE,
-            //@hide: IP_MEMORY_STORE_SERVICE,
-            IPSEC_SERVICE,
-            VPN_MANAGEMENT_SERVICE,
-            TEST_NETWORK_SERVICE,
-            //@hide: UPDATE_LOCK_SERVICE,
-            //@hide: NETWORKMANAGEMENT_SERVICE,
-            NETWORK_STATS_SERVICE,
-            //@hide: NETWORK_POLICY_SERVICE,
-            WIFI_SERVICE,
-            WIFI_AWARE_SERVICE,
-            WIFI_P2P_SERVICE,
-            WIFI_SCANNING_SERVICE,
-            //@hide: LOWPAN_SERVICE,
-            //@hide: WIFI_RTT_SERVICE,
-            //@hide: ETHERNET_SERVICE,
-            WIFI_RTT_RANGING_SERVICE,
-            WIFI_USD_SERVICE,
-            NSD_SERVICE,
-            AUDIO_SERVICE,
-            AUDIO_DEVICE_VOLUME_SERVICE,
-            AUTH_SERVICE,
-            FINGERPRINT_SERVICE,
-            //@hide: FACE_SERVICE,
-            BIOMETRIC_SERVICE,
-            AUTHENTICATION_POLICY_SERVICE,
-            MEDIA_ROUTER_SERVICE,
-            TELEPHONY_SERVICE,
-            TELEPHONY_SUBSCRIPTION_SERVICE,
-            CARRIER_CONFIG_SERVICE,
-            EUICC_SERVICE,
-            //@hide: MMS_SERVICE,
-            TELECOM_SERVICE,
-            CLIPBOARD_SERVICE,
-            INPUT_METHOD_SERVICE,
-            TEXT_SERVICES_MANAGER_SERVICE,
-            TEXT_CLASSIFICATION_SERVICE,
-            APPWIDGET_SERVICE,
-            //@hide: VOICE_INTERACTION_MANAGER_SERVICE,
-            //@hide: BACKUP_SERVICE,
-            REBOOT_READINESS_SERVICE,
-            ROLLBACK_SERVICE,
-            DROPBOX_SERVICE,
-            //@hide: DEVICE_IDLE_CONTROLLER,
-            //@hide: POWER_WHITELIST_MANAGER,
-            DEVICE_POLICY_SERVICE,
-            UI_MODE_SERVICE,
-            DOWNLOAD_SERVICE,
-            NFC_SERVICE,
-            BLUETOOTH_SERVICE,
-            //@hide: SIP_SERVICE,
-            USB_SERVICE,
-            LAUNCHER_APPS_SERVICE,
-            //@hide: SERIAL_SERVICE,
-            //@hide: HDMI_CONTROL_SERVICE,
-            INPUT_SERVICE,
-            DISPLAY_SERVICE,
-            //@hide COLOR_DISPLAY_SERVICE,
-            USER_SERVICE,
-            RESTRICTIONS_SERVICE,
-            APP_OPS_SERVICE,
-            ROLE_SERVICE,
-            //@hide ROLE_CONTROLLER_SERVICE,
-            CAMERA_SERVICE,
-            //@hide: PLATFORM_COMPAT_SERVICE,
-            //@hide: PLATFORM_COMPAT_NATIVE_SERVICE,
-            PRINT_SERVICE,
-            CONSUMER_IR_SERVICE,
-            //@hide: TRUST_SERVICE,
-            TV_INTERACTIVE_APP_SERVICE,
-            TV_INPUT_SERVICE,
-            //@hide: TV_TUNER_RESOURCE_MGR_SERVICE,
-            //@hide: NETWORK_SCORE_SERVICE,
-            USAGE_STATS_SERVICE,
-            MEDIA_SESSION_SERVICE,
-            MEDIA_COMMUNICATION_SERVICE,
-            BATTERY_SERVICE,
-            JOB_SCHEDULER_SERVICE,
-            PERSISTENT_DATA_BLOCK_SERVICE,
-            //@hide: OEM_LOCK_SERVICE,
-            MEDIA_PROJECTION_SERVICE,
-            MIDI_SERVICE,
-            RADIO_SERVICE,
-            HARDWARE_PROPERTIES_SERVICE,
-            //@hide: SOUND_TRIGGER_SERVICE,
-            SHORTCUT_SERVICE,
-            //@hide: CONTEXTHUB_SERVICE,
-            SYSTEM_HEALTH_SERVICE,
-            //@hide: INCIDENT_SERVICE,
-            //@hide: INCIDENT_COMPANION_SERVICE,
-            //@hide: STATS_COMPANION_SERVICE,
-            COMPANION_DEVICE_SERVICE,
-            VIRTUAL_DEVICE_SERVICE,
-            CROSS_PROFILE_APPS_SERVICE,
-            //@hide: SYSTEM_UPDATE_SERVICE,
-            //@hide: TIME_DETECTOR_SERVICE,
-            //@hide: TIME_ZONE_DETECTOR_SERVICE,
-            PERMISSION_SERVICE,
-            LIGHTS_SERVICE,
-            LOCALE_SERVICE,
-            //@hide: PEOPLE_SERVICE,
-            //@hide: DEVICE_STATE_SERVICE,
-            //@hide: SPEECH_RECOGNITION_SERVICE,
-            UWB_SERVICE,
-            MEDIA_METRICS_SERVICE,
-            //@hide: ATTESTATION_VERIFICATION_SERVICE,
-            //@hide: SAFETY_CENTER_SERVICE,
-            DISPLAY_HASH_SERVICE,
-            CREDENTIAL_SERVICE,
-            DEVICE_LOCK_SERVICE,
-            VIRTUALIZATION_SERVICE,
-            GRAMMATICAL_INFLECTION_SERVICE,
-            SECURITY_STATE_SERVICE,
-           //@hide: ECM_ENHANCED_CONFIRMATION_SERVICE,
-            CONTACT_KEYS_SERVICE,
-            RANGING_SERVICE,
-            MEDIA_QUALITY_SERVICE,
-            ADVANCED_PROTECTION_SERVICE,
-
-    })
+    @StringDef(
+            suffix = {"_SERVICE"},
+            value = {
+                POWER_SERVICE,
+                // @hide: POWER_STATS_SERVICE,
+                WINDOW_SERVICE,
+                LAYOUT_INFLATER_SERVICE,
+                ACCOUNT_SERVICE,
+                ACTIVITY_SERVICE,
+                ALARM_SERVICE,
+                NOTIFICATION_SERVICE,
+                ACCESSIBILITY_SERVICE,
+                CAPTIONING_SERVICE,
+                KEYGUARD_SERVICE,
+                LOCATION_SERVICE,
+                HEALTHCONNECT_SERVICE,
+                // @hide: COUNTRY_DETECTOR,
+                SEARCH_SERVICE,
+                SENSOR_SERVICE,
+                SENSOR_PRIVACY_SERVICE,
+                STORAGE_SERVICE,
+                STORAGE_STATS_SERVICE,
+                WALLPAPER_SERVICE,
+                VIBRATOR_MANAGER_SERVICE,
+                VIBRATOR_SERVICE,
+                // @hide: STATUS_BAR_SERVICE,
+                THREAD_NETWORK_SERVICE,
+                CONNECTIVITY_SERVICE,
+                TETHERING_SERVICE,
+                PAC_PROXY_SERVICE,
+                VCN_MANAGEMENT_SERVICE,
+                // @hide: IP_MEMORY_STORE_SERVICE,
+                IPSEC_SERVICE,
+                VPN_MANAGEMENT_SERVICE,
+                TEST_NETWORK_SERVICE,
+                // @hide: UPDATE_LOCK_SERVICE,
+                // @hide: NETWORKMANAGEMENT_SERVICE,
+                NETWORK_STATS_SERVICE,
+                // @hide: NETWORK_POLICY_SERVICE,
+                WIFI_SERVICE,
+                WIFI_AWARE_SERVICE,
+                WIFI_P2P_SERVICE,
+                WIFI_SCANNING_SERVICE,
+                // @hide: LOWPAN_SERVICE,
+                // @hide: WIFI_RTT_SERVICE,
+                // @hide: ETHERNET_SERVICE,
+                WIFI_RTT_RANGING_SERVICE,
+                WIFI_USD_SERVICE,
+                NSD_SERVICE,
+                AUDIO_SERVICE,
+                AUDIO_DEVICE_VOLUME_SERVICE,
+                AUTH_SERVICE,
+                FINGERPRINT_SERVICE,
+                // @hide: FACE_SERVICE,
+                BIOMETRIC_SERVICE,
+                AUTHENTICATION_POLICY_SERVICE,
+                MEDIA_ROUTER_SERVICE,
+                TELEPHONY_SERVICE,
+                TELEPHONY_SUBSCRIPTION_SERVICE,
+                CARRIER_CONFIG_SERVICE,
+                EUICC_SERVICE,
+                // @hide: MMS_SERVICE,
+                TELECOM_SERVICE,
+                CLIPBOARD_SERVICE,
+                INPUT_METHOD_SERVICE,
+                TEXT_SERVICES_MANAGER_SERVICE,
+                TEXT_CLASSIFICATION_SERVICE,
+                APPWIDGET_SERVICE,
+                // @hide: VOICE_INTERACTION_MANAGER_SERVICE,
+                // @hide: BACKUP_SERVICE,
+                REBOOT_READINESS_SERVICE,
+                ROLLBACK_SERVICE,
+                DROPBOX_SERVICE,
+                // @hide: DEVICE_IDLE_CONTROLLER,
+                // @hide: POWER_WHITELIST_MANAGER,
+                DEVICE_POLICY_SERVICE,
+                UI_MODE_SERVICE,
+                DOWNLOAD_SERVICE,
+                NFC_SERVICE,
+                BLUETOOTH_SERVICE,
+                // @hide: SIP_SERVICE,
+                USB_SERVICE,
+                LAUNCHER_APPS_SERVICE,
+                // @hide: SERIAL_SERVICE,
+                // @hide: HDMI_CONTROL_SERVICE,
+                INPUT_SERVICE,
+                DISPLAY_SERVICE,
+                // @hide COLOR_DISPLAY_SERVICE,
+                USER_SERVICE,
+                RESTRICTIONS_SERVICE,
+                APP_OPS_SERVICE,
+                ROLE_SERVICE,
+                // @hide ROLE_CONTROLLER_SERVICE,
+                CAMERA_SERVICE,
+                // @hide: PLATFORM_COMPAT_SERVICE,
+                // @hide: PLATFORM_COMPAT_NATIVE_SERVICE,
+                PRINT_SERVICE,
+                CONSUMER_IR_SERVICE,
+                // @hide: TRUST_SERVICE,
+                TV_INTERACTIVE_APP_SERVICE,
+                TV_INPUT_SERVICE,
+                // @hide: TV_TUNER_RESOURCE_MGR_SERVICE,
+                // @hide: NETWORK_SCORE_SERVICE,
+                USAGE_STATS_SERVICE,
+                MEDIA_SESSION_SERVICE,
+                MEDIA_COMMUNICATION_SERVICE,
+                BATTERY_SERVICE,
+                JOB_SCHEDULER_SERVICE,
+                PERSISTENT_DATA_BLOCK_SERVICE,
+                // @hide: OEM_LOCK_SERVICE,
+                MEDIA_PROJECTION_SERVICE,
+                MIDI_SERVICE,
+                RADIO_SERVICE,
+                HARDWARE_PROPERTIES_SERVICE,
+                // @hide: SOUND_TRIGGER_SERVICE,
+                SHORTCUT_SERVICE,
+                // @hide: CONTEXTHUB_SERVICE,
+                SYSTEM_HEALTH_SERVICE,
+                // @hide: INCIDENT_SERVICE,
+                // @hide: INCIDENT_COMPANION_SERVICE,
+                // @hide: STATS_COMPANION_SERVICE,
+                COMPANION_DEVICE_SERVICE,
+                VIRTUAL_DEVICE_SERVICE,
+                CROSS_PROFILE_APPS_SERVICE,
+                // @hide: SYSTEM_UPDATE_SERVICE,
+                // @hide: TIME_DETECTOR_SERVICE,
+                // @hide: TIME_ZONE_DETECTOR_SERVICE,
+                PERMISSION_SERVICE,
+                LIGHTS_SERVICE,
+                LOCALE_SERVICE,
+                // @hide: PEOPLE_SERVICE,
+                // @hide: DEVICE_STATE_SERVICE,
+                // @hide: SPEECH_RECOGNITION_SERVICE,
+                UWB_SERVICE,
+                MEDIA_METRICS_SERVICE,
+                // @hide: ATTESTATION_VERIFICATION_SERVICE,
+                // @hide: SAFETY_CENTER_SERVICE,
+                DISPLAY_HASH_SERVICE,
+                CREDENTIAL_SERVICE,
+                DEVICE_LOCK_SERVICE,
+                VIRTUALIZATION_SERVICE,
+                GRAMMATICAL_INFLECTION_SERVICE,
+                SECURITY_STATE_SERVICE,
+                // @hide: ECM_ENHANCED_CONFIRMATION_SERVICE,
+                CONTACT_KEYS_SERVICE,
+                RANGING_SERVICE,
+                MEDIA_QUALITY_SERVICE,
+                ADVANCED_PROTECTION_SERVICE,
+            })
     @Retention(RetentionPolicy.SOURCE)
     public @interface ServiceName {}
 
@@ -4576,6 +4652,8 @@ public abstract class Context {
      * @see #AUTHENTICATION_POLICY_SERVICE
      * @see android.security.authenticationpolicy.AuthenticationPolicyManager
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract Object getSystemService(@ServiceName @NonNull String name);
 
     /**
@@ -4636,6 +4714,8 @@ public abstract class Context {
      * @param serviceClass The class of the desired service.
      * @return The service name or null if the class is not a supported system service.
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract @Nullable String getSystemServiceName(@NonNull Class<?> serviceClass);
 
     /**
@@ -6687,6 +6767,15 @@ public abstract class Context {
     @SystemApi
     public static final String WEARABLE_SENSING_SERVICE = "wearable_sensing";
 
+    /**
+     * Use with {@link #getSystemService(String)} to retrieve a
+     * {@link android.companion.datatransfer.continuity.TaskContinuityManager}.
+     *
+     * @see #getSystemService(String)
+     * @see TaskContinuityManager
+     * @hide
+     */
+    public static final String TASK_CONTINUITY_SERVICE = "task_continuity";
 
     /**
      * Use with {@link #getSystemService(String)} to retrieve a
@@ -6871,11 +6960,11 @@ public abstract class Context {
 
     /**
      * Use with {@link #getSystemService(String)} to retrieve a
-     * {@link android.media.quality.MediaQuality} for standardize picture and audio
-     * API parameters.
+     * {@link android.media.quality.MediaQualityManager} for standardize picture
+     * and audio API parameters.
      *
      * @see #getSystemService(String)
-     * @see android.media.quality.MediaQuality
+     * @see android.media.quality.MediaQualityManager
      */
     @FlaggedApi(android.media.tv.flags.Flags.FLAG_MEDIA_QUALITY_FW)
     public static final String MEDIA_QUALITY_SERVICE = "media_quality";
@@ -6885,6 +6974,16 @@ public abstract class Context {
      * @hide
      */
     public static final String DYNAMIC_INSTRUMENTATION_SERVICE = "dynamic_instrumentation";
+
+    /**
+     * Use with {@link #getSystemService(String)} to retrieve a
+     * {@link android.service.chooser.ChooserManager}.
+     *
+     * @see #getSystemService(String)
+     * @see android.service.chooser.ChooserManager
+     */
+    @FlaggedApi(android.service.chooser.Flags.FLAG_INTERACTIVE_CHOOSER)
+    public static final String CHOOSER_SERVICE = "chooser";
 
     /**
      * Use with {@link #getSystemService} to retrieve a
@@ -7609,7 +7708,8 @@ public abstract class Context {
      */
     @SystemApi
     @NonNull
-    public Context createContextAsUser(@NonNull UserHandle user, @CreatePackageOptions int flags) {
+    public Context createContextAsUser(
+            @CanBeALL @CanBeCURRENT @NonNull UserHandle user, @CreatePackageOptions int flags) {
         if (Build.IS_ENG) {
             throw new IllegalStateException("createContextAsUser not overridden!");
         }
@@ -7670,7 +7770,9 @@ public abstract class Context {
     @NonNull
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     @TestApi
-    public UserHandle getUser() {
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
+    public @CanBeALL @CanBeCURRENT UserHandle getUser() {
         return android.os.Process.myUserHandle();
     }
 
@@ -7680,7 +7782,9 @@ public abstract class Context {
      */
     @UnsupportedAppUsage
     @TestApi
-    public @UserIdInt int getUserId() {
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
+    public @CanBeALL @CanBeCURRENT @UserIdInt int getUserId() {
         return android.os.UserHandle.myUserId();
     }
 
@@ -8137,6 +8241,8 @@ public abstract class Context {
      * @see #registerDeviceIdChangeListener(Executor, IntConsumer)
      * @see #isUiContext()
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public int getDeviceId() {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }
@@ -8184,6 +8290,8 @@ public abstract class Context {
      *
      * @see #CONTEXT_RESTRICTED
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public boolean isRestricted() {
         return false;
     }
@@ -8212,6 +8320,8 @@ public abstract class Context {
      * @hide
      */
     @SuppressWarnings("HiddenAbstractMethod")
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public abstract boolean canLoadUnsafeResources();
 
     /**
@@ -8281,6 +8391,8 @@ public abstract class Context {
     /**
      * @hide
      */
+    @android.ravenwood.annotation.RavenwoodSupported(
+            type = SupportType.SUBCLASS, subclass = "RavenwoodContext")
     public Handler getMainThreadHandler() {
         throw new RuntimeException("Not implemented. Must override in a subclass.");
     }

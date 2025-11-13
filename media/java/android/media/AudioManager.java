@@ -4594,7 +4594,18 @@ public class AudioManager {
 
     /**
      *  Request audio focus.
-     *  Send a request to obtain the audio focus
+     *  Send a request to obtain the audio focus.
+     *
+     * <aside class="note"><b>Note:</b>
+     * If an app targets Android 15 (API level 35) or higher, it cannot request
+     * audio focus unless it's the top app or running a foreground service.
+     * This requirement is similar to the
+     * <a href="/media/media3/session/background-playback#service-declaration">requirements
+     * for audio playback</a>. If an app requests audio focus when it does not
+     * meet these requirements, the method returns
+     * {@link AudioManager#AUDIOFOCUS_REQUEST_FAILED}.
+     * </aside>
+     *
      *  @param l the listener to be notified of audio focus changes
      *  @param streamType the main audio stream type affected by the focus request
      *  @param durationHint use {@link #AUDIOFOCUS_GAIN_TRANSIENT} to indicate this focus request
@@ -4680,6 +4691,17 @@ public class AudioManager {
      * Request audio focus.
      * See the {@link AudioFocusRequest} for information about the options available to configure
      * your request, and notification of focus gain and loss.
+     *
+     * <aside class="note"><b>Note:</b>
+     * If an app targets Android 15 (API level 35) or higher, it cannot request
+     * audio focus unless it's the top app or running a foreground service.
+     * This requirement is similar to the
+     * <a href="/media/media3/session/background-playback#service-declaration">requirements
+     * for audio playback</a>. If an app requests audio focus when it does not
+     * meet these requirements, the method returns
+     * {@link AudioManager#AUDIOFOCUS_REQUEST_FAILED}.
+     * </aside>
+     *
      * @param focusRequest a {@link AudioFocusRequest} instance used to configure how focus is
      *   requested.
      * @return {@link #AUDIOFOCUS_REQUEST_FAILED}, {@link #AUDIOFOCUS_REQUEST_GRANTED}
@@ -5891,6 +5913,8 @@ public class AudioManager {
                             final Message m = arci.mHandler.obtainMessage(
                                     MSSG_PLAYBACK_CONFIG_CHANGE/*what*/,
                                     new PlaybackConfigChangeCallbackData(arci.mCb, configs)/*obj*/);
+                            // only the last config matters, discard unprocessed ones
+                            arci.mHandler.removeMessages(MSSG_PLAYBACK_CONFIG_CHANGE);
                             arci.mHandler.sendMessage(m);
                         }
                     }
@@ -8051,10 +8075,7 @@ public class AudioManager {
      * Returns an array of {@link AudioDeviceInfo} objects corresponding to the audio devices
      * currently connected to the system and meeting the criteria specified in the
      * <code>flags</code> parameter.
-     * Notes that Android audio framework only support one device per device type. In that case,
-     * if there are multiple audio device with the same device type connected to the Android device,
-     * only the last reported device will be known by Android audio framework and returned by this
-     * API.
+     *
      * @param flags A set of bitflags specifying the criteria to test.
      * @see #GET_DEVICES_OUTPUTS
      * @see #GET_DEVICES_INPUTS
@@ -9195,9 +9216,15 @@ public class AudioManager {
             for (int portId : portIds) {
                 AudioDeviceInfo device = getDeviceForPortId(portId, GET_DEVICES_OUTPUTS);
                 if (device == null) {
+                    //TODO b/381334864: remove log when fixed
+                    Log.w(TAG, "getAvailableCommunicationDevices: no device for ID: " + portId);
                     continue;
                 }
                 devices.add(device);
+            }
+            if (devices.stream().filter(d -> d.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
+                    .findFirst().orElse(null) == null) {
+                Log.w(TAG, "getAvailableCommunicationDevices: no EARPIECE!");
             }
             return devices;
         } catch (RemoteException e) {

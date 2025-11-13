@@ -23,6 +23,7 @@ import android.content.Intent
 import android.content.IntentSender
 import android.os.Binder
 import android.os.UserHandle
+import android.platform.test.annotations.EnableFlags
 import android.testing.TestableLooper
 import android.widget.RemoteViews
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -45,8 +46,10 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -136,6 +139,7 @@ class GlanceableHubWidgetManagerServiceTest : SysuiTestCase() {
         }
 
     @Test
+    @EnableFlags(android.appwidget.flags.Flags.FLAG_ENGAGEMENT_METRICS)
     fun setAppWidgetHostListener_getUpdates() =
         testScope.runTest {
             // Bind service
@@ -143,7 +147,15 @@ class GlanceableHubWidgetManagerServiceTest : SysuiTestCase() {
             val service = IGlanceableHubWidgetManagerService.Stub.asInterface(binder)
 
             // Set listener
-            val listener = mock<IGlanceableHubWidgetManagerService.IAppWidgetHostListener>()
+            val listener =
+                mock<IGlanceableHubWidgetManagerService.IAppWidgetHostListener> {
+                    on { collectWidgetEvent(any()) } doAnswer
+                        {
+                            (it.arguments[0]
+                                    as IGlanceableHubWidgetManagerService.IAppWidgetEventCallback)
+                                .onResult(null)
+                        }
+                }
             service.setAppWidgetHostListener(1, listener)
 
             // Verify a listener is set on the host
@@ -164,6 +176,9 @@ class GlanceableHubWidgetManagerServiceTest : SysuiTestCase() {
 
             appWidgetHostListener.onViewDataChanged(1)
             verify(listener).onViewDataChanged(1)
+
+            appWidgetHostListener.collectWidgetEvent()
+            verify(listener).collectWidgetEvent(any())
         }
 
     @Test

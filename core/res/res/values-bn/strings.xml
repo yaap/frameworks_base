@@ -354,10 +354,12 @@
     <string name="permgroupdesc_sensors" msgid="2610631290633747752">"আপনার অত্যাবশ্যক লক্ষণগুলির সম্পর্কে সেন্সর ডেটা অ্যাক্সেস করে"</string>
     <string name="permgrouplab_notifications" msgid="5472972361980668884">"বিজ্ঞপ্তি"</string>
     <string name="permgroupdesc_notifications" msgid="4608679556801506580">"বিজ্ঞপ্তি দেখুন"</string>
+    <string name="permgrouplab_xr_eye_sensitive" msgid="2099659100156643683">"XR সংবেদনশীল আই ট্র্যাকিং ডেটা"</string>
+    <string name="permgroupdesc_xr_eye_sensitive" msgid="1414121516133760271">"চোখের দৃষ্টি সম্পর্কিত সংবেদনশীল ডেটা অ্যাক্সেস করুন"</string>
     <string name="permgrouplab_xr_tracking" msgid="7418994009794287471">"XR ট্র্যাকিং ডেটা"</string>
     <string name="permgroupdesc_xr_tracking" msgid="6777198859446500821">"আপনার এবং আপনার চারপাশের পরিবেশ সম্পর্কে XR ডেটা অ্যাক্সেস করুন"</string>
-    <string name="permgrouplab_xr_tracking_sensitive" msgid="1194833982988144536">"সংবেদনশীল XR ট্র্যাকিং ডেটা"</string>
-    <string name="permgroupdesc_xr_tracking_sensitive" msgid="9178027369004805829">"সংবেদনশীল ট্র্যাকিং ডেটা অ্যাক্সেস করুন, যেমন চোখের দৃষ্টি"</string>
+    <string name="permgrouplab_xr_tracking_sensitive" msgid="2993940754322250652">"XR ট্র্যাকিং সংক্রান্ত সংবেদনশীল ডেটা"</string>
+    <string name="permgroupdesc_xr_tracking_sensitive" msgid="8498501397939308918">"আপনার এবং আপনার চারপাশের পরিবেশ সম্পর্কে ট্র্যাকিং সংক্রান্ত সংবেদনশীল ডেটা অ্যাক্সেস করুন"</string>
     <string name="capability_title_canRetrieveWindowContent" msgid="7554282892101587296">"উইন্ডোর কন্টেন্ট ফিরিয়ে আনুন"</string>
     <string name="capability_desc_canRetrieveWindowContent" msgid="6195610527625237661">"ব্যবহার করছেন এমন একটি উইন্ডোর কন্টেন্ট পরীক্ষা করে৷"</string>
     <string name="capability_title_canRequestTouchExploration" msgid="327598364696316213">"স্পর্শের মাধ্যমে অন্বেষণ করা চালু করুন"</string>
@@ -382,6 +384,8 @@
     <string name="permdesc_expandStatusBar" msgid="7180756900448498536">"অ্যাপ্লিকেশনটিকে স্ট্যাটাস বার প্রসারিত বা সঙ্কুচিত করতে দেয়৷"</string>
     <string name="permlab_fullScreenIntent" msgid="4310888199502509104">"লক করা ডিভাইসে ফুল স্ক্রিন অ্যাক্টিভিটি হিসাবে বিজ্ঞপ্তি দেখায়"</string>
     <string name="permdesc_fullScreenIntent" msgid="1100721419406643997">"এই অ্যাপকে লক করা ডিভাইসে ফুল স্ক্রিন অ্যাক্টিভিটি হিসাবে বিজ্ঞপ্তি দেখানোর অনুমতি দেয়"</string>
+    <string name="permlab_postPromotedNotifications" msgid="4873499297871691102">"লাইভ আপডেট দেখুন"</string>
+    <string name="permdesc_postPromotedNotifications" msgid="4530634734172420651">"অ্যাপটিকে অনগোয়িং, জরুরি বিজ্ঞপ্তি, স্ট্যাটাস বার এবং লক স্ক্রিনে দেখানোর অনুমতি দেয়"</string>
     <string name="permlab_install_shortcut" msgid="7451554307502256221">"শর্টকাট ইনস্টল করা"</string>
     <string name="permdesc_install_shortcut" msgid="4476328467240212503">"একটি অ্যাপ্লিকেশানকে ব্যবহারকারীর হস্তক্ষেপ ছাড়াই হোমস্ক্রীণে শর্টকাটগুলি যোগ করার অনুমতি দেয়৷"</string>
     <string name="permlab_uninstall_shortcut" msgid="295263654781900390">"শর্টকাটগুলি আনইনস্টল করে"</string>
@@ -698,7 +702,7 @@
   </string-array>
     <string name="fingerprint_error_not_match" msgid="4599441812893438961">"ফিঙ্গারপ্রিন্ট শনাক্ত করা যায়নি"</string>
     <string name="fingerprint_udfps_error_not_match" msgid="8236930793223158856">"ফিঙ্গারপ্রিন্ট শনাক্ত করা যায়নি"</string>
-    <string name="fingerprint_dialog_use_fingerprint_instead" msgid="5590293588784953188">"মুখ শনাক্ত করা যায়নি। এর পরিবর্তে ফিঙ্গারপ্রিন্ট ব্যবহার করুন।"</string>
+    <string name="fingerprint_dialog_use_fingerprint_instead" msgid="5590293588784953188">"ফেস চেনা যায়নি। এর পরিবর্তে ফিঙ্গারপ্রিন্ট ব্যবহার করুন।"</string>
     <string name="fingerprint_authenticated" msgid="2024862866860283100">"আঙ্গুলের ছাপ যাচাই করা হয়েছে"</string>
     <string name="face_authenticated_no_confirmation_required" msgid="8867889115112348167">"ফেস যাচাই করা হয়েছে"</string>
     <string name="face_authenticated_confirmation_required" msgid="6872632732508013755">"ফেস যাচাই করা হয়েছে, \'কনফার্ম করুন\' বোতাম প্রেস করুন"</string>
@@ -1182,22 +1186,8 @@
     <string name="duration_hours_shortest_future" msgid="2979276794547981674">"<xliff:g id="COUNT">%d</xliff:g>ঘণ্টার মধ্যে"</string>
     <string name="duration_days_shortest_future" msgid="3392722163935571543">"<xliff:g id="COUNT">%d</xliff:g>দিনের মধ্যে"</string>
     <string name="duration_years_shortest_future" msgid="5537464088352970388">"<xliff:g id="COUNT">%d</xliff:g>বছরের মধ্যে"</string>
-    <string name="duration_minutes_shortest_past" msgid="1740022450020492407">"<xliff:g id="COUNT">%d</xliff:g>মিনিট আগে"</string>
-    <string name="duration_hours_shortest_past" msgid="2098397414186628489">"<xliff:g id="COUNT">%d</xliff:g>ঘণ্টা আগে"</string>
-    <string name="duration_days_shortest_past" msgid="1832006037955897625">"<xliff:g id="COUNT">%d</xliff:g>দিন আগে"</string>
-    <string name="duration_years_shortest_past" msgid="6168256514200469291">"<xliff:g id="COUNT">%d</xliff:g>বছর আগে"</string>
     <string name="duration_minutes_medium" msgid="5891933490342643944">"<xliff:g id="COUNT">%d</xliff:g>মিনিট"</string>
     <string name="duration_hours_medium" msgid="1465359726485910115">"<xliff:g id="COUNT">%d</xliff:g>ঘণ্টা"</string>
-    <string name="duration_days_medium" msgid="5994225628248661388">"<xliff:g id="COUNT">%d</xliff:g>দিন"</string>
-    <string name="duration_years_medium" msgid="734023884353592526">"<xliff:g id="COUNT">%d</xliff:g>বছর"</string>
-    <string name="duration_minutes_medium_future" msgid="2750894988731934402">"<xliff:g id="COUNT">%d</xliff:g>মিনিটের মধ্যে"</string>
-    <string name="duration_hours_medium_future" msgid="6050833881463849764">"<xliff:g id="COUNT">%d</xliff:g>ঘণ্টার মধ্যে"</string>
-    <string name="duration_days_medium_future" msgid="1700821545602729963">"<xliff:g id="COUNT">%d</xliff:g>দিনের মধ্যে"</string>
-    <string name="duration_years_medium_future" msgid="3281018940397120166">"<xliff:g id="COUNT">%d</xliff:g>বছরের মধ্যে"</string>
-    <string name="duration_minutes_medium_past" msgid="7400424340181947714">"<xliff:g id="COUNT">%d</xliff:g>মিনিট আগে"</string>
-    <string name="duration_hours_medium_past" msgid="6709441336035202617">"<xliff:g id="COUNT">%d</xliff:g>ঘন্টা আগে"</string>
-    <string name="duration_days_medium_past" msgid="5748156261134344532">"<xliff:g id="COUNT">%d</xliff:g>দিন আগে"</string>
-    <string name="duration_years_medium_past" msgid="893797065424596243">"<xliff:g id="COUNT">%d</xliff:g>বছর আগে"</string>
     <string name="duration_minutes_relative" msgid="8620337701051015593">"{count,plural, =1{# মিনিট আগে}one{# মিনিট আগে}other{# মিনিট আগে}}"</string>
     <string name="duration_hours_relative" msgid="4836449961693180253">"{count,plural, =1{# ঘণ্টা আগে}one{# ঘণ্টা আগে}other{# ঘণ্টা আগে}}"</string>
     <string name="duration_days_relative" msgid="621965767567258302">"{count,plural, =1{# দিন আগে}one{# দিন আগে}other{# দিন আগে}}"</string>
@@ -1709,6 +1699,12 @@
     <string name="default_audio_route_name_external_device" msgid="8124229858618975">"এক্সটার্নাল ডিভাইস"</string>
     <string name="default_audio_route_name_headphones" msgid="6954070994792640762">"হেডফোন"</string>
     <string name="default_audio_route_name_usb" msgid="895668743163316932">"USB"</string>
+    <string name="default_audio_route_name_hdmi_tv" msgid="1629608564121895625">"টিভি অডিও"</string>
+    <string name="default_audio_route_name_arc" msgid="5117738492549798911">"আর্ক"</string>
+    <string name="default_audio_route_name_earc" msgid="5869527419074773683">"eARC"</string>
+    <string name="default_audio_route_name_analog" msgid="7781645558035374980">"অ্যানালগ"</string>
+    <string name="default_audio_route_name_digital" msgid="6959855552809654826">"ডিজিটাল"</string>
+    <string name="default_audio_route_name_aux" msgid="7432808125413299672">"AUX"</string>
     <string name="default_audio_route_category_name" msgid="5241740395748134483">"সিস্টেম"</string>
     <string name="bluetooth_a2dp_audio_route_name" msgid="4214648773120426288">"ব্লুটুথ অডিও"</string>
     <string name="wireless_display_route_description" msgid="8297563323032966831">"ওয়্যারলেস প্রদর্শন"</string>
@@ -1804,7 +1800,8 @@
     <string name="one_handed_mode_feature_name" msgid="2334330034828094891">"এক হাতে ব্যবহার করার মোড"</string>
     <string name="reduce_bright_colors_feature_name" msgid="3222994553174604132">"অতিরিক্ত কম উজ্জ্বলতা"</string>
     <string name="hearing_aids_feature_name" msgid="1125892105105852542">"হিয়ারিং ডিভাইস"</string>
-    <string name="autoclick_feature_name" msgid="8149248738736949630">"অটোক্লিক"</string>
+    <string name="autoclick_feature_name" msgid="4056260617171267864">"অটো ক্লিক (থাকার সময়)"</string>
+    <string name="mouse_keys_feature_name" msgid="3362643216513384542">"মাউস কী"</string>
     <string name="hearing_device_status_disconnected" msgid="497547752953543832">"ডিসকানেক্ট হয়ে গেছে"</string>
     <string name="hearing_device_status_connected" msgid="2149385149669918764">"কানেক্ট করা হয়েছে"</string>
     <string name="hearing_device_status_active" msgid="4770378695482566032">"অ্যাক্টিভ"</string>
@@ -1816,7 +1813,7 @@
     <string name="accessibility_gesture_prompt_text" msgid="6452246951969541792">"ফিচার বেছে নিন"</string>
     <string name="accessibility_gesture_3finger_prompt_text" msgid="77745752309056152">"ফিচার বেছে নিন"</string>
     <string name="accessibility_button_instructional_text" msgid="6831154884557881996">"পরের বার অ্যাক্সেসিবিলিটি বোতামে ট্যাপ করলে, ফিচারটি চালু হয়ে যাবে"</string>
-    <string name="accessibility_gesture_instructional_text" msgid="4133877896011098550">"পরের বার এই শর্টকাট ব্যবহার করলে, ফিচারটি চালু হয়ে যাবে। ২টি আঙ্গুল দিয়ে স্ক্রিনের নিচ থেকে উপরের দিকে সোয়াইপ করে দ্রুত ছেড়ে দিন।"</string>
+    <string name="accessibility_gesture_instructional_text" msgid="4133877896011098550">"পরের বার এই শর্টকাট ব্যবহার করলে, ফিচারটি চালু হয়ে যাবে। ২টি আঙুল দিয়ে স্ক্রিনের নিচ থেকে উপরের দিকে সোয়াইপ করে দ্রুত ছেড়ে দিন।"</string>
     <string name="accessibility_gesture_3finger_instructional_text" msgid="1124458279366968154">"পরের বার এই শর্টকাট ব্যবহার করলে, ফিচারটি চালু হয়ে যাবে। ৩টি আঙ্গুল দিয়ে স্ক্রিনের নিচ থেকে উপরের দিকে সোয়াইপ করে দ্রুত ছেড়ে দিন।"</string>
     <string name="accessibility_magnification_chooser_text" msgid="1502075582164931596">"বড় করে দেখা"</string>
     <string name="hearing_device_switch_phone_mic_notification_title" msgid="6645178038359708836">"ফোনের মাইকে পরিবর্তন করবেন?"</string>
@@ -1829,6 +1826,7 @@
     <string name="user_logging_out_message" msgid="7216437629179710359">"<xliff:g id="NAME">%1$s</xliff:g>কে লগ-আউট করা হচ্ছে..."</string>
     <string name="owner_name" msgid="8713560351570795743">"মালিক"</string>
     <string name="guest_name" msgid="8502103277839834324">"অতিথি"</string>
+    <string name="headless_system_user_name" msgid="1849150903255530049">"সিস্টেম ব্যবহারকারী"</string>
     <string name="error_message_title" msgid="4082495589294631966">"ত্রুটি"</string>
     <string name="error_message_change_not_allowed" msgid="843159705042381454">"এই পরিবর্তনটি আপনার প্রশাসক দ্বারা অনুমোদিত নয়"</string>
     <string name="app_not_found" msgid="3429506115332341800">"এই ক্রিয়াটিকে চালনা করার জন্য কোনো অ্যাপ্লিকেশান পাওয়া যায়নি"</string>
@@ -2043,7 +2041,7 @@
     <string name="promotional_notification_channel_label" msgid="7414844730492860233">"প্রোমোশন"</string>
     <string name="social_notification_channel_label" msgid="106520267132019945">"সোশ্যাল"</string>
     <string name="news_notification_channel_label" msgid="4299937455247883311">"খবর"</string>
-    <string name="recs_notification_channel_label" msgid="4945985121418684297">"সাজেশন"</string>
+    <string name="recs_notification_channel_label" msgid="4731685669194175453">"সাজেস্ট করা হয়েছে"</string>
     <string name="importance_from_user" msgid="2782756722448800447">"আপনি এই বিজ্ঞপ্তিগুলির গুরুত্ব সেট করেছেন।"</string>
     <string name="importance_from_person" msgid="4235804979664465383">"লোকজন জড়িত থাকার কারণে এটি গুরুত্বপূর্ণ।"</string>
     <string name="notification_history_title_placeholder" msgid="7748630986182249599">"কাস্টম অ্যাপ বিজ্ঞপ্তি"</string>
@@ -2095,7 +2093,7 @@
     <string name="app_streaming_blocked_message_for_settings_dialog" product="tablet" msgid="3286849551133045896">"আপনার <xliff:g id="DEVICE">%1$s</xliff:g>-এ এটি অ্যাক্সেস করা যাবে না। পরিবর্তে আপনার ট্যাবলেটে ব্যবহার করে দেখুন।"</string>
     <string name="app_streaming_blocked_message_for_settings_dialog" product="default" msgid="6264287556598916295">"আপনার <xliff:g id="DEVICE">%1$s</xliff:g>-এ এটি অ্যাক্সেস করা যাবে না। পরিবর্তে আপনার ফোনে ব্যবহার করে দেখুন।"</string>
     <string name="deprecated_target_sdk_message" msgid="5246906284426844596">"Android-এর আরও পুরনো ভার্সনের জন্য এই অ্যাপ তৈরি করা হয়েছিল। এটি সঠিকভাবে কাজ নাও করতে পারে এবং এর মধ্যে লেটেস্ট সুরক্ষা ও গোপনীয়তার নিরাপত্তা ব্যবস্থা অন্তর্ভুক্ত করা নেই। আপডেটের জন্য চেক করুন বা অ্যাপের ডেভেলপারের সাথে যোগাযোগ করুন।"</string>
-    <string name="deprecated_target_sdk_app_store" msgid="8456784048558808909">"আপডেট পাওয়া যাচ্ছে কিনা দেখুন"</string>
+    <string name="deprecated_target_sdk_app_store" msgid="8456784048558808909">"আপডেট করতে হবে কিনা দেখুন"</string>
     <string name="deprecated_abi_message" msgid="6820548011196218091">"Android-এর লেটেস্ট ভার্সনের সাথে এই অ্যাপটি মানানসই নয়। আপডেটের জন্য চেক করুন বা অ্যাপ ডেভেলপারের সাথে যোগাযোগ করুন।"</string>
     <string name="new_sms_notification_title" msgid="6528758221319927107">"আপনার নতুন মেসেজ আছে"</string>
     <string name="new_sms_notification_content" msgid="3197949934153460639">"দেখার জন্য SMS অ্যাপ্লিকেশান খুলুন"</string>
@@ -2266,19 +2264,21 @@
     <string name="accessibility_system_action_dpad_left_label" msgid="6557647179116479152">"ডিপ্যাড (Dpad)-এর বাঁদিকে"</string>
     <string name="accessibility_system_action_dpad_right_label" msgid="9180196950365804081">"ডিপ্যাড (Dpad)-এর ডানদিকে"</string>
     <string name="accessibility_system_action_dpad_center_label" msgid="8149791419358224893">"ডিপ্যাড (Dpad)-এর মাঝখানে"</string>
-    <string name="accessibility_autoclick_type_settings_panel_title" msgid="7354373370578758696">"অটোক্লিক টাইপ সেটিংস প্যানেল"</string>
-    <string name="accessibility_autoclick_left_click" msgid="2301793352260551080">"বাঁদিকের বোতামে ক্লিক করুন"</string>
-    <string name="accessibility_autoclick_right_click" msgid="4353495816526181293">"মাউসের ডানদিকের বোতামে ক্লিক করুন"</string>
-    <string name="accessibility_autoclick_double_click" msgid="2103826849116176478">"ডবল ক্লিক করুন"</string>
+    <string name="accessibility_autoclick_type_settings_panel_title" msgid="2153131135765368397">"অটোক্লিক বিকল্পের মেনু"</string>
+    <string name="accessibility_autoclick_left_click" msgid="8241237237588793835">"বাঁদিকের বোতামে ক্লিক করুন"</string>
+    <string name="accessibility_autoclick_right_click" msgid="6208390123529830506">"ডানদিকের বোতামে ক্লিক করুন"</string>
+    <string name="accessibility_autoclick_double_click" msgid="2800154470129612873">"ডবল ক্লিক করুন"</string>
     <string name="accessibility_autoclick_drag" msgid="1499559489796843224">"টেনে আনুন"</string>
     <string name="accessibility_autoclick_scroll" msgid="3499385943728726933">"স্ক্রল করুন"</string>
+    <string name="accessibility_autoclick_long_press" msgid="6241367542788162585">"স্পর্শ করে ধরে থাকুন"</string>
     <string name="accessibility_autoclick_pause" msgid="3272200156172573568">"পজ করুন"</string>
-    <string name="accessibility_autoclick_position" msgid="2933660969907663545">"পজিশন"</string>
-    <string name="accessibility_autoclick_scroll_up" msgid="2044948780797117443">"উপর দিকে স্ক্রল করুন"</string>
-    <string name="accessibility_autoclick_scroll_down" msgid="3733401063292018116">"নিচে স্ক্রল করুন"</string>
-    <string name="accessibility_autoclick_scroll_left" msgid="8564421367992824198">"বাঁদিকে স্ক্রল করুন"</string>
-    <string name="accessibility_autoclick_scroll_right" msgid="8932417330753984265">"ডানদিকে স্ক্রল করুন"</string>
-    <string name="accessibility_autoclick_scroll_exit" msgid="3788610039146769696">"স্ক্রল মোড থেকে বেরিয়ে আসুন"</string>
+    <string name="accessibility_autoclick_resume" msgid="3213396544455349247">"আবার চালু করুন"</string>
+    <string name="accessibility_autoclick_position" msgid="5952428999227490977">"মেনুর অবস্থান পরিবর্তন করুন"</string>
+    <string name="accessibility_autoclick_scroll_up" msgid="4018950185625702489">"উপরের দিকে স্ক্রল করুন"</string>
+    <string name="accessibility_autoclick_scroll_down" msgid="7055049493005995473">"নিচের দিকে স্ক্রল করুন"</string>
+    <string name="accessibility_autoclick_scroll_left" msgid="7469540382570551732">"বাঁ দিকে স্ক্রল করুন"</string>
+    <string name="accessibility_autoclick_scroll_right" msgid="8395851755038161912">"ডান দিকে স্ক্রল করুন"</string>
+    <string name="accessibility_autoclick_scroll_exit" msgid="8766731873098339511">"স্ক্রল মোড থেকে বেরিয়ে আসুন"</string>
     <string name="accessibility_autoclick_scroll_panel_title" msgid="7120598166296447036">"স্ক্রল প্যানেল"</string>
     <string name="as_app_forced_to_restricted_bucket" msgid="8233871289353898964">"<xliff:g id="PACKAGE_NAME">%1$s</xliff:g> সীমাবদ্ধ গ্রুপে অন্তর্ভুক্ত করা হয়েছে"</string>
     <string name="conversation_single_line_name_display" msgid="8958948312915255999">"<xliff:g id="SENDER_NAME">%1$s</xliff:g>:"</string>
@@ -2555,8 +2555,17 @@
     <string name="keyboard_shortcut_group_applications_maps" msgid="7950000659522589471">"ম্যাপ"</string>
     <string name="keyboard_shortcut_group_applications" msgid="3010389163951364798">"অ্যাপ্লিকেশন"</string>
     <string name="fingerprint_loe_notification_msg" msgid="3927447270148854546">"আপনার ফিঙ্গারপ্রিন্ট আর শনাক্ত করা যাবে না। \'ফিঙ্গারপ্রিন্ট আনলক\' ফিচার আবার সেট-আপ করুন।"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="468577168569874967">"লক থাকাকালীন USB ডিভাইস প্লাগ-ইন করা হয়েছে"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="6695268246267993166">"Android লক থাকাকালীন USB ডিভাইস প্লাগ-ইন করা হয়েছে। ডিভাইস ব্যবহার করতে, প্রথমে Android আনলক করুন এবং তারপর সেটি ব্যবহার করতে USB ডিভাইস আবার যোগ করুন।"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title" msgid="285421860627714333">"নিরাপত্তা এবং গোপনীয়তা"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="5205863500921477220">"USB-এর জন্য উন্নত সুরক্ষা"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="2147694109838597680">"ডেটা ট্রান্সফারের জন্য ডিভাইস আনলক করুন"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text" msgid="1979414895616432005">"ডেটা ট্রান্সফার করার জন্য আপনার ডিভাইস আনলক এবং আবার কানেক্ট করতে হতে পারে"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text" msgid="5974307859193807824">"ফাস্ট চার্জিং ও ডেটা ট্রান্সফার করার জন্য ডিভাইস আনলক করুন"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text" msgid="9045166614060168068">"ফাস্ট চার্জিং ও ডেটা ট্রান্সফার করার জন্য আপনার ডিভাইস আনলক এবং আবার কানেক্ট করতে হতে পারে"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text" msgid="5538918232374470393">"ফাস্ট চার্জিংয়ের জন্য ডিভাইস আনলক করুন"</string>
+    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text" msgid="4301626745704703517">"ফাস্ট চার্জিংয়ের জন্য আপনার ডিভাইস আনলক এবং আবার কানেক্ট করতে হতে পারে"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text" msgid="5495539757631669634">"সাইলেন্স"</string>
+    <string name="usb_apm_usb_notification_silenced_title" msgid="7883902869771699533">"বিজ্ঞপ্তি সাইলেন্ট করা আছে"</string>
+    <string name="usb_apm_usb_notification_silenced_text" msgid="7154391495952217529">"আপনার ডিভাইস রিস্টার্ট না করা পর্যন্ত সেটি সাইলেন্ট করা আছে"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_title" msgid="3461195995882871461">"সন্দেহজনক USB অ্যাক্টিভিটি"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_text" msgid="6537085605929303187">"USB ডেটা সিগন্যাল বন্ধ করা হয়েছে।"</string>
     <string name="fingerprint_frr_notification_title" msgid="3668331918920659093">"\'ফিঙ্গারপ্রিন্ট আনলক\' ফিচারে সমস্যা হচ্ছে?"</string>

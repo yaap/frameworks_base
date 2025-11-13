@@ -18,7 +18,13 @@ package com.android.wm.shell.bubbles.bar;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 
+import static com.android.wm.shell.bubbles.util.BubbleUtils.isValidToBubble;
+import static com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_BUBBLES_NOISY;
+
+import static java.lang.Math.max;
+
 import android.annotation.Nullable;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.graphics.Insets;
 import android.graphics.Outline;
@@ -32,10 +38,12 @@ import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.internal.protolog.ProtoLog;
 import com.android.wm.shell.R;
 import com.android.wm.shell.bubbles.Bubble;
 import com.android.wm.shell.bubbles.BubbleExpandedViewManager;
@@ -51,6 +59,7 @@ import com.android.wm.shell.shared.bubbles.BubbleBarLocation;
 import com.android.wm.shell.shared.handles.RegionSamplingHelper;
 import com.android.wm.shell.taskview.TaskView;
 
+import java.io.PrintWriter;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
@@ -120,6 +129,8 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
 
     private BubbleBarHandleView mHandleView;
     @Nullable
+    private BubbleTaskView mBubbleTaskView;
+    @Nullable
     private TaskView mTaskView;
     @Nullable
     private BubbleOverflowContainerView mOverflowView;
@@ -153,7 +164,6 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
     /** A runnable to start the expansion animation as soon as the task view is made visible. */
     @Nullable
     private Runnable mAnimateExpansion = null;
-    private TaskViewVisibilityState mVisibilityState = TaskViewVisibilityState.INVISIBLE;
 
     /**
      * Whether we want the {@code TaskView}'s content to be visible (alpha = 1f). If
@@ -166,18 +176,7 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
 
     private boolean mIsClipping = false;
     private int mBottomClip = 0;
-
-    /** An enum value that tracks the visibility state of the task view */
-    private enum TaskViewVisibilityState {
-        /** The task view is going away, and we're waiting for the surface to be destroyed. */
-        PENDING_INVISIBLE,
-        /** The task view is invisible and does not have a surface. */
-        INVISIBLE,
-        /** The task view is in the process of being added to a surface. */
-        PENDING_VISIBLE,
-        /** The task view is visible and has a surface. */
-        VISIBLE
-    }
+    private int mImeTop = 0;
 
     // Ideally this would be package private, but we have to set this in a fake for test and we
     // don't yet have dagger set up for tests, so have to set manually
@@ -230,10 +229,12 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
     public void initialize(BubbleExpandedViewManager expandedViewManager,
             BubblePositioner positioner,
             boolean isOverflow,
+            @Nullable Bubble bubble,
             @Nullable BubbleTaskView bubbleTaskView,
             @Nullable Executor mainExecutor,
             @Nullable Executor backgroundExecutor,
             @Nullable RegionSamplingProvider regionSamplingProvider) {
+        mBubble = bubble;
         mManager = expandedViewManager;
         mPositioner = positioner;
         mIsOverflow = isOverflow;
@@ -249,6 +250,7 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
             // Don't show handle for overflow
             mHandleView.setVisibility(View.GONE);
         } else {
+            mBubbleTaskView = bubbleTaskView;
             mTaskView = bubbleTaskView.getTaskView();
             mBubbleTaskViewListener = new BubbleTaskViewListener(mContext, bubbleTaskView,
                     /* viewParent= */ this,
@@ -257,27 +259,12 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
 
             // if the task view is already attached to a parent we need to remove it
             if (mTaskView.getParent() != null) {
-                // it's possible that the task view is visible, e.g. if we're unfolding, in which
-                // case removing it will trigger a visibility change. we have to wait for that
-                // signal before we can add it to this expanded view, otherwise the signal will be
-                // incorrect because the task view will have a surface.
-                // if the task view is not visible, then it has no surface and removing it will not
-                // trigger any visibility change signals.
-                if (bubbleTaskView.isVisible()) {
-                    mVisibilityState = TaskViewVisibilityState.PENDING_INVISIBLE;
-                }
                 ((ViewGroup) mTaskView.getParent()).removeView(mTaskView);
             }
-
-            // if we're invisible it's safe to setup the task view and then await on the visibility
-            // signal.
-            if (mVisibilityState == TaskViewVisibilityState.INVISIBLE) {
-                mVisibilityState = TaskViewVisibilityState.PENDING_VISIBLE;
-                setupTaskView();
-            }
+            setupTaskView();
 
             // Handle view needs to draw on top of task view.
-            bringChildToFront(mHandleView);
+            mHandleView.setElevation(1);
 
             mHandleView.setAccessibilityDelegate(new HandleViewAccessibilityDelegate());
         }
@@ -329,8 +316,13 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
     }
 
     private void setupTaskView() {
-        FrameLayout.LayoutParams lp =
-                new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
+        // if we're converting this bubble to bar mode, set the isMovingWindows state to false for
+        // this task view before adding it as a child view.
+        if (mBubble.isConvertingToBar()) {
+            mTaskView.setIsMovingWindows(false);
+        }
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
         addView(mTaskView, lp);
         mTaskView.setEnableSurfaceClipping(true);
         mTaskView.setCornerRadius(mCurrentCornerRadius);
@@ -395,7 +387,7 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
 
     @Override
     public void onTaskCreated() {
-        if (mTaskView != null) {
+        if (mTaskView != null && !mBubble.isConvertingToBar()) {
             mTaskView.setAlpha(0);
         }
         if (mListener != null) {
@@ -407,13 +399,6 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
 
     @Override
     public void onContentVisibilityChanged(boolean visible) {
-        if (mVisibilityState == TaskViewVisibilityState.PENDING_INVISIBLE && !visible) {
-            // the surface is now destroyed. set up the task view and wait for the visibility
-            // signal.
-            mVisibilityState = TaskViewVisibilityState.PENDING_VISIBLE;
-            setupTaskView();
-            return;
-        }
         if (visible) {
             onTaskViewVisible();
         }
@@ -427,13 +412,22 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
     }
 
     @Override
+    public void onTaskInfoChanged(ActivityManager.RunningTaskInfo taskInfo) {
+        if (!isValidToBubble(taskInfo)) {
+            // TODO(b/411558731): Besides just showing a warning toast, also force the app to return
+            // to fullscreen, similar to split screen behavior when not supported.
+            Toast.makeText(mContext, R.string.bubble_not_supported_text, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
     public void onBackPressed() {
         if (mListener == null) return;
         mListener.onBackPressed();
     }
 
     void animateExpansionWhenTaskViewVisible(Runnable animateExpansion) {
-        if (mVisibilityState == TaskViewVisibilityState.VISIBLE || mIsOverflow) {
+        if ((mBubbleTaskView != null && mBubbleTaskView.isVisible()) || mIsOverflow) {
             animateExpansion.run();
         } else {
             mAnimateExpansion = animateExpansion;
@@ -441,13 +435,10 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
     }
 
     private void onTaskViewVisible() {
-        // if we're waiting to be visible, start the expansion animation if it's pending.
-        if (mVisibilityState == TaskViewVisibilityState.PENDING_VISIBLE) {
-            mVisibilityState = TaskViewVisibilityState.VISIBLE;
-            if (mAnimateExpansion != null) {
-                mAnimateExpansion.run();
-                mAnimateExpansion = null;
-            }
+        ProtoLog.d(WM_SHELL_BUBBLES_NOISY, "BBEV.onTaskViewVisible()");
+        if (mAnimateExpansion != null) {
+            mAnimateExpansion.run();
+            mAnimateExpansion = null;
         }
     }
 
@@ -689,9 +680,21 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
         return mTempBounds.bottom;
     }
 
-    /** Update the amount by which to clip the expanded view at the bottom. */
-    public void updateBottomClip(int bottomClip) {
-        mBottomClip = bottomClip;
+    /** Notifies the expanded view that the IME top changed. */
+    public void onImeTopChanged(int imeTop) {
+        mImeTop = imeTop;
+        mBottomClip = max(getContentBottomOnScreen() - mImeTop, 0);
+        onClipUpdate();
+    }
+
+    void updateBottomClip() {
+        if (mIsClipping) {
+            onImeTopChanged(mImeTop);
+        }
+    }
+
+    void resetBottomClip() {
+        mBottomClip = 0;
         onClipUpdate();
     }
 
@@ -799,6 +802,23 @@ public class BubbleBarExpandedView extends FrameLayout implements BubbleTaskView
                 return true;
             }
             return false;
+        }
+    }
+
+    /**
+     * Description of current expanded view state.
+     */
+    public void dump(@android.annotation.NonNull PrintWriter pw,
+            @android.annotation.NonNull String prefix) {
+        pw.print(prefix); pw.println("BubbleBarExpandedView:");
+        pw.print(prefix); pw.print("  taskId: "); pw.println(getTaskId());
+        pw.print(prefix); pw.print("  contentVisibility: "); pw.println(mIsContentVisible);
+        pw.print(prefix); pw.print("  isAnimating: "); pw.println(mIsAnimating);
+        pw.print(prefix); pw.print("  isDragging: "); pw.println(mIsDragging);
+        if (mTaskView != null) {
+            pw.print(prefix);
+            pw.print("  is task view moving windows: ");
+            pw.println(mTaskView.isMovingWindows());
         }
     }
 }

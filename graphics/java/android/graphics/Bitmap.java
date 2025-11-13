@@ -34,8 +34,9 @@ import android.os.Trace;
 import android.util.DisplayMetrics;
 import android.util.Half;
 import android.util.Log;
+import android.util.proto.ProtoOutputStream;
 import android.view.ThreadedRenderer;
-
+import com.android.server.am.BitmapDumpProto;
 import dalvik.annotation.optimization.CriticalNative;
 
 import libcore.util.NativeAllocationRegistry;
@@ -43,11 +44,13 @@ import libcore.util.NativeAllocationRegistry;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.lang.ref.WeakReference;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.WeakHashMap;
 
@@ -103,11 +106,12 @@ public final class Bitmap implements Parcelable {
 
     private static volatile int sDefaultDensity = -1;
 
-    /**
-     * This id is not authoritative and can be duplicated if an ashmem bitmap is decoded from a
-     * parcel.
-     */
     private long mId;
+
+    // source id of the bitmap where this bitmap was created from, e.g.
+    // in the case of ashmem bitmap received, mSourceId is the mId of
+    // the bitmap from the sender
+    private long mSourceId = -1;
 
     /**
      * For backwards compatibility, allows the app layer to change the default
@@ -182,6 +186,7 @@ public final class Bitmap implements Parcelable {
         }
 
         mNativePtr = nativeBitmap;
+        mSourceId = nativeGetSourceId(mNativePtr);
         final int allocationByteCount = getAllocationByteCount();
         getRegistry(fromMalloc, allocationByteCount).registerNativeAllocation(this, mNativePtr);
 
@@ -609,8 +614,11 @@ public final class Bitmap implements Parcelable {
             this.nativeInt = ni;
         }
 
+        /**
+         * @hide
+         */
         @UnsupportedAppUsage
-        static Config nativeToConfig(int ni) {
+        public static Config nativeToConfig(int ni) {
             return sConfigs[ni];
         }
     }
@@ -1542,6 +1550,21 @@ public final class Bitmap implements Parcelable {
             this.nativeInt = nativeInt;
         }
         final int nativeInt;
+
+        /**
+         * @hide
+         */
+        public static @Nullable CompressFormat from(@NonNull String format) {
+            if (format.equals("jpg") || format.equals("jpeg")) {
+                return CompressFormat.JPEG;
+            } else if (format.equals("png")) {
+                return CompressFormat.PNG;
+            } else if (format.equals("webp")) {
+                return CompressFormat.WEBP_LOSSLESS;
+            } else {
+                return null;
+            }
+        }
     }
 
     /**
@@ -1552,6 +1575,7 @@ public final class Bitmap implements Parcelable {
         private int format;
         private long[] natives;
         private byte[][] buffers;
+        private int[] sizes;
         private int max;
 
         public DumpData(@NonNull CompressFormat format, int max) {
@@ -1559,12 +1583,14 @@ public final class Bitmap implements Parcelable {
             this.format = format.nativeInt;
             this.natives = new long[max];
             this.buffers = new byte[max][];
+            this.sizes = new int[max];
             this.count = 0;
         }
 
-        public void add(long nativePtr, byte[] buffer) {
+        public void add(long nativePtr, byte[] buffer, int size) {
             natives[count] = nativePtr;
             buffers[count] = buffer;
+            sizes[count] = size;
             count = (count >= max) ? max : count + 1;
         }
 
@@ -1578,6 +1604,18 @@ public final class Bitmap implements Parcelable {
      */
     private static DumpData dumpData = null;
 
+    private static ArrayList<Bitmap> getAllBitmaps() {
+        final ArrayList<Bitmap> allBitmaps;
+        synchronized (Bitmap.class) {
+          allBitmaps = new ArrayList<>(sAllBitmaps.size());
+          for (Bitmap bitmap : sAllBitmaps.keySet()) {
+            if (bitmap != null && !bitmap.isRecycled()) {
+              allBitmaps.add(bitmap);
+            }
+          }
+        }
+        return allBitmaps;
+    }
 
     /**
      * @hide
@@ -1592,36 +1630,67 @@ public final class Bitmap implements Parcelable {
             dumpData = null;
             return;
         }
-        final CompressFormat fmt;
-        if (format.equals("jpg") || format.equals("jpeg")) {
-            fmt = CompressFormat.JPEG;
-        } else if (format.equals("png")) {
-            fmt = CompressFormat.PNG;
-        } else if (format.equals("webp")) {
-            fmt = CompressFormat.WEBP_LOSSLESS;
-        } else {
+
+        final CompressFormat fmt = CompressFormat.from(format);
+        if (fmt == null) {
             Log.w(TAG, "No bitmaps dumped: unrecognized format " + format);
             return;
         }
 
-        final ArrayList<Bitmap> allBitmaps;
-        synchronized (Bitmap.class) {
-          allBitmaps = new ArrayList<>(sAllBitmaps.size());
-          for (Bitmap bitmap : sAllBitmaps.keySet()) {
-            if (bitmap != null && !bitmap.isRecycled()) {
-              allBitmaps.add(bitmap);
-            }
-          }
-        }
-
+        final ArrayList<Bitmap> allBitmaps = getAllBitmaps();
         dumpData = new DumpData(fmt, allBitmaps.size());
         for (Bitmap bitmap : allBitmaps) {
             ByteArrayOutputStream bas = new ByteArrayOutputStream();
             if (bitmap.compress(fmt, 90, bas)) {
-                dumpData.add(bitmap.getNativeInstance(), bas.toByteArray());
+                dumpData.add(bitmap.getNativeInstance(), bas.toByteArray(),
+                        bitmap.getAllocationByteCount());
             }
         }
         Log.i(TAG, dumpData.size() + "/" + allBitmaps.size() + " bitmaps dumped");
+    }
+
+    /**
+     * @hide
+     *
+     * Dump information of all the bitmaps into the protobuf stream. If dumpFormat
+     * is specified, compress the bitmaps and store the content.
+     *
+     * @param proto       protobuf stream for storing bitmap information
+     * @param dumpFormat  if not null, specify the format of the compressed image
+     */
+    public static void dumpAll(ProtoOutputStream proto, @Nullable String dumpFormat) {
+        final ArrayList<Bitmap> allBitmaps = getAllBitmaps();
+
+        if (allBitmaps.size() == 0) {
+            return;
+        }
+
+        for (Bitmap bitmap : allBitmaps) {
+            int bytes = bitmap.getAllocationByteCount();
+            int config = bitmap.getConfig().nativeInt;
+
+            final long token = proto.start(BitmapDumpProto.AppBitmapInfo.BITMAPS);
+            proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.ID, bitmap.mId);
+            proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.WIDTH, bitmap.mWidth);
+            proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.HEIGHT, bitmap.mHeight);
+            proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.SIZE, bytes);
+            proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.MUTABLE, bitmap.isMutable());
+            proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.CONFIG, config);
+            proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.SOURCE, bitmap.mSourceId);
+            if (dumpFormat != null) {
+                try {
+                    ByteArrayOutputStream bas = new ByteArrayOutputStream();
+                    if (bitmap.compress(CompressFormat.from(dumpFormat), 90, bas)) {
+                        proto.write(BitmapDumpProto.AppBitmapInfo.BitmapInfo.CONTENT,
+                                    bas.toByteArray());
+                    }
+                    bas.close();
+                } catch (IOException e) {
+                    Log.e(TAG, "failed to compress bitmap-" + bitmap.mId + ": " + e);
+                }
+            }
+            proto.end(token);
+        }
     }
 
     /**
@@ -2594,6 +2663,8 @@ public final class Bitmap implements Parcelable {
 
     private static native Gainmap nativeExtractGainmap(long nativePtr);
     private static native void nativeSetGainmap(long bitmapPtr, long gainmapPtr);
+    private static native long nativeGetSourceId(long nativePtr);
+    private static native void nativeSetSourceId(long nativePtr, long sourceId);
 
     // ---------------- @CriticalNative -------------------
 

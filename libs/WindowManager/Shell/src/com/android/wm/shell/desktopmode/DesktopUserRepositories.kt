@@ -29,7 +29,8 @@ import com.android.wm.shell.desktopmode.persistence.DesktopPersistentRepository
 import com.android.wm.shell.desktopmode.persistence.DesktopRepositoryInitializer
 import com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_DESKTOP_MODE
 import com.android.wm.shell.shared.annotations.ShellMainThread
-import com.android.wm.shell.shared.desktopmode.DesktopModeStatus
+import com.android.wm.shell.shared.desktopmode.DesktopConfig
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import com.android.wm.shell.sysui.ShellController
 import com.android.wm.shell.sysui.ShellInit
 import com.android.wm.shell.sysui.UserChangeListener
@@ -39,13 +40,14 @@ import kotlinx.coroutines.launch
 
 /** Manages per-user DesktopRepository instances. */
 class DesktopUserRepositories(
-    context: Context,
     shellInit: ShellInit,
     private val shellController: ShellController,
     private val persistentRepository: DesktopPersistentRepository,
     private val repositoryInitializer: DesktopRepositoryInitializer,
     @ShellMainThread private val mainCoroutineScope: CoroutineScope,
     private val userManager: UserManager,
+    desktopState: DesktopState,
+    desktopConfig: DesktopConfig,
 ) : UserChangeListener {
     private var userId: Int
     private var userIdToProfileIdsMap: MutableMap<Int, List<Int>> = mutableMapOf()
@@ -59,21 +61,22 @@ class DesktopUserRepositories(
             /** Gets [DesktopRepository] for existing [userId] or creates a new one. */
             fun getOrCreate(userId: Int): DesktopRepository =
                 this[userId]
-                    ?: DesktopRepository(persistentRepository, mainCoroutineScope, userId).also {
-                        this[userId] = it
-                    }
+                    ?: DesktopRepository(
+                            persistentRepository,
+                            mainCoroutineScope,
+                            userId,
+                            desktopConfig,
+                        )
+                        .also { this[userId] = it }
         }
 
     init {
         userId = ActivityManager.getCurrentUser()
-        if (DesktopModeStatus.canEnterDesktopMode(context)) {
-            shellInit.addInitCallback(::onInit, this)
-        }
-        if (
-            ENABLE_DESKTOP_WINDOWING_HSUM.isTrue() &&
-                !DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue
-        ) {
+        if (ENABLE_DESKTOP_WINDOWING_HSUM.isTrue) {
             userIdToProfileIdsMap[userId] = userManager.getProfiles(userId).map { it.id }
+        }
+        if (desktopState.canEnterDesktopMode) {
+            shellInit.addInitCallback(::onInit, this)
         }
     }
 
@@ -104,6 +107,17 @@ class DesktopUserRepositories(
     fun getUserIdForProfile(profileId: Int): Int {
         if (userIdToProfileIdsMap[userId]?.contains(profileId) == true) return userId
         else return profileId
+    }
+
+    /** Find the repositories that contains the specified desk; returns empty set if none found. */
+    fun getRepositoriesWithDeskId(deskId: Int): Set<DesktopRepository> {
+        val repositories = mutableSetOf<DesktopRepository>()
+        desktopRepoByUserId.forEach { _, desktopRepository ->
+            if (desktopRepository.getAllDeskIds().contains(deskId)) {
+                repositories.add(desktopRepository)
+            }
+        }
+        return repositories
     }
 
     /** Dumps [DesktopRepository] for each user. */
@@ -149,6 +163,10 @@ class DesktopUserRepositories(
             }
         }
     }
+
+    /** Execute the provided callback for all repositories. */
+    fun forAllRepositories(repositoryCallback: (DesktopRepository) -> Unit) =
+        desktopRepoByUserId.forEach { _, repository -> repositoryCallback(repository) }
 
     private fun logD(msg: String, vararg arguments: Any?) {
         ProtoLog.d(WM_SHELL_DESKTOP_MODE, "%s: $msg", TAG, *arguments)

@@ -123,8 +123,8 @@ class ResizingEffectPolicy {
      * {@link #mDimValue} These values will be then be applied in
      * {@link #adjustRootSurface} and {@link #adjustDimSurface} respectively.
      */
-    void applyDividerPosition(
-            int position, boolean isLeftRightSplit, DividerSnapAlgorithm snapAlgorithm) {
+    void applyDividerPosition(int position, boolean isLeftRightSplit,
+            DividerSnapAlgorithm snapAlgorithm, SplitState splitState) {
         mDimmingSide = DOCKED_INVALID;
         mRetreatingSideParallax.set(0, 0);
         mAdvancingSideParallax.set(0, 0);
@@ -162,7 +162,7 @@ class ResizingEffectPolicy {
         mParallaxSpec.getParallax(mRetreatingSideParallax, mAdvancingSideParallax, position,
                 snapAlgorithm, isLeftRightSplit, displayBounds, mRetreatingSurface,
                 mRetreatingContent, mAdvancingSurface, mAdvancingContent, mDimmingSide,
-                topLeftShrink);
+                topLeftShrink, splitState);
     }
 
     /** Applies the calculated parallax and dimming values to task surfaces. */
@@ -222,6 +222,10 @@ class ResizingEffectPolicy {
         }
     }
 
+    /**
+     * Called on every frame while the user is dragging the divider to dismiss an app or move it
+     * offscreen. Sets alpha and visibility on the two provided dim layers.
+     */
     void adjustDimSurface(SurfaceControl.Transaction t,
             SurfaceControl dimLayer1, SurfaceControl dimLayer2) {
         SurfaceControl targetDimLayer;

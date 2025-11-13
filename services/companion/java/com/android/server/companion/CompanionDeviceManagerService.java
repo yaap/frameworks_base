@@ -17,6 +17,7 @@
 
 package com.android.server.companion;
 
+import static android.Manifest.permission.ACCESS_COMPANION_INFO;
 import static android.Manifest.permission.ASSOCIATE_COMPANION_DEVICES;
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
 import static android.Manifest.permission.DELIVER_COMPANION_MESSAGES;
@@ -136,6 +137,8 @@ public class CompanionDeviceManagerService extends SystemService {
     private final DisassociationProcessor mDisassociationProcessor;
     private final CrossDeviceSyncController mCrossDeviceSyncController;
 
+    private final Object mPackageLock = new Object();
+
     public CompanionDeviceManagerService(Context context) {
         super(context);
 
@@ -234,8 +237,6 @@ public class CompanionDeviceManagerService extends SystemService {
         if (associations.isEmpty()) return;
 
         mCompanionExemptionProcessor.updateAtm(userId, associations);
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.execute(mCompanionExemptionProcessor::updateAutoRevokeExemptions);
     }
 
     @Override
@@ -243,6 +244,10 @@ public class CompanionDeviceManagerService extends SystemService {
         Slog.i(TAG, "onUserUnlocked() user=" + user);
         // Notify and bind the app after the phone is unlocked.
         mDevicePresenceProcessor.sendDevicePresenceEventOnUnlocked(user.getUserIdentifier());
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> mCompanionExemptionProcessor.updateAutoRevokeExemptions(
+                user.getUserIdentifier()));
     }
 
     private void onPackageRemoveOrDataClearedInternal(
@@ -723,10 +728,17 @@ public class CompanionDeviceManagerService extends SystemService {
         }
 
         @Override
-        public void setDeviceId(int associationId, DeviceId deviceId) {
-            mAssociationRequestsProcessor.setDeviceId(associationId, deviceId);
+        public DeviceId setDeviceId(int associationId, DeviceId deviceId) {
+            return mAssociationRequestsProcessor.setDeviceId(associationId, deviceId);
         }
 
+        @Override
+        @EnforcePermission(ACCESS_COMPANION_INFO)
+        public AssociationInfo getAssociationByDeviceId(int userId, DeviceId deviceId) {
+            getAssociationByDeviceId_enforcePermission();
+
+            return mAssociationStore.getAssociationByDeviceId(userId, deviceId);
+        }
 
         @Override
         public byte[] getBackupPayload(int userId) {
@@ -774,22 +786,30 @@ public class CompanionDeviceManagerService extends SystemService {
     private final PackageMonitor mPackageMonitor = new PackageMonitor() {
         @Override
         public void onPackageRemoved(String packageName, int uid) {
-            onPackageRemoveOrDataClearedInternal(getChangingUserId(), packageName);
+            synchronized (mPackageLock) {
+                onPackageRemoveOrDataClearedInternal(getChangingUserId(), packageName);
+            }
         }
 
         @Override
         public void onPackageDataCleared(String packageName, int uid) {
-            onPackageRemoveOrDataClearedInternal(getChangingUserId(), packageName);
+            synchronized (mPackageLock) {
+                onPackageRemoveOrDataClearedInternal(getChangingUserId(), packageName);
+            }
         }
 
         @Override
         public void onPackageModified(@NonNull String packageName) {
-            onPackageModifiedInternal(getChangingUserId(), packageName);
+            synchronized (mPackageLock) {
+                onPackageModifiedInternal(getChangingUserId(), packageName);
+            }
         }
 
         @Override
         public void onPackageAdded(String packageName, int uid) {
-            onPackageAddedInternal(getChangingUserId(), packageName);
+            synchronized (mPackageLock) {
+                onPackageAddedInternal(getChangingUserId(), packageName);
+            }
         }
     };
 

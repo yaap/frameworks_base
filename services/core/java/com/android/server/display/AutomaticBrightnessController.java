@@ -448,6 +448,10 @@ public class AutomaticBrightnessController {
         if (brightnessEvent != null) {
             brightnessEvent.setLux(
                     mAmbientLuxValid ? mAmbientLux : PowerManager.BRIGHTNESS_INVALID_FLOAT);
+            if (mAmbientLightRingBuffer.size() > 0) {
+                brightnessEvent.setLastReadLux(
+                        mAmbientLightRingBuffer.getLux(mAmbientLightRingBuffer.size() - 1));
+            }
             brightnessEvent.setPreThresholdLux(mPreThresholdLux);
             brightnessEvent.setPreThresholdBrightness(mPreThresholdBrightness);
             brightnessEvent.setRecommendedBrightness(mScreenAutoBrightness);
@@ -609,14 +613,13 @@ public class AutomaticBrightnessController {
 
     public boolean setBrightnessConfiguration(BrightnessConfiguration configuration,
             boolean shouldResetShortTermModel) {
-        if (mBrightnessMappingStrategyMap.get(AUTO_BRIGHTNESS_MODE_DEFAULT)
-                .setBrightnessConfiguration(configuration)) {
-            if (!isInIdleMode() && shouldResetShortTermModel) {
-                resetShortTermModel();
-            }
-            return true;
+        boolean changed = mBrightnessMappingStrategyMap.get(AUTO_BRIGHTNESS_MODE_DEFAULT)
+                                  .setBrightnessConfiguration(configuration);
+        if (!isInIdleMode() && shouldResetShortTermModel) {
+            resetShortTermModel();
+            changed = true;
         }
-        return false;
+        return changed;
     }
 
     /**

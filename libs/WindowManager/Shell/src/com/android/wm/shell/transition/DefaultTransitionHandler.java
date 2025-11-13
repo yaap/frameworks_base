@@ -121,8 +121,6 @@ import com.android.wm.shell.shared.animation.Interpolators;
 import com.android.wm.shell.sysui.ShellInit;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
 
 /** The default handler that handles anything not already handled. */
 public class DefaultTransitionHandler implements Transitions.TransitionHandler {
@@ -133,7 +131,6 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
     private final DisplayController mDisplayController;
     private final Context mContext;
     private final Handler mMainHandler;
-    private final Handler mAnimHandler;
     private final ShellExecutor mMainExecutor;
     private final ShellExecutor mAnimExecutor;
     private final TransitionAnimation mTransitionAnimation;
@@ -172,7 +169,6 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
             @NonNull TransactionPool transactionPool,
             @NonNull ShellExecutor mainExecutor, @NonNull Handler mainHandler,
             @NonNull ShellExecutor animExecutor,
-            @NonNull Handler animHandler,
             @NonNull RootTaskDisplayAreaOrganizer rootTDAOrganizer,
             @NonNull InteractionJankMonitor interactionJankMonitor) {
         mDisplayController = displayController;
@@ -181,7 +177,6 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
         mMainHandler = mainHandler;
         mMainExecutor = mainExecutor;
         mAnimExecutor = animExecutor;
-        mAnimHandler = animHandler;
         mTransitionAnimation = new TransitionAnimation(context, false /* debug */, Transitions.TAG);
         mCurrentUserId = UserHandle.myUserId();
         mDevicePolicyManager = mContext.getSystemService(DevicePolicyManager.class);
@@ -321,6 +316,22 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
     }
 
     @Override
+    public boolean startAnimation(@NonNull IBinder transition,
+                                  @Nullable TransitionInfo info,
+                                  @NonNull TransitionDispatchState dispatchState,
+                                  @NonNull SurfaceControl.Transaction startTransaction,
+                                  @NonNull SurfaceControl.Transaction finishTransaction,
+                                  @NonNull Transitions.TransitionFinishCallback finishCallback) {
+        if (info == null) {
+            // In data collection mode: there can't be errors - nothing to do
+            return false;
+        }
+        // In animation mode: always play everything
+        return startAnimation(
+                transition, info, startTransaction, finishTransaction, finishCallback);
+    }
+
+    @Override
     public boolean startAnimation(@NonNull IBinder transition, @NonNull TransitionInfo info,
             @NonNull SurfaceControl.Transaction startTransaction,
             @NonNull SurfaceControl.Transaction finishTransaction,
@@ -351,7 +362,8 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
         final ArrayList<Animator> animations = new ArrayList<>();
         mAnimations.put(transition, animations);
 
-        final boolean isTaskTransition = isTaskTransition(info);
+        final boolean isTaskTransition = com.android.window.flags.Flags.transitionHandlerCujTags()
+                && isTaskTransition(info);
 
         final Runnable onAnimFinish = () -> {
             if (!animations.isEmpty()) return;
@@ -359,11 +371,11 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
                 mInteractionJankMonitor.end(CUJ_DEFAULT_TASK_TO_TASK_ANIMATION);
             }
             mAnimations.remove(transition);
+            if (Flags.releaseSurfaceOnTransitionFinish()) {
+                info.releaseAllSurfaces();
+            }
             finishCallback.onTransitionFinished(null /* wct */);
         };
-
-        final List<Consumer<SurfaceControl.Transaction>> postStartTransactionCallbacks =
-                new ArrayList<>();
 
         @ColorInt int backgroundColorForTransition = 0;
         final int wallpaperTransit = getWallpaperTransitType(info);
@@ -559,12 +571,6 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
                 backgroundColorForTransition = getTransitionBackgroundColorIfSet(change, a,
                         backgroundColorForTransition);
 
-                if (!isTask && a.getExtensionEdges() != 0x0) {
-                    startTransaction.setEdgeExtensionEffect(
-                            change.getLeash(), a.getExtensionEdges());
-                    finishTransaction.setEdgeExtensionEffect(change.getLeash(), /* edge */ 0);
-                }
-
                 final Rect clipRect = TransitionUtil.isClosingType(mode)
                         ? new Rect(mRotator.getEndBoundsInStartRotation(change))
                         : new Rect(change.getEndAbsBounds());
@@ -582,6 +588,13 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
                     // always rely solely on endAbsBounds and need to also max with endRelOffset.
                     animRelOffset.x = Math.max(animRelOffset.x, change.getEndRelOffset().x);
                     animRelOffset.y = Math.max(animRelOffset.y, change.getEndRelOffset().y);
+                }
+                if (!isTask && a.getExtensionEdges() != 0x0
+                        && (change.hasFlags(FLAG_FILLS_TASK
+                        | FLAG_IN_TASK_WITH_EMBEDDED_ACTIVITY))) {
+                    startTransaction.setEdgeExtensionEffect(
+                            change.getLeash(), a.getExtensionEdges());
+                    finishTransaction.setEdgeExtensionEffect(change.getLeash(), /* edge */ 0);
                 }
 
                 if (isActivity && !isActivityLevel
@@ -626,34 +639,30 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
                     finishTransaction);
         }
 
-        if (postStartTransactionCallbacks.size() > 0) {
-            // postStartTransactionCallbacks require that the start transaction is already
-            // applied to run otherwise they may result in flickers and UI inconsistencies.
-            startTransaction.apply(true /* sync */);
-            // startTransaction is empty now, so fill it with the edge-extension setup
-            for (Consumer<SurfaceControl.Transaction> postStartTransactionCallback :
-                    postStartTransactionCallbacks) {
-                postStartTransactionCallback.accept(startTransaction);
-            }
-        }
         startTransaction.apply();
 
-        // now start animations. they are started on another thread, so we have to post them
-        // *after* applying the startTransaction
-        mAnimExecutor.execute(() -> {
+        final boolean hasAnimations = !animations.isEmpty();
+        if (hasAnimations) {
             if (isTaskTransition) {
                 mInteractionJankMonitor.begin(info.getRoot(0).getLeash(), mContext,
-                        mAnimHandler, CUJ_DEFAULT_TASK_TO_TASK_ANIMATION);
+                        mMainHandler, CUJ_DEFAULT_TASK_TO_TASK_ANIMATION);
             }
-            for (int i = 0; i < animations.size(); ++i) {
-                animations.get(i).start();
-            }
-        });
+
+            // now start animations. they are started on another thread, so we have to post them
+            // *after* applying the startTransaction
+            mAnimExecutor.execute(() -> {
+                for (int i = 0; i < animations.size(); ++i) {
+                    animations.get(i).start();
+                }
+            });
+        }
 
         mRotator.cleanUp(finishTransaction);
         TransitionMetrics.getInstance().reportAnimationStart(transition);
         // run finish now in-case there are no animations
-        onAnimFinish.run();
+        if (!hasAnimations) {
+            onAnimFinish.run();
+        }
         return true;
     }
 
@@ -665,10 +674,16 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
 
         for (int i = 0; i < info.getRootCount(); ++i) {
             final int displayId = info.getRoot(i).getDisplayId();
-            final SurfaceControl.Builder colorLayerBuilder = new SurfaceControl.Builder()
-                    .setName("animation-background")
+            final SurfaceControl backgroundSurface = new SurfaceControl.Builder()
+                    .setName("animation-background for #" + info.getDebugId())
                     .setCallsite("DefaultTransitionHandler")
-                    .setColorLayer();
+                    .setColorLayer()
+                    .setParent(info.getRoot(i).getLeash())
+                    .build();
+
+            startTransaction.setColor(backgroundSurface, colorArray)
+                    .setLayer(backgroundSurface, -1)
+                    .show(backgroundSurface);
 
             // Attaching the background surface to the transition root could unexpectedly make it
             // cover one of the split root tasks. To avoid this, put the background surface just
@@ -677,15 +692,10 @@ public class DefaultTransitionHandler implements Transitions.TransitionHandler {
                     info.getChanges().stream().anyMatch(c-> c.getTaskInfo() != null
                             && c.getTaskInfo().getWindowingMode() == WINDOWING_MODE_MULTI_WINDOW);
             if (isSplitTaskInvolved) {
-                mRootTDAOrganizer.attachToDisplayArea(displayId, colorLayerBuilder);
-            } else {
-                colorLayerBuilder.setParent(info.getRootLeash());
+                mRootTDAOrganizer.relZToDisplayArea(displayId, backgroundSurface, startTransaction,
+                        -1);
             }
 
-            final SurfaceControl backgroundSurface = colorLayerBuilder.build();
-            startTransaction.setColor(backgroundSurface, colorArray)
-                    .setLayer(backgroundSurface, -1)
-                    .show(backgroundSurface);
             finishTransaction.remove(backgroundSurface);
         }
     }

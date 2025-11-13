@@ -51,6 +51,7 @@ import com.android.systemui.media.controls.ui.viewmodel.MediaControlViewModel
 import com.android.systemui.media.controls.ui.viewmodel.SeekBarViewModel
 import com.android.systemui.res.R
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
+import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.surfaceeffects.PaintDrawCallback
 import com.android.systemui.surfaceeffects.loadingeffect.LoadingEffect
@@ -79,8 +80,8 @@ import javax.inject.Inject
 open class MediaViewController
 @Inject
 constructor(
-    @Main private val context: Context,
-    @Main private val configurationController: ConfigurationController,
+    @ShadeDisplayAware private val context: Context,
+    @ShadeDisplayAware private val configurationController: ConfigurationController,
     private val mediaHostStatesManager: MediaHostStatesManager,
     private val logger: MediaViewLogger,
     private val seekBarViewModel: SeekBarViewModel,
@@ -94,8 +95,6 @@ constructor(
 
     /** A listener when the current dimensions of the player change */
     lateinit var sizeChangedListener: () -> Unit
-    lateinit var configurationChangeListener: () -> Unit
-    lateinit var recsConfigurationChangeListener: (MediaViewController, TransitionLayout) -> Unit
     var locationChangeListener: (Int) -> Unit = {}
     private var firstRefresh: Boolean = true
     @VisibleForTesting private var transitionLayout: TransitionLayout? = null
@@ -288,18 +287,7 @@ constructor(
                             )
                         )
                     }
-                    if (SceneContainerFlag.isEnabled) {
-                        if (
-                            this@MediaViewController::recsConfigurationChangeListener.isInitialized
-                        ) {
-                            transitionLayout?.let {
-                                recsConfigurationChangeListener.invoke(this@MediaViewController, it)
-                            }
-                        }
-                    } else if (
-                        this@MediaViewController::configurationChangeListener.isInitialized
-                    ) {
-                        configurationChangeListener.invoke()
+                    if (!SceneContainerFlag.isEnabled) {
                         refreshState()
                     }
                 }
@@ -995,7 +983,7 @@ constructor(
             // Let's squish the media player if our size was overridden
             result = squishViewState(result, state.squishFraction)
         }
-        logger.logMediaSize("update to carousel", result.width, result.height)
+        logger.logMediaSize("update to carousel (squish ${state?.squishFraction}", result.width, result.height)
         return result
     }
 
@@ -1201,12 +1189,7 @@ constructor(
         val width = targetView.width
         val height = targetView.height
         val random = Random()
-        val luminosity =
-            if (Flags.mediaControlsA11yColors()) {
-                0.6f
-            } else {
-                TurbulenceNoiseAnimationConfig.DEFAULT_LUMINOSITY_MULTIPLIER
-            }
+        val luminosity = 0.6f
         return TurbulenceNoiseAnimationConfig(
             gridCount = 2.14f,
             luminosity,

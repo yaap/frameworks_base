@@ -44,7 +44,7 @@
 #include <utils/Log.h>
 #include <utils/String16.h>
 #include <utils/String8.h>
-
+#include <android-base/logging.h>
 #ifdef __ANDROID__
 #include <binder/TextOutput.h>
 
@@ -1405,6 +1405,28 @@ size_t ResXMLParser::getAttributeCount() const
         return dtohs(((const ResXMLTree_attrExt*)mCurExt)->attributeCount);
     }
     return 0;
+}
+
+std::optional<ResXMLParser::ResXMLFlagInfo> ResXMLParser::getFlagInfo() const
+{
+    if (mEventCode == START_TAG) {
+        const auto* attrExt = ((const ResXMLTree_attrExt*)mCurExt);
+        uint16_t s1 = sizeof(ResXMLTree_attrExt);
+        uint16_t s2 = sizeof(ResXMLTreeFlagExt);
+
+        // Flag information is stored in an ResXMLTreeFlagExt. If there is a flag, this is
+        // stored right after the ResXMLTree_attrExt. To determine if there is a flagExt we see
+        // if the offset to where attributes start is big enough to store both a ResXMLTree_attrExt
+        // and a ResXMLTreeFlagExt.
+        if (attrExt->attributeStart == (s1 + s2)) {
+            auto flag_ext = (const ResXMLTreeFlagExt*)(((const uint8_t*)mCurExt) + s1);
+            if (flag_ext->descriptor == ResXMLTreeExtDescriptor::FLAG_INFO) {
+                return ResXMLParser::ResXMLFlagInfo{flag_ext->flag_name.index,
+                                                  flag_ext->flag_negated};
+            }
+        }
+    }
+    return {};
 }
 
 int32_t ResXMLParser::getAttributeNamespaceID(size_t idx) const
@@ -2880,14 +2902,13 @@ bool ResTable_config::isBetterThan(const ResTable_config& o,
             }
         }
 
-        if (version || o.version) {
-            if ((sdkVersion != o.sdkVersion) && requested->sdkVersion) {
+        if ((version || o.version) && requested->version) {
+            if (sdkVersion != o.sdkVersion) {
                 return (sdkVersion > o.sdkVersion);
             }
 
-            if ((minorVersion != o.minorVersion) &&
-                    requested->minorVersion) {
-                return (minorVersion);
+            if (minorVersion != o.minorVersion) {
+                return (minorVersion > o.minorVersion);
             }
         }
 
@@ -3077,11 +3098,16 @@ bool ResTable_config::match(const ResTable_config& settings) const {
             return false;
         }
     }
-    if (version != 0) {
-        if (sdkVersion != 0 && sdkVersion > settings.sdkVersion) {
+    if (sdkVersion != 0 && sdkVersion > settings.sdkVersion) {
+        return false;
+    }
+    if (minorVersion != 0) {
+        if (sdkVersion == 0) {
+            // The version is 0.x. sdkVersion of 0 is not really valid. Therefore if it's 0,
+            // we shouldn't allow a minorVersion (unless it's also 0).
             return false;
         }
-        if (minorVersion != 0 && minorVersion != settings.minorVersion) {
+        if (sdkVersion == settings.sdkVersion && minorVersion > settings.minorVersion) {
             return false;
         }
     }

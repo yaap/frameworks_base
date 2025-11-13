@@ -21,11 +21,13 @@
 #include <android/native_window.h>
 #include <ui/ColorSpace.h>
 #include <utils/Log.h>
+#include <vndk/hardware_buffer.h>
 
 #include <algorithm>
 #include <cmath>
 
 #include "SkColorSpace.h"
+#include "SkColorType.h"
 
 namespace android {
 namespace uirenderer {
@@ -61,6 +63,14 @@ static inline SkImageInfo createImageInfo(int32_t width, int32_t height, int32_t
             break;
         case AHARDWAREBUFFER_FORMAT_R8_UNORM:
             colorType = kAlpha_8_SkColorType;
+            alphaType = kPremul_SkAlphaType;
+            break;
+        case AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM:
+            colorType = kBGRA_8888_SkColorType;
+            alphaType = kPremul_SkAlphaType;
+            break;
+        case AHARDWAREBUFFER_FORMAT_B10G10R10A2_UNORM:
+            colorType = kBGRA_1010102_SkColorType;
             alphaType = kPremul_SkAlphaType;
             break;
         default:
@@ -100,6 +110,8 @@ uint32_t ColorTypeToBufferFormat(SkColorType colorType) {
             return kRGBA4444;
         case kAlpha_8_SkColorType:
               return AHARDWAREBUFFER_FORMAT_R8_UNORM;
+        case kBGRA_8888_SkColorType:
+            return AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM;
         default:
             ALOGV("Unsupported colorType: %d, return RGBA_8888 by default", (int)colorType);
             return AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
@@ -122,6 +134,8 @@ SkColorType BufferFormatToColorType(uint32_t format) {
             return kRGBA_F16_SkColorType;
         case AHARDWAREBUFFER_FORMAT_R8_UNORM:
             return kAlpha_8_SkColorType;
+        case AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM:
+            return kBGRA_8888_SkColorType;
         default:
             ALOGV("Unsupported format: %d, return unknown by default", format);
             return kUnknown_SkColorType;
@@ -373,28 +387,25 @@ Lab fromXyz(const float3& v) {
 
 };
 
-Lab sRGBToLab(SkColor color) {
+Lab sRGBToLab(SkColor4f color) {
     auto colorSpace = ColorSpace::sRGB();
     float3 rgb;
-    rgb.r = SkColorGetR(color) / 255.0f;
-    rgb.g = SkColorGetG(color) / 255.0f;
-    rgb.b = SkColorGetB(color) / 255.0f;
+    rgb.r = color.fR;
+    rgb.g = color.fG;
+    rgb.b = color.fB;
     float3 xyz = colorSpace.rgbToXYZ(rgb);
     float3 srcXYZ = ColorSpace::XYZ(float3{colorSpace.getWhitePoint(), 1});
     xyz = adaptation(BRADFORD, srcXYZ, ILLUMINANT_D50_XYZ) * xyz;
     return LabColorSpace::fromXyz(xyz);
 }
 
-SkColor LabToSRGB(const Lab& lab, SkAlpha alpha) {
+SkColor4f LabToSRGB(const Lab& lab, float alpha) {
     auto colorSpace = ColorSpace::sRGB();
     float3 xyz = LabColorSpace::toXyz(lab);
     float3 dstXYZ = ColorSpace::XYZ(float3{colorSpace.getWhitePoint(), 1});
     xyz = adaptation(BRADFORD, ILLUMINANT_D50_XYZ, dstXYZ) * xyz;
     float3 rgb = colorSpace.xyzToRGB(xyz);
-    return SkColorSetARGB(alpha,
-            static_cast<uint8_t>(rgb.r * 255),
-            static_cast<uint8_t>(rgb.g * 255),
-            static_cast<uint8_t>(rgb.b * 255));
+    return SkColor4f(rgb.r, rgb.g, rgb.b, alpha);
 }
 
 skcms_TransferFunction GetPQSkTransferFunction(float sdr_white_level) {

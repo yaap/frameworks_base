@@ -37,6 +37,7 @@ import com.android.systemui.settings.fakeUserTracker
 import com.android.systemui.testKosmos
 import com.android.systemui.user.data.repository.fakeUserRepository
 import com.android.systemui.util.settings.fakeSettings
+import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -49,6 +50,7 @@ import org.mockito.kotlin.whenever
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class CommunalSettingsInteractorTest : SysuiTestCase() {
 
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
@@ -100,6 +102,20 @@ class CommunalSettingsInteractorTest : SysuiTestCase() {
 
             val startCondition by collectLastValue(underTest.whenToStartHub)
             assertEquals(startCondition, WhenToStartHub.WHILE_CHARGING)
+        }
+
+    @Test
+    fun allowedForCurrentUserByDevicePolicy_reportsFalseWithPartialUserInfo() =
+        kosmos.runTest {
+            val lastValue by collectLastValue(underTest.allowedForCurrentUserByDevicePolicy)
+
+            assertThat(lastValue).isTrue()
+
+            val userInfo = UserInfo(fakeUserRepository.getMainUser())
+            userInfo.partial = true
+            fakeUserRepository.setUserInfos(listOf(userInfo))
+
+            assertThat(lastValue).isFalse()
         }
 
     private fun setKeyguardFeaturesDisabled(user: UserInfo, disabledFlags: Int) {

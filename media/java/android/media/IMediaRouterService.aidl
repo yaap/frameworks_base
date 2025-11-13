@@ -26,6 +26,7 @@ import android.media.RouteDiscoveryPreference;
 import android.media.RouteListingPreference;
 import android.media.RoutingSessionInfo;
 import android.media.SuggestedDeviceInfo;
+import android.media.session.MediaSession;
 import android.os.Bundle;
 import android.os.UserHandle;
 /**
@@ -53,7 +54,8 @@ interface IMediaRouterService {
     // Methods for MediaRouter2
     List<MediaRoute2Info> getSystemRoutes(String callerPackageName, boolean isProxyRouter);
     RoutingSessionInfo getSystemSessionInfo();
-    boolean showMediaOutputSwitcherWithRouter2(String packageName);
+    boolean showMediaOutputSwitcherWithRouter2(String packageName,
+            in @nullable MediaSession.Token sessionToken);
 
     void registerRouter2(IMediaRouter2 router, String packageName);
     void unregisterRouter2(IMediaRouter2 router);
@@ -75,7 +77,7 @@ interface IMediaRouterService {
     void releaseSessionWithRouter2(IMediaRouter2 router, String sessionId);
     void setDeviceSuggestionsWithRouter2(IMediaRouter2 router,
             in @nullable List<SuggestedDeviceInfo> suggestedDeviceInfo);
-    @nullable Map<String, List<SuggestedDeviceInfo>> getDeviceSuggestionsWithRouter2(
+    Map<String, List<SuggestedDeviceInfo>> getDeviceSuggestionsWithRouter2(
             IMediaRouter2 router);
 
     // Methods for MediaRouter2Manager
@@ -102,9 +104,11 @@ interface IMediaRouterService {
     void setSessionVolumeWithManager(IMediaRouter2Manager manager, int requestId,
             String sessionId, int volume);
     void releaseSessionWithManager(IMediaRouter2Manager manager, int requestId, String sessionId);
-    boolean showMediaOutputSwitcherWithProxyRouter(IMediaRouter2Manager manager);
+    boolean showMediaOutputSwitcherWithProxyRouter(IMediaRouter2Manager manager,
+            in @nullable MediaSession.Token sessionToken);
     void setDeviceSuggestionsWithManager(IMediaRouter2Manager manager,
             in @nullable List<SuggestedDeviceInfo> suggestedDeviceInfo);
-    @nullable Map<String, List<SuggestedDeviceInfo>> getDeviceSuggestionsWithManager(
+Map<String, List<SuggestedDeviceInfo>> getDeviceSuggestionsWithManager(
             IMediaRouter2Manager manager);
+    void onDeviceSuggestionRequestedWithManager(IMediaRouter2Manager manager);
 }

@@ -285,6 +285,7 @@ package android.app {
     field @FlaggedApi("android.service.notification.redact_sensitive_notifications_from_untrusted_listeners") public static final String OPSTR_RECEIVE_SENSITIVE_NOTIFICATIONS = "android:receive_sensitive_notifications";
     field public static final String OPSTR_RECORD_AUDIO_HOTWORD = "android:record_audio_hotword";
     field public static final String OPSTR_RESERVED_FOR_TESTING = "android:reserved_for_testing";
+    field public static final String OPSTR_SYSTEM_EXEMPT_FROM_ACTIVITY_BG_START_RESTRICTION = "android:system_exempt_from_activity_bg_start_restriction";
     field public static final String OPSTR_USE_ICC_AUTH_WITH_DEVICE_IDENTIFIER = "android:use_icc_auth_with_device_identifier";
     field public static final int OP_COARSE_LOCATION = 0; // 0x0
     field public static final int OP_RECORD_AUDIO = 27; // 0x1b
@@ -368,9 +369,13 @@ package android.app {
     field public static final int FLAG_USER_INITIATED_JOB = 32768; // 0x8000
   }
 
+  public static final class Notification.Metric.FixedFloat extends android.app.Notification.Metric.MetricValue {
+    field public static final int DEFAULT_MAX_FRACTION_DIGITS = 3; // 0x3
+    field public static final int DEFAULT_MIN_FRACTION_DIGITS = 0; // 0x0
+  }
+
   public final class NotificationChannel implements android.os.Parcelable {
     method @NonNull public android.app.NotificationChannel copy();
-    method public int getOriginalImportance();
     method public boolean isImportanceLockedByCriticalDeviceFunction();
     method public void lockFields(int);
     method public void setDeleted(boolean);
@@ -485,6 +490,7 @@ package android.app {
     method @Deprecated public boolean revokeRuntimePermission(String, String, android.os.UserHandle);
     method public void syncInputTransactions();
     method public void syncInputTransactions(boolean);
+    method @NonNull public android.graphics.Bitmap takeScreenshot(int) throws java.io.IOException;
     field @NonNull public static final java.util.Set<java.lang.String> ALL_PERMISSIONS;
     field public static final int FLAG_NOT_ACCESSIBILITY_TOOL = 4; // 0x4
   }
@@ -508,7 +514,10 @@ package android.app {
     method @Nullable public android.graphics.Bitmap getBitmap();
     method @Nullable public android.graphics.Bitmap getBitmapAsUser(int, boolean, int);
     method @FlaggedApi("com.android.window.flags.multi_crop") @NonNull @RequiresPermission(android.Manifest.permission.READ_WALLPAPER_INTERNAL) public java.util.List<android.graphics.Rect> getBitmapCrops(@NonNull java.util.List<android.graphics.Point>, int, boolean);
+    method @NonNull @RequiresPermission(android.Manifest.permission.READ_WALLPAPER_INTERNAL) public android.util.SparseArray<android.graphics.Rect> getBitmapCrops(int);
     method @FlaggedApi("com.android.window.flags.multi_crop") @NonNull public java.util.List<android.graphics.Rect> getBitmapCrops(@NonNull android.graphics.Point, @NonNull java.util.List<android.graphics.Point>, @Nullable java.util.Map<android.graphics.Point,android.graphics.Rect>);
+    method public static int getOrientation(@NonNull android.graphics.Point);
+    method @Nullable public android.os.ParcelFileDescriptor getWallpaperFile(int, boolean);
     method public boolean isLockscreenLiveWallpaperEnabled();
     method @Nullable public android.graphics.Rect peekBitmapDimensions();
     method @Nullable public android.graphics.Rect peekBitmapDimensions(int);
@@ -518,6 +527,10 @@ package android.app {
     method public void setWallpaperZoomOut(@NonNull android.os.IBinder, float);
     method public boolean shouldEnableWideColorGamut();
     method public boolean wallpaperSupportsWcg(int);
+    field public static final int ORIENTATION_LANDSCAPE = 1; // 0x1
+    field public static final int ORIENTATION_PORTRAIT = 0; // 0x0
+    field public static final int ORIENTATION_SQUARE_LANDSCAPE = 3; // 0x3
+    field public static final int ORIENTATION_SQUARE_PORTRAIT = 2; // 0x2
   }
 
   public class WindowConfiguration implements java.lang.Comparable<android.app.WindowConfiguration> android.os.Parcelable {
@@ -905,12 +918,13 @@ package android.companion {
     method @NonNull public android.companion.AssociationInfo build();
     method @NonNull public android.companion.AssociationInfo.Builder setAssociatedDevice(@Nullable android.companion.AssociatedDevice);
     method @FlaggedApi("android.companion.association_device_icon") @NonNull public android.companion.AssociationInfo.Builder setDeviceIcon(@Nullable android.graphics.drawable.Icon);
-    method @FlaggedApi("android.companion.association_tag") @NonNull public android.companion.AssociationInfo.Builder setDeviceId(@Nullable android.companion.DeviceId);
+    method @NonNull public android.companion.AssociationInfo.Builder setDeviceId(@Nullable android.companion.DeviceId);
     method @NonNull public android.companion.AssociationInfo.Builder setDeviceMacAddress(@Nullable android.net.MacAddress);
     method @NonNull public android.companion.AssociationInfo.Builder setDeviceProfile(@Nullable String);
     method @NonNull public android.companion.AssociationInfo.Builder setDisplayName(@Nullable CharSequence);
     method @NonNull public android.companion.AssociationInfo.Builder setLastTimeConnected(long);
     method @NonNull public android.companion.AssociationInfo.Builder setNotifyOnDeviceNearby(boolean);
+    method @NonNull public android.companion.AssociationInfo.Builder setPackagesToNotify(@Nullable java.util.List<java.lang.String>);
     method @NonNull public android.companion.AssociationInfo.Builder setRevoked(boolean);
     method @NonNull public android.companion.AssociationInfo.Builder setSelfManaged(boolean);
     method @NonNull public android.companion.AssociationInfo.Builder setSystemDataSyncFlags(int);
@@ -1080,6 +1094,7 @@ package android.content.pm {
     field public static final long NEVER_SANDBOX_DISPLAY_APIS = 184838306L; // 0xb0468a2L
     field public static final long OVERRIDE_CAMERA_COMPAT_DISABLE_FORCE_ROTATION = 263959004L; // 0xfbbb1dcL
     field public static final long OVERRIDE_CAMERA_COMPAT_DISABLE_REFRESH = 264304459L; // 0xfc0f74bL
+    field @FlaggedApi("com.android.window.flags.enable_camera_compat_for_desktop_windowing_opt_out_api") public static final long OVERRIDE_CAMERA_COMPAT_DISABLE_SIMULATE_REQUESTED_ORIENTATION = 398195815L; // 0x17bbfc67L
     field public static final long OVERRIDE_CAMERA_COMPAT_ENABLE_REFRESH_VIA_PAUSE = 264301586L; // 0xfc0ec12L
     field public static final long OVERRIDE_ENABLE_COMPAT_FAKE_FOCUS = 263259275L; // 0xfb1048bL
     field @FlaggedApi("com.android.window.flags.app_compat_properties_api") public static final long OVERRIDE_ENABLE_COMPAT_IGNORE_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED = 273509367L; // 0x104d6bf7L
@@ -1201,7 +1216,7 @@ package android.content.pm {
     method public boolean isRestricted();
     method @FlaggedApi("android.multiuser.allow_supervising_profile") public boolean isSupervisingProfile();
     method public boolean supportsSwitchTo();
-    method @Deprecated public boolean supportsSwitchToByUser();
+    method public boolean supportsSwitchToByUser();
     method public void writeToParcel(android.os.Parcel, int);
     field @NonNull public static final android.os.Parcelable.Creator<android.content.pm.UserInfo> CREATOR;
     field public static final int FLAG_ADMIN = 2; // 0x2
@@ -1569,6 +1584,7 @@ package android.hardware.biometrics {
     method @NonNull @RequiresPermission(android.Manifest.permission.TEST_BIOMETRIC) public android.hardware.biometrics.BiometricTestSession createTestSession(int);
     method @NonNull @RequiresPermission(android.Manifest.permission.TEST_BIOMETRIC) public java.util.List<android.hardware.biometrics.SensorProperties> getSensorProperties();
     method @NonNull @RequiresPermission(android.Manifest.permission.TEST_BIOMETRIC) public String getUiPackage();
+    method @FlaggedApi("android.hardware.biometrics.identity_check_test_api") @RequiresPermission(android.Manifest.permission.TEST_BIOMETRIC) public void setIdentityCheckTestStatus(@NonNull android.hardware.biometrics.IdentityCheckStatus);
   }
 
   public class BiometricPrompt {
@@ -1591,6 +1607,21 @@ package android.hardware.biometrics {
     method @RequiresPermission(android.Manifest.permission.TEST_BIOMETRIC) public void notifyError(int, int);
     method @RequiresPermission(android.Manifest.permission.TEST_BIOMETRIC) public void rejectAuthentication(int);
     method @RequiresPermission(android.Manifest.permission.TEST_BIOMETRIC) public void startEnroll(int);
+  }
+
+  @FlaggedApi("android.hardware.biometrics.identity_check_test_api") public final class IdentityCheckStatus implements android.os.Parcelable {
+    method public int describeContents();
+    method public boolean isIdentityCheckActive();
+    method public boolean isIdentityCheckValueForTestAvailable();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.hardware.biometrics.IdentityCheckStatus> CREATOR;
+  }
+
+  public static final class IdentityCheckStatus.Builder {
+    ctor public IdentityCheckStatus.Builder();
+    method @NonNull public android.hardware.biometrics.IdentityCheckStatus build();
+    method @NonNull public android.hardware.biometrics.IdentityCheckStatus.Builder setIdentityCheckActive(boolean);
+    method @NonNull public android.hardware.biometrics.IdentityCheckStatus.Builder setIdentityCheckValueForTestAvailable(boolean);
   }
 
   public class SensorProperties {
@@ -1731,7 +1762,6 @@ package android.hardware.display {
   public final class DisplayManager {
     method public boolean areUserDisabledHdrTypesAllowed();
     method @RequiresPermission(android.Manifest.permission.MODIFY_USER_PREFERRED_DISPLAY_MODE) public void clearGlobalUserPreferredDisplayMode();
-    method @FlaggedApi("com.android.server.display.feature.flags.display_topology") @Nullable @RequiresPermission("android.permission.MANAGE_DISPLAYS") public android.hardware.display.DisplayTopology getDisplayTopology();
     method @Nullable public android.view.Display.Mode getGlobalUserPreferredDisplayMode();
     method @NonNull public android.hardware.display.HdrConversionMode getHdrConversionModeSetting();
     method @NonNull public int[] getSupportedHdrOutputTypes();
@@ -1756,13 +1786,6 @@ package android.hardware.display {
     field public static final int VIRTUAL_DISPLAY_FLAG_OWN_FOCUS = 16384; // 0x4000
     field public static final int VIRTUAL_DISPLAY_FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS = 512; // 0x200
     field public static final int VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH = 64; // 0x40
-  }
-
-  @FlaggedApi("com.android.server.display.feature.flags.display_topology") public final class DisplayTopology implements android.os.Parcelable {
-    method public int describeContents();
-    method @NonNull public android.util.SparseArray<android.graphics.RectF> getAbsoluteBounds();
-    method public void writeToParcel(@NonNull android.os.Parcel, int);
-    field @NonNull public static final android.os.Parcelable.Creator<android.hardware.display.DisplayTopology> CREATOR;
   }
 
 }
@@ -1804,6 +1827,7 @@ package android.hardware.input {
     method @FlaggedApi("com.android.input.flags.device_associations") @RequiresPermission("android.permission.ASSOCIATE_INPUT_DEVICE_TO_DISPLAY") public void addUniqueIdAssociationByDescriptor(@NonNull String, @NonNull String);
     method @RequiresPermission("android.permission.ASSOCIATE_INPUT_DEVICE_TO_DISPLAY") public void addUniqueIdAssociationByPort(@NonNull String, @NonNull String);
     method @RequiresPermission(android.Manifest.permission.REMAP_MODIFIER_KEYS) public void clearAllModifierKeyRemappings();
+    method @Nullable @RequiresPermission(android.Manifest.permission.INJECT_EVENTS) public android.graphics.PointF getCursorPosition(int);
     method @NonNull public java.util.List<java.lang.String> getKeyboardLayoutDescriptors();
     method @NonNull public String getKeyboardLayoutTypeForLayoutDescriptor(@NonNull String);
     method @NonNull @RequiresPermission(android.Manifest.permission.REMAP_MODIFIER_KEYS) public java.util.Map<java.lang.Integer,java.lang.Integer> getModifierKeyRemapping();
@@ -1812,6 +1836,7 @@ package android.hardware.input {
     method @FlaggedApi("com.android.input.flags.device_associations") @RequiresPermission("android.permission.ASSOCIATE_INPUT_DEVICE_TO_DISPLAY") public void removeUniqueIdAssociationByDescriptor(@NonNull String);
     method @RequiresPermission("android.permission.ASSOCIATE_INPUT_DEVICE_TO_DISPLAY") public void removeUniqueIdAssociationByPort(@NonNull String);
     method public void resetLockedModifierState();
+    method @RequiresPermission(android.Manifest.permission.SET_POINTER_SPEED) public void setMouseScalingEnabled(boolean, int);
     field public static final long BLOCK_UNTRUSTED_TOUCHES = 158002302L; // 0x96aec7eL
   }
 
@@ -1946,8 +1971,14 @@ package android.media {
 
   public final class AudioAttributes implements android.os.Parcelable {
     method public static int[] getSdkUsages();
+    method public long getTestId();
     method @NonNull public static String usageToXsdString(int);
     method public static int xsdStringToUsage(@NonNull String);
+    field public static final long VALUE_TEST_ID_NONE = -9223372036854775808L; // 0x8000000000000000L
+  }
+
+  public static class AudioAttributes.Builder {
+    method @NonNull public android.media.AudioAttributes.Builder setTestId(long);
   }
 
   public final class AudioDeviceInfo {
@@ -1957,6 +1988,7 @@ package android.media {
 
   public class AudioDeviceVolumeManager {
     method @RequiresPermission(anyOf={android.Manifest.permission.MODIFY_AUDIO_ROUTING, android.Manifest.permission.QUERY_AUDIO_STATE, android.Manifest.permission.MODIFY_AUDIO_SETTINGS_PRIVILEGED}) public boolean isFullVolumeDevice();
+    method @FlaggedApi("android.media.audio.unify_absolute_volume_management") @RequiresPermission(anyOf={android.Manifest.permission.MODIFY_AUDIO_ROUTING, android.Manifest.permission.MODIFY_AUDIO_SETTINGS_PRIVILEGED, android.Manifest.permission.BLUETOOTH_PRIVILEGED, "android.permission.BLUETOOTH_STACK"}) public void resetDeviceAbsoluteVolumeBehavior(@NonNull android.media.AudioDeviceAttributes);
   }
 
   public final class AudioFocusRequest {
@@ -2463,7 +2495,9 @@ package android.os {
     method public static void invalidateCache(@NonNull String, @NonNull String);
     method public final boolean isDisabled();
     method @Nullable public Result query(@NonNull Query);
+    method @FlaggedApi("android.os.ipc_data_cache_testmode_apis") public static void setCacheTestMode(boolean);
     method public static void setTestMode(boolean);
+    field @FlaggedApi("android.os.ipc_data_cache_module_adservices") public static final String MODULE_ADSERVICES = "adservices";
     field public static final String MODULE_BLUETOOTH = "bluetooth";
     field public static final String MODULE_SYSTEM = "system_server";
     field public static final String MODULE_TEST = "test";
@@ -2596,7 +2630,7 @@ package android.os {
   }
 
   public class UserManager {
-    method @FlaggedApi("android.os.allow_private_profile") @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public boolean canAddPrivateProfile();
+    method @FlaggedApi("android.os.allow_private_profile") @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS, android.Manifest.permission.QUERY_USERS}) public boolean canAddPrivateProfile();
     method @Nullable @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public android.content.pm.UserInfo createProfileForUser(@Nullable String, @NonNull String, int, int, @Nullable String[]);
     method @Nullable @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public android.content.pm.UserInfo createRestrictedProfile(@Nullable String);
     method @Nullable @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public android.content.pm.UserInfo createUser(@Nullable String, @NonNull String, int);
@@ -2607,7 +2641,6 @@ package android.os {
     method @Nullable @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public java.util.Set<java.lang.String> getPreInstallableSystemPackages(@NonNull String);
     method @NonNull @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS, android.Manifest.permission.QUERY_USERS}) public String getUserType();
     method @NonNull @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public java.util.List<android.content.pm.UserInfo> getUsers();
-    method @Deprecated @NonNull @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public java.util.List<android.content.pm.UserInfo> getUsers(boolean, boolean, boolean);
     method @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public boolean hasBaseUserRestriction(@NonNull String, @NonNull android.os.UserHandle);
     method @RequiresPermission(anyOf={android.Manifest.permission.MANAGE_USERS, android.Manifest.permission.CREATE_USERS}) public boolean isUserTypeEnabled(@NonNull String);
     method public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported();
@@ -3040,6 +3073,7 @@ package android.provider {
     field public static final String NOTIFICATION_BADGING = "notification_badging";
     field public static final String NOTIFICATION_BUBBLES = "notification_bubbles";
     field public static final String POWER_MENU_LOCKED_SHOW_CONTENT = "power_menu_locked_show_content";
+    field public static final String SCREEN_OFF_UNLOCK_UDFPS_ENABLED = "screen_off_udfps_enabled";
     field public static final String SELECTED_SPELL_CHECKER = "selected_spell_checker";
     field public static final String SELECTED_SPELL_CHECKER_SUBTYPE = "selected_spell_checker_subtype";
     field public static final String SHOW_FIRST_CRASH_DIALOG_DEV_OPTION = "show_first_crash_dialog_dev_option";
@@ -3435,7 +3469,7 @@ package android.telecom {
   }
 
   public class TelecomManager {
-    method @FlaggedApi("com.android.server.telecom.flags.voip_call_monitor_refactor") public boolean hasForegroundServiceDelegation(@Nullable android.telecom.PhoneAccountHandle);
+    method public boolean hasForegroundServiceDelegation(@Nullable android.telecom.PhoneAccountHandle);
   }
 
 }
@@ -3948,6 +3982,7 @@ package android.view.accessibility {
   public final class AccessibilityManager {
     method @NonNull @RequiresPermission(android.Manifest.permission.MANAGE_ACCESSIBILITY) public java.util.List<java.lang.String> getAccessibilityShortcutTargets(int);
     method public boolean hasAnyDirectConnection();
+    method @FlaggedApi("android.view.accessibility.enable_trusted_accessibility_service_api") @RequiresPermission(android.Manifest.permission.MANAGE_ACCESSIBILITY) public void setTrustedAccessibilityServiceForTesting(@Nullable android.content.ComponentName);
     method @FlaggedApi("android.view.accessibility.flash_notification_system_api") public boolean startFlashNotificationSequence(@NonNull android.content.Context, int);
     method @FlaggedApi("android.view.accessibility.flash_notification_system_api") public boolean stopFlashNotificationSequence(@NonNull android.content.Context);
   }
@@ -4476,7 +4511,7 @@ package android.window {
     method @Nullable @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS) public void createRootTask(int, int, @Nullable android.os.IBinder);
     method @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS) public boolean deleteRootTask(@NonNull android.window.WindowContainerToken);
     method @Nullable @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS) public java.util.List<android.app.ActivityManager.RunningTaskInfo> getChildTasks(@NonNull android.window.WindowContainerToken, @NonNull int[]);
-    method @Nullable @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS) public android.window.WindowContainerToken getImeTarget(int);
+    method @Nullable @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS) public android.window.WindowContainerToken getImeLayeringTarget(int);
     method @Nullable @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS) public java.util.List<android.app.ActivityManager.RunningTaskInfo> getRootTasks(int, @NonNull int[]);
     method @BinderThread public void onAppSplashScreenViewRemoved(int);
     method @BinderThread public void onBackPressedOnTaskRoot(@NonNull android.app.ActivityManager.RunningTaskInfo);

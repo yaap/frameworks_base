@@ -42,6 +42,7 @@ import android.provider.Settings.Secure;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
+import android.view.ViewConfiguration;
 
 import java.util.Map;
 
@@ -138,6 +139,20 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.KEY_REPEAT_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.KEY_REPEAT_TIMEOUT_MS, NON_NEGATIVE_INTEGER_VALIDATOR);
         VALIDATORS.put(Secure.KEY_REPEAT_DELAY_MS, NON_NEGATIVE_INTEGER_VALIDATOR);
+        VALIDATORS.put(Secure.ACCESSIBILITY_TEXT_CURSOR_BLINK_INTERVAL_MS, value -> {
+            if (!NON_NEGATIVE_INTEGER_VALIDATOR.validate(value)) {
+                return false;
+            }
+
+            try {
+                int intValue = Integer.parseInt(value);
+                return intValue == ViewConfiguration.NO_BLINK_TEXT_CURSOR_BLINK_INTERVAL_MS
+                        || intValue >= ViewConfiguration.MIN_TEXT_CURSOR_BLINK_INTERVAL_MS;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+
+        });
         VALIDATORS.put(Secure.CAMERA_GESTURE_DISABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(
                 Secure.ACCESSIBILITY_AUTOCLICK_CURSOR_AREA_SIZE, NON_NEGATIVE_INTEGER_VALIDATOR);
@@ -159,6 +174,7 @@ public class SecureSettingsValidators {
                 new DiscreteValueValidator(new String[] {"1", "2"}));
         VALIDATORS.put(Secure.MINIMAL_POST_PROCESSING_ALLOWED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.MIRROR_BUILT_IN_DISPLAY, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.INCLUDE_DEFAULT_DISPLAY_IN_TOPOLOGY, BOOLEAN_VALIDATOR);
         VALIDATORS.put(
                 Secure.MATCH_CONTENT_FRAME_RATE,
                 new DiscreteValueValidator(new String[] {"0", "1", "2"}));
@@ -258,6 +274,9 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.SCREENSAVER_ACTIVATE_ON_SLEEP, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.SCREENSAVER_ACTIVATE_ON_POSTURED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.SCREENSAVER_HOME_CONTROLS_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.SCREENSAVER_RESTRICT_TO_WIRELESS_CHARGING, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.LOW_LIGHT_DISPLAY_BEHAVIOR, new InclusiveIntegerRangeValidator(0, 3));
+        VALIDATORS.put(Secure.LOW_LIGHT_DISPLAY_BEHAVIOR_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.LOCKDOWN_IN_POWER_MENU, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.SHOW_FIRST_CRASH_DIALOG_DEV_OPTION, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.VOLUME_DIALOG_DISMISS_TIMEOUT, NON_NEGATIVE_INTEGER_VALIDATOR);
@@ -322,6 +341,8 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.NAV_BAR_FORCE_VISIBLE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.NAV_BAR_KIDS_MODE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(
+                Secure.NAV_BAR_ORDER, new DiscreteValueValidator(new String[] {"0", "1"}));
+        VALIDATORS.put(
                 Secure.NAVIGATION_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2"}));
         VALIDATORS.put(Secure.NAVIGATION_MODE_RESTORE,
                 new DiscreteValueValidator(new String[] {"-1", "0", "1", "2"}));
@@ -362,6 +383,9 @@ public class SecureSettingsValidators {
                         Secure.ACCESSIBILITY_MAGNIFICATION_MODE_FULLSCREEN,
                         Secure.ACCESSIBILITY_MAGNIFICATION_MODE_ALL));
         VALIDATORS.put(Secure.ACCESSIBILITY_MAGNIFICATION_FOLLOW_TYPING_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(
+                Secure.ACCESSIBILITY_MAGNIFICATION_FOLLOW_KEYBOARD_ENABLED,
+                BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.ACCESSIBILITY_MAGNIFICATION_ALWAYS_ON_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.ACCESSIBILITY_MAGNIFICATION_CURSOR_FOLLOWING_MODE,
                 new InclusiveIntegerRangeValidator(
@@ -371,6 +395,7 @@ public class SecureSettingsValidators {
         VALIDATORS.put(
                 Secure.ACCESSIBILITY_MAGNIFICATION_TWO_FINGER_TRIPLE_TAP_ENABLED,
                 BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.ACCESSIBILITY_MAGNIFICATION_MAGNIFY_NAV_AND_IME, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.ACCESSIBILITY_PINCH_TO_ZOOM_ANYWHERE_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.ACCESSIBILITY_SINGLE_FINGER_PANNING_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(
@@ -386,6 +411,10 @@ public class SecureSettingsValidators {
                 Secure.ACCESSIBILITY_KEY_GESTURE_TARGETS,
                 ACCESSIBILITY_SHORTCUT_TARGET_LIST_VALIDATOR);
         VALIDATORS.put(Secure.ACCESSIBILITY_FORCE_INVERT_COLOR_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.ACTION_CORNER_TOP_LEFT_ACTION, NON_NEGATIVE_INTEGER_VALIDATOR);
+        VALIDATORS.put(Secure.ACTION_CORNER_TOP_RIGHT_ACTION, NON_NEGATIVE_INTEGER_VALIDATOR);
+        VALIDATORS.put(Secure.ACTION_CORNER_BOTTOM_LEFT_ACTION, NON_NEGATIVE_INTEGER_VALIDATOR);
+        VALIDATORS.put(Secure.ACTION_CORNER_BOTTOM_RIGHT_ACTION, NON_NEGATIVE_INTEGER_VALIDATOR);
         VALIDATORS.put(Secure.ONE_HANDED_MODE_ACTIVATED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.ONE_HANDED_MODE_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.ONE_HANDED_MODE_TIMEOUT, ANY_INTEGER_VALIDATOR);
@@ -477,6 +506,7 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.GLANCEABLE_HUB_ENABLED, new InclusiveIntegerRangeValidator(0, 1));
         VALIDATORS.put(Secure.WHEN_TO_START_GLANCEABLE_HUB,
                 new InclusiveIntegerRangeValidator(0, 3));
+        VALIDATORS.put(Secure.GLANCEABLE_HUB_RESTRICT_TO_WIRELESS_CHARGING, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.STYLUS_BUTTONS_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.STYLUS_HANDWRITING_ENABLED,
                 new DiscreteValueValidator(new String[] {"-1", "0", "1"}));
@@ -499,6 +529,11 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.ON_DEVICE_INTELLIGENCE_UNBIND_TIMEOUT_MS, ANY_LONG_VALIDATOR);
         VALIDATORS.put(Secure.ON_DEVICE_INTELLIGENCE_IDLE_TIMEOUT_MS, NONE_NEGATIVE_LONG_VALIDATOR);
         VALIDATORS.put(Secure.ACCESSIBILITY_MOUSE_KEYS_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.ACCESSIBILITY_MOUSE_KEYS_ACCELERATION,
+                new InclusiveFloatRangeValidator(0, 1.0f));
+        VALIDATORS.put(Secure.ACCESSIBILITY_MOUSE_KEYS_MAX_SPEED,
+                new InclusiveIntegerRangeValidator(1, 10));
+        VALIDATORS.put(Secure.ACCESSIBILITY_MOUSE_KEYS_USE_PRIMARY_KEYS, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.MANDATORY_BIOMETRICS, new InclusiveIntegerRangeValidator(0, 1));
         VALIDATORS.put(Secure.MANDATORY_BIOMETRICS_REQUIREMENTS_SATISFIED,
                 new InclusiveIntegerRangeValidator(0, 1));
@@ -510,11 +545,16 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.FINGERPRINT_APP_ENABLED,  BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.FINGERPRINT_KEYGUARD_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.DUAL_SHADE, BOOLEAN_VALIDATOR);
-        VALIDATORS.put(Secure.BROWSER_CONTENT_FILTERS_ENABLED, BOOLEAN_VALIDATOR);
-        VALIDATORS.put(Secure.SEARCH_CONTENT_FILTERS_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.BROWSER_CONTENT_FILTERS_ENABLED, ANY_INTEGER_VALIDATOR);
+        VALIDATORS.put(Secure.SEARCH_CONTENT_FILTERS_ENABLED, ANY_INTEGER_VALIDATOR);
         VALIDATORS.put(Secure.SPELL_CHECKER_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.SELECTED_SPELL_CHECKER, NULLABLE_COMPONENT_NAME_VALIDATOR);
         VALIDATORS.put(Secure.SELECTED_SPELL_CHECKER_SUBTYPE, ANY_INTEGER_VALIDATOR);
+        VALIDATORS.put(Secure.PACK_THEME_FEATURE_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.SUGGESTED_THEME_FEATURE_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.HDR_BRIGHTNESS_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.HDR_BRIGHTNESS_BOOST_LEVEL, new InclusiveFloatRangeValidator(0, 1));
+        VALIDATORS.put(Secure.APP_FUNCTION_AGENT_ALLOWLIST_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.NFC_SOUNDS, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.EXTRA_DIM_AUTO_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2", "3", "4"}));
         VALIDATORS.put(Secure.EXTRA_DIM_AUTO_TIME, TIME_RANGE_VALIDATOR);

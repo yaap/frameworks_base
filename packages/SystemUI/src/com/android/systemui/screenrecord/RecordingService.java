@@ -16,6 +16,9 @@
 
 package com.android.systemui.screenrecord;
 
+import static com.android.systemui.screenrecord.ScreenRecordUxController.EXTRA_STATE;
+import static com.android.systemui.screenrecord.ScreenRecordUxController.INTENT_UPDATE_STATE;
+
 import android.annotation.Nullable;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -103,7 +106,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     protected static final String EXTRA_NOTIFICATION_ID = "notification_id";
 
     private final RecordingServiceBinder mBinder;
-    private final RecordingController mController;
+    private final ScreenRecordUxController mController;
     protected final KeyguardDismissUtil mKeyguardDismissUtil;
     private final Handler mMainHandler;
     private ScreenRecordingAudioSource mAudioSource = ScreenRecordingAudioSource.NONE;
@@ -122,7 +125,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     private boolean mHEVC;
 
     @Inject
-    public RecordingService(RecordingController controller, @LongRunning Executor executor,
+    public RecordingService(ScreenRecordUxController controller, @LongRunning Executor executor,
             @Main Handler handler, UiEventLogger uiEventLogger,
             NotificationManager notificationManager,
             UserContextProvider userContextTracker, KeyguardDismissUtil keyguardDismissUtil,
@@ -236,8 +239,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                         mAudioSource,
                         captureTarget,
                         displayId,
-                        this,
-                        mScreenRecordingStartTimeStore
+                        this
                 );
                 setLowQuality(mLowQuality);
                 setHEVC(mHEVC);
@@ -327,12 +329,12 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     @Override
     public void onCreate() {
         super.onCreate();
-        mController.addCallback((RecordingController.RecordingStateChangeCallback) mBinder);
+        mController.addCallback((ScreenRecordUxController.StateChangeCallback) mBinder);
     }
 
     @Override
     public void onDestroy() {
-        mController.removeCallback((RecordingController.RecordingStateChangeCallback) mBinder);
+        mController.removeCallback((ScreenRecordUxController.StateChangeCallback) mBinder);
         super.onDestroy();
     }
 
@@ -348,8 +350,8 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
             // Main user has a reference to the correct controller, so no need to use a broadcast
             mController.updateState(state);
         } else {
-            Intent intent = new Intent(RecordingController.INTENT_UPDATE_STATE);
-            intent.putExtra(RecordingController.EXTRA_STATE, state);
+            Intent intent = new Intent(INTENT_UPDATE_STATE);
+            intent.putExtra(EXTRA_STATE, state);
             intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY);
             sendBroadcast(intent, PERMISSION_SELF);
         }
@@ -583,13 +585,10 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
         return count;
     }
 
-    private void stopService(@StopReason int stopReason) {
-        stopService(USER_ID_NOT_SPECIFIED, stopReason);
-    }
-
     private void stopService(int userId, @StopReason int stopReason) {
         if (userId == USER_ID_NOT_SPECIFIED) {
             userId = mUserContextTracker.getUserContext().getUserId();
+            Log.w(getTag(), "Stopping service without specifying user! " + userId);
         }
         UserHandle currentUser = new UserHandle(userId);
         Log.d(getTag(), "notifying for user " + userId);
@@ -607,7 +606,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
             }
             showErrorToast(R.string.screenrecord_save_error);
             Log.e(getTag(), "stopRecording called, but there was an error when ending"
-                    + "recording");
+                    + " recording");
             exception.printStackTrace();
             createErrorSavingNotification(currentUser);
         } catch (Throwable throwable) {
@@ -696,7 +695,6 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
         return new RecordingServiceStrings(getResources());
     }
 
-
     /**
      * Get an intent to stop the recording service.
      * @param context Context from the requesting activity
@@ -755,15 +753,21 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     }
 
     @Override
-    public void onStopped(@StopReason int stopReason) {
+    public void onStarted() {
+        mScreenRecordingStartTimeStore.markStartTime();
+    }
+
+    @Override
+    public void onStopped(int userId, @StopReason int stopReason) {
         if (mController.isRecording()) {
-            Log.d(getTag(), "Stopping recording because the system requested the stop");
-            stopService(stopReason);
+            Log.d(getTag(), "Stopping recording for user " + userId
+                    + " because the system requested the stop");
+            stopService(userId, stopReason);
         }
     }
 
     private class RecordingServiceBinder extends IRemoteRecording.Stub
-            implements RecordingController.RecordingStateChangeCallback {
+            implements ScreenRecordUxController.StateChangeCallback {
 
         private ArrayList<IRecordingCallback> mCallbackList = new ArrayList<>();
 

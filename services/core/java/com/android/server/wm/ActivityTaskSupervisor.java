@@ -109,6 +109,7 @@ import android.app.servertransaction.LaunchActivityItem;
 import android.app.servertransaction.PauseActivityItem;
 import android.app.servertransaction.ResumeActivityItem;
 import android.app.servertransaction.StopActivityItem;
+import android.content.AttributionSource;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -140,6 +141,7 @@ import android.os.Trace;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.os.WorkSource;
+import android.permission.PermissionManager;
 import android.provider.MediaStore;
 import android.util.ArrayMap;
 import android.util.Slog;
@@ -291,6 +293,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
     private WindowManagerService mWindowManager;
 
     private AppOpsManager mAppOpsManager;
+    private PermissionManager mPermissionManager;
     private VirtualDeviceManagerInternal mVirtualDeviceManagerInternal;
 
     /** Common synchronization logic used to save things to disks. */
@@ -932,6 +935,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             // a resume.
             r.setState(RESUMED, "realStartActivityLocked");
             r.completeResumeLocked();
+            makeNonTopVisibleActivitiesActiveIfNeeded(r, task);
         } else if (r.isVisibleRequested()) {
             // This activity is not starting in the resumed state... which should look like we asked
             // it to pause+stop (but remain visible), and it has done so and reported back the
@@ -940,6 +944,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                     + "(starting in paused state)", r);
             r.setState(PAUSED, "realStartActivityLocked");
             mRootWindowContainer.executeAppTransitionForAllDisplay();
+            makeNonTopVisibleActivitiesActiveIfNeeded(r, task);
         } else {
             // This activity is starting while invisible, so it should be stopped.
             r.setState(STOPPING, "realStartActivityLocked");
@@ -1047,20 +1052,13 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             // transaction.
             mService.getLifecycleManager().dispatchPendingTransaction(proc.getThread());
         }
-        final boolean isSuccessful;
-        try {
-            isSuccessful = mService.getLifecycleManager().scheduleTransactionItems(
-                    proc.getThread(),
-                    // Immediately dispatch the transaction, so that if it fails, the server can
-                    // restart the process and retry now.
-                    true /* shouldDispatchImmediately */,
-                    launchActivityItem, lifecycleItem);
-        } catch (RemoteException e) {
-            // TODO(b/323801078): remove Exception when cleanup
-            return e;
-        }
-        if (com.android.window.flags.Flags.cleanupDispatchPendingTransactionsRemoteException()
-                && !isSuccessful) {
+        final boolean isSuccessful = mService.getLifecycleManager().scheduleTransactionItems(
+                proc.getThread(),
+                // Immediately dispatch the transaction, so that if it fails, the server can
+                // restart the process and retry now.
+                true /* shouldDispatchImmediately */,
+                launchActivityItem, lifecycleItem);
+        if (!isSuccessful) {
             return new DeadObjectException("Failed to dispatch the ClientTransaction to dead"
                     + " process. See earlier log for more details.");
         }
@@ -1086,6 +1084,24 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             }
         }
         return null;
+    }
+
+    /**
+     * Sends lifecycle item (e.g. StartActivityItem) to non-top visible activities in the same task
+     * of the launched activity if ensureActivitiesVisible was called with notifyClients=false.
+     */
+    private static void makeNonTopVisibleActivitiesActiveIfNeeded(@NonNull ActivityRecord launched,
+            @NonNull Task task) {
+        if (!task.inMultiWindowMode() || (launched.occludesParent() && !launched.isEmbedded())) {
+            // Skip if this activity may trigger other activities to pause, because activityPaused
+            // will call ensureActivitiesVisible with notifyClients=true.
+            return;
+        }
+        task.forAllActivities(r -> {
+            if (r != launched && r.isVisibleRequested()) {
+                r.makeActiveIfNeeded(null /* activeActivity */);
+            }
+        });
     }
 
     void updateHomeProcessIfNeeded(@NonNull ActivityRecord r) {
@@ -1365,6 +1381,13 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         return mAppOpsManager;
     }
 
+    private PermissionManager getPermissionManager() {
+        if (mPermissionManager == null) {
+            mPermissionManager = mService.mContext.getSystemService(PermissionManager.class);
+        }
+        return mPermissionManager;
+    }
+
     BackgroundActivityStartController getBackgroundActivityLaunchController() {
         return mBalController;
     }
@@ -1380,6 +1403,16 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
 
         if (activityInfo.permission == null) {
             return ACTIVITY_RESTRICTION_NONE;
+        }
+
+        // TODO(b/419317335): Fully migrate to PermissionManager behind additional flags
+        if (com.android.media.projection.flags.Flags.recordingOverlay()) {
+            if (ignoreTargetSecurity || getPermissionManager().checkPermissionForDataDelivery(
+                    activityInfo.permission,
+                    new AttributionSource(callingUid, callingPackage, callingFeatureId), "")
+                    == PermissionManager.PERMISSION_GRANTED) {
+                return ACTIVITY_RESTRICTION_NONE;
+            }
         }
 
         final int opCode = AppOpsManager.permissionToOpCode(activityInfo.permission);
@@ -1572,6 +1605,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             return;
         }
 
+        final ActionChain chain = mService.mChainTracker.startTransit("findTaskToFront");
         try {
             // We allow enter PiP for previous front task if not requested otherwise via options.
             boolean shouldCauseEnterPip = options == null
@@ -1582,12 +1616,12 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
 
             mService.deferWindowLayout();
             boolean newTransition = false;
-            Transition transition = task.mTransitionController.getCollectingTransition();
-            if (transition == null && task.mTransitionController.isShellTransitionsEnabled()) {
-                transition = task.mTransitionController.createTransition(TRANSIT_TO_FRONT);
+            if (!chain.isCollecting() && task.mTransitionController.isShellTransitionsEnabled()) {
+                chain.attachTransition(
+                        task.mTransitionController.createTransition(TRANSIT_TO_FRONT));
                 newTransition = true;
             }
-            task.mTransitionController.collect(task);
+            chain.collect(task);
             reason = reason + " findTaskToMoveToFront";
             boolean reparented = false;
             if (task.isResizeable() && canUseActivityOptionsLaunchBounds(options)) {
@@ -1631,13 +1665,14 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                 r.showStartingWindow(true /* taskSwitch */);
             }
             if (newTransition) {
-                task.mTransitionController.requestStartTransition(transition, task,
+                task.mTransitionController.requestStartTransition(chain.getTransition(), task,
                         options != null ? options.getRemoteTransition() : null,
                         null /* displayChange */);
             }
         } finally {
             mUserLeaving = false;
             mService.continueWindowLayout();
+            mService.mChainTracker.endPartial();
         }
     }
 
@@ -1674,13 +1709,10 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
     }
 
     private void removePinnedRootTaskInSurfaceTransaction(Task rootTask) {
-        final Transition transition = rootTask.mTransitionController.requestTransitionIfNeeded(
-                TRANSIT_TO_BACK, 0 /* flags */, rootTask, rootTask.mDisplayContent);
-        if (transition == null) {
-            rootTask.mTransitionController.collect(rootTask);
-        } else {
-            transition.collect(rootTask);
-        }
+        final ActionChain chain = mService.mChainTracker.startTransit("remPinTask");
+        rootTask.mTransitionController.requestTransitionIfNeeded(
+                TRANSIT_TO_BACK, 0 /* flags */, rootTask, rootTask.mDisplayContent, chain);
+        chain.collect(rootTask);
 
         /**
          * Workaround: Force-stop all the activities in the root pinned task before we reparent them
@@ -1704,6 +1736,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         if (rootTask.getParent() == null) {
             // The activities in the task may already be finishing. Then the task could be removed
             // when performing the idle check.
+            mService.mChainTracker.endPartial();
             return;
         }
 
@@ -1726,6 +1759,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             mRootWindowContainer.resumeFocusedTasksTopActivities();
         } finally {
             mService.continueWindowLayout();
+            mService.mChainTracker.endPartial();
         }
     }
 
@@ -1774,9 +1808,14 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             // Prevent recursion.
             return;
         }
-        Transition transit = task.mTransitionController.requestCloseTransitionIfNeeded(task);
-        if (transit != null) {
-            transit.collectClose(task);
+        final ActionChain chain = mService.mChainTracker.startTransit("removeTask");
+        final boolean wasCollecting = chain.isCollecting();
+        if (!wasCollecting) {
+            chain.attachTransition(task.mTransitionController.requestCloseTransitionIfNeeded(task));
+        }
+        chain.collectClose(task);
+        final Transition transition = chain.getTransition();
+        if (!wasCollecting && transition != null) {
             if (!task.mTransitionController.useFullReadyTracking()) {
                 // If a transition was created here, it means this is an isolated removeTask. It's
                 // possible for there to be no consequent operations (eg. this is a multiwindow task
@@ -1784,14 +1823,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                 // tracker so that it doesn't get stuck. However, since the old ready tracker
                 // doesn't support multiple conditions, we have to touch it here at the beginning
                 // before anything that may need it to wait (setReady(false)).
-                transit.setReady(task, true);
-            }
-        } else {
-            // If we failed to create a transition, there might be already a currently collecting
-            // transition. Let's use it if possible.
-            transit = task.mTransitionController.getCollectingTransition();
-            if (transit != null) {
-                transit.collectClose(task);
+                transition.setReady(task, true);
             }
         }
 
@@ -1830,6 +1862,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                             task, callingUid, callingPid, callerActivityClassName);
         } finally {
             task.mInRemoveTask = false;
+            mService.mChainTracker.endPartial();
         }
     }
     static CharSequence getApplicationLabel(PackageManager pm, String packageName) {
@@ -2180,7 +2213,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             final ActivityRecord s = mStoppingActivities.get(i);
             // Activity in a force hidden task should not be counted as animating, i.e., we want to
             // send onStop before any configuration change when removing pip transition is ongoing.
-            final boolean animating = s.isInTransition()
+            final boolean animating = s.inTransition()
                     && s.getTask() != null && !s.getTask().isForceHidden();
             ProtoLog.v(WM_DEBUG_STATES, "Stopping %s: nowVisible=%b animating=%b "
                     + "finishing=%s", s, s.nowVisible, animating, s.finishing);
@@ -2820,6 +2853,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         final ActivityOptions activityOptions = options != null
                 ? options.getOptions(this)
                 : null;
+        boolean inChain;
         synchronized (mService.mGlobalLock) {
             final boolean isCallerRecents = mRecentTasks.isCallerRecents(callingUid);
             boolean moveHomeTaskForward = isCallerRecents;
@@ -2935,6 +2969,10 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             intent = task.intent;
             intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY);
             userId = task.mUserId;
+            inChain = mService.mChainTracker.isInChain();
+            if (inChain) {
+                mService.mChainTracker.pushAsyncStart();
+            }
         }
         // ActivityStarter will acquire the lock where the places need, so execute the request
         // outside of the lock.
@@ -2957,6 +2995,9 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                     task.removeIfPossible("start-from-recents");
                 }
                 mService.continueWindowLayout();
+                if (inChain) {
+                    mService.mChainTracker.popAsyncStart();
+                }
             }
         }
     }

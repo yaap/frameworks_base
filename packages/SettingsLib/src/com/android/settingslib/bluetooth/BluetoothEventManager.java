@@ -568,10 +568,13 @@ public class BluetoothEventManager {
                 Log.w(TAG, "AclStateChangedHandler: action is null");
                 return;
             }
-            final CachedBluetoothDevice activeDevice = mDeviceManager.findDevice(device);
+            CachedBluetoothDevice activeDevice = mDeviceManager.findDevice(device);
             if (activeDevice == null) {
-                Log.w(TAG, "AclStateChangedHandler: activeDevice is null");
-                return;
+                activeDevice = mDeviceManager.addDevice(device);
+                Log.d(
+                        TAG,
+                        "AclStateChangedHandler created new CachedBluetoothDevice "
+                                + device.getAnonymizedAddress());
             }
             final int state;
             switch (action) {
@@ -585,6 +588,9 @@ public class BluetoothEventManager {
                     Log.w(TAG, "ActiveDeviceChangedHandler: unknown action " + action);
                     return;
             }
+            int transport = intent
+                    .getIntExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_BREDR);
+            activeDevice.onAclStateChanged(state, transport);
             dispatchAclStateChanged(activeDevice, state);
         }
     }

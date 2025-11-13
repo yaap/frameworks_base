@@ -34,10 +34,10 @@ flag {
 }
 
 flag {
-  name: "accurate_wallpaper_downsampling"
+  name: "enable_wallpaper_transform_surface_control_command"
   namespace: "systemui"
-  description: "Accurate downsampling of wallpaper bitmap for high resolution images"
-  bug: "355665230"
+  description: "Enables sending SurfaceControl to onCommand that could be used to transform the wallpaper"
+  bug: "399077623"
   metadata {
     purpose: PURPOSE_BUGFIX
   }
@@ -48,4 +48,24 @@ flag {
   namespace: "lse_desktop_experience"
   description: "Enable wallpaper support in connected displays"
   bug: "366461618"
+}
+
+flag {
+  name: "update_recents_from_system"
+  namespace: "systemui"
+  description: "Update recent wallpapers list more reliably. Only effective after rebooting."
+  bug: "395679036"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "fix_get_bitmap_crops"
+  namespace: "systemui"
+  description: "Avoid some rounding errors in WallpaperManager.getBitmapCrops(..., originalBitmap=true)"
+  bug: "384502688"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }

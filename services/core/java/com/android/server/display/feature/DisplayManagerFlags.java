@@ -63,6 +63,10 @@ public class DisplayManagerFlags {
             Flags.FLAG_DISPLAY_TOPOLOGY,
             DesktopExperienceFlags.DISPLAY_TOPOLOGY::isTrue);
 
+    private final FlagState mDisplayTopologyApi = new FlagState(
+            Flags.FLAG_DISPLAY_TOPOLOGY_API,
+            Flags::displayTopologyApi);
+
     private final FlagState mConnectedDisplayErrorHandlingFlagState = new FlagState(
             Flags.FLAG_ENABLE_CONNECTED_DISPLAY_ERROR_HANDLING,
             Flags::enableConnectedDisplayErrorHandling);
@@ -137,14 +141,14 @@ public class DisplayManagerFlags {
             Flags::sensorBasedBrightnessThrottling
     );
 
-    private final FlagState mIdleScreenRefreshRateTimeout = new FlagState(
-            Flags.FLAG_IDLE_SCREEN_REFRESH_RATE_TIMEOUT,
-            Flags::idleScreenRefreshRateTimeout
-    );
-
     private final FlagState mRefactorDisplayPowerController = new FlagState(
             Flags.FLAG_REFACTOR_DISPLAY_POWER_CONTROLLER,
             Flags::refactorDisplayPowerController
+    );
+
+    private final FlagState mDozeBrightnessStrategy = new FlagState(
+            Flags.FLAG_DOZE_BRIGHTNESS_STRATEGY,
+            Flags::dozeBrightnessStrategy
     );
 
     private final FlagState mUseFusionProxSensor = new FlagState(
@@ -171,11 +175,6 @@ public class DisplayManagerFlags {
             Flags::enableSynthetic60hzModes
     );
 
-    private final FlagState mOffloadDozeOverrideHoldsWakelock = new FlagState(
-            Flags.FLAG_OFFLOAD_DOZE_OVERRIDE_HOLDS_WAKELOCK,
-            Flags::offloadDozeOverrideHoldsWakelock
-    );
-
     private final FlagState mOffloadSessionCancelBlockScreenOn = new FlagState(
             Flags.FLAG_OFFLOAD_SESSION_CANCEL_BLOCK_SCREEN_ON,
             Flags::offloadSessionCancelBlockScreenOn);
@@ -183,10 +182,6 @@ public class DisplayManagerFlags {
     private final FlagState mNewHdrBrightnessModifier = new FlagState(
             Flags.FLAG_NEW_HDR_BRIGHTNESS_MODIFIER,
             Flags::newHdrBrightnessModifier);
-
-    private final FlagState mIdleScreenConfigInSubscribingLightSensor = new FlagState(
-            Flags.FLAG_IDLE_SCREEN_CONFIG_IN_SUBSCRIBING_LIGHT_SENSOR,
-            Flags::idleScreenConfigInSubscribingLightSensor);
 
     private final FlagState mVirtualDisplayLimit =
             new FlagState(
@@ -285,9 +280,38 @@ public class DisplayManagerFlags {
             Flags::separateTimeouts
     );
 
+    private final FlagState mSetBrightnessByUnit = new FlagState(
+            Flags.FLAG_SET_BRIGHTNESS_BY_UNIT,
+            Flags::setBrightnessByUnit
+    );
+
     private final FlagState mDelayImplicitRrRegistrationUntilRrAccessed = new FlagState(
             Flags.FLAG_DELAY_IMPLICIT_RR_REGISTRATION_UNTIL_RR_ACCESSED,
             Flags::delayImplicitRrRegistrationUntilRrAccessed
+    );
+
+    private final FlagState mHdrBrightnessSetting = new FlagState(
+            Flags.FLAG_HDR_BRIGHTNESS_SETTING,
+            Flags::hdrBrightnessSetting
+    );
+
+    private final FlagState mDispatchDisplayModeWithVsyncOffsets = new FlagState(
+            Flags.FLAG_ENABLE_ON_MODE_CHANGED_VSYNC_PHASE_OFFSET,
+            Flags::enableOnModeChangedVsyncPhaseOffset
+    );
+
+    private final FlagState mEnableDefaultDisplayInTopologySwitch = new FlagState(
+            Flags.FLAG_ENABLE_DEFAULT_DISPLAY_IN_TOPOLOGY_SWITCH,
+            DesktopExperienceFlags.ENABLE_DEFAULT_DISPLAY_IN_TOPOLOGY_SWITCH::isTrue
+    );
+
+    private final FlagState mModeSwitchWithoutSaving = new FlagState(
+            Flags.FLAG_MODE_SWITCH_WITHOUT_SAVING,
+            Flags::modeSwitchWithoutSaving
+    );
+    private final FlagState mEnsureColorFadeWhenTurningOn = new FlagState(
+            Flags.FLAG_ENSURE_COLOR_FADE_WHEN_TURNING_ON,
+            Flags::ensureColorFadeWhenTurningOn
     );
 
     /**
@@ -425,12 +449,12 @@ public class DisplayManagerFlags {
         return mSensorBasedBrightnessThrottling.isEnabled();
     }
 
-    public boolean isIdleScreenRefreshRateTimeoutEnabled() {
-        return mIdleScreenRefreshRateTimeout.isEnabled();
-    }
-
     public boolean isRefactorDisplayPowerControllerEnabled() {
         return mRefactorDisplayPowerController.isEnabled();
+    }
+
+    public boolean isDozeBrightnessStrategyEnabled() {
+        return mDozeBrightnessStrategy.isEnabled();
     }
 
     public boolean isUseFusionProxSensorEnabled() {
@@ -447,10 +471,6 @@ public class DisplayManagerFlags {
 
     public boolean isPeakRefreshRatePhysicalLimitEnabled() {
         return mPeakRefreshRatePhysicalLimit.isEnabled();
-    }
-
-    public boolean isOffloadDozeOverrideHoldsWakelockEnabled() {
-        return mOffloadDozeOverrideHoldsWakelock.isEnabled();
     }
 
     public boolean isOffloadSessionCancelBlockScreenOnEnabled() {
@@ -485,14 +505,6 @@ public class DisplayManagerFlags {
     public boolean isNormalBrightnessForDozeParameterEnabled(Context context) {
         return mNormalBrightnessForDozeParameter.isEnabled() && context.getResources().getBoolean(
                 com.android.internal.R.bool.config_allowNormalBrightnessForDozePolicy);
-    }
-
-     /**
-      * @return {@code true} if idle timer refresh rate config is accounted for while subscribing to
-      * the light sensor
-      */
-    public boolean isIdleScreenConfigInSubscribingLightSensorEnabled() {
-        return mIdleScreenConfigInSubscribingLightSensor.isEnabled();
     }
 
     /**
@@ -627,6 +639,29 @@ public class DisplayManagerFlags {
         return mDelayImplicitRrRegistrationUntilRrAccessed.isEnabled();
     }
 
+    public boolean isHdrBrightnessSettingEnabled() {
+        return mHdrBrightnessSetting.isEnabled();
+    }
+
+    public boolean isDispatchDisplayModeWithVsyncOffsetsEnabled() {
+        return mDispatchDisplayModeWithVsyncOffsets.isEnabled();
+    }
+
+    public boolean isDefaultDisplayInTopologySwitchEnabled() {
+        return mEnableDefaultDisplayInTopologySwitch.isEnabled();
+    }
+
+    public boolean isModeSwitchWithoutSavingEnabled() {
+        return mModeSwitchWithoutSaving.isEnabled();
+    }
+
+    /**
+     * @return {@code true} if the flag for ensure color fad when turning screen on is enabled
+     */
+    public boolean isEnsureColorFadeWhenTurningOnEnabled() {
+        return mEnsureColorFadeWhenTurningOn.isEnabled();
+    }
+
     /**
      * dumps all flagstates
      * @param pw printWriter
@@ -641,6 +676,7 @@ public class DisplayManagerFlags {
         pw.println(" " + mDisplayOffloadFlagState);
         pw.println(" " + mExternalDisplayLimitModeState);
         pw.println(" " + mDisplayTopology);
+        pw.println(" " + mDisplayTopologyApi);
         pw.println(" " + mPowerThrottlingClamperFlagState);
         pw.println(" " + mEvenDimmerFlagState);
         pw.println(" " + mSmallAreaDetectionFlagState);
@@ -654,20 +690,18 @@ public class DisplayManagerFlags {
         pw.println(" " + mAlwaysRotateDisplayDevice);
         pw.println(" " + mPixelAnisotropyCorrectionEnabled);
         pw.println(" " + mSensorBasedBrightnessThrottling);
-        pw.println(" " + mIdleScreenRefreshRateTimeout);
         pw.println(" " + mRefactorDisplayPowerController);
+        pw.println(" " + mDozeBrightnessStrategy);
         pw.println(" " + mResolutionBackupRestore);
         pw.println(" " + mUseFusionProxSensor);
         pw.println(" " + mDozeBrightnessFloat);
         pw.println(" " + mPeakRefreshRatePhysicalLimit);
         pw.println(" " + mIgnoreAppPreferredRefreshRate);
         pw.println(" " + mSynthetic60hzModes);
-        pw.println(" " + mOffloadDozeOverrideHoldsWakelock);
         pw.println(" " + mOffloadSessionCancelBlockScreenOn);
         pw.println(" " + mNewHdrBrightnessModifier);
         pw.println(" " + mVirtualDisplayLimit);
         pw.println(" " + mNormalBrightnessForDozeParameter);
-        pw.println(" " + mIdleScreenConfigInSubscribingLightSensor);
         pw.println(" " + mEnableWaitingConfirmationBeforeMirroring);
         pw.println(" " + mEnableBatteryStatsForAllDisplays);
         pw.println(" " + mEnableApplyDisplayChangedDuringDisplayAdded);
@@ -685,7 +719,13 @@ public class DisplayManagerFlags {
         pw.println(" " + mRefreshRateEventForForegroundApps);
         pw.println(" " + mCommittedStateSeparateEvent);
         pw.println(" " + mSeparateTimeouts);
+        pw.println(" " + mSetBrightnessByUnit);
         pw.println(" " + mDelayImplicitRrRegistrationUntilRrAccessed);
+        pw.println(" " + mHdrBrightnessSetting);
+        pw.println(" " + mDispatchDisplayModeWithVsyncOffsets);
+        pw.println(" " + mEnableDefaultDisplayInTopologySwitch);
+        pw.println(" " + mModeSwitchWithoutSaving);
+        pw.println(" " + mEnsureColorFadeWhenTurningOn);
     }
 
     private static class FlagState {

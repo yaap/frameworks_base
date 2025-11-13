@@ -18,6 +18,7 @@ package com.android.wm.shell.scenarios
 
 import android.app.Instrumentation
 import android.tools.NavBar
+import android.tools.PlatformConsts.DEFAULT_DISPLAY
 import android.tools.Rotation
 import android.tools.traces.parsers.WindowManagerStateHelper
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,6 +29,7 @@ import com.android.server.wm.flicker.helpers.MotionEventHelper
 import com.android.server.wm.flicker.helpers.SimpleAppHelper
 import com.android.window.flags.Flags
 import com.android.wm.shell.Utils
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import org.junit.After
 import org.junit.Assume
 import org.junit.Before
@@ -40,12 +42,12 @@ abstract class ResizeAppWithEdgeResize
 constructor(
     val inputMethod: MotionEventHelper.InputMethod,
     val rotation: Rotation = Rotation.ROTATION_90
-) {
+) : TestScenarioBase() {
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
     private val tapl = LauncherInstrumentation()
     private val wmHelper = WindowManagerStateHelper(instrumentation)
     private val device = UiDevice.getInstance(instrumentation)
-    private val testApp = DesktopModeAppHelper(SimpleAppHelper(instrumentation))
+    val testApp = DesktopModeAppHelper(SimpleAppHelper(instrumentation))
     private val motionEventHelper = MotionEventHelper(instrumentation, inputMethod)
 
     @Rule
@@ -55,9 +57,10 @@ constructor(
     @Before
     fun setup() {
         Assume.assumeTrue(
-            Flags.enableDesktopWindowingMode()
-                    && Flags.enableWindowingEdgeDragResize() && tapl.isTablet
+            DesktopState.fromContext(instrumentation.context)
+                .isDesktopModeSupportedOnDisplay(DEFAULT_DISPLAY)
         )
+        Assume.assumeTrue(Flags.enableWindowingEdgeDragResize())
         tapl.setEnableRotation(true)
         tapl.setExpectedRotation(rotation.value)
         testApp.enterDesktopMode(wmHelper, device)

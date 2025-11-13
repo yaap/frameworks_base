@@ -1950,8 +1950,8 @@ public class ComputerEngine implements Computer {
     private int getIsolatedOwner(int isolatedUid) {
         final int ownerUid = mIsolatedOwners.get(isolatedUid, -1);
         if (ownerUid == -1) {
-            throw new IllegalStateException(
-                    "No owner UID found for isolated UID " + isolatedUid);
+            Slog.wtf(TAG, "No owner UID found for isolated UID " + isolatedUid);
+            return isolatedUid;
         }
         return ownerUid;
     }
@@ -2839,17 +2839,6 @@ public class ComputerEngine implements Computer {
             enforceCrossUserPermission(Binder.getCallingUid(), userId, false, false,
                     !isRecentsAccessingChildProfiles(Binder.getCallingUid(), userId),
                     "MATCH_ANY_USER flag requires INTERACT_ACROSS_USERS permission");
-        } else if (!Flags.removeCrossUserPermissionHack()
-                && (flags & PackageManager.MATCH_UNINSTALLED_PACKAGES) != 0
-                && isCallerSystemUser
-                && mUserManager.hasProfile(UserHandle.USER_SYSTEM)) {
-            // If the caller wants all packages and has a profile associated with it,
-            // then match all users. This is to make sure that launchers that need to access
-            //work
-            // profile apps don't start breaking. TODO: Remove this hack when launchers stop
-            //using
-            // MATCH_UNINSTALLED_PACKAGES to query apps in other profiles. b/31000380
-            flags |= PackageManager.MATCH_ANY_USER;
         }
         return updateFlags(flags, userId);
     }
@@ -3519,7 +3508,7 @@ public class ComputerEngine implements Computer {
                         } else {
                             final boolean isHomeActivity = ACTION_MAIN.equals(intent.getAction())
                                     && intent.hasCategory(CATEGORY_HOME);
-                            if (!Flags.improveHomeAppBehavior() || !isHomeActivity) {
+                            if (!isHomeActivity) {
                                 // Don't reset the preferred activity just for the home intent, we
                                 // should respect the default home app even though there any new
                                 // home activity is enabled.
@@ -4460,12 +4449,7 @@ public class ComputerEngine implements Computer {
         }
         final int callingUserId = UserHandle.getUserId(callingUid);
         if (isKnownIsolatedComputeApp(uid)) {
-            try {
-                uid = getIsolatedOwner(uid);
-            } catch (IllegalStateException e) {
-                // If the owner uid doesn't exist, just use the current uid
-                Slog.wtf(TAG, "Expected isolated uid " + uid + " to have an owner", e);
-            }
+            uid = getIsolatedOwner(uid);
         }
         final int appId = UserHandle.getAppId(uid);
         final Object obj = mSettings.getSettingBase(appId);
@@ -4503,12 +4487,7 @@ public class ComputerEngine implements Computer {
                 uid = getBaseSdkSandboxUid();
             }
             if (isKnownIsolatedComputeApp(uid)) {
-                try {
-                    uid = getIsolatedOwner(uid);
-                } catch (IllegalStateException e) {
-                    // If the owner uid doesn't exist, just use the current uid
-                    Slog.wtf(TAG, "Expected isolated uid " + uid + " to have an owner", e);
-                }
+                uid = getIsolatedOwner(uid);
             }
             final int appId = UserHandle.getAppId(uid);
             final Object obj = mSettings.getSettingBase(appId);

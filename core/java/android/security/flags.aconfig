@@ -42,13 +42,10 @@ flag {
 }
 
 flag {
-    name: "secure_array_zeroization"
+    name: "software_ratelimiter"
     namespace: "security"
-    description: "Enable secure array zeroization"
-    bug: "320392352"
-    metadata {
-      purpose: PURPOSE_BUGFIX
-    }
+    description: "Enable support for SoftwareRateLimiter in LockSettingsService"
+    bug: "395976735"
 }
 
 flag {
@@ -65,16 +62,6 @@ flag {
   namespace: "biometrics"
   description: "Causes TrustManagerService to listen for credential attempts and ignore reports from upstream"
   bug: "323086607"
-}
-
-flag {
-    name: "clear_strong_auth_on_adding_primary_credential"
-    namespace: "biometrics"
-    description: "Clear StrongAuth on adding credential"
-    bug: "320817991"
-    metadata {
-      purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -120,6 +107,14 @@ flag {
 }
 
 flag {
+    name: "secure_lock_device"
+    namespace: "biometrics"
+    description: "Feature flag for Secure Lock Device feature"
+    bug: "401645997"
+    is_exported: true
+}
+
+flag {
     name: "subscribe_to_keyguard_locked_state_perm_priv_flag"
     namespace: "psap_ai"
     description: "Feature flag to add the privileged flag to the SUBSCRIBE_TO_KEYGUARD_LOCKED_STATE permission"
@@ -132,4 +127,11 @@ flag {
     namespace: "biometrics"
     description: "Flag to allow an adb secure setting to disable the adaptive auth lock"
     bug: "371057865"
+}
+
+flag {
+    name: "failed_auth_lock_toggle"
+    namespace: "biometrics"
+    description: "Feature flag to enable the toggle for failed authentication lock"
+    bug: "414605464"
 }

@@ -17,6 +17,7 @@
 package com.android.server.companion.devicepresence;
 
 import static android.companion.AssociationRequest.DEVICE_PROFILE_AUTOMOTIVE_PROJECTION;
+import static android.companion.DevicePresenceEvent.EVENT_ASSOCIATION_REMOVED;
 import static android.companion.DevicePresenceEvent.EVENT_BLE_APPEARED;
 import static android.companion.DevicePresenceEvent.EVENT_BLE_DISAPPEARED;
 import static android.companion.DevicePresenceEvent.EVENT_BT_CONNECTED;
@@ -28,18 +29,23 @@ import static android.content.Context.BLUETOOTH_SERVICE;
 import static android.os.Process.ROOT_UID;
 import static android.os.Process.SHELL_UID;
 
+import static com.android.server.companion.utils.MetricUtils.logDevicePresenceEvent;
 import static com.android.server.companion.utils.PermissionsUtils.enforceCallerCanManageAssociationsForPackage;
+import static com.android.server.companion.utils.PermissionsUtils.enforceCallerCanObserveDevicePresenceByDeviceId;
 import static com.android.server.companion.utils.PermissionsUtils.enforceCallerCanObserveDevicePresenceByUuid;
 
 import android.annotation.NonNull;
+import android.annotation.PermissionManuallyEnforced;
 import android.annotation.SuppressLint;
 import android.annotation.TestApi;
 import android.annotation.UserIdInt;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.companion.AssociationInfo;
+import android.companion.DeviceId;
 import android.companion.DeviceNotAssociatedException;
 import android.companion.DevicePresenceEvent;
+import android.companion.Flags;
 import android.companion.ObservingDevicePresenceRequest;
 import android.content.Context;
 import android.hardware.power.Mode;
@@ -59,6 +65,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.CollectionUtils;
 import com.android.server.companion.CompanionExemptionProcessor;
 import com.android.server.companion.association.AssociationStore;
+import com.android.server.companion.utils.MetricUtils;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -185,28 +192,81 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
     /**
      * Process device presence start request.
      */
+
+    @PermissionManuallyEnforced
     public void startObservingDevicePresence(ObservingDevicePresenceRequest request,
-            String packageName, int userId, boolean enforcePermissions) {
+            String callingPackage, int userId, boolean enforcePermissions) {
         Slog.i(TAG,
                 "Start observing request=[" + request + "] for userId=[" + userId + "], package=["
-                        + packageName + "]...");
+                        + callingPackage + "]...");
         final ParcelUuid requestUuid = request.getUuid();
+        final DeviceId deviceId = request.getDeviceId();
 
         if (requestUuid != null) {
             if (enforcePermissions) {
-                enforceCallerCanObserveDevicePresenceByUuid(mContext, packageName, userId);
+                enforceCallerCanObserveDevicePresenceByUuid(mContext, callingPackage, userId);
             }
 
             // If it's already being observed, then no-op.
-            if (mObservableUuidStore.isUuidBeingObserved(requestUuid, userId, packageName)) {
-                Slog.i(TAG, "UUID=[" + requestUuid + "], package=[" + packageName + "], userId=["
-                        + userId + "] is already being observed.");
+            if (mObservableUuidStore.isUuidBeingObserved(requestUuid, userId, callingPackage)) {
+                Slog.i(TAG, "UUID=[" + requestUuid + "], package=["
+                        + callingPackage + "], userId=[" + userId + "] is already being observed.");
                 return;
             }
 
             final ObservableUuid observableUuid = new ObservableUuid(userId, requestUuid,
-                    packageName, System.currentTimeMillis());
+                    callingPackage, System.currentTimeMillis());
             mObservableUuidStore.writeObservableUuid(userId, observableUuid);
+        } else if (deviceId != null) {
+            enforceCallerCanObserveDevicePresenceByDeviceId(mContext);
+
+            Slog.i(TAG, "Register device presence for Device id: " + deviceId);
+
+            AssociationInfo associationInfo = mAssociationStore.getAssociationByDeviceId(
+                    userId, deviceId);
+            if (associationInfo == null) {
+                throw new IllegalArgumentException(
+                        "Association is not found for DeviceId=(" + deviceId + ")"
+                );
+            }
+
+            if (callingPackage.equals(associationInfo.getPackageName())) {
+                throw new IllegalArgumentException(
+                      "When observing device presence for the own package,"
+                              + " use setAssociationId instead, not the device id."
+                );
+            }
+
+            List<String> packagesToNotify;
+            if (associationInfo.getPackagesToNotify() != null) {
+                packagesToNotify = new ArrayList<>(associationInfo.getPackagesToNotify());
+            } else {
+                packagesToNotify = new ArrayList<>();
+            }
+
+            if (!packagesToNotify.contains(callingPackage)) {
+                packagesToNotify.add(callingPackage);
+            } else {
+                Slog.i(TAG, "Package: " + callingPackage
+                        + " has been already observing, no action needed");
+                return;
+            }
+
+            associationInfo = (new AssociationInfo.Builder(associationInfo))
+                    .setPackagesToNotify(packagesToNotify).build();
+            mAssociationStore.updateAssociation(associationInfo);
+
+            // Device already present, trigger the callback immediately.
+            if (associationInfo.shouldBindWhenPresent()) {
+                if (isBlePresent(associationInfo.getId())) {
+                    notifyAndExemptApp(
+                            EVENT_BLE_APPEARED, associationInfo, callingPackage, userId);
+                }
+                if (isBtConnected(associationInfo.getId())) {
+                    notifyAndExemptApp(
+                            EVENT_BT_CONNECTED, associationInfo, callingPackage, userId);
+                }
+            }
         } else {
             final int associationId = request.getAssociationId();
             AssociationInfo association = mAssociationStore.getAssociationWithCallerChecks(
@@ -242,6 +302,7 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
     /**
      * Process device presence stop request.
      */
+    @PermissionManuallyEnforced
     public void stopObservingDevicePresence(ObservingDevicePresenceRequest request,
             String packageName, int userId, boolean enforcePermissions) {
         Slog.i(TAG,
@@ -249,6 +310,7 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
                         + packageName + "]...");
 
         final ParcelUuid requestUuid = request.getUuid();
+        final DeviceId deviceId = request.getDeviceId();
 
         if (requestUuid != null) {
             if (enforcePermissions) {
@@ -263,6 +325,34 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
 
             mObservableUuidStore.removeObservableUuid(userId, requestUuid, packageName);
             removeCurrentConnectedUuidDevice(requestUuid);
+        } else if (deviceId != null) {
+            enforceCallerCanObserveDevicePresenceByDeviceId(mContext);
+
+            Slog.i(TAG, "Unregister device presence for Device id: " + request.getDeviceId());
+
+            AssociationInfo associationInfo = mAssociationStore.getAssociationByDeviceId(userId,
+                    deviceId);
+            if (associationInfo == null) {
+                throw new IllegalArgumentException(
+                        "Association is not found for DeviceId=(" + deviceId + ")"
+                );
+            }
+
+            if (associationInfo.getPackagesToNotify() != null
+                    && associationInfo.getPackagesToNotify().contains(packageName)) {
+                List<String> packagesToNotify =
+                        new ArrayList<>(associationInfo.getPackagesToNotify());
+                packagesToNotify.remove(packageName);
+                if (packagesToNotify.isEmpty()) {
+                    packagesToNotify = null;
+                }
+                associationInfo = (new AssociationInfo.Builder(associationInfo))
+                        .setPackagesToNotify(packagesToNotify).build();
+                mAssociationStore.updateAssociation(associationInfo);
+            } else {
+                Slog.w(TAG, "DeviceId: " + request.getDeviceId() + " is not currently observed");
+                return;
+            }
         } else {
             final int associationId = request.getAssociationId();
             AssociationInfo association = mAssociationStore.getAssociationWithCallerChecks(
@@ -358,6 +448,8 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
                 mAssociationStore.getActiveAssociationsByPackage(userId, packageName);
         final List<ObservableUuid> observableUuids =
                 mObservableUuidStore.getObservableUuidsForPackage(userId, packageName);
+        final List<AssociationInfo> associationInfos =
+                mAssociationStore.getActiveAssociationsByUser(userId);
 
         for (AssociationInfo association : packageAssociations) {
             if (!association.shouldBindWhenPresent()) continue;
@@ -366,6 +458,14 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
 
         for (ObservableUuid uuid : observableUuids) {
             if (isDeviceUuidPresent(uuid.getUuid())) {
+                return true;
+            }
+        }
+
+        for (AssociationInfo ai : associationInfos) {
+            List<String> packagesToNotify = ai.getPackagesToNotify();
+            if (packagesToNotify != null
+                    && packagesToNotify.contains(packageName) && isDevicePresent(ai.getId())) {
                 return true;
             }
         }
@@ -663,6 +763,7 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
         final int userId = association.getUserId();
         final String packageName = association.getPackageName();
         final DevicePresenceEvent event = new DevicePresenceEvent(associationId, eventType, null);
+        final String deviceProfile = association.getDeviceProfile();
 
         if (eventType == EVENT_BLE_APPEARED) {
             synchronized (mBtDisconnectedDevices) {
@@ -694,9 +795,15 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
                 }
 
                 if (association.isSelfManaged() || added) {
-                    notifyDevicePresenceEvent(userId, packageName, event);
+                    notifyDevicePresenceEvent(userId, packageName, deviceProfile, event);
                     // Also send the legacy callback.
                     legacyNotifyDevicePresenceEvent(association, true);
+                    // Also send the callback to the package that registered to be notified.
+                    if (association.getPackagesToNotify() != null) {
+                        for (String packageToNotify : association.getPackagesToNotify()) {
+                            notifyAndExemptApp(eventType, association, packageToNotify, userId);
+                        }
+                    }
                 }
                 break;
             case EVENT_BLE_DISAPPEARED:
@@ -713,15 +820,25 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
                 }
 
                 if (association.isSelfManaged() || removed) {
-                    notifyDevicePresenceEvent(userId, packageName, event);
+                    notifyDevicePresenceEvent(userId, packageName, deviceProfile, event);
                     // Also send the legacy callback.
                     legacyNotifyDevicePresenceEvent(association, false);
+                    // Send the callback to other packages that registered to be notified
+                    if (association.getPackagesToNotify() != null) {
+                        for (String packageToNotify : association.getPackagesToNotify()) {
+                            notifyDevicePresenceEvent(
+                                    userId, packageToNotify, deviceProfile, event);
+                            // Also unbind the package that registered to be notified.
+                            if (!shouldBindPackage(userId, packageToNotify)) {
+                                unbindAndRemoveExemptionForApp(userId, packageToNotify);
+                            }
+                        }
+                    }
                 }
 
                 // Check if there are other devices associated to the app that are present.
                 if (!shouldBindPackage(userId, packageName)) {
-                    mCompanionAppBinder.unbindCompanionApp(userId, packageName);
-                    mCompanionExemptionProcessor.exemptPackage(userId, packageName, false);
+                    unbindAndRemoveExemptionForApp(userId, packageName);
                 }
                 break;
             default:
@@ -755,7 +872,7 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
 
                 bindApplicationIfNeeded(userId, packageName, false);
 
-                notifyDevicePresenceEvent(userId, packageName, event);
+                notifyDevicePresenceEvent(userId, packageName, MetricUtils.UUID, event);
                 break;
             case EVENT_BT_DISCONNECTED:
                 final boolean removed = mConnectedUuidDevices.remove(parcelUuid);
@@ -769,7 +886,7 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
                     return;
                 }
 
-                notifyDevicePresenceEvent(userId, packageName, event);
+                notifyDevicePresenceEvent(userId, packageName, MetricUtils.UUID, event);
 
                 if (!shouldBindPackage(userId, packageName)) {
                     mCompanionAppBinder.unbindCompanionApp(userId, packageName);
@@ -784,7 +901,8 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
     /**
      * Notify device presence event to the app.
      *
-     * @deprecated Use {@link #notifyDevicePresenceEvent(int, String, DevicePresenceEvent)} instead.
+     * @deprecated Use
+     * {@link #notifyDevicePresenceEvent(int, String, String, DevicePresenceEvent)} instead.
      */
     @Deprecated
     private void legacyNotifyDevicePresenceEvent(AssociationInfo association,
@@ -813,10 +931,12 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
      * Notify the device presence event to the app.
      */
     private void notifyDevicePresenceEvent(int userId, String packageName,
-            DevicePresenceEvent event) {
+            String deviceProfileOrUuid, DevicePresenceEvent event) {
         Slog.i(TAG,
-                "notifyCompanionDevicePresenceEvent userId=[" + userId + "], packageName=["
-                        + packageName + "], event=[" + event + "]...");
+                "notifyCompanionDevicePresenceEvent userId=[" + userId + "],"
+                        + "packageName=[" + packageName + "],"
+                        + "deviceProfileOrUuid=[" + deviceProfileOrUuid + "],"
+                        + "event=[" + event + "]...");
 
         final CompanionServiceConnector primaryServiceConnector =
                 mCompanionAppBinder.getPrimaryServiceConnector(userId, packageName);
@@ -825,6 +945,8 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
             Slog.e(TAG, "Package is NOT bound.");
             return;
         }
+        logDevicePresenceEvent(
+                userId, mContext, deviceProfileOrUuid, packageName, event.getEvent());
 
         primaryServiceConnector.postOnDevicePresenceEvent(event);
     }
@@ -945,6 +1067,24 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
     public void onAssociationRemoved(@NonNull AssociationInfo association) {
         final int id = association.getId();
 
+        if (association.isNotifyOnDeviceNearby() && Flags.notifyAssociationRemoved()) {
+            final int userId = association.getUserId();
+            final String packageName = association.getPackageName();
+            final DevicePresenceEvent event = new DevicePresenceEvent(
+                    id, EVENT_ASSOCIATION_REMOVED, /* uuid */ null);
+            // Notify and unbind for the original package that created this association.
+            processNotifyAssociationRemoved(userId, packageName, event,
+                    association.getDeviceProfile(), association.isSelfManaged());
+            // Notify and unbind for non companion app.
+            if (Flags.associationVerification() && association.getPackagesToNotify() != null) {
+                for (String packageToNotify : association.getPackagesToNotify()) {
+                    if (!packageToNotify.equals(packageName)) {
+                        processNotifyAssociationRemoved(userId, packageToNotify, event,
+                                association.getDeviceProfile(), association.isSelfManaged());
+                    }
+                }
+            }
+        }
         mConnectedBtDevices.remove(id);
         mNearbyBleDevices.remove(id);
         mConnectedSelfManagedDevices.remove(id);
@@ -1219,6 +1359,34 @@ public class DevicePresenceProcessor implements AssociationStore.OnChangeListene
                 mBtDisconnectedDevices.remove(associationId);
                 mBtDisconnectedDevicesBlePresence.delete(associationId);
             }
+        }
+    }
+
+    private void notifyAndExemptApp(
+            int eventType, AssociationInfo associationInfo, String packageName, int userId) {
+        final DevicePresenceEvent event = new DevicePresenceEvent(
+                associationInfo.getId(), eventType, null);
+        bindApplicationIfNeeded(userId, packageName, associationInfo.isSelfManaged());
+        mCompanionExemptionProcessor.exemptPackage(
+                userId, packageName, /* hasPresentDevices */ true);
+        notifyDevicePresenceEvent(userId, packageName, associationInfo.getDeviceProfile(), event);
+    }
+
+    private void unbindAndRemoveExemptionForApp(int userId, String packageName) {
+        mCompanionAppBinder.unbindCompanionApp(userId, packageName);
+        mCompanionExemptionProcessor.exemptPackage(userId, packageName, false);
+    }
+
+    private void processNotifyAssociationRemoved(int userId, @NonNull String packageName,
+            @NonNull DevicePresenceEvent event, String deviceProfile, boolean isSelfManaged) {
+        bindApplicationIfNeeded(userId, packageName, isSelfManaged);
+        notifyDevicePresenceEvent(userId, packageName, deviceProfile, event);
+
+        if (!shouldBindPackage(userId, packageName)) {
+            mCompanionAppBinder.unbindCompanionApp(userId, packageName);
+        } else {
+            Slog.i(TAG, "Not unbinding package " + packageName
+                    + " as other associations are still present.");
         }
     }
 }

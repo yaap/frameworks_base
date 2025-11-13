@@ -23,6 +23,7 @@ import static android.content.Context.BIND_FOREGROUND_SERVICE;
 import static android.content.Context.DEVICE_POLICY_SERVICE;
 import static android.os.UserHandle.USER_ALL;
 import static android.os.UserHandle.USER_SYSTEM;
+import static android.service.notification.Flags.reportNlsStartAndEnd;
 import static android.service.notification.NotificationListenerService.META_DATA_DEFAULT_AUTOBIND;
 
 import static com.android.server.notification.Flags.FLAG_MANAGED_SERVICES_CONCURRENT_MULTIUSER;
@@ -33,11 +34,13 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.app.ActivityManager;
 import android.app.ActivityOptions;
+import android.app.IBinderSession;
 import android.app.PendingIntent;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Context.BindServiceFlags;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ApplicationInfo;
@@ -53,6 +56,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.IInterface;
 import android.os.Looper;
+import android.os.Process;
 import android.os.RemoteException;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -183,6 +187,11 @@ abstract public class ManagedServices {
     @GuardedBy("mApproved")
     protected final ArrayMap<Integer, ArrayMap<Boolean, ArraySet<String>>> mApproved =
             new ArrayMap<>();
+
+    // List of approved UIDs, by user
+    @GuardedBy("mApproved")
+    protected final SparseArray<HashSet<Integer>> mApprovedUids = new SparseArray<>();
+
     // List of packages or components (by user) that are configured to be enabled/disabled
     // explicitly by the user
     @GuardedBy("mApproved")
@@ -274,6 +283,10 @@ abstract public class ManagedServices {
         }
     }
 
+    UserProfiles getUserProfiles() {
+        return mUserProfiles;
+    }
+
     /**
      * When resetting a package, we need to enable default components that belong to that packages
      * we also need to disable components that are not default to return the managed service state
@@ -349,18 +362,11 @@ abstract public class ManagedServices {
         return userSet != null && userSet.remove(approvedValue);
     }
 
-    protected int getBindFlags() {
+    protected long getBindFlags() {
         return BIND_AUTO_CREATE | BIND_FOREGROUND_SERVICE | BIND_ALLOW_WHITELIST_MANAGEMENT;
     }
 
     protected void onServiceRemovedLocked(ManagedServiceInfo removed) { }
-
-    private ManagedServiceInfo newServiceInfo(IInterface service,
-            ComponentName component, int userId, boolean isSystem, ServiceConnection connection,
-            int targetSdkVersion, int uid) {
-        return new ManagedServiceInfo(service, component, userId, isSystem, connection,
-                targetSdkVersion, uid);
-    }
 
     public void onBootPhaseAppsCanStart() {}
 
@@ -385,6 +391,8 @@ abstract public class ManagedServices {
                         }
                     }
                 }
+                final HashSet<Integer> uids = mApprovedUids.get(userId);
+                pw.println("    Approved uids for user " + userId + ": " + uids.toString());
             }
             pw.println("    Has user set:");
             Set<Integer> userIds = mUserSetServices.keySet();
@@ -846,11 +854,16 @@ abstract public class ManagedServices {
                 approvedByType = new ArrayMap<>();
                 mApproved.put(userId, approvedByType);
             }
-
             ArraySet<String> approvedList = approvedByType.get(isPrimary);
             if (approvedList == null) {
                 approvedList = new ArraySet<>();
                 approvedByType.put(isPrimary, approvedList);
+            }
+
+            HashSet<Integer> approvedUids = mApprovedUids.get(userId);
+            if (approvedUids == null) {
+                approvedUids = new HashSet<>();
+                mApprovedUids.put(userId, approvedUids);
             }
 
             String[] approvedArray = approved.split(ENABLED_SERVICES_SEPARATOR);
@@ -858,6 +871,10 @@ abstract public class ManagedServices {
                 String approvedItem = getApprovedValue(pkgOrComponent);
                 if (approvedItem != null) {
                     approvedList.add(approvedItem);
+                }
+                int uid = getUidForPackageOrComponent(pkgOrComponent, userId);
+                if (uid != Process.INVALID_UID) {
+                    approvedUids.add(uid);
                 }
             }
 
@@ -931,6 +948,11 @@ abstract public class ManagedServices {
                 allowedByType = new ArrayMap<>();
                 mApproved.put(userId, allowedByType);
             }
+            HashSet<Integer> approvedUids = mApprovedUids.get(userId);
+            if (approvedUids == null) {
+                approvedUids = new HashSet<>();
+                mApprovedUids.put(userId, approvedUids);
+            }
             ArraySet<String> approved = allowedByType.get(isPrimary);
             if (approved == null) {
                 approved = new ArraySet<>();
@@ -939,10 +961,17 @@ abstract public class ManagedServices {
             String approvedItem = getApprovedValue(pkgOrComponent);
 
             if (approvedItem != null) {
+                int uid = getUidForPackageOrComponent(pkgOrComponent, userId);
                 if (enabled) {
                     approved.add(approvedItem);
+                    if (uid != Process.INVALID_UID) {
+                        approvedUids.add(uid);
+                    }
                 } else {
                     approved.remove(approvedItem);
+                    if (uid != Process.INVALID_UID) {
+                        approvedUids.remove(uid);
+                    }
                 }
             }
             ArraySet<String> userSetServices = mUserSetServices.get(userId);
@@ -955,9 +984,20 @@ abstract public class ManagedServices {
             } else {
                 userSetServices.remove(pkgOrComponent);
             }
+
         }
 
         rebindServices(false, userId);
+    }
+
+    private int getUidForPackageOrComponent(String pkgOrComponent, int userId) {
+        String packageName = getPackageName(pkgOrComponent);
+
+        try {
+            return mContext.getPackageManager().getPackageUidAsUser(packageName, userId);
+        } catch (NameNotFoundException e) {
+            return Process.INVALID_UID;
+        }
     }
 
     private String getApprovedValue(String pkgOrComponent) {
@@ -1015,6 +1055,13 @@ abstract public class ManagedServices {
             }
         }
         return allowedPackages;
+    }
+
+    protected boolean isUidAllowed(int uid) {
+        synchronized (mApproved) {
+            HashSet<Integer> allowedUids = mApprovedUids.get(UserHandle.getUserId(uid));
+            return allowedUids != null && allowedUids.contains(uid);
+        }
     }
 
     protected boolean isPackageOrComponentAllowed(String pkgOrComponent, int userId) {
@@ -1138,6 +1185,7 @@ abstract public class ManagedServices {
         Slog.i(TAG, "Removing approved services for removed user " + user);
         synchronized (mApproved) {
             mApproved.remove(user);
+            mApprovedUids.remove(user);
         }
         synchronized (mSnoozing) {
             mSnoozing.remove(user);
@@ -1813,7 +1861,8 @@ abstract public class ManagedServices {
                 IInterface mService;
 
                 @Override
-                public void onServiceConnected(ComponentName name, IBinder binder) {
+                public void onServiceConnected(ComponentName name, IBinder binder,
+                        IBinderSession binderSession) {
                     Slog.v(TAG,  userid + " " + getCaption() + " service connected: " + name);
                     boolean added = false;
                     ManagedServiceInfo info = null;
@@ -1821,8 +1870,13 @@ abstract public class ManagedServices {
                         mServicesRebinding.remove(servicesBindingTag);
                         try {
                             mService = asInterface(binder);
-                            info = newServiceInfo(mService, name,
-                                userid, isSystem, this, targetSdkVersion, uid);
+                            if (reportNlsStartAndEnd()) {
+                                info = new ManagedServiceInfo(mService, name, userid, isSystem,
+                                        this, targetSdkVersion, uid, binderSession);
+                            } else {
+                                info = new ManagedServiceInfo(mService, name, userid, isSystem,
+                                        this, targetSdkVersion, uid);
+                            }
                             binder.linkToDeath(info, 0);
                             added = mServices.add(info);
                         } catch (RemoteException e) {
@@ -1832,6 +1886,14 @@ abstract public class ManagedServices {
                     if (added) {
                         onServiceAdded(info);
                     }
+                }
+
+                @Override
+                public void onServiceConnected(ComponentName name, IBinder service) {
+                    Slog.wtfStack(TAG,
+                            "onServiceConnected(ComponentName, IBinder) called even when "
+                                    + "onServiceConnected(ComponentName, IBinder, IBinderSession)"
+                                    + " was overridden");
                 }
 
                 @Override
@@ -1864,7 +1926,7 @@ abstract public class ManagedServices {
             };
             if (!mContext.bindServiceAsUser(intent,
                     serviceConnection,
-                    getBindFlags(),
+                    BindServiceFlags.of(getBindFlags()),
                     new UserHandle(userid))) {
                 mServicesBound.remove(servicesBindingTag);
                 Slog.w(TAG, "Unable to bind " + getCaption() + " service: " + intent
@@ -1950,7 +2012,7 @@ abstract public class ManagedServices {
 
     private ManagedServiceInfo registerServiceImpl(final IInterface service,
             final ComponentName component, final int userid, int targetSdk, int uid) {
-        ManagedServiceInfo info = newServiceInfo(service, component, userid,
+        ManagedServiceInfo info = new ManagedServiceInfo(service, component, userid,
                 true /*isSystem*/, null /*connection*/, targetSdk, uid);
         return registerServiceImpl(info);
     }
@@ -2053,10 +2115,17 @@ abstract public class ManagedServices {
         public int uid;
         @FlaggedApi(FLAG_MANAGED_SERVICES_CONCURRENT_MULTIUSER)
         public boolean isVisibleBackgroundUserService;
+        public final IBinderSession mBinderSession;
 
         public ManagedServiceInfo(IInterface service, ComponentName component,
                 int userid, boolean isSystem, ServiceConnection connection, int targetSdkVersion,
                 int uid) {
+            this(service, component, userid, isSystem, connection, targetSdkVersion, uid, null);
+        }
+
+        public ManagedServiceInfo(IInterface service, ComponentName component,
+                int userid, boolean isSystem, ServiceConnection connection, int targetSdkVersion,
+                int uid, IBinderSession binderSession) {
             this.service = service;
             this.component = component;
             this.userid = userid;
@@ -2069,6 +2138,7 @@ abstract public class ManagedServices {
                         .getService(UserManagerInternal.class).isVisibleBackgroundFullUser(userid);
             }
             mKey = Pair.create(component, userid);
+            mBinderSession = binderSession;
         }
 
         public boolean isGuest(ManagedServices host) {
@@ -2289,6 +2359,30 @@ abstract public class ManagedServices {
                     return user.isProfile() && hasParent(user, context);
                 }
                 return user.isManagedProfile() || user.isCloneProfile();
+            }
+        }
+
+        boolean isManagedProfileUser(int userId) {
+            synchronized (mCurrentProfiles) {
+                UserInfo user = mCurrentProfiles.get(userId);
+                if (user == null) {
+                    return false;
+                }
+                return user.isManagedProfile();
+            }
+        }
+
+        int getProfileParentId(int userId, Context context) {
+            final long identity = Binder.clearCallingIdentity();
+            try {
+                UserManager um = context.getSystemService(UserManager.class);
+                UserInfo parent = um.getProfileParent(userId);
+                if (parent != null) {
+                    return parent.id;
+                }
+                return userId;  // if no parent, return itself
+            } finally {
+                Binder.restoreCallingIdentity(identity);
             }
         }
 

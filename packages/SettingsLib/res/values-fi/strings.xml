@@ -246,7 +246,7 @@
     <item msgid="6946761421234586000">"400 %"</item>
   </string-array>
     <string name="choose_profile" msgid="343803890897657450">"Valitse profiili"</string>
-    <string name="category_personal" msgid="6236798763159385225">"Omat"</string>
+    <string name="category_personal" msgid="6236798763159385225">"Henkilökohtainen"</string>
     <string name="category_work" msgid="4014193632325996115">"Työ"</string>
     <string name="category_private" msgid="4244892185452788977">"Yksityinen"</string>
     <string name="category_clone" msgid="1554511758987195974">"Klooni"</string>
@@ -298,8 +298,8 @@
     <string name="oem_unlock_enable_summary" msgid="5857388174390953829">"Salli käynnistysohjelman lukituksen avaaminen"</string>
     <string name="confirm_enable_oem_unlock_title" msgid="8249318129774367535">"Sallitaanko OEM:n lukituksen avaus?"</string>
     <string name="confirm_enable_oem_unlock_text" msgid="854131050791011970">"VAROITUS: laitteen suojaustoiminnot eivät toimi tämän asetuksen ollessa käytössä."</string>
-    <string name="mock_location_app" msgid="6269380172542248304">"Valitse valesijaintisovellus"</string>
-    <string name="mock_location_app_not_set" msgid="6972032787262831155">"Valesijaintisovellusta ei ole valittu"</string>
+    <string name="mock_location_app" msgid="6269380172542248304">"Valitse imitoidun sijainnin sovellus"</string>
+    <string name="mock_location_app_not_set" msgid="6972032787262831155">"Imitoidun sijainnin sovellusta ei valittu"</string>
     <string name="mock_location_app_set" msgid="4706722469342913843">"Valesijaintisovellus: <xliff:g id="APP_NAME">%1$s</xliff:g>"</string>
     <string name="debug_networking_category" msgid="6829757985772659599">"Yhteysominaisuudet"</string>
     <string name="wifi_display_certification" msgid="1805579519992520381">"Langattoman näytön sertifiointi"</string>
@@ -449,7 +449,7 @@
     <string name="force_resizable_activities" msgid="7143612144399959606">"Pakota kaikki toiminnot hyväksymään koon muutos"</string>
     <string name="force_resizable_activities_summary" msgid="2490382056981583062">"Pakota kaikki toiminnot hyväksymään koon muuttaminen usean ikkunan tilassa luettelon arvoista riippumatta"</string>
     <string name="enable_freeform_support" msgid="7599125687603914253">"Ota käyttöön vapaamuotoiset ikkunat"</string>
-    <string name="local_backup_password_title" msgid="4631017948933578709">"Varmuuskop. salasana"</string>
+    <string name="local_backup_password_title" msgid="4631017948933578709">"Varmuuskopion salasana"</string>
     <string name="local_backup_password_summary_none" msgid="7646898032616361714">"Tietokoneen kaikkien tietojen varmuuskopiointia ei ole tällä hetkellä suojattu"</string>
     <string name="local_backup_password_summary_change" msgid="1707357670383995567">"Vaihda tai poista tietokoneen kaikkien tietojen varmuuskopioinnin salasana koskettamalla."</string>
     <string name="local_backup_password_toast_success" msgid="4891666204428091604">"Uusi varasalasana asetettiin"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"<xliff:g id="ID_1">%1$s</xliff:g> sitten"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> jäljellä"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"Pienin"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"Pienempi"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"Pieni"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"Oletus"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"Suuri"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"Suurempi"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"Suurin"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"Suurempi"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"Hyvin suuri"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"Erittäin suuri"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"Suurin"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"Muokattu (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"Valikko"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"Palauta tehdasasetukset antamalla salasana"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{1 laite on yhdistetty}other{# laitetta on yhdistetty}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"Enemmän aikaa"</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"Vähemmän aikaa"</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"Suurennus"</string>
     <string name="cancel" msgid="5665114069455378395">"Peru"</string>
     <string name="next" msgid="2699398661093607009">"Seuraava"</string>
     <string name="back" msgid="5554327870352703710">"Takaisin"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"Jos lähetät <xliff:g id="SWITCHAPP">%1$s</xliff:g>-sovellusta tai muutat ulostuloa, nykyinen lähetyksesi loppuu"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"Lähetä <xliff:g id="SWITCHAPP">%1$s</xliff:g>-sovellusta"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"Muuta ulostuloa"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"Takaisin siirtymisen ennakoivat animaatiot"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"Ota käyttöön takaisin siirtymisen ennakoivat järjestelmäanimaatiot"</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"Asetus ottaa järjestelmäanimaatiot käyttöön ennakoiville eleanimaatioille. Se edellyttää, että enableOnBackInvokedCallback-arvo on Tosi sovelluksen manifestitiedostossa."</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="not_specified" msgid="5423502443185110328">"Ei määritetty"</string>
     <string name="neuter" msgid="2075249330106127310">"Neutri"</string>

@@ -18,8 +18,10 @@ package android.platform.test.ravenwood;
 
 import static com.android.ravenwood.common.RavenwoodCommonUtils.RAVENWOOD_RESOURCE_APK;
 
+import android.app.Application;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.content.res.Resources.Theme;
@@ -31,6 +33,7 @@ import android.os.Looper;
 import android.os.PermissionEnforcer;
 import android.os.ServiceManager;
 import android.os.UserHandle;
+import android.ravenwood.annotation.RavenwoodSupported.RavenwoodProvidingImplementation;
 import android.ravenwood.example.BlueManager;
 import android.ravenwood.example.RedManager;
 import android.util.ArrayMap;
@@ -39,11 +42,15 @@ import android.util.Singleton;
 import com.android.internal.annotations.GuardedBy;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Objects;
+import java.nio.file.Files;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
+@RavenwoodProvidingImplementation(target = Context.class)
 public class RavenwoodContext extends RavenwoodBaseContext {
     private static final String TAG = com.android.ravenwood.common.RavenwoodCommonUtils.TAG;
 
@@ -56,17 +63,19 @@ public class RavenwoodContext extends RavenwoodBaseContext {
     private final ArrayMap<Class<?>, String> mClassToName = new ArrayMap<>();
     private final ArrayMap<String, Supplier<?>> mNameToFactory = new ArrayMap<>();
 
-    private final File mFilesDir;
-    private final File mCacheDir;
+    private final File mDataDir;
     private final Supplier<Resources> mResourcesSupplier;
 
-    private RavenwoodContext mAppContext;
+    private Application mAppContext;
 
     @GuardedBy("mLock")
     private Resources mResources;
 
     @GuardedBy("mLock")
     private Resources.Theme mTheme;
+
+    @GuardedBy("mLock")
+    private PackageManager mPm;
 
     private void registerService(Class<?> serviceClass, String serviceName,
             Supplier<?> serviceSupplier) {
@@ -79,8 +88,8 @@ public class RavenwoodContext extends RavenwoodBaseContext {
         mPackageName = packageName;
         mMainThread = mainThread;
         mResourcesSupplier = resourcesSupplier;
-        mFilesDir = createTempDir(packageName + "_files-dir");
-        mCacheDir = createTempDir(packageName + "_cache-dir");
+
+        mDataDir = Files.createTempDirectory(mPackageName).toFile();
 
         // Services provided by a typical shipping device
         registerService(ClipboardManager.class,
@@ -113,11 +122,6 @@ public class RavenwoodContext extends RavenwoodBaseContext {
         }
     }
 
-    void cleanUp() {
-        deleteDir(mFilesDir);
-        deleteDir(mCacheDir);
-    }
-
     @Override
     public String getSystemServiceName(Class<?> serviceClass) {
         // TODO: pivot to using SystemServiceRegistry
@@ -128,6 +132,21 @@ public class RavenwoodContext extends RavenwoodBaseContext {
             throw new UnsupportedOperationException(
                     "Service " + serviceClass + " not yet supported under Ravenwood");
         }
+    }
+
+    @Override
+    public PackageManager getPackageManager() {
+        synchronized (mLock) {
+            if (mPm == null) {
+                mPm = new RavenwoodPackageManager(this);
+            }
+            return mPm;
+        }
+    }
+
+    @Override
+    public ClassLoader getClassLoader() {
+        return getClass().getClassLoader();
     }
 
     @Override
@@ -162,12 +181,12 @@ public class RavenwoodContext extends RavenwoodBaseContext {
 
     @Override
     public UserHandle getUser() {
-        return android.os.UserHandle.of(android.os.UserHandle.myUserId());
+        return UserHandle.of(UserHandle.myUserId());
     }
 
     @Override
     public int getUserId() {
-        return android.os.UserHandle.myUserId();
+        return UserHandle.myUserId();
     }
 
     @Override
@@ -176,19 +195,74 @@ public class RavenwoodContext extends RavenwoodBaseContext {
     }
 
     @Override
-    public File getFilesDir() {
-        return mFilesDir;
+    public FileInputStream openFileInput(String name) throws FileNotFoundException {
+        return new FileInputStream(getFileStreamPath(name));
     }
 
     @Override
-    public File getCacheDir() {
-        return mCacheDir;
+    public FileOutputStream openFileOutput(String name, int mode) throws FileNotFoundException {
+        final boolean append = (mode & MODE_APPEND) != 0;
+        return new FileOutputStream(getFileStreamPath(name), append);
     }
 
     @Override
     public boolean deleteFile(String name) {
-        File f = new File(name);
-        return f.delete();
+        return getFileStreamPath(name).delete();
+    }
+
+    @Override
+    public File getDataDir() {
+        return mDataDir;
+    }
+
+    @Override
+    public File getDir(String name, int mode) {
+        name = "app_" + name;
+        File file = new File(getDataDir(), name);
+        if (!file.exists()) {
+            file.mkdir();
+        }
+        return file;
+    }
+
+    private File makePrivateDir(String name) {
+        var dir = new File(getDataDir(), name);
+        dir.mkdirs();
+        return dir;
+    }
+
+    private File getPreferencesDir() {
+        return makePrivateDir("shared_prefs");
+    }
+
+    @Override
+    public File getFilesDir() {
+        return makePrivateDir("files");
+    }
+
+    @Override
+    public File getCacheDir() {
+        return makePrivateDir("cache");
+    }
+
+    @Override
+    public File getCodeCacheDir() {
+        return makePrivateDir("code_cache");
+    }
+
+    @Override
+    public File getNoBackupFilesDir() {
+        return makePrivateDir("no_backup");
+    }
+
+    @Override
+    public File getFileStreamPath(String name) {
+        return new File(getFilesDir(), name);
+    }
+
+    @Override
+    public File getSharedPreferencesPath(String name) {
+        return new File(getPreferencesDir(), name + ".xml");
     }
 
     @Override
@@ -217,11 +291,18 @@ public class RavenwoodContext extends RavenwoodBaseContext {
     }
 
     @Override
+    public void setTheme(int resid) {
+        synchronized (mLock) {
+            getTheme().applyStyle(resid, true);
+        }
+    }
+
+    @Override
     public String getPackageResourcePath() {
         return new File(RAVENWOOD_RESOURCE_APK).getAbsolutePath();
     }
 
-    public void setApplicationContext(RavenwoodContext appContext) {
+    final void attachApplicationContext(Application appContext) {
         mAppContext = appContext;
     }
 
@@ -257,34 +338,10 @@ public class RavenwoodContext extends RavenwoodBaseContext {
                 }
             }
         };
-        return () -> {
-            return singleton.get();
-        };
+        return () -> singleton.get();
     }
 
     public interface ThrowingSupplier<T> {
         T get() throws Exception;
-    }
-
-
-    static File createTempDir(String prefix) throws IOException {
-        // Create a temp file, delete it and recreate it as a directory.
-        final File dir = File.createTempFile(prefix + "-", "");
-        dir.delete();
-        dir.mkdirs();
-        return dir;
-    }
-
-    static void deleteDir(File dir) {
-        File[] children = dir.listFiles();
-        if (children != null) {
-            for (File child : children) {
-                if (child.isDirectory()) {
-                    deleteDir(child);
-                } else {
-                    child.delete();
-                }
-            }
-        }
     }
 }

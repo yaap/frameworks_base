@@ -111,11 +111,9 @@ public final class Message implements Parcelable {
     public int workSourceUid = UID_NONE;
 
     /**
-     * Sending thread
-     *
-     * @hide
+     * Name of the thread that sent the message.
      */
-    public String mSendingThreadName;
+    /*package*/ String sendingThreadName;
 
     /** If set message is in use.
      * This flag is set when the message is enqueued and remains set while it
@@ -145,9 +143,7 @@ public final class Message implements Parcelable {
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
     public long when;
 
-    /** @hide */
-    @SuppressWarnings("unused")
-    public long mInsertSeq;
+    /*package*/ long insertSeq;
 
     /*package*/ Bundle data;
 
@@ -169,21 +165,21 @@ public final class Message implements Parcelable {
 
     private static final int MAX_POOL_SIZE = 50;
 
-    private static boolean gCheckRecycle = true;
-
     /**
      * Return a new Message instance from the global pool. Allows us to
      * avoid allocating new objects in many cases.
      */
     public static Message obtain() {
-        synchronized (sPoolSync) {
-            if (sPool != null) {
-                Message m = sPool;
-                sPool = m.next;
-                m.next = null;
-                m.flags = 0; // clear in-use flag
-                sPoolSize--;
-                return m;
+        if (!MessageQueue.getUseConcurrent()) {
+            synchronized (sPoolSync) {
+                if (sPool != null) {
+                    Message m = sPool;
+                    sPool = m.next;
+                    m.next = null;
+                    m.flags = 0; // clear in-use flag
+                    sPoolSize--;
+                    return m;
+                }
             }
         }
         return new Message();
@@ -315,13 +311,6 @@ public final class Message implements Parcelable {
         return m;
     }
 
-    /** @hide */
-    public static void updateCheckRecycle(int targetSdkVersion) {
-        if (targetSdkVersion < Build.VERSION_CODES.LOLLIPOP) {
-            gCheckRecycle = false;
-        }
-    }
-
     /**
      * Return a Message instance to the global pool.
      * <p>
@@ -332,11 +321,8 @@ public final class Message implements Parcelable {
      */
     public void recycle() {
         if (isInUse()) {
-            if (gCheckRecycle) {
-                throw new IllegalStateException("This message cannot be recycled because it "
-                        + "is still in use.");
-            }
-            return;
+            throw new IllegalStateException("This message cannot be recycled because it "
+                    + "is still in use.");
         }
         recycleUnchecked();
     }
@@ -347,8 +333,23 @@ public final class Message implements Parcelable {
      */
     @UnsupportedAppUsage
     void recycleUnchecked() {
-        // Mark the message as in use while it remains in the recycled object pool.
-        // Clear out all other details.
+        clear();
+        if (!MessageQueue.getUseConcurrent()) {
+            synchronized (sPoolSync) {
+                if (sPoolSize < MAX_POOL_SIZE) {
+                    next = sPool;
+                    sPool = this;
+                    sPoolSize++;
+                }
+            }
+        }
+    }
+
+    /**
+     * Clears all Message contents.
+     */
+    void clear() {
+        // Prevent accidental reuse such as if this Message is recycled.
         flags = FLAG_IN_USE;
         what = 0;
         arg1 = 0;
@@ -361,14 +362,6 @@ public final class Message implements Parcelable {
         target = null;
         callback = null;
         data = null;
-
-        synchronized (sPoolSync) {
-            if (sPoolSize < MAX_POOL_SIZE) {
-                next = sPool;
-                sPool = this;
-                sPoolSize++;
-            }
-        }
     }
 
     /**

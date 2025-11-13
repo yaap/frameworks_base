@@ -48,18 +48,11 @@ constructor(
                     if (isDozing) {
                         flowOf(false)
                     } else {
-                        mediaCarouselInteractor.hasActiveMediaOrRecommendation
+                        mediaCarouselInteractor.hasActiveMedia
                     }
                 },
             initialValue =
-                !keyguardInteractor.isDozing.value &&
-                    mediaCarouselInteractor.hasActiveMediaOrRecommendation.value,
-        )
-
-    val isShadeLayoutWide: Boolean by
-        hydrator.hydratedStateOf(
-            traceName = "isShadeLayoutWide",
-            source = shadeModeInteractor.isShadeLayoutWide,
+                !keyguardInteractor.isDozing.value && mediaCarouselInteractor.hasActiveMedia.value,
         )
 
     override suspend fun onActivated(): Nothing {

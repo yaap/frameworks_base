@@ -60,6 +60,7 @@ import androidx.annotation.Nullable;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.jank.InteractionJankMonitor;
 import com.android.internal.protolog.ProtoLog;
+import com.android.wm.shell.Flags;
 import com.android.wm.shell.R;
 import com.android.wm.shell.WindowManagerShellWrapper;
 import com.android.wm.shell.common.DisplayChangeController;
@@ -94,13 +95,13 @@ import com.android.wm.shell.pip.PipTransitionController;
 import com.android.wm.shell.pip.PipTransitionState;
 import com.android.wm.shell.protolog.ShellProtoLogGroup;
 import com.android.wm.shell.shared.annotations.ShellMainThread;
+import com.android.wm.shell.shared.pip.PipFlags;
 import com.android.wm.shell.sysui.ConfigurationChangeListener;
 import com.android.wm.shell.sysui.KeyguardChangeListener;
 import com.android.wm.shell.sysui.ShellCommandHandler;
 import com.android.wm.shell.sysui.ShellController;
 import com.android.wm.shell.sysui.ShellInit;
 import com.android.wm.shell.sysui.UserChangeListener;
-import com.android.wm.shell.transition.Transitions;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -485,12 +486,13 @@ public class PipController implements PipTransitionController.PipTransitionCallb
         mDisplayInsetsController = displayInsetsController;
         mTabletopModeController = tabletopModeController;
 
-        if (!PipUtils.isPip2ExperimentEnabled()) {
+        if (!PipFlags.isPip2ExperimentEnabled()) {
             shellInit.addInitCallback(this::onInit, this);
         }
     }
 
-    private void onInit() {
+    @VisibleForTesting
+    void onInit() {
         mShellCommandHandler.addDumpCallback(this::dump, this);
         mPipInputConsumer = new PipInputConsumer(WindowManagerGlobal.getWindowManagerService(),
                 INPUT_CONSUMER_PIP, mMainExecutor);
@@ -723,7 +725,9 @@ public class PipController implements PipTransitionController.PipTransitionCallb
                     });
         });
 
-        mMediaController.registerSessionListenerForCurrentUser();
+        if (!ShellController.FIX_MISSING_USER_CHANGE_CALLBACKS_FLAG.isTrue()) {
+            mMediaController.registerSessionListenerForCurrentUser();
+        }
 
         mShellController.addConfigurationChangeListener(this);
         mShellController.addKeyguardChangeListener(this);
@@ -771,6 +775,10 @@ public class PipController implements PipTransitionController.PipTransitionCallb
         mTouchHandler.onOverlayChanged();
         onDisplayChanged(new DisplayLayout(mContext, mContext.getDisplay()),
                 false /* saveRestoreSnapFraction */);
+
+        if (Flags.enablePipBoxShadows()) {
+            mPipTaskOrganizer.onThemeChanged(mContext);
+        }
     }
 
     private void onDisplayChanged(DisplayLayout layout, boolean saveRestoreSnapFraction) {
@@ -796,8 +804,8 @@ public class PipController implements PipTransitionController.PipTransitionCallb
             return;
         }
         Runnable updateDisplayLayout = () -> {
-            final boolean fromRotation = Transitions.ENABLE_SHELL_TRANSITIONS
-                    && mPipDisplayLayoutState.getDisplayLayout().rotation() != layout.rotation();
+            final boolean fromRotation =
+                    mPipDisplayLayoutState.getDisplayLayout().rotation() != layout.rotation();
 
             // update the internal state of objects subscribed to display changes
             mPipDisplayLayoutState.setDisplayLayout(layout);
@@ -835,7 +843,8 @@ public class PipController implements PipTransitionController.PipTransitionCallb
             // Calculate the PiP bounds in the new orientation based on same fraction along the
             // rotated movement bounds.
             final Rect postChangeMovementBounds = mPipBoundsAlgorithm.getMovementBounds(
-                    postChangeBounds, false /* adjustForIme */);
+                    postChangeBounds, false /* adjustForIme */,
+                    mPipDisplayLayoutState.getDisplayLayout());
             pipSnapAlgorithm.applySnapFraction(postChangeBounds, postChangeMovementBounds,
                     snapFraction, mPipBoundsState.getStashedState(),
                     mPipBoundsState.getStashOffset(),
@@ -1188,7 +1197,8 @@ public class PipController implements PipTransitionController.PipTransitionCallb
         // Calculate the stack bounds in the new orientation based on same fraction along the
         // rotated movement bounds.
         final Rect postChangeMovementBounds = mPipBoundsAlgorithm.getMovementBounds(
-                postChangeStackBounds, false /* adjustForIme */);
+                postChangeStackBounds, false /* adjustForIme */,
+                mPipDisplayLayoutState.getDisplayLayout());
         pipSnapAlgorithm.applySnapFraction(postChangeStackBounds, postChangeMovementBounds,
                 snapFraction, mPipBoundsState.getStashedState(), mPipBoundsState.getStashOffset(),
                 mPipDisplayLayoutState.getDisplayBounds(),

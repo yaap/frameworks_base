@@ -23,11 +23,11 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
+import android.service.dreams.Flags
 import android.service.dreams.IDreamManager
 import android.testing.TestableLooper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
-import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.communal.domain.interactor.communalSettingsInteractor
 import com.android.systemui.communal.domain.interactor.setCommunalV2ConfigEnabled
@@ -50,6 +50,7 @@ import org.mockito.kotlin.whenever
 @SmallTest
 @TestableLooper.RunWithLooper
 @RunWith(AndroidJUnit4::class)
+@android.platform.test.annotations.EnabledOnRavenwood
 class DreamOverlayRegistrantTest : SysuiTestCase() {
     private val kosmos = testKosmos()
 
@@ -123,7 +124,7 @@ class DreamOverlayRegistrantTest : SysuiTestCase() {
 
     /** Verify overlay registered when enabled in manifest. */
     @Test
-    @DisableFlags(Flags.FLAG_GLANCEABLE_HUB_V2)
+    @DisableFlags(Flags.FLAG_DREAMS_V2)
     fun testRegisteredWhenEnabledWithManifest() {
         serviceInfo.enabled = true
         start()
@@ -131,10 +132,10 @@ class DreamOverlayRegistrantTest : SysuiTestCase() {
         verify(dreamManager).registerDreamOverlayService(componentName)
     }
 
-    /** Verify overlay registered for mobile hub with flag. */
+    /** Verify overlay registered for dreams v2 with flag. */
     @Test
-    @EnableFlags(Flags.FLAG_GLANCEABLE_HUB_V2)
-    fun testRegisteredForMobileHub() {
+    @EnableFlags(Flags.FLAG_DREAMS_V2)
+    fun testRegisteredForDreamsV2() {
         kosmos.setCommunalV2ConfigEnabled(true)
 
         start()
@@ -143,12 +144,12 @@ class DreamOverlayRegistrantTest : SysuiTestCase() {
     }
 
     /**
-     * Make sure dream overlay not registered when not in manifest and not hub mode on mobile is not
+     * Make sure dream overlay not registered when not in manifest and not dreams on mobile is not
      * enabled.
      */
     @Test
-    @DisableFlags(Flags.FLAG_GLANCEABLE_HUB_V2)
-    fun testDisabledForMobileWithoutMobileHub() {
+    @DisableFlags(Flags.FLAG_DREAMS_V2)
+    fun testDisabledForMobileWithoutDreamsV2() {
         start()
 
         verify(packageManager, never())
@@ -162,7 +163,7 @@ class DreamOverlayRegistrantTest : SysuiTestCase() {
 
     /** Ensure service unregistered when component is disabled at runtime. */
     @Test
-    @EnableFlags(Flags.FLAG_GLANCEABLE_HUB_V2)
+    @EnableFlags(Flags.FLAG_DREAMS_V2)
     fun testUnregisteredWhenComponentDisabled() {
         kosmos.setCommunalV2ConfigEnabled(true)
         start()

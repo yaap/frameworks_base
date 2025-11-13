@@ -19,8 +19,6 @@ package com.android.systemui.qs.tiles;
 import static android.hardware.SensorPrivacyManager.Sensors.CAMERA;
 import static android.platform.test.flag.junit.FlagsParameterization.allCombinationsOf;
 
-import static com.android.systemui.Flags.FLAG_QS_CUSTOM_TILE_CLICK_GUARANTEED_BUG_FIX;
-
 import static junit.framework.TestCase.assertEquals;
 
 import static org.mockito.Mockito.doReturn;
@@ -44,6 +42,7 @@ import com.android.systemui.plugins.qs.QSTile;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.qs.QSHost;
 import com.android.systemui.qs.QsEventLogger;
+import com.android.systemui.qs.flags.QSComposeFragment;
 import com.android.systemui.qs.flags.QsInCompose;
 import com.android.systemui.qs.logging.QSLogger;
 import com.android.systemui.qs.tileimpl.QSTileImpl;
@@ -52,7 +51,9 @@ import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.DeviceStateRotationLockSettingController;
 import com.android.systemui.statusbar.policy.RotationLockController;
 import com.android.systemui.statusbar.policy.RotationLockControllerImpl;
+import com.android.systemui.util.concurrency.FakeExecutor;
 import com.android.systemui.util.settings.FakeSettings;
+import com.android.systemui.util.time.FakeSystemClock;
 import com.android.systemui.util.wrapper.RotationPolicyWrapper;
 
 import org.junit.After;
@@ -62,11 +63,11 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.List;
-import java.util.Optional;
-
 import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
 import platform.test.runner.parameterized.Parameters;
+
+import java.util.List;
+import java.util.Optional;
 
 @RunWith(ParameterizedAndroidJunit4.class)
 @TestableLooper.RunWithLooper(setAsMainLooper = true)
@@ -81,7 +82,7 @@ public class RotationLockTileTest extends SysuiTestCase {
 
     @Parameters(name = "{0}")
     public static List<FlagsParameterization> getParams() {
-        return allCombinationsOf(FLAG_QS_CUSTOM_TILE_CLICK_GUARANTEED_BUG_FIX);
+        return allCombinationsOf(QSComposeFragment.FLAG_NAME);
     }
 
     @Mock
@@ -111,6 +112,7 @@ public class RotationLockTileTest extends SysuiTestCase {
     private TestableLooper mTestableLooper;
     private RotationLockTile mLockTile;
     private TestableResources mTestableResources;
+    private FakeExecutor mFakeExecutor = new FakeExecutor(new FakeSystemClock());
 
     public RotationLockTileTest(FlagsParameterization flags) {
         super();
@@ -128,8 +130,13 @@ public class RotationLockTileTest extends SysuiTestCase {
         mTestableResources.addOverride(com.android.internal.R.bool.config_allowRotationResolver,
                 true);
 
-        mController = new RotationLockControllerImpl(mRotationPolicyWrapper,
-                mDeviceStateRotationLockSettingController, DEFAULT_SETTINGS);
+        mController = new RotationLockControllerImpl(
+                mRotationPolicyWrapper,
+                mDeviceStateRotationLockSettingController,
+                DEFAULT_SETTINGS,
+                mFakeExecutor,
+                mFakeExecutor
+        );
 
         mLockTile = new RotationLockTile(
                 mHost,

@@ -17,11 +17,15 @@
 package com.android.server.display;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doAnswer;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.inOrder;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
 import static com.android.server.display.AutomaticBrightnessController.AUTO_BRIGHTNESS_MODE_BEDTIME_WEAR;
 import static com.android.server.display.AutomaticBrightnessController.AUTO_BRIGHTNESS_MODE_DEFAULT;
 import static com.android.server.display.AutomaticBrightnessController.AUTO_BRIGHTNESS_MODE_DOZE;
 import static com.android.server.display.AutomaticBrightnessController.AUTO_BRIGHTNESS_MODE_IDLE;
+import static com.android.server.display.TestUtilsKt.TEST_SENSOR_NAME;
+import static com.android.server.display.TestUtilsKt.createSensor;
+import static com.android.server.display.TestUtilsKt.createSensorEvent;
 import static com.android.server.display.config.DisplayDeviceConfigTestUtilsKt.createSensorData;
 
 import static org.junit.Assert.assertEquals;
@@ -104,6 +108,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
@@ -242,7 +247,7 @@ public final class DisplayPowerControllerTest {
         SensorEventListener listener = getSensorEventListener(mProxSensor);
         assertNotNull(listener);
 
-        listener.onSensorChanged(TestUtils.createSensorEvent(mProxSensor, /* value= */ 5));
+        listener.onSensorChanged(createSensorEvent(mProxSensor, /* value= */ 5));
         advanceTime(1);
 
         // two times, one for unfinished business and one for proximity
@@ -272,7 +277,7 @@ public final class DisplayPowerControllerTest {
         assertNotNull(listener);
 
         // Send a positive proximity event
-        listener.onSensorChanged(TestUtils.createSensorEvent(mProxSensor, /* value= */ 1));
+        listener.onSensorChanged(createSensorEvent(mProxSensor, /* value= */ 1));
         advanceTime(1);
 
         // The display should have been turned off
@@ -282,7 +287,7 @@ public final class DisplayPowerControllerTest {
         clearInvocations(mHolder.displayPowerState);
         when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_OFF);
         // Send a negative proximity event
-        listener.onSensorChanged(TestUtils.createSensorEvent(mProxSensor,
+        listener.onSensorChanged(createSensorEvent(mProxSensor,
                 (int) PROX_SENSOR_MAX_RANGE + 1));
         // Advance time by less than PROXIMITY_SENSOR_NEGATIVE_DEBOUNCE_DELAY
         advanceTime(1);
@@ -315,7 +320,7 @@ public final class DisplayPowerControllerTest {
         assertNotNull(listener);
 
         // Send a positive proximity event
-        listener.onSensorChanged(TestUtils.createSensorEvent(mProxSensor, /* value= */ 1));
+        listener.onSensorChanged(createSensorEvent(mProxSensor, /* value= */ 1));
         advanceTime(1);
 
         // The display should have been turned off
@@ -844,7 +849,7 @@ public final class DisplayPowerControllerTest {
     }
 
     @Test
-    public void testSetScreenOffBrightnessSensorEnabled_DisplayIsOff() {
+    public void testSetScreenOffBrightnessSensorEnabled_PolicyIsOff() {
         Settings.System.putInt(mContext.getContentResolver(),
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC);
@@ -871,6 +876,40 @@ public final class DisplayPowerControllerTest {
                 any(BrightnessEvent.class))).thenReturn(PowerManager.BRIGHTNESS_INVALID_FLOAT);
 
         mHolder.dpc.requestPowerState(dpr, /* waitForNegativeProximity= */ false);
+        advanceTime(1); // Run updatePowerState
+
+        verify(mHolder.screenOffBrightnessSensorController, atLeastOnce())
+                .getAutomaticScreenBrightness();
+        verify(mHolder.animator).animateTo(eq(brightness), anyFloat(), anyFloat(), eq(false));
+    }
+
+    @Test
+    public void testSetScreenOffBrightnessSensorEnabled_PolicyBright_DisplayIsOff() {
+        Settings.System.putInt(mContext.getContentResolver(),
+                Settings.System.SCREEN_BRIGHTNESS_MODE,
+                Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC);
+
+        when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_OFF);
+
+        DisplayPowerRequest dpr = new DisplayPowerRequest();
+        dpr.policy = DisplayPowerRequest.POLICY_BRIGHT;
+        mHolder.dpc.requestPowerState(dpr, /* waitForNegativeProximity= */ false);
+        advanceTime(1); // Run updatePowerState
+
+        verify(mHolder.screenOffBrightnessSensorController, atLeastOnce())
+                .setLightSensorEnabled(true);
+
+        // The display turns on and we use the brightness value recommended by
+        // ScreenOffBrightnessSensorController
+        clearInvocations(mHolder.screenOffBrightnessSensorController);
+        float brightness = 0.14f;
+        when(mHolder.screenOffBrightnessSensorController.getAutomaticScreenBrightness())
+                .thenReturn(brightness);
+        when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_ON);
+        when(mHolder.automaticBrightnessController.getAutomaticScreenBrightness(
+                any(BrightnessEvent.class))).thenReturn(PowerManager.BRIGHTNESS_INVALID_FLOAT);
+
+        mHolder.dpc.updateBrightness();
         advanceTime(1); // Run updatePowerState
 
         verify(mHolder.screenOffBrightnessSensorController, atLeastOnce())
@@ -1315,14 +1354,19 @@ public final class DisplayPowerControllerTest {
     }
 
     @Test
-    public void testSetBrightness_BrightnessShouldBeClamped() {
+    public void testSetBrightness_BrightnessShouldBeUnlamped() {
         float clampedBrightness = 0.6f;
+        float unclampedBrightness = 0.8f;
+        int userSerial = 123;
         when(mHolder.hbmController.getCurrentBrightnessMax()).thenReturn(clampedBrightness);
 
         mHolder.dpc.setBrightness(PowerManager.BRIGHTNESS_MAX);
-        mHolder.dpc.setBrightness(0.8f, /* userSerial= */ 123);
+        mHolder.dpc.setBrightness(unclampedBrightness, userSerial);
 
-        verify(mHolder.brightnessSetting, times(2)).setBrightness(clampedBrightness);
+        InOrder inOrder = inOrder(mHolder.brightnessSetting);
+        inOrder.verify(mHolder.brightnessSetting).setBrightness(PowerManager.BRIGHTNESS_MAX);
+        inOrder.verify(mHolder.brightnessSetting).setUserSerial(userSerial);
+        inOrder.verify(mHolder.brightnessSetting).setBrightness(unclampedBrightness);
     }
 
     @Test
@@ -1587,8 +1631,6 @@ public final class DisplayPowerControllerTest {
 
     @Test
     public void testDozeScreenStateOverride_toSupportedOffloadStateFromDoze_DisplayStateChanges() {
-        when(mDisplayManagerFlagsMock.isOffloadDozeOverrideHoldsWakelockEnabled()).thenReturn(true);
-
         // set up.
         int initState = Display.STATE_DOZE;
         int supportedTargetState = Display.STATE_DOZE_SUSPEND;
@@ -1701,6 +1743,59 @@ public final class DisplayPowerControllerTest {
 
         verify(mDisplayOffloadSession).blockScreenOn(any(Runnable.class));
         verify(mDisplayOffloadSession, never()).cancelBlockScreenOn();
+
+        // Set brightness
+        when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_ON);
+        float brightness = 0.34f;
+        when(mHolder.brightnessSetting.getBrightness()).thenReturn(brightness);
+        ArgumentCaptor<BrightnessSetting.BrightnessSettingListener> listenerCaptor =
+                ArgumentCaptor.forClass(BrightnessSetting.BrightnessSettingListener.class);
+        verify(mHolder.brightnessSetting).registerListener(listenerCaptor.capture());
+        BrightnessSetting.BrightnessSettingListener listener = listenerCaptor.getValue();
+        listener.onBrightnessChanged(brightness);
+        advanceTime(1); // Send messages, run updatePowerState
+
+        // Brightness should not be set if screen on blocked
+        verify(mHolder.animator, never()).animateTo(/* linearFirstTarget= */ anyFloat(),
+                /* linearSecondTarget= */ anyFloat(), /* rate= */ anyFloat(),
+                /* ignoreAnimationLimits= */ anyBoolean());
+    }
+
+    @Test
+    public void testOffloadBlocker_turnON_noOffloadSession_screenOnNotBlocked() {
+        // set up, do not set the offload session
+        int initState = Display.STATE_OFF;
+        mHolder = createDisplayPowerController(DISPLAY_ID, UNIQUE_ID);
+        when(mDisplayOffloadSession.blockScreenOn(any())).thenReturn(true);
+
+        // start with OFF.
+        when(mHolder.displayPowerState.getScreenState()).thenReturn(initState);
+        DisplayPowerRequest dpr = new DisplayPowerRequest();
+        dpr.policy = DisplayPowerRequest.POLICY_OFF;
+        mHolder.dpc.requestPowerState(dpr, /* waitForNegativeProximity= */ false);
+        advanceTime(1); // Run updatePowerState
+
+        // go to ON.
+        dpr.policy = DisplayPowerRequest.POLICY_BRIGHT;
+        mHolder.dpc.requestPowerState(dpr, /* waitForNegativeProximity= */ false);
+        advanceTime(1); // Run updatePowerState
+
+        verify(mDisplayOffloadSession, never()).blockScreenOn(any(Runnable.class));
+        verify(mDisplayOffloadSession, never()).cancelBlockScreenOn();
+
+        // Set brightness
+        when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_ON);
+        float brightness = 0.34f;
+        when(mHolder.brightnessSetting.getBrightness()).thenReturn(brightness);
+        ArgumentCaptor<BrightnessSetting.BrightnessSettingListener> listenerCaptor =
+                ArgumentCaptor.forClass(BrightnessSetting.BrightnessSettingListener.class);
+        verify(mHolder.brightnessSetting).registerListener(listenerCaptor.capture());
+        BrightnessSetting.BrightnessSettingListener listener = listenerCaptor.getValue();
+        listener.onBrightnessChanged(brightness);
+        advanceTime(1); // Send messages, run updatePowerState
+
+        verify(mHolder.animator).animateTo(eq(brightness), /* linearSecondTarget= */ anyFloat(),
+                /* rate= */ eq(0f), /* ignoreAnimationLimits= */ eq(false));
     }
 
     @Test
@@ -2179,21 +2274,12 @@ public final class DisplayPowerControllerTest {
         when(mHolder.brightnessSetting.getBrightness()).thenReturn(brightness);
         when(mHolder.hbmController.getCurrentBrightnessMax())
                 .thenReturn(PowerManager.BRIGHTNESS_MAX);
-        when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_ON);
-        // Start with state=DOZE.
         when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_DOZE);
+
         DisplayPowerRequest dprInit = new DisplayPowerRequest();
-        dprInit.policy = DisplayPowerRequest.POLICY_DOZE;
+        dprInit.policy = DisplayPowerRequest.POLICY_BRIGHT;
         mHolder.dpc.requestPowerState(dprInit, /* waitForNegativeProximity= */ false);
-        advanceTime(1); // Run updatePowerState; initialize to DOZE
-        // Go to state=ON. But state change would be blocked. so, state=DOZE.
-        when(mDisplayOffloadSession.blockScreenOn(any())).thenReturn(true);
-        DisplayPowerRequest dpr = new DisplayPowerRequest();
-        dpr.dozeScreenState = Display.STATE_ON;
-        dpr.policy = DisplayPowerRequest.POLICY_BRIGHT;
-        dpr.useNormalBrightnessForDoze = true;
-        mHolder.dpc.requestPowerState(dpr, /* waitForNegativeProximity= */ false);
-        advanceTime(1); // Run updatePowerState; process turning on.
+        advanceTime(1); // Run updatePowerState
 
         ArgumentCaptor<BrightnessSetting.BrightnessSettingListener> listenerCaptor =
                 ArgumentCaptor.forClass(BrightnessSetting.BrightnessSettingListener.class);
@@ -2469,6 +2555,25 @@ public final class DisplayPowerControllerTest {
         // No crash = success
     }
 
+    @Test
+    public void testScreenOff_thenTurnOn_ensureColorFade() {
+        mHolder = createDisplayPowerController(DISPLAY_ID, UNIQUE_ID);
+
+        // Ensure the feature flag is enabled.
+        when(mDisplayManagerFlagsMock.isEnsureColorFadeWhenTurningOnEnabled()).thenReturn(true);
+        // Ensure the initial screen state is OFF.
+        when(mHolder.displayPowerState.getScreenState()).thenReturn(Display.STATE_OFF);
+
+        // Run the DPC logic.
+        DisplayPowerRequest dpr = new DisplayPowerRequest();
+        dpr.policy = DisplayPowerRequest.POLICY_BRIGHT;
+        mHolder.dpc.requestPowerState(dpr, /* waitForNegativeProximity= */ false);
+        advanceTime(1); // Run updatePowerState
+
+        // The conditions are met, so prepareColorFade() is invoked.
+        verify(mHolder.displayPowerState).prepareColorFade(any(), anyInt());
+    }
+
     /**
      * Creates a mock and registers it to {@link LocalServices}.
      */
@@ -2483,9 +2588,9 @@ public final class DisplayPowerControllerTest {
     }
 
     private void setUpSensors() throws Exception {
-        mProxSensor = TestUtils.createSensor(Sensor.TYPE_PROXIMITY, Sensor.STRING_TYPE_PROXIMITY,
-                PROX_SENSOR_MAX_RANGE);
-        Sensor screenOffBrightnessSensor = TestUtils.createSensor(
+        mProxSensor = createSensor(Sensor.TYPE_PROXIMITY, Sensor.STRING_TYPE_PROXIMITY,
+                TEST_SENSOR_NAME, PROX_SENSOR_MAX_RANGE);
+        Sensor screenOffBrightnessSensor = createSensor(
                 Sensor.TYPE_LIGHT, Sensor.STRING_TYPE_LIGHT);
         when(mSensorManagerMock.getSensorList(eq(Sensor.TYPE_ALL)))
                 .thenReturn(List.of(mProxSensor, screenOffBrightnessSensor));

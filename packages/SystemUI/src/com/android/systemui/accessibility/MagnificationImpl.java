@@ -46,10 +46,10 @@ import androidx.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.graphics.SfVsyncFrameCallbackProvider;
+import com.android.systemui.LauncherProxyService;
 import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.model.SysUiState;
-import com.android.systemui.recents.LauncherProxyService;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.util.settings.SecureSettings;
@@ -532,6 +532,26 @@ public class MagnificationImpl implements Magnification, CommandQueue.Callbacks 
                 }
 
                 @Override
+                public void onSetMagnifyTyping(int displayId, boolean enable) {
+                    mHandler.post(() -> onSetMagnifyTypingInternal(displayId, enable));
+                    mA11yLogger.log(enable
+                            ? MagnificationSettingsEvent
+                                    .MAGNIFICATION_SETTINGS_PANEL_FOLLOW_TYPING_ENABLED
+                            : MagnificationSettingsEvent
+                                    .MAGNIFICATION_SETTINGS_PANEL_FOLLOW_TYPING_DISABLED);
+                }
+
+                @Override
+                public void onSetMagnifyKeyboard(int displayId, boolean enable) {
+                    mHandler.post(() -> onSetMagnifyKeyboardInternal(displayId, enable));
+                    mA11yLogger.log(enable
+                            ? MagnificationSettingsEvent
+                                    .MAGNIFICATION_SETTINGS_PANEL_MAGNIFY_IME_ENABLED
+                            : MagnificationSettingsEvent
+                                    .MAGNIFICATION_SETTINGS_PANEL_MAGNIFY_IME_DISABLED);
+                }
+
+                @Override
                 public void onEditMagnifierSizeMode(int displayId, boolean enable) {
                     mHandler.post(() -> onEditMagnifierSizeModeInternal(displayId, enable));
                     mA11yLogger.log(enable
@@ -580,6 +600,24 @@ public class MagnificationImpl implements Magnification, CommandQueue.Callbacks 
                 mWindowMagnificationControllerSupplier.get(displayId);
         if (windowMagnificationController != null) {
             windowMagnificationController.setDiagonalScrolling(enable);
+        }
+    }
+
+    @MainThread
+    private void onSetMagnifyTypingInternal(int displayId, boolean enable) {
+        final WindowMagnificationController windowMagnificationController =
+                mWindowMagnificationControllerSupplier.get(displayId);
+        if (windowMagnificationController != null) {
+            windowMagnificationController.setMagnifyTyping(enable);
+        }
+    }
+
+    @MainThread
+    private void onSetMagnifyKeyboardInternal(int displayId, boolean enable) {
+        final WindowMagnificationController windowMagnificationController =
+                mWindowMagnificationControllerSupplier.get(displayId);
+        if (windowMagnificationController != null) {
+            windowMagnificationController.setMagnifyKeyboard(enable);
         }
     }
 

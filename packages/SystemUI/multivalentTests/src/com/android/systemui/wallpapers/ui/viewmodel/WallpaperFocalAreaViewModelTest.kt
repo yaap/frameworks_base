@@ -23,8 +23,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.coroutines.collectLastValue
+import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.keyguard.data.repository.fakeKeyguardTransitionRepository
 import com.android.systemui.keyguard.domain.interactor.keyguardTransitionInteractor
+import com.android.systemui.keyguard.shared.model.KeyguardState.GONE
 import com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN
 import com.android.systemui.keyguard.shared.model.TransitionState
 import com.android.systemui.keyguard.shared.model.TransitionStep
@@ -34,7 +36,6 @@ import com.android.systemui.statusbar.notification.data.repository.activeNotific
 import com.android.systemui.statusbar.notification.data.repository.setActiveNotifs
 import com.android.systemui.testKosmos
 import com.android.systemui.wallpapers.data.repository.wallpaperFocalAreaRepository
-import com.android.systemui.wallpapers.domain.interactor.WallpaperFocalAreaInteractor
 import com.android.systemui.wallpapers.domain.interactor.WallpaperFocalAreaInteractorTest.Companion.overrideMockedResources
 import com.android.systemui.wallpapers.domain.interactor.WallpaperFocalAreaInteractorTest.OverrideResources
 import com.android.systemui.wallpapers.domain.interactor.wallpaperFocalAreaInteractor
@@ -65,6 +66,7 @@ class WallpaperFocalAreaViewModelTest : SysuiTestCase() {
             mockedResources,
             OverrideResources(screenWidth = 1000, screenHeight = 2000, centerAlignFocalArea = false),
         )
+
         whenever(kosmos.mockedContext.resources).thenReturn(mockedResources)
         whenever(
                 mockedResources.getFloat(
@@ -76,13 +78,8 @@ class WallpaperFocalAreaViewModelTest : SysuiTestCase() {
                         )
                 )
             )
-            .thenReturn(2f)
-        kosmos.wallpaperFocalAreaInteractor =
-            WallpaperFocalAreaInteractor(
-                context = kosmos.mockedContext,
-                wallpaperFocalAreaRepository = kosmos.wallpaperFocalAreaRepository,
-                shadeRepository = kosmos.shadeRepository,
-            )
+            .thenReturn(1f)
+        kosmos.wallpaperFocalAreaInteractor.context = kosmos.mockedContext
         underTest =
             WallpaperFocalAreaViewModel(
                 wallpaperFocalAreaInteractor = kosmos.wallpaperFocalAreaInteractor,
@@ -91,58 +88,155 @@ class WallpaperFocalAreaViewModelTest : SysuiTestCase() {
     }
 
     @Test
+    @DisableSceneContainer
     fun focalAreaBoundsSent_whenFinishTransitioningToLockscreen() =
         testScope.runTest {
-            overrideMockedResources(
-                mockedResources,
-                OverrideResources(
-                    screenWidth = 1600,
-                    screenHeight = 2000,
-                    centerAlignFocalArea = false,
-                ),
-            )
             val bounds by collectLastValue(underTest.wallpaperFocalAreaBounds)
-
+            kosmos.wallpaperFocalAreaRepository.setHasFocalArea(true)
             kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
-                listOf(
-                    TransitionStep(transitionState = TransitionState.STARTED, to = LOCKSCREEN),
-                    TransitionStep(transitionState = TransitionState.FINISHED, to = LOCKSCREEN),
-                ),
+                listOf(TransitionStep(transitionState = TransitionState.STARTED, to = LOCKSCREEN)),
+                testScope,
+            )
+            setTestFocalAreaBounds()
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.FINISHED, to = LOCKSCREEN)),
+                testScope,
+            )
+            assertThat(bounds).isNotNull()
+        }
+
+    @Test
+    @DisableSceneContainer
+    fun wallpaperHasFocalArea_shouldSendBounds() =
+        testScope.runTest {
+            val bounds by collectLastValue(underTest.wallpaperFocalAreaBounds)
+            kosmos.wallpaperFocalAreaRepository.setHasFocalArea(true)
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.STARTED, to = LOCKSCREEN)),
+                testScope,
+            )
+            setTestFocalAreaBounds()
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.FINISHED, to = LOCKSCREEN)),
+                testScope,
+            )
+
+            assertThat(bounds).isNotNull()
+        }
+
+    @Test
+    @DisableSceneContainer
+    fun wallpaperDoesNotHaveFocalArea_shouldNotSendBounds() =
+        testScope.runTest {
+            val bounds by collectLastValue(underTest.wallpaperFocalAreaBounds)
+            kosmos.wallpaperFocalAreaRepository.setHasFocalArea(false)
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.STARTED, to = LOCKSCREEN)),
+                testScope,
+            )
+            kosmos.wallpaperFocalAreaRepository.setWallpaperFocalAreaBounds(
+                DEFAULT_FOCAL_AREA_BOUNDS
+            )
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.FINISHED, to = LOCKSCREEN)),
+                testScope,
+            )
+
+            assertThat(bounds).isNull()
+        }
+
+    @Test
+    @DisableSceneContainer
+    fun boundsChangeWhenGoingFromLockscreenToGone_shouldNotSendBounds() =
+        testScope.runTest {
+            val bounds by collectLastValue(underTest.wallpaperFocalAreaBounds)
+            kosmos.wallpaperFocalAreaRepository.setHasFocalArea(true)
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.STARTED, to = LOCKSCREEN)),
                 testScope,
             )
 
             setTestFocalAreaBounds()
-
-            assertThat(bounds).isEqualTo(RectF(400F, 510F, 1200F, 700F))
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.FINISHED, to = LOCKSCREEN)),
+                testScope,
+            )
+            assertThat(bounds?.top).isEqualTo(20F)
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(
+                    TransitionStep(
+                        transitionState = TransitionState.STARTED,
+                        from = LOCKSCREEN,
+                        to = GONE,
+                    )
+                ),
+                testScope,
+            )
+            setTestFocalAreaBounds(
+                activeNotifs = 3,
+                shortcutAbsoluteTop = 400F,
+                notificationDefaultTop = 20F,
+                notificationStackAbsoluteBottom = 200F,
+            )
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(
+                    TransitionStep(
+                        transitionState = TransitionState.FINISHED,
+                        from = LOCKSCREEN,
+                        to = GONE,
+                    )
+                ),
+                testScope,
+            )
+            assertThat(bounds?.top).isEqualTo(20F)
         }
 
     @Test
-    fun focalAreaBoundsNotSent_whenNotFinishTransitioningToLockscreen() =
+    @DisableSceneContainer
+    fun boundsChangeOnLockscreen_shouldSendBounds() =
         testScope.runTest {
-            overrideMockedResources(
-                mockedResources,
-                OverrideResources(
-                    screenWidth = 1600,
-                    screenHeight = 2000,
-                    centerAlignFocalArea = false,
-                ),
-            )
             val bounds by collectLastValue(underTest.wallpaperFocalAreaBounds)
-
+            kosmos.wallpaperFocalAreaRepository.setHasFocalArea(true)
             kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
                 listOf(TransitionStep(transitionState = TransitionState.STARTED, to = LOCKSCREEN)),
                 testScope,
             )
             setTestFocalAreaBounds()
 
-            assertThat(bounds).isEqualTo(null)
+            kosmos.fakeKeyguardTransitionRepository.sendTransitionSteps(
+                listOf(TransitionStep(transitionState = TransitionState.FINISHED, to = LOCKSCREEN)),
+                testScope,
+            )
+
+            assertThat(bounds).isNotNull()
         }
 
-    private fun setTestFocalAreaBounds() {
-        kosmos.shadeRepository.setShadeLayoutWide(false)
-        kosmos.activeNotificationListRepository.setActiveNotifs(0)
-        kosmos.wallpaperFocalAreaRepository.setShortcutAbsoluteTop(400F)
-        kosmos.wallpaperFocalAreaRepository.setNotificationDefaultTop(20F)
-        kosmos.wallpaperFocalAreaRepository.setNotificationStackAbsoluteBottom(20F)
+    @Test
+    fun onReboot_sendFocalBounds() =
+        testScope.runTest {
+            val bounds by collectLastValue(underTest.wallpaperFocalAreaBounds)
+            kosmos.wallpaperFocalAreaRepository.setHasFocalArea(true)
+            setTestFocalAreaBounds()
+            assertThat(bounds).isNotNull()
+        }
+
+    private fun setTestFocalAreaBounds(
+        shadeLayoutWide: Boolean = false,
+        activeNotifs: Int = 0,
+        shortcutAbsoluteTop: Float = 400F,
+        notificationDefaultTop: Float = 20F,
+        notificationStackAbsoluteBottom: Float = 20F,
+    ) {
+        kosmos.shadeRepository.setShadeLayoutWide(shadeLayoutWide)
+        kosmos.activeNotificationListRepository.setActiveNotifs(activeNotifs)
+        kosmos.wallpaperFocalAreaRepository.setShortcutAbsoluteTop(shortcutAbsoluteTop)
+        kosmos.wallpaperFocalAreaRepository.setNotificationDefaultTop(notificationDefaultTop)
+        kosmos.wallpaperFocalAreaRepository.setNotificationStackAbsoluteBottom(
+            notificationStackAbsoluteBottom
+        )
+    }
+
+    companion object {
+        val DEFAULT_FOCAL_AREA_BOUNDS = RectF(0f, 400f, 1000F, 1900F)
     }
 }

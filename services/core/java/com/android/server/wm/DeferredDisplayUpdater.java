@@ -17,6 +17,7 @@
 package com.android.server.wm;
 
 import static android.view.WindowManager.TRANSIT_CHANGE;
+import static android.view.WindowManager.TRANSIT_FLAG_DISPLAY_LEVEL_TRANSITION;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_WINDOW_TRANSITIONS_MIN;
 import static com.android.server.wm.ActivityTaskManagerService.POWER_MODE_REASON_CHANGE_DISPLAY;
@@ -100,6 +101,8 @@ class DeferredDisplayUpdater {
 
     /** Whether {@link #mScreenUnblocker} should wait for transition to be ready. */
     private boolean mShouldWaitForTransitionWhenScreenOn;
+
+    private boolean mInPhysicalDisplayChangeTransition;
 
     /** The message to notify PhoneWindowManager#finishWindowsDrawn. */
     @Nullable
@@ -190,11 +193,16 @@ class DeferredDisplayUpdater {
     private void requestDisplayChangeTransition(boolean physicalDisplayUpdated,
             @NonNull Runnable onStartCollect) {
 
-        final Transition transition = new Transition(TRANSIT_CHANGE, /* flags= */ 0,
+        final Transition transition = new Transition(TRANSIT_CHANGE,
+                /* flags= */ TRANSIT_FLAG_DISPLAY_LEVEL_TRANSITION,
                 mDisplayContent.mTransitionController,
                 mDisplayContent.mTransitionController.mSyncEngine);
 
         mDisplayContent.mAtmService.startPowerMode(POWER_MODE_REASON_CHANGE_DISPLAY);
+
+        if (physicalDisplayUpdated) {
+            mInPhysicalDisplayChangeTransition = true;
+        }
 
         mDisplayContent.mTransitionController.startCollectOrQueue(transition, deferred -> {
             final Rect startBounds = new Rect(0, 0, mDisplayContent.mInitialDisplayWidth,
@@ -211,6 +219,8 @@ class DeferredDisplayUpdater {
                 }
             }
 
+            final ActionChain chain = mDisplayContent.mAtmService.mChainTracker.start(
+                    "dispChg", transition);
             mDisplayContent.mAtmService.deferWindowLayout();
             try {
                 onStartCollect.run();
@@ -227,6 +237,7 @@ class DeferredDisplayUpdater {
                 // Run surface placement after requestStartTransition, so shell side can receive
                 // the transition request before handling task info changes.
                 mDisplayContent.mAtmService.continueWindowLayout();
+                mDisplayContent.mAtmService.mChainTracker.end();
             }
         });
     }
@@ -318,11 +329,15 @@ class DeferredDisplayUpdater {
      * properties.
      */
     void onDisplayContentDisplayPropertiesPostChanged() {
+        if (mInPhysicalDisplayChangeTransition) {
+            return;
+        }
         // Unblock immediately in case there is no transition. This is unlikely to happen.
-        if (mScreenUnblocker != null && !mDisplayContent.mTransitionController.inTransition()) {
+        if (mScreenUnblocker != null) {
             mScreenUnblocker.sendToTarget();
             mScreenUnblocker = null;
         }
+        mShouldWaitForTransitionWhenScreenOn = false;
     }
 
     /**
@@ -356,6 +371,7 @@ class DeferredDisplayUpdater {
      */
     private void continueScreenUnblocking() {
         synchronized (mDisplayContent.mWmService.mGlobalLock) {
+            mInPhysicalDisplayChangeTransition = false;
             mShouldWaitForTransitionWhenScreenOn = false;
             mDisplayContent.mWmService.mH.removeCallbacks(mScreenUnblockTimeoutRunnable);
             if (mScreenUnblocker == null) {

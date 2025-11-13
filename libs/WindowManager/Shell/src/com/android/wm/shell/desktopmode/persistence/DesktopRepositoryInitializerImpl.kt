@@ -26,7 +26,8 @@ import com.android.wm.shell.desktopmode.DesktopUserRepositories
 import com.android.wm.shell.desktopmode.persistence.DesktopRepositoryInitializer.DeskRecreationFactory
 import com.android.wm.shell.protolog.ShellProtoLogGroup.WM_SHELL_DESKTOP_MODE
 import com.android.wm.shell.shared.annotations.ShellMainThread
-import com.android.wm.shell.shared.desktopmode.DesktopModeStatus
+import com.android.wm.shell.shared.desktopmode.DesktopConfig
+import com.android.wm.shell.shared.desktopmode.DesktopState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,8 @@ class DesktopRepositoryInitializerImpl(
     private val context: Context,
     private val persistentRepository: DesktopPersistentRepository,
     @ShellMainThread private val mainCoroutineScope: CoroutineScope,
+    private val desktopConfig: DesktopConfig,
+    private val desktopState: DesktopState,
 ) : DesktopRepositoryInitializer {
 
     override var deskRecreationFactory: DeskRecreationFactory = DefaultDeskRecreationFactory()
@@ -50,7 +53,11 @@ class DesktopRepositoryInitializerImpl(
     override val isInitialized: StateFlow<Boolean> = _isInitialized
 
     override fun initialize(userRepositories: DesktopUserRepositories) {
-        if (!DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_PERSISTENCE.isTrue) {
+        // TODO: b/401107440 - Remove second check once restoring to external displays is supported
+        if (
+            !DesktopModeFlags.ENABLE_DESKTOP_WINDOWING_PERSISTENCE.isTrue ||
+                !desktopState.isDesktopModeSupportedOnDisplay(Display.DEFAULT_DISPLAY)
+        ) {
             _isInitialized.value = true
             return
         }
@@ -127,6 +134,7 @@ class DesktopRepositoryInitializerImpl(
                                     deskId = newDeskId,
                                     taskId = task.taskId,
                                     isVisible = false,
+                                    taskBounds = null,
                                 )
 
                                 if (isVisible) {
@@ -139,17 +147,26 @@ class DesktopRepositoryInitializerImpl(
                                     )
                                 }
 
-                                if (task.desktopTaskTilingState == DesktopTaskTilingState.LEFT) {
-                                    repository.addLeftTiledTask(
-                                        persistentDesktop.displayId,
-                                        task.taskId,
-                                    )
-                                } else if (
-                                    task.desktopTaskTilingState == DesktopTaskTilingState.RIGHT
+                                val tilingEnabled =
+                                    DesktopExperienceFlags.ENABLE_TILE_RESIZING.isTrue()
+                                if (
+                                    tilingEnabled &&
+                                        task.desktopTaskTilingState == DesktopTaskTilingState.LEFT
                                 ) {
-                                    repository.addRightTiledTask(
+                                    repository.addLeftTiledTaskToDesk(
                                         persistentDesktop.displayId,
                                         task.taskId,
+                                        newDeskId,
+                                    )
+                                }
+                                if (
+                                    tilingEnabled &&
+                                        task.desktopTaskTilingState == DesktopTaskTilingState.RIGHT
+                                ) {
+                                    repository.addRightTiledTaskToDesk(
+                                        persistentDesktop.displayId,
+                                        task.taskId,
+                                        newDeskId,
                                     )
                                 }
                             }
@@ -182,8 +199,7 @@ class DesktopRepositoryInitializerImpl(
     }
 
     private fun getTaskLimit(persistedDesk: Desktop): Int =
-        DesktopModeStatus.getMaxTaskLimit(context).takeIf { it > 0 }
-            ?: persistedDesk.zOrderedTasksCount
+        desktopConfig.maxTaskLimit.takeIf { it > 0 } ?: persistedDesk.zOrderedTasksCount
 
     private fun logV(msg: String, vararg arguments: Any?) {
         ProtoLog.v(WM_SHELL_DESKTOP_MODE, "%s: $msg", TAG, *arguments)

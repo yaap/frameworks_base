@@ -18,9 +18,9 @@ package com.android.server.wm;
 
 import static android.view.WindowManager.LayoutParams.TYPE_PRESENTATION;
 import static android.view.WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION;
+import static android.window.DesktopExperienceFlags.ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_ERROR;
-import static com.android.window.flags.Flags.enablePresentationForConnectedDisplays;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -106,7 +106,7 @@ class PresentationController implements DisplayManager.DisplayListener {
             return false;
         }
 
-        if (!enablePresentationForConnectedDisplays()) {
+        if (!ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS.isTrue()) {
             return displayContent.getDisplay().isPublicPresentation();
         }
 
@@ -125,8 +125,7 @@ class PresentationController implements DisplayManager.DisplayListener {
         }
 
         final int displayId = displayContent.mDisplayId;
-        if (hasPresentationWindow(displayId)
-                && win != null && win != mPresentations.get(displayId).mWin) {
+        if (hasPresentationWindow(displayId) && win != mPresentations.get(displayId).mWin) {
             // A display can't have multiple presentations.
             return false;
         }
@@ -137,7 +136,7 @@ class PresentationController implements DisplayManager.DisplayListener {
             hostTask = presentation.mHostTask;
         } else if (win == null) {
             final Task globallyFocusedTask =
-                    displayContent.mWmService.mRoot.getTopDisplayFocusedRootTask();
+                    displayContent.mWmService.mRoot.getTopDisplayFocusedLeafTask();
             if (globallyFocusedTask != null && uid == globallyFocusedTask.effectiveUid) {
                 hostTask = globallyFocusedTask;
             }
@@ -162,7 +161,8 @@ class PresentationController implements DisplayManager.DisplayListener {
         // be shown on them.
         // TODO(b/390481621): Disallow a presentation from covering its controlling activity so that
         // the presentation won't stop its controlling activity.
-        return enablePresentationForConnectedDisplays() && isPresentationVisible(displayId);
+        return ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS.isTrue()
+                && isPresentationVisible(displayId);
     }
 
     void onPresentationAdded(@NonNull WindowState win, int uid) {
@@ -192,9 +192,9 @@ class PresentationController implements DisplayManager.DisplayListener {
         win.mToken.registerWindowContainerListener(presentationWindowListener);
 
         Task hostTask = null;
-        if (enablePresentationForConnectedDisplays()) {
+        if (ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS.isTrue()) {
             final Task globallyFocusedTask =
-                    win.mWmService.mRoot.getTopDisplayFocusedRootTask();
+                    win.mWmService.mRoot.getTopDisplayFocusedLeafTask();
             if (globallyFocusedTask != null && uid == globallyFocusedTask.effectiveUid) {
                 hostTask = globallyFocusedTask;
             }
@@ -223,13 +223,17 @@ class PresentationController implements DisplayManager.DisplayListener {
 
     void removePresentation(int displayId, @NonNull String reason) {
         final Presentation presentation = mPresentations.get(displayId);
-        if (enablePresentationForConnectedDisplays() && presentation != null) {
-            ProtoLog.v(WmProtoLogGroups.WM_DEBUG_PRESENTATION, "Removing Presentation %s for "
-                    + "reason %s", mPresentations.get(displayId), reason);
+        if (ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS.isTrue() && presentation != null) {
             final WindowState win = presentation.mWin;
             win.mWmService.mAtmService.mH.post(() -> {
                 synchronized (win.mWmService.mGlobalLock) {
-                    win.removeIfPossible();
+                    // Invoke removeIfPossible() only if the presentation isn't being removed.
+                    if (!win.mAnimatingExit || !win.mRemoveOnExit) {
+                        ProtoLog.v(WmProtoLogGroups.WM_DEBUG_PRESENTATION,
+                                "Removing Presentation %s for reason %s",
+                                mPresentations.get(displayId), reason);
+                        win.removeIfPossible();
+                    }
                 }
             });
         }

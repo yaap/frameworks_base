@@ -31,11 +31,12 @@ import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.internal.logging.UiEventLogger
 import com.android.keyguard.BouncerPanelExpansionCalculator
 import com.android.systemui.Dumpable
+import com.android.systemui.Flags.qsComposeFragmentEarlyExpansion
 import com.android.systemui.animation.ShadeInterpolation
 import com.android.systemui.classifier.Classifier
 import com.android.systemui.classifier.domain.interactor.FalsingInteractor
 import com.android.systemui.common.ui.domain.interactor.ConfigurationInteractor
-import com.android.systemui.deviceentry.domain.interactor.DeviceEntryInteractor
+import com.android.systemui.deviceentry.domain.interactor.DeviceEntryBypassInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
 import com.android.systemui.keyguard.shared.model.Edge
 import com.android.systemui.keyguard.shared.model.KeyguardState
@@ -63,7 +64,6 @@ import com.android.systemui.res.R
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.shade.LargeScreenHeaderHelper
 import com.android.systemui.shade.ShadeDisplayAware
-import com.android.systemui.shade.domain.interactor.ShadeInteractor
 import com.android.systemui.shade.transition.LargeScreenShadeInterpolator
 import com.android.systemui.statusbar.StatusBarState
 import com.android.systemui.statusbar.SysuiStatusBarStateController
@@ -98,11 +98,10 @@ constructor(
     footerActionsViewModelFactory: FooterActionsViewModel.Factory,
     private val footerActionsController: FooterActionsController,
     private val sysuiStatusBarStateController: SysuiStatusBarStateController,
-    deviceEntryInteractor: DeviceEntryInteractor,
+    deviceEntryBypassInteractor: DeviceEntryBypassInteractor,
     disableFlagsInteractor: DisableFlagsInteractor,
     keyguardTransitionInteractor: KeyguardTransitionInteractor,
     private val largeScreenShadeInterpolator: LargeScreenShadeInterpolator,
-    shadeInteractor: ShadeInteractor,
     @ShadeDisplayAware configurationInteractor: ConfigurationInteractor,
     private val largeScreenHeaderHelper: LargeScreenHeaderHelper,
     private val squishinessInteractor: TileSquishinessInteractor,
@@ -135,7 +134,7 @@ constructor(
     var isQsVisible by mutableStateOf(false)
 
     val isQsVisibleAndAnyShadeExpanded: Boolean
-        get() = anyShadeExpanded && isQsVisible
+        get() = isPanelExpanded && isQsVisible
 
     // This can only be negative if undefined (in which case it will be -1f), else it will be
     // in [0, 1]. In some cases, it could be set back to -1f internally to indicate that it's
@@ -211,11 +210,13 @@ constructor(
 
     var heightOverride by mutableStateOf(-1)
 
+    var isPanelExpanded by mutableStateOf(false)
+
     val expansionState by derivedStateOf {
         if (forceQs) {
             QSExpansionState(1f)
         } else {
-            QSExpansionState(qsExpansion.coerceIn(0f, 1f))
+            QSExpansionState(qsExpansion.coerceIn(if (isQsExpanded) EARLY_EXPANSION else 0f, 1f))
         }
     }
 
@@ -229,22 +230,23 @@ constructor(
 
     var overScrollAmount by mutableStateOf(0)
 
-    val viewTranslationY by derivedStateOf {
-        if (isOverscrolling) {
-            overScrollAmount.toFloat()
-        } else {
-            if (onKeyguardAndExpanded) {
-                translationScaleY * qqsHeight
+    val viewTranslationY: Float
+        get() =
+            if (isOverscrolling) {
+                overScrollAmount.toFloat()
             } else {
-                headerTranslation
+                if (onKeyguardAndExpanded) {
+                    translationScaleY * qqsHeight
+                } else {
+                    headerTranslation
+                }
             }
-        }
-    }
 
-    val qsScrollTranslationY by derivedStateOf {
-        val panelTranslationY = translationScaleY * heightDiff
-        if (onKeyguardAndExpanded) panelTranslationY else 0f
-    }
+    val qsScrollTranslationY: Float
+        get() {
+            val panelTranslationY = translationScaleY * heightDiff
+            return if (onKeyguardAndExpanded) panelTranslationY else 0f
+        }
 
     val viewAlpha by derivedStateOf {
         when {
@@ -258,6 +260,9 @@ constructor(
 
     val showingMirror: Boolean
         get() = containerViewModel.brightnessSliderViewModel.showMirror
+
+    val isBrightnessSliderVisible: Boolean
+        get() = containerViewModel.isBrightnessSliderVisible
 
     // The initial values in these two are not meaningful. The flow will emit on start the correct
     // values. This is because we need to lazily fetch them after initMediaHosts.
@@ -398,7 +403,7 @@ constructor(
     private val isBypassEnabled by
         hydrator.hydratedStateOf(
             traceName = "isBypassEnabled",
-            source = deviceEntryInteractor.isBypassEnabled,
+            source = deviceEntryBypassInteractor.isBypassEnabled,
         )
 
     private val showCollapsedOnKeyguard by derivedStateOf {
@@ -419,9 +424,8 @@ constructor(
     private val translationScaleY: Float
         get() = ((qsExpansion - 1) * (if (isInSplitShade) 1f else SHORT_PARALLAX_AMOUNT))
 
-    private val headerTranslation by derivedStateOf {
-        if (isTransitioningToFullShade) 0f else proposedTranslation
-    }
+    private val headerTranslation: Float
+        get() = if (isTransitioningToFullShade) 0f else proposedTranslation
 
     private val alphaProgress by derivedStateOf {
         when {
@@ -446,12 +450,6 @@ constructor(
                     Edge.create(to = Overlays.Bouncer),
                     Edge.create(to = KeyguardState.PRIMARY_BOUNCER),
                 ),
-        )
-
-    private val anyShadeExpanded by
-        hydrator.hydratedStateOf(
-            traceName = "anyShadeExpanded",
-            source = shadeInteractor.isAnyExpanded,
         )
 
     fun applyNewQsScrollerBounds(left: Float, top: Float, right: Float, bottom: Float) {
@@ -537,11 +535,12 @@ constructor(
             printSection("Quick Settings state") {
                 println("isQSExpanded", isQsExpanded)
                 println("isQSVisible", isQsVisible)
-                println("anyShadeExpanded", anyShadeExpanded)
+                println("isPanelExpanded", isPanelExpanded)
                 println("isQSVisibleAndAnyShadeExpanded", isQsVisibleAndAnyShadeExpanded)
                 println("isQSEnabled", isQsEnabled)
                 println("isCustomizing", containerViewModel.editModeViewModel.isEditing.value)
                 println("inFirstPage", inFirstPage)
+                println("isBrightnessSliderVisible", containerViewModel.isBrightnessSliderVisible)
             }
             printSection("Expansion state") {
                 println("qsExpansion", qsExpansion)
@@ -593,6 +592,14 @@ constructor(
 
     // In the future, this may have other relevant elements.
     data class QSExpansionState(@FloatRange(0.0, 1.0) val progress: Float)
+
+    companion object {
+        private val EARLY_EXPANSION
+            get() = if (qsComposeFragmentEarlyExpansion()) 1.0E-6F else 0f
+
+        val QS_LISTENING_THRESHOLD
+            get() = EARLY_EXPANSION * 2
+    }
 }
 
 private fun Float.constrainSquishiness(): Float {

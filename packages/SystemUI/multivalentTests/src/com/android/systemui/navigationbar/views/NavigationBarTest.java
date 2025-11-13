@@ -84,6 +84,7 @@ import androidx.test.filters.SmallTest;
 
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.UiEventLogger;
+import com.android.systemui.LauncherProxyService;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.SysuiTestableContext;
 import com.android.systemui.accessibility.AccessibilityButtonModeObserver;
@@ -105,7 +106,6 @@ import com.android.systemui.navigationbar.views.buttons.KeyButtonView;
 import com.android.systemui.navigationbar.views.buttons.NavBarButtonClickLogger;
 import com.android.systemui.navigationbar.views.buttons.NavbarOrientationTrackingLogger;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
-import com.android.systemui.recents.LauncherProxyService;
 import com.android.systemui.recents.Recents;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.settings.FakeDisplayTracker;
@@ -120,6 +120,7 @@ import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.NotificationRemoteInputManager;
 import com.android.systemui.statusbar.NotificationShadeDepthController;
 import com.android.systemui.statusbar.NotificationShadeWindowController;
+import com.android.systemui.statusbar.data.repository.LightBarControllerStore;
 import com.android.systemui.statusbar.phone.AutoHideControllerStore;
 import com.android.systemui.statusbar.phone.CentralSurfaces;
 import com.android.systemui.statusbar.phone.LightBarController;
@@ -213,7 +214,7 @@ public class NavigationBarTest extends SysuiTestCase {
     @Mock
     private LightBarController mLightBarController;
     @Mock
-    private LightBarController.Factory mLightBarcontrollerFactory;
+    private LightBarControllerStore mLightBarControllerStore;
     @Mock
     private WindowManager mWindowManager;
     @Mock
@@ -257,8 +258,7 @@ public class NavigationBarTest extends SysuiTestCase {
     @Before
     public void setup() throws Exception {
         MockitoAnnotations.initMocks(this);
-
-        when(mLightBarcontrollerFactory.create(any(Context.class))).thenReturn(mLightBarController);
+        when(mLightBarControllerStore.forDisplay(anyInt())).thenReturn(mLightBarController);
         when(mNavigationBarView.getHomeButton()).thenReturn(mHomeButton);
         when(mNavigationBarView.getRecentsButton()).thenReturn(mRecentsButton);
         when(mNavigationBarView.getAccessibilityButton()).thenReturn(mAccessibilityButton);
@@ -275,6 +275,7 @@ public class NavigationBarTest extends SysuiTestCase {
         when(mNavigationBarView.getResources()).thenReturn(mResources);
         when(mNavigationBarView.getViewRootImpl()).thenReturn(mViewRootImpl);
         when(mEdgeBackGestureHandlerFactory.create(any())).thenReturn(mEdgeBackGestureHandler);
+        when(mLauncherProxyService.isSystemOrVisibleBgUser()).thenReturn(true);
         setupSysuiDependency();
         // This class inflates views that call Dependency.get, thus these injections are still
         // necessary.
@@ -706,8 +707,7 @@ public class NavigationBarTest extends SysuiTestCase {
                 mFakeExecutor,
                 mUiEventLogger,
                 mNavBarHelper,
-                mLightBarController,
-                mLightBarcontrollerFactory,
+                mLightBarControllerStore,
                 mAutoHideControllerStore,
                 Optional.of(mTelecomManager),
                 mInputMethodManager,

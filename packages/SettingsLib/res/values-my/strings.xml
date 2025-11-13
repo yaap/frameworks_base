@@ -209,9 +209,9 @@
     <string name="tts_settings" msgid="8130616705989351312">"စာ-မှ-စကား ဆက်တင်များ"</string>
     <string name="tts_settings_title" msgid="7602210956640483039">"စာ-မှ-စကားသို့ အထွက်"</string>
     <string name="tts_default_rate_title" msgid="3964187817364304022">"စကားပြောနှုန်း"</string>
-    <string name="tts_default_rate_summary" msgid="3781937042151716987">"စာတမ်းအားပြောဆိုသော အမြန်နှုန်း"</string>
+    <string name="tts_default_rate_summary" msgid="3781937042151716987">"စာသားကို ဖတ်ပြသော အမြန်နှုန်း"</string>
     <string name="tts_default_pitch_title" msgid="6988592215554485479">"အသံအနိမ့်အမြင့်"</string>
-    <string name="tts_default_pitch_summary" msgid="9132719475281551884">"စက်ဖြင့်ထုတ်လုပ်ထားသည့် စကားသံကို အကျိုးသက်ရောက်မှုရှိပါမည်။"</string>
+    <string name="tts_default_pitch_summary" msgid="9132719475281551884">"စက်ဖြင့်ထုတ်လုပ်သည့် စကားသံအပေါ် သက်ရောက်သည်"</string>
     <string name="tts_default_lang_title" msgid="4698933575028098940">"ဘာသာစကား"</string>
     <string name="tts_lang_use_system" msgid="6312945299804012406">"စနစ်၏ ဘာသာစကားကို အသုံးပြုရန်"</string>
     <string name="tts_lang_not_selected" msgid="7927823081096056147">"ဘာသာစကား မရွေးချယ်ထားပါ။"</string>
@@ -294,16 +294,16 @@
     <string name="keep_screen_on_summary" msgid="1510731514101925829">"အားသွင်းနေချိန် ဖန်သားပြင် ပိတ်သွားမည် မဟုတ်ပါ"</string>
     <string name="bt_hci_snoop_log" msgid="7291287955649081448">"ဘလူးတုသ် HCI snoop မှတ်တမ်းကို ဖွင့်ခြင်း"</string>
     <string name="bt_hci_snoop_log_summary" msgid="6808538971394092284">"ဘလူးတုသ် အတွဲများ သိမ်းယူပါ။ (ဤဆက်တင်ကို ပြောင်းပြီးသည့်အခါ ဘလူးတုသ် ဖွင့်/ပိတ် လုပ်ပါ)"</string>
-    <string name="oem_unlock_enable" msgid="5334869171871566731">"OEM သော့ဖွင့်ခြင်း"</string>
+    <string name="oem_unlock_enable" msgid="5334869171871566731">"OEM လော့ခ်ဖွင့်ခြင်း"</string>
     <string name="oem_unlock_enable_summary" msgid="5857388174390953829">"အစပြုခြင်းကိရိယာအား သော့ဖွင့်ရန် ခွင့်ပြုမည်"</string>
-    <string name="confirm_enable_oem_unlock_title" msgid="8249318129774367535">"OEM သော့ဖွင့်ခြင်း ခွင့်ပြုမလား?"</string>
+    <string name="confirm_enable_oem_unlock_title" msgid="8249318129774367535">"OEM လော့ခ်ဖွင့်ခြင်း ခွင့်ပြုမလား။"</string>
     <string name="confirm_enable_oem_unlock_text" msgid="854131050791011970">"သတိပေးချက်: ဤချိန်ညှိချက်ဖွင့်ထားလျှင်၊ ဤစက်ပစ္စည်းပေါ်တွင် စက်ပစ္စည်းကာကွယ်သည့် အထူးပြုလုပ်ချက် အလုပ်လုပ်မည်မဟုတ်ပါ။"</string>
     <string name="mock_location_app" msgid="6269380172542248304">"တည်နေရာဖန်တီးသည့် အက်ပ်ရွေးရန်"</string>
     <string name="mock_location_app_not_set" msgid="6972032787262831155">"တည်နေရာဖန်တီးသည့်အက်ပ် သတ်မှတ်ထားခြင်းမရှိပါ"</string>
     <string name="mock_location_app_set" msgid="4706722469342913843">"တည်နေရာအတုပြ အက်ပ်- <xliff:g id="APP_NAME">%1$s</xliff:g>"</string>
     <string name="debug_networking_category" msgid="6829757985772659599">"ချိတ်ဆက်ဆောင်ရွက်ခြင်း"</string>
     <string name="wifi_display_certification" msgid="1805579519992520381">"ကြိုးမဲ့ပြသမှု အသိအမှတ်ပြုလက်မှတ်"</string>
-    <string name="wifi_verbose_logging" msgid="1785910450009679371">"Wi‑Fi Verbose မှတ်တမ်းတင်ခြင်းအား ဖွင့်မည်"</string>
+    <string name="wifi_verbose_logging" msgid="1785910450009679371">"Wi‑Fi အကျယ်မှတ်တမ်းတင်ခြင်းဖွင့်ရန်"</string>
     <string name="wifi_scan_throttling" msgid="2985624788509913617">"Wi‑Fi ရှာဖွေခြင်း ထိန်းချုပ်မှု"</string>
     <string name="wifi_non_persistent_mac_randomization" msgid="7482769677894247316">"Wi‑Fi ပြောင်းလဲသော MAC ကျပန်းပြုလုပ်ခြင်း"</string>
     <string name="mobile_data_always_on" msgid="8275958101875563572">"မိုဘိုင်းဒေတာကို အမြဲဖွင့်ထားရန်"</string>
@@ -335,7 +335,7 @@
     <string name="private_dns_mode_provider_hostname_hint" msgid="6564868953748514595">"DNS ဝန်ဆောင်ပေးသူအမည်ကို ထည့်ပါ"</string>
     <string name="private_dns_mode_provider_failure" msgid="8356259467861515108">"ချိတ်ဆက်၍ မရပါ"</string>
     <string name="wifi_display_certification_summary" msgid="8111151348106907513">"ကြိုးမဲ့ပြသမှု အသိအမှတ်ပြုလက်မှတ်အတွက် ရွေးချယ်စရာများပြသည်"</string>
-    <string name="wifi_verbose_logging_summary" msgid="4993823188807767892">"Wi‑Fi မှတ်တမ်းတင်ခြင်း နှုန်းအားမြင့်ကာ၊ Wi‑Fi ရွေးရာတွင် SSID RSSI ဖြင့်ပြပါ"</string>
+    <string name="wifi_verbose_logging_summary" msgid="4993823188807767892">"Wi‑Fi မှတ်တမ်းတင်နှုန်းမြှင့်ပြီး Wi‑Fi ရွေးစနစ်တွင် SSID RSSI အလိုက်ပြသည်"</string>
     <string name="wifi_scan_throttling_summary" msgid="2577105472017362814">"ဘက်ထရီအသုံးပြုမှု လျှော့ချပြီး ကွန်ရက်စွမ်းဆောင်ရည် ပိုမိုကောင်းမွန်သည်"</string>
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"ဤမုဒ်ကို ဖွင့်ထားသည့်အခါ MAC ကျပန်းပြုလုပ်ထားသည့် ကွန်ရက်သို့ ချိတ်ဆက်လိုက်သည့်အခါတိုင်း ဤစက်၏ MAC လိပ်စာ ပြောင်းသွားနိုင်သည်။"</string>
     <string name="wifi_metered_label" msgid="8737187690304098638">"အခမဲ့ မဟုတ်ပါ"</string>
@@ -380,7 +380,7 @@
     <string name="select_application" msgid="2543228890535466325">"အပလီကေးရှင်းရွေးချယ်ရန်"</string>
     <string name="no_application" msgid="9038334538870247690">"တခုမှမရှိ"</string>
     <string name="wait_for_debugger" msgid="7461199843335409809">"အမှားရှာပြင်ကိရိယာကို စောင့်ရန်"</string>
-    <string name="wait_for_debugger_summary" msgid="6846330006113363286">"အမှားပြင်ဆင်ရှာဖွေသည့် အပလီကေးရှင်းသည် လုပ်ငန်းမစမီ တွဲဖက်ရန် အမှားရှာဖွေမည့်သူကို စောင့်နေသည်။"</string>
+    <string name="wait_for_debugger_summary" msgid="6846330006113363286">"အမှားရှာပြင်သည့် အပလီကေးရှင်းသည် လုပ်ငန်းမစမီ အမှားရှာပြင်ကိရိယာ တွဲဖက်ရန် စောင့်နေသည်။"</string>
     <string name="debug_input_category" msgid="7349460906970849771">"ထည့်သွင်းရန်"</string>
     <string name="debug_drawing_category" msgid="5066171112313666619">"ရေးဆွဲခြင်း"</string>
     <string name="debug_hw_drawing_category" msgid="5830815169336975162">"ဟာ့ဒ်ဝဲ အရှိန်မြှင့် ပုံဖော်ခြင်း"</string>
@@ -388,30 +388,30 @@
     <string name="debug_monitoring_category" msgid="1597387133765424994">"စောင့်ကြည့်စစ်ဆေးခြင်း"</string>
     <string name="window_management_category" msgid="2015535427098365170">"ဝင်းဒိုး စီမံခန့်ခွဲမှု"</string>
     <string name="strict_mode" msgid="889864762140862437">"တင်းကြပ်သောစနစ် ဖွင့်ရန်"</string>
-    <string name="strict_mode_summary" msgid="1838248687233554654">"အက်ပ်လုပ်ဆောင်မှု ရှည်ကြာလျှင် စကရင်ပြန်စသည်"</string>
+    <string name="strict_mode_summary" msgid="1838248687233554654">"အက်ပ်လုပ်ဆောင်မှု ရှည်ကြာလျှင် စကရင်အချက်ပြသည်"</string>
     <string name="pointer_location" msgid="7516929526199520173">"မြား၏တည်နေရာ"</string>
     <string name="pointer_location_summary" msgid="957120116989798464">"လက်ရှိထိတွေ့မှုဒေတာကို ဖန်သားပေါ်တွင်ထပ်၍ ပြသသည်"</string>
     <string name="show_touches" msgid="8437666942161289025">"တို့ချက်များ ပြရန်"</string>
     <string name="show_touches_summary" msgid="3692861665994502193">"တို့ခြင်းများအတွက် အမြင်ဖြင့် တုံ့ပြန်မှုပြသည်"</string>
-    <string name="show_key_presses" msgid="6360141722735900214">"ကီးနှိပ်မှုများ ပြပါ"</string>
+    <string name="show_key_presses" msgid="6360141722735900214">"ကီးနှိပ်မှုများ ပြရန်"</string>
     <string name="show_key_presses_summary" msgid="725387457373015024">"ပကတိကီးနှိပ်မှုများအတွက် ရုပ်မြင်အကြံပြုချက် ပြပါ"</string>
-    <string name="touchpad_visualizer" msgid="3707916068870825115">"တာ့ချ်ပက် ထည့်သွင်းချက် ပြပါ"</string>
+    <string name="touchpad_visualizer" msgid="3707916068870825115">"တာ့ချ်ပက်ထည့်သွင်းချက် ပြရန်"</string>
     <string name="touchpad_visualizer_summary" msgid="4056080018119847449">"ဖန်သားပြင်တွင် ထပ်ဆင့်ပြသခြင်းသည် တာ့ချ်ပက်တွင် ထည့်သွင်းသော ဒေတာနှင့် သိရှိသော လက်ဟန်များကို ပြထားသည်"</string>
     <string name="show_screen_updates" msgid="2078782895825535494">"မျက်နှာပြင်အပ်ဒိတ်ပြရန်"</string>
     <string name="show_screen_updates_summary" msgid="2126932969682087406">"အပ်ဒိတ်လုပ်စဉ် ဝင်းဒိုးမျက်နှာပြင်တွင် အချက်ပြရန်"</string>
     <string name="show_hw_screen_updates" msgid="2021286231267747506">"မြင်ကွင်းအပ်ဒိတ်များ ပြခြင်း"</string>
-    <string name="show_hw_screen_updates_summary" msgid="3539770072741435691">"ပုံဆွဲစဉ် ဝင်းဒိုးအတွင်း တဒင်္ဂပြပါ"</string>
+    <string name="show_hw_screen_updates_summary" msgid="3539770072741435691">"ပုံဆွဲစဉ် ဝင်းဒိုးအတွင်း တဒင်္ဂပြသည်"</string>
     <string name="show_hw_layers_updates" msgid="5268370750002509767">"ဟာ့ဒ်ဝဲအလွှာ အပ်ဒိတ်များပြခြင်း"</string>
-    <string name="show_hw_layers_updates_summary" msgid="5850955890493054618">"အပ်ဒိတ်လုပ်ချိန် ဟာ့ဒ်ဝဲအလွှာများ အစိမ်းရောင်ပြပါ"</string>
+    <string name="show_hw_layers_updates_summary" msgid="5850955890493054618">"အပ်ဒိတ်လုပ်ချိန် ဟာ့ဒ်ဝဲအလွှာများ အစိမ်းရောင်ပြသည်"</string>
     <string name="debug_hw_overdraw" msgid="8944851091008756796">"GPU ပိုသုံးစွဲမှု ပြင်ဆင်ခြင်း"</string>
     <string name="disable_overlays" msgid="4206590799671557143">"HW ထပ်ပိုးခြင်းများ ပိတ်ရန်"</string>
-    <string name="disable_overlays_summary" msgid="1954852414363338166">"GPU ကိုမျက်နှာပြင်ခင်းကျင်းရာတွင် အမြဲသုံးပါ။"</string>
+    <string name="disable_overlays_summary" msgid="1954852414363338166">"စခရင်ပေါင်းစပ်မှုအတွက် GPU ကို အမြဲသုံးသည်"</string>
     <string name="simulate_color_space" msgid="1206503300335835151">"အရောင်စနစ် ပြောင်းရန်"</string>
     <string name="enable_opengl_traces_title" msgid="4638773318659125196">"OpenGL ခြေရာခံခြင်းဖွင့်ပါ။"</string>
     <string name="usb_audio_disable_routing" msgid="3367656923544254975">"USB အသံလမ်းကြောင်း ပိတ်ရန်"</string>
     <string name="usb_audio_disable_routing_summary" msgid="8768242894849534699">"USB အသံစက်ပစ္စည်းများသို့ အလိုအလျောက် ချိတ်ဆက်ခြင်းကို ပိတ်သည်"</string>
     <string name="debug_layout" msgid="1659216803043339741">"ပြကွက်၏ဘောင်များ ပြရန်"</string>
-    <string name="debug_layout_summary" msgid="8825829038287321978">"ဖြတ်ပိုင်းအနားသတ်များ၊ အနားများ စသဖြင့် ပြပါ။"</string>
+    <string name="debug_layout_summary" msgid="8825829038287321978">"ဖြတ်ပိုင်းအနားသတ်များ၊ အနားများ စသဖြင့် ပြသည်"</string>
     <string name="force_rtl_layout_all_locales" msgid="8690762598501599796">"RTL အပြင်အဆင်အတိုင်း ဖြစ်စေခြင်း"</string>
     <string name="force_rtl_layout_all_locales_summary" msgid="6663016859517239880">"ဘာသာစကားအားလုံးအတွက် RTL အပြင်အဆင်အတိုင်း ဖြစ်စေသည်"</string>
     <string name="transparent_navigation_bar" msgid="1933192171384678484">"လမ်းညွှန်ဘား အကြည်"</string>
@@ -438,7 +438,7 @@
     <string name="shade_display_awareness_title" msgid="8000009404669495876">"အကြောင်းကြားချက်ပြကွက် နေရာ"</string>
     <string name="debug_applications_category" msgid="5394089406638954196">"အက်ပ်များ"</string>
     <string name="immediately_destroy_activities" msgid="1826287490705167403">"ဆောင်ရွက်မှုများကို သိမ်းမထားပါနှင့်"</string>
-    <string name="immediately_destroy_activities_summary" msgid="6289590341144557614">"သုံးသူထွက်သွားသည်နှင့် လုပ်ဆောင်ချက်များ ဖျက်ရန်"</string>
+    <string name="immediately_destroy_activities_summary" msgid="6289590341144557614">"သုံးသူထွက်သွားသည်နှင့် လုပ်ဆောင်ချက်များ ဖျက်သည်"</string>
     <string name="app_process_limit_title" msgid="8361367869453043007">"နောက်ခံလုပ်ငန်းစဉ်ကန့်သတ်ခြင်း"</string>
     <string name="show_all_anrs" msgid="9160563836616468726">"နောက်ခံ ANR များကို ပြရန်"</string>
     <string name="show_all_anrs_summary" msgid="8562788834431971392">"နောက်ခံ အက်ပ်များအတွက် \'အက်ပ်တုံ့ပြန်မှုမရှိ\' ဟု ပြရန်"</string>
@@ -478,7 +478,7 @@
     <string name="transcode_disable_cache" msgid="3160069309377467045">"အမျိူးအစားပြောင်းခြင်း ကက်ရှ်ကို ပိတ်ရန်"</string>
     <string name="runningservices_settings_title" msgid="6460099290493086515">"အလုပ်လုပ်နေသောဝန်ဆောင်မှုများ"</string>
     <string name="runningservices_settings_summary" msgid="1046080643262665743">"လက်ရှိ ဝန်ဆောင်မှုများကို ကြည့်ရှု ထိန်းသိမ်းသည်"</string>
-    <string name="select_webview_provider_title" msgid="3917815648099445503">"WebView အကောင်အထည်ဖော်မှု"</string>
+    <string name="select_webview_provider_title" msgid="3917815648099445503">"ဝဘ်မြင်ကွင်း အကောင်အထည်ဖော်မှု"</string>
     <string name="select_webview_provider_dialog_title" msgid="2444261109877277714">"WebView အကောင်အထည်ဖော်မှု သတ်မှတ်ပါ"</string>
     <string name="select_webview_provider_toast_text" msgid="8512254949169359848">"ဤရွေးချယ်မှု မှန်ကန်မှု မရှိတော့ပါ။ ထပ်စမ်းကြည့်ပါ။"</string>
     <string name="webview_launch_devtools_title" msgid="8009687433555367112">"ဝဘ်မြင်ကွင်း ဆောဖ့်ဝဲတူးလ်များ"</string>
@@ -551,11 +551,15 @@
   </string-array>
     <string name="charge_length_format" msgid="6941645744588690932">"ပြီးခဲ့သည့် <xliff:g id="ID_1">%1$s</xliff:g> က"</string>
     <string name="remaining_length_format" msgid="4310625772926171089">"<xliff:g id="ID_1">%1$s</xliff:g> ကျန်"</string>
+    <string name="screen_zoom_summary_smallest" msgid="1042159093382395789">"အသေးဆုံး"</string>
+    <string name="screen_zoom_summary_smaller" msgid="7452722393802683776">"ပိုသေး"</string>
     <string name="screen_zoom_summary_small" msgid="6050633151263074260">"သေး"</string>
     <string name="screen_zoom_summary_default" msgid="1888865694033865408">"မူရင်း"</string>
     <string name="screen_zoom_summary_large" msgid="4706951482598978984">"ကြီး"</string>
-    <string name="screen_zoom_summary_very_large" msgid="7317423942896999029">"ပိုကြီး"</string>
-    <string name="screen_zoom_summary_extremely_large" msgid="1438045624562358554">"အကြီးဆုံး"</string>
+    <string name="screen_zoom_summary_larger" msgid="7346406528348409139">"ပိုကြီး"</string>
+    <string name="screen_zoom_summary_very_large" msgid="6853699118427019538">"အလွန်ကြီး"</string>
+    <string name="screen_zoom_summary_extra_large" msgid="4898389280769475551">"အလွန်ကြီး"</string>
+    <string name="screen_zoom_summary_largest" msgid="5120290329622591371">"အကြီးဆုံး"</string>
     <string name="screen_zoom_summary_custom" msgid="3468154096832912210">"စိတ်ကြိုက် (<xliff:g id="DENSITYDPI">%d</xliff:g>)"</string>
     <string name="content_description_menu_button" msgid="6254844309171779931">"မီနူး"</string>
     <string name="retail_demo_reset_message" msgid="5392824901108195463">"ဒီမိုမုဒ်၌မူလဆက်တင်ထားရန် စကားဝှက်ထည့်ပါ"</string>
@@ -574,6 +578,7 @@
     <string name="wifi_tether_connected_summary" msgid="5100712926640492336">"{count,plural, =1{စက် ၁ ခု ချိတ်ဆက်ထားသည်}other{စက် # ခု ချိတ်ဆက်ထားသည်}}"</string>
     <string name="accessibility_manual_zen_more_time" msgid="5141801092071134235">"အချိန်တိုးရန်။"</string>
     <string name="accessibility_manual_zen_less_time" msgid="6828877595848229965">"အချိန်လျှော့ရန်။"</string>
+    <string name="accessibility_screen_magnification_title" msgid="4981096059561256342">"ချဲ့ခြင်း"</string>
     <string name="cancel" msgid="5665114069455378395">"မလုပ်တော့"</string>
     <string name="next" msgid="2699398661093607009">"ရှေ့သို့"</string>
     <string name="back" msgid="5554327870352703710">"နောက်သို့"</string>
@@ -655,7 +660,7 @@
     <string name="user_grant_admin_message" msgid="1673791931033486709">"စီမံခန့်ခွဲသူများ၌ အခြားအသုံးပြုသူများတွင်မရှိသော အထူးဆောင်ရွက်ခွင့်များရှိသည်။ စီမံခန့်ခွဲသူက အသုံးပြုသူအားလုံးကို စီမံခြင်း၊ ဤစက်ပစ္စည်းကို အပ်ဒိတ်လုပ်ခြင်း (သို့) ပြင်ဆင်သတ်မှတ်ခြင်း၊ ဆက်တင်များပြင်ဆင်ခြင်း၊ ထည့်သွင်းထားသောအက်ပ်အားလုံးကို ကြည့်ခြင်းနှင့် အခြားသူများအတွက် စီမံခန့်ခွဲသူ ဆောင်ရွက်ခွင့်များပေးခြင်း (သို့) ရုပ်သိမ်းခြင်းတို့ လုပ်နိုင်သည်။"</string>
     <string name="user_grant_admin_button" msgid="5441486731331725756">"စီမံခန့်ခွဲသူအဖြစ် သတ်မှတ်ရန်"</string>
     <string name="user_setup_dialog_title" msgid="8037342066381939995">"အသုံးပြုသူကို ယခုသတ်မှတ်မလား။"</string>
-    <string name="user_setup_dialog_message" msgid="269931619868102841">"သူသည် ကိရိယာကိုယူ၍ သူ၏နေရာကို ယခုသတ်မှတ်နိုင်ရမည်"</string>
+    <string name="user_setup_dialog_message" msgid="269931619868102841">"သူသည် သူ၏နေရာကို စက်တွင် ယခုသတ်မှတ်နိုင်ရမည်"</string>
     <string name="user_setup_profile_dialog_message" msgid="4788197052296962620">"ယခု ကိုယ်ရေးအချက်အလက်ကို အစီအမံလုပ်မည်လား?"</string>
     <string name="user_setup_button_setup_now" msgid="1708269547187760639">"ယခု သတ်မှတ်ပါမည်"</string>
     <string name="user_setup_button_setup_later" msgid="8712980133555493516">"ယခုမလုပ်ပါ"</string>
@@ -754,9 +759,6 @@
     <string name="bt_le_audio_broadcast_dialog_sub_title" msgid="268234802198852753">"<xliff:g id="SWITCHAPP">%1$s</xliff:g> ကို ထုတ်လွှင့်သောအခါ (သို့) အထွက်ကို ပြောင်းသောအခါ သင့်လက်ရှိထုတ်လွှင့်ခြင်း ရပ်သွားမည်"</string>
     <string name="bt_le_audio_broadcast_dialog_switch_app" msgid="5749813313369517812">"<xliff:g id="SWITCHAPP">%1$s</xliff:g> ထုတ်လွှင့်ခြင်း"</string>
     <string name="bt_le_audio_broadcast_dialog_different_output" msgid="2638402023060391333">"အထွက်ကို ပြောင်းခြင်း"</string>
-    <string name="back_navigation_animation" msgid="8105467568421689484">"နောက်ခလုတ်၏ ရှေ့ပြေးလှုပ်ရှားသက်ဝင်ပုံ"</string>
-    <string name="back_navigation_animation_summary" msgid="741292224121599456">"နောက်ခလုတ်ရှေ့ပြေးအတွက် စနစ်လှုပ်ရှားသက်ဝင်ပုံများကို ဖွင့်ပါသည်။"</string>
-    <string name="back_navigation_animation_dialog" msgid="8696966520944625596">"ဤဆက်တင်သည် လက်ဟန် ရှေ့ပြေးလှုပ်ရှားသက်ဝင်ပုံအတွက် စနစ်လှုပ်ရှားသက်ဝင်ပုံများကို ဖွင့်ပါသည်။ အက်ပ်တစ်ခုစီ၏ ဆက်တင်အတွက် enableOnBackInvokedCallback ကို မန်နီးဖက်စ် (manifest) ဖိုင်၌ ဖွင့်ထားရန်လိုအပ်သည်။"</string>
     <string name="font_scale_percentage" msgid="2624057443622817886">"<xliff:g id="PERCENTAGE">%1$d</xliff:g> %%"</string>
     <string name="not_specified" msgid="5423502443185110328">"သတ်မှတ်မထားပါ"</string>
     <string name="neuter" msgid="2075249330106127310">"နပုလ္လိင်"</string>
