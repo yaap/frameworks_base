@@ -6657,16 +6657,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     @Override
-    public void sendCustomAction(Intent intent) {
-        String action = intent.getAction();
-        if (action != null) {
-            if (YaapUtils.INTENT_SCREENSHOT.equals(action)) {
-                interceptScreenshotChord(TAKE_SCREENSHOT_FULLSCREEN, 0);
-            }
-        }
-    }
-
-    @Override
     public void setDismissImeOnBackKeyPressed(boolean newValue) {
         mDismissImeOnBackKeyPressed = newValue;
     }
