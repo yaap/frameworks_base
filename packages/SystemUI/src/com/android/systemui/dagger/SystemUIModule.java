@@ -16,7 +16,6 @@
 
 package com.android.systemui.dagger;
 
-import android.app.AlarmManager;
 import android.app.INotificationManager;
 import android.app.Service;
 import android.app.backup.BackupManager;
@@ -52,7 +51,6 @@ import com.android.systemui.bouncer.data.repository.BouncerRepositoryModule;
 import com.android.systemui.bouncer.domain.interactor.BouncerInteractorModule;
 import com.android.systemui.bouncer.ui.BouncerViewModule;
 import com.android.systemui.brightness.dagger.ScreenBrightnessModule;
-import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.classifier.FalsingModule;
 import com.android.systemui.clipboardoverlay.dagger.ClipboardOverlayModule;
 import com.android.systemui.common.data.CommonDataLayerModule;
@@ -157,7 +155,6 @@ import com.android.systemui.statusbar.phone.LetterboxModule;
 import com.android.systemui.statusbar.pipeline.dagger.StatusBarPipelineModule;
 import com.android.systemui.statusbar.policy.DeviceStateRotationLockSettingController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
-import com.android.systemui.statusbar.policy.NextAlarmController;
 import com.android.systemui.statusbar.policy.PolicyModule;
 import com.android.systemui.statusbar.policy.SensitiveNotificationProtectionController;
 import com.android.systemui.statusbar.policy.ZenModeController;
@@ -173,7 +170,6 @@ import com.android.systemui.topui.TopUiModule;
 import com.android.systemui.touchpad.TouchpadModule;
 import com.android.systemui.tuner.dagger.TunerModule;
 import com.android.systemui.user.UserModule;
-import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.EventLogModule;
 import com.android.systemui.user.domain.UserDomainLayerModule;
 import com.android.systemui.util.concurrency.SysUIConcurrencyModule;
@@ -188,11 +184,6 @@ import com.android.systemui.util.time.SystemClockImpl;
 import com.android.systemui.wallet.dagger.WalletModule;
 import com.android.systemui.wmshell.BubblesManager;
 import com.android.wm.shell.bubbles.Bubbles;
-
-import com.google.android.systemui.smartspace.BcSmartspaceDataProvider;
-import com.google.android.systemui.smartspace.KeyguardMediaViewController;
-import com.google.android.systemui.smartspace.KeyguardSmartspaceController;
-import com.google.android.systemui.smartspace.KeyguardZenAlarmViewController;
 
 import dagger.Binds;
 import dagger.BindsOptionalOf;
@@ -519,32 +510,5 @@ public abstract class SystemUIModule {
     @Provides
     static Handler provideMainHandler() {
         return new Handler(Looper.getMainLooper());
-    }
-
-    @Provides
-    @SysUISingleton
-    static KeyguardSmartspaceController provideKeyguardSmartspaceController(FeatureFlags featureFlags,
-            KeyguardZenAlarmViewController keyguardZenAlarmViewController, KeyguardMediaViewController keyguardMediaViewController) {
-        return new KeyguardSmartspaceController(featureFlags, keyguardZenAlarmViewController, keyguardMediaViewController);
-    }
-
-    @Provides
-    @SysUISingleton
-    static KeyguardZenAlarmViewController provideKeyguardZenAlarmViewController(Context context, BcSmartspaceDataPlugin bcSmartspaceDataPlugin, ZenModeController zenModeController,
-            AlarmManager alarmManager, NextAlarmController nextAlarmController, Handler handler) {
-        return new KeyguardZenAlarmViewController(context, bcSmartspaceDataPlugin, zenModeController, alarmManager, nextAlarmController, handler);
-    }
-
-    @Provides
-    @SysUISingleton
-    static KeyguardMediaViewController provideKeyguardMediaViewController(Context context, BcSmartspaceDataPlugin bcSmartspaceDataPlugin,
-            @Main DelayableExecutor delayableExecutor, NotificationMediaManager notificationMediaManager, BroadcastDispatcher broadcastDispatcher, UserTracker userTracker) {
-        return new KeyguardMediaViewController(context, bcSmartspaceDataPlugin, delayableExecutor, notificationMediaManager, broadcastDispatcher, userTracker);
-    }
-
-    @Provides
-    @SysUISingleton
-    static BcSmartspaceDataPlugin provideBcSmartspaceDataPlugin() {
-        return new BcSmartspaceDataProvider();
     }
 }
