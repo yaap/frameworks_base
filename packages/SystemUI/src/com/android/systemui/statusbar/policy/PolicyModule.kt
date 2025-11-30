@@ -36,7 +36,6 @@ import com.android.systemui.qs.tiles.CameraToggleTile
 import com.android.systemui.qs.tiles.DcDimTile
 import com.android.systemui.qs.tiles.FlashlightTile
 import com.android.systemui.qs.tiles.FlashlightTileWithLevel
-import com.android.systemui.qs.tiles.FlashlightStrengthTile
 import com.android.systemui.qs.tiles.GamingModeTile
 import com.android.systemui.qs.tiles.HeadsUpTile
 import com.android.systemui.qs.tiles.LocationTile
