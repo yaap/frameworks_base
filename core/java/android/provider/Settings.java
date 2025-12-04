@@ -7128,16 +7128,6 @@ public final class Settings {
         public static final String VOLUME_PANEL_ON_LEFT_LAND = "volume_panel_on_left_land";
 
         /**
-         * Position to show statusbar clock
-         * 0 = Left (Default)
-         * 1 = Center
-         * 2 = Right
-         * @hide
-         */
-        @Readable
-        public static final String STATUSBAR_CLOCK_POSITION = "statusbar_clock_position";
-
-        /**
          * Whether allowing pocket service to register sensors and dispatch informations.
          *   0 = disabled
          *   1 = enabled

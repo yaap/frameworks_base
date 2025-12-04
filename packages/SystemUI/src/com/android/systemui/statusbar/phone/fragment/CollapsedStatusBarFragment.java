@@ -41,7 +41,6 @@ import androidx.core.animation.Animator;
 import com.android.app.animation.Interpolators;
 import com.android.app.animation.InterpolatorsAndroidX;
 import com.android.keyguard.KeyguardUpdateMonitor;
-import com.android.systemui.Dependency;
 import com.android.systemui.Dumpable;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.demomode.DemoMode;
@@ -69,7 +68,6 @@ import com.android.systemui.statusbar.events.SystemStatusAnimationScheduler;
 import com.android.systemui.statusbar.headsup.shared.StatusBarNoHunBehavior;
 import com.android.systemui.statusbar.notification.icon.ui.viewbinder.NotificationIconContainerStatusBarViewBinder;
 import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi;
-import com.android.systemui.statusbar.phone.ClockController;
 import com.android.systemui.statusbar.phone.NotificationIconContainer;
 import com.android.systemui.statusbar.phone.PhoneStatusBarView;
 import com.android.systemui.statusbar.phone.StatusBarHideIconsForBouncerManager;
@@ -94,7 +92,6 @@ import com.android.systemui.util.CarrierConfigTracker;
 import com.android.systemui.util.CarrierConfigTracker.CarrierConfigChangedListener;
 import com.android.systemui.util.CarrierConfigTracker.DefaultDataSubscriptionChangedListener;
 import com.android.systemui.util.settings.SecureSettings;
-import com.android.systemui.tuner.TunerService;
 
 import kotlin.Unit;
 
@@ -118,7 +115,7 @@ import javax.inject.Inject;
 @SuppressLint("ValidFragment")
 public class CollapsedStatusBarFragment extends Fragment implements CommandQueue.Callbacks,
         StatusBarStateController.StateListener,
-        SystemStatusAnimationCallback, Dumpable, TunerService.Tunable {
+        SystemStatusAnimationCallback, Dumpable {
 
     public static final String TAG = "CollapsedStatusBarFragment";
     private static final String EXTRA_PANEL_STATE = "panel_state";
@@ -172,9 +169,6 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
     private final StatusBarWindowControllerStore mStatusBarWindowControllerStore;
     private final StatusBarConfigurationControllerStore mStatusBarConfigurationControllerStore;
     private final DarkIconDispatcherStore mDarkIconDispatcherStore;
-
-    private ClockController mClockController;
-    private boolean mIsClockBlacklisted;
 
     private List<String> mBlockedIcons = new ArrayList<>();
     private Map<Startable, Startable.State> mStartableStates = new ArrayMap<>();
@@ -406,7 +400,6 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         mStatusBarIconController.addIconGroup(mDarkIconManager);
         mEndSideContent = mStatusBar.findViewById(R.id.status_bar_end_side_content);
         mEndSideAlphaController = new MultiSourceMinAlphaController(mEndSideContent);
-        mClockController = mStatusBar.getClockController();
         mClockView = mStatusBar.findViewById(R.id.clock);
         mPrimaryOngoingActivityChip = mStatusBar.findViewById(R.id.ongoing_activity_chip_primary);
         mSecondaryOngoingActivityChip =
@@ -429,8 +422,6 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
                 /* systemEventChipAnimateIn */ null,
                 /* systemEventChipAnimateOut */ null,
                 mStatusBarVisibilityChangeListener);
-
-        Dependency.get(TunerService.class).addTunable(this, StatusBarIconController.ICON_HIDE_LIST);
     }
 
     private String getDumpableName() {
@@ -553,16 +544,6 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         }
     }
 
-    @Override
-    public void onTuningChanged(String key, String newValue) {
-        boolean wasClockBlacklisted = mIsClockBlacklisted;
-        mIsClockBlacklisted = StatusBarIconController.getIconHideList(
-                getContext(), newValue).contains("clock");
-        if (wasClockBlacklisted && !mIsClockBlacklisted) {
-            showClock(false);
-        }
-    }
-
     /** Initializes views related to the notification icon area. */
     public void initNotificationIconArea() {
         Trace.beginSection("CollapsedStatusBarFragment#initNotifIconArea");
@@ -680,8 +661,8 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
         // The clock may have already been hidden, but we might want to shift its
         // visibility to GONE from INVISIBLE or vice versa
         if (newModel.getShowClock() != previousModel.getShowClock()
-                || mClockController.getClock().getVisibility() != clockHiddenMode()) {
-            if (newModel.getShowClock() && !mIsClockBlacklisted) {
+                || mClockView.getVisibility() != clockHiddenMode()) {
+            if (newModel.getShowClock()) {
                 showClock(animate);
             } else {
                 hideClock(animate);
@@ -867,12 +848,12 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
 
     private void hideClock(boolean animate) {
         StatusBarRootModernization.assertInLegacyMode();
-        animateHiddenState(mClockController.getClock(), clockHiddenMode(), animate);
+        animateHiddenState(mClockView, clockHiddenMode(), animate);
     }
 
     private void showClock(boolean animate) {
         StatusBarRootModernization.assertInLegacyMode();
-        animateShow(mClockController.getClock(), animate);
+        animateShow(mClockView, animate);
     }
 
     /** Hides the primary ongoing activity chip. */
@@ -907,7 +888,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
     private int clockHiddenMode() {
         StatusBarRootModernization.assertInLegacyMode();
         if (!mShadeExpansionStateManager.isClosed() && !mKeyguardStateController.isShowing()
-                && !mStatusBarStateController.isDozing() && mClockController.getClock().shouldBeVisible()) {
+                && !mStatusBarStateController.isDozing()) {
             return View.INVISIBLE;
         }
         return View.GONE;
