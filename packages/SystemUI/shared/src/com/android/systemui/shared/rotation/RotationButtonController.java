@@ -188,8 +188,11 @@ public class RotationButtonController {
         void update() {
             boolean enabled = Settings.System.getInt(mContext.getContentResolver(),
                     Settings.System.ENABLE_FLOATING_ROTATION_BUTTON, 1) == 1;
-            if (mRotationButton == null) return;
-            mContext.getMainExecutor().execute(() -> mRotationButton.setCanShowRotationButton(enabled));
+            mContext.getMainExecutor().execute(() -> {
+                if (mRotationButton != null) {
+                    mRotationButton.setCanShowRotationButton(enabled);
+                }
+            });
         }
     }
 
