@@ -506,7 +506,7 @@ public class KeyguardStatusBarViewController extends ViewController<KeyguardStat
                 (view, windowInsets) -> mView.updateWindowInsets(windowInsets, insetsProvider()));
         mSecureSettings.registerContentObserverForUserSync(
                 Settings.Secure.STATUS_BAR_SHOW_VIBRATE_ICON,
-                false,
+                true,
                 mVolumeSettingObserver,
                 UserHandle.USER_ALL);
         updateUserSwitcher();

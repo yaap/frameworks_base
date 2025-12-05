@@ -449,12 +449,12 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
                 mSecureSettings.getIntForUser(
                         Settings.Secure.STATUS_BAR_SHOW_VIBRATE_ICON,
                         1,
-                        UserHandle.USER_CURRENT) == 0;
+                        UserHandle.USER_CURRENT) == 1;
 
         // Filter out vibrate icon from the blocklist if the setting is on
         for (int i = 0; i < blockList.size(); i++) {
             if (blockList.get(i).equals(vibrateIconSlot)) {
-                if (showVibrateIcon) {
+                if (!showVibrateIcon) {
                     mBlockedIcons.add(blockList.get(i));
                 }
             } else {
@@ -502,7 +502,7 @@ public class CollapsedStatusBarFragment extends Fragment implements CommandQueue
 
         mSecureSettings.registerContentObserverForUserSync(
                 Settings.Secure.STATUS_BAR_SHOW_VIBRATE_ICON,
-                false,
+                true,
                 mVolumeSettingObserver,
                 UserHandle.USER_ALL);
     }
