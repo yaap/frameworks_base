@@ -469,8 +469,8 @@ fun BrightnessSlider(
                     }
                 },
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
+                    .size(45.dp)
+                    .clip(RoundedCornerShape(CornerSize(SliderTrackRoundedCorner)))
                     .background(autoBrightnessBackgroundColor),
                 update = { button ->
                     val targetState =
