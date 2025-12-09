@@ -19,6 +19,7 @@ package com.android.systemui.qs.panels.ui.compose
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
@@ -26,6 +27,8 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -38,6 +41,7 @@ import com.android.compose.theme.PlatformTheme
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
+import com.android.systemui.compose.modifiers.resIdToTestTag
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.DefaultEditTileGrid
 import com.android.systemui.qs.panels.ui.compose.infinitegrid.EditAction
 import com.android.systemui.qs.panels.ui.viewmodel.AvailableEditActions
@@ -66,8 +70,9 @@ class EditModeTest : SysuiTestCase() {
         val allTiles = remember { TestEditTiles.toMutableStateList() }
         val largeTiles = remember { TestLargeTilesSpecs.toMutableStateList() }
         val currentTiles = allTiles.filter { it.isCurrent }
-        val listState =
+        val listState = remember {
             EditTileListState(currentTiles, TestLargeTilesSpecs, columns = 4, largeTilesSpan = 2)
+        }
         LaunchedEffect(currentTiles, largeTiles) {
             listState.updateTiles(currentTiles, largeTiles.toSet())
         }
@@ -80,6 +85,7 @@ class EditModeTest : SysuiTestCase() {
                 allTiles = allTiles,
                 modifier = Modifier.fillMaxSize(),
                 snapshotViewModel = snapshotViewModel,
+                topBarActions = remember { mutableStateListOf() },
                 onStopEditing = {},
             ) { action ->
                 snapshotViewModel.takeSnapshot(
@@ -122,6 +128,25 @@ class EditModeTest : SysuiTestCase() {
 
         composeRule.assertCurrentTilesGridContainsExactly(
             listOf("tileA", "tileB", "tileC", "tileD_large", "tileE", "tileF")
+        )
+        composeRule.assertAvailableTilesGridContainsExactly(TestEditTiles.map { it.tileSpec.spec })
+    }
+
+    @Test
+    fun clickCurrentTile_shouldRemove() {
+        composeRule.setContent { EditTileGridUnderTest() }
+        composeRule.waitForIdle()
+
+        // Tap to remove
+        composeRule
+            .onAllNodesWithContentDescription(
+                context.getString(R.string.accessibility_qs_edit_remove_tile_action)
+            )
+            .onFirst()
+            .performClick()
+
+        composeRule.assertCurrentTilesGridContainsExactly(
+            listOf("tileB", "tileC", "tileD_large", "tileE")
         )
         composeRule.assertAvailableTilesGridContainsExactly(TestEditTiles.map { it.tileSpec.spec })
     }
@@ -209,6 +234,44 @@ class EditModeTest : SysuiTestCase() {
         composeRule.onNodeWithContentDescription("Undo").assertDoesNotExist()
     }
 
+    @Test
+    fun gridHeader_dependsOnPlacementMode() {
+        composeRule.setContent { EditTileGridUnderTest() }
+        composeRule.waitForIdle()
+
+        // Assert the idle string is showing
+        composeRule
+            .onNodeWithText(context.getString(R.string.select_to_rearrange_tiles))
+            .assertExists()
+        composeRule
+            .onNodeWithText(context.getString(R.string.tap_to_position_tile))
+            .assertDoesNotExist()
+
+        // Double tap "tileA" to enable placement mode
+        composeRule.onNodeWithContentDescription("tileA").performTouchInput { doubleClick() }
+
+        // Assert the "Tap to position" string is showing
+        composeRule
+            .onNodeWithText(context.getString(R.string.select_to_rearrange_tiles))
+            .assertDoesNotExist()
+        composeRule.onNodeWithText(context.getString(R.string.tap_to_position_tile)).assertExists()
+    }
+
+    @Test
+    fun visibleAvailableTiles_dependsOnPlacementMode() {
+        composeRule.setContent { EditTileGridUnderTest() }
+        composeRule.waitForIdle()
+
+        // Assert the available tiles are visible
+        composeRule.onNodeWithText("tileF").assertExists()
+
+        // Double tap "tileA" to enable placement mode
+        composeRule.onNodeWithContentDescription("tileA").performTouchInput { doubleClick() }
+
+        // Assert the available tiles are not visible
+        composeRule.onNodeWithText("tileF").assertDoesNotExist()
+    }
+
     private fun ComposeContentTestRule.assertCurrentTilesGridContainsExactly(specs: List<String>) =
         assertGridContainsExactly(CURRENT_TILES_GRID_TEST_TAG, specs)
 
@@ -217,8 +280,8 @@ class EditModeTest : SysuiTestCase() {
     ) = assertGridContainsExactly(AVAILABLE_TILES_GRID_TEST_TAG, specs)
 
     companion object {
-        private const val CURRENT_TILES_GRID_TEST_TAG = "CurrentTilesGrid"
-        private const val AVAILABLE_TILES_GRID_TEST_TAG = "AvailableTilesGrid"
+        private val CURRENT_TILES_GRID_TEST_TAG = resIdToTestTag("CurrentTilesGrid")
+        private val AVAILABLE_TILES_GRID_TEST_TAG = resIdToTestTag("AvailableTilesGrid")
 
         private fun createEditTile(
             tileSpec: String,

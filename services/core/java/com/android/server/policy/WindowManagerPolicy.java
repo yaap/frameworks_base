@@ -148,8 +148,6 @@ public interface WindowManagerPolicy extends WindowManagerPolicyConstants {
     int ACTION_PASS_TO_USER = 0x00000001;
     /** Layout state may have changed (so another layout will be performed) */
     int FINISH_LAYOUT_REDO_LAYOUT = 0x0001;
-    /** Configuration state may have changed */
-    int FINISH_LAYOUT_REDO_CONFIG = 0x0002;
     /** Wallpaper may need to move */
     int FINISH_LAYOUT_REDO_WALLPAPER = 0x0004;
     /** Need to recompute animations */
@@ -914,8 +912,18 @@ public interface WindowManagerPolicy extends WindowManagerPolicyConstants {
 
     /**
      * Return whether the default display is on and not blocked by a black surface.
+     *
+     * @deprecated Use {@link #isScreenOn(int)} instead, to better support multi-display.
      */
-    public boolean isScreenOn();
+    @Deprecated
+    default boolean isScreenOn() {
+        return isScreenOn(Display.DEFAULT_DISPLAY);
+    }
+
+    /**
+     * Return whether the specified display is on and not blocked by a black surface.
+     */
+    boolean isScreenOn(int displayId);
 
     /**
      * @param ignoreScreenOn {@code true} if screen state should be ignored.

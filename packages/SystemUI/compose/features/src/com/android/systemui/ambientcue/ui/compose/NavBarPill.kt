@@ -16,12 +16,19 @@
 
 package com.android.systemui.ambientcue.ui.compose
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,20 +36,25 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.IconButtonColors
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,20 +72,25 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.compose.ui.util.lerp
-import com.android.compose.PlatformIconButton
 import com.android.compose.ui.graphics.painter.rememberDrawablePainter
 import com.android.systemui.ambientcue.ui.compose.modifier.animatedActionBorder
+import com.android.systemui.ambientcue.ui.utils.AmbientCueAnimationState
+import com.android.systemui.ambientcue.ui.utils.FilterUtils
 import com.android.systemui.ambientcue.ui.viewmodel.ActionType
 import com.android.systemui.ambientcue.ui.viewmodel.ActionViewModel
 import com.android.systemui.res.R
+import kotlinx.coroutines.delay
 
 @Composable
 fun NavBarPill(
@@ -82,15 +99,24 @@ fun NavBarPill(
     modifier: Modifier = Modifier,
     visible: Boolean = true,
     expanded: Boolean = false,
+    showEducation: Boolean = false,
     onClick: () -> Unit = {},
     onCloseClick: () -> Unit = {},
+    onCloseEducation: () -> Unit = {},
+    onAnimationStateChange: (Int, AmbientCueAnimationState) -> Unit = { _, _ -> },
 ) {
     val maxPillWidth = 248.dp
     val backgroundColor = if (isSystemInDarkTheme()) Color.Black else Color.White
-    val scrimColor = MaterialTheme.colorScheme.primary
+    val smartScrimColor = MaterialTheme.colorScheme.primaryFixedDim
 
     val density = LocalDensity.current
     val collapsedWidthPx = with(density) { navBarWidth.toPx() }
+    var wasEverCollapsed by remember(actions) { mutableStateOf(false) }
+    val showAnimationInProgress = remember { mutableStateOf(false) }
+    val hideAnimationInProgress = remember { mutableStateOf(false) }
+    val expandAnimationInProgress = remember { mutableStateOf(false) }
+    val collapseAnimationInProgress = remember { mutableStateOf(false) }
+
     var expandedSize by remember { mutableStateOf(IntSize.Zero) }
     val visibleState = remember { MutableTransitionState(false) }
     visibleState.targetState = visible
@@ -116,7 +142,7 @@ fun NavBarPill(
                         0f at 0
                         0.2f at 500
                         0.2f at 1500
-                        0f at 2000
+                        0.4f at 2000
                     }
                 } else {
                     tween(500)
@@ -124,7 +150,7 @@ fun NavBarPill(
             },
             label = "smartScrimAlphaBoost",
         ) {
-            if (it) 0f else 0f
+            if (it) 0.4f else 0f
         }
     val expansionAlpha by
         animateFloatAsState(
@@ -132,31 +158,88 @@ fun NavBarPill(
             animationSpec = tween(250, delayMillis = 200),
             label = "expansion",
         )
+    val smartScrimOffset by
+        animateIntAsState(
+            if (expanded) -18 else 10,
+            animationSpec = tween(250, delayMillis = 200),
+            label = "smartScrimOffset",
+        )
+    AmbientCueJankMonitorComposable(
+        visibleTargetState = visibleState.targetState,
+        enterProgress = enterProgress,
+        expanded = expanded,
+        expansionAlpha = expansionAlpha,
+        showAnimationInProgress = showAnimationInProgress,
+        hideAnimationInProgress = hideAnimationInProgress,
+        expandAnimationInProgress = expandAnimationInProgress,
+        collapseAnimationInProgress = collapseAnimationInProgress,
+        onAnimationStateChange = onAnimationStateChange,
+    )
 
-    Box(
+    val blurRadius = remember { Animatable(4f) }
+    LaunchedEffect(Unit) {
+        delay(BLUR_DURATION_MILLIS)
+        blurRadius.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(durationMillis = BLUR_FADE_DURATION_MILLIS),
+        )
+    }
+    LaunchedEffect(expanded, expansionAlpha) {
+        if (expanded && expansionAlpha == 0f) {
+            wasEverCollapsed = true
+        }
+    }
+
+    val config = LocalConfiguration.current
+    val isBoldTextEnabled = config.fontWeightAdjustment > 0
+    val fontScale = config.fontScale
+    val actionTextStyle =
+        MaterialTheme.typography.labelMedium.copy(
+            fontWeight = if (isBoldTextEnabled) FontWeight.Bold else FontWeight.Medium,
+            fontSize =
+                with(density) {
+                    (MaterialTheme.typography.labelMedium.fontSize.value * fontScale).dp.toSp()
+                },
+        )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Bottom,
         modifier =
             modifier.defaultMinSize(minWidth = 412.dp, minHeight = 50.dp).drawBehind {
                 // SmartScrim
-                val radius = size.width / 2f
-                if (!(radius > 0)) return@drawBehind
-                val scrimBrush =
+                val smartScrimRadius = 50.dp.toPx()
+                val smartScrimBrush =
                     Brush.radialGradient(
-                        colors = listOf(scrimColor, scrimColor.copy(alpha = 0f)),
+                        colors = listOf(smartScrimColor, smartScrimColor.copy(alpha = 0f)),
                         center = Offset.Zero,
-                        radius = radius,
+                        radius = smartScrimRadius * 0.9f,
                     )
-                translate(radius, size.height) {
-                    scale(scaleX = 1f, scaleY = size.height / size.width * 2, pivot = Offset.Zero) {
+                translate(size.width / 2f, size.height + smartScrimOffset.dp.toPx()) {
+                    scale(
+                        scaleX = size.width / (smartScrimRadius * 2),
+                        scaleY = 1f,
+                        pivot = Offset.Zero,
+                    ) {
                         drawCircle(
-                            brush = scrimBrush,
+                            brush = smartScrimBrush,
                             alpha = smartScrimAlpha + smartScrimAlphaBoost,
-                            radius = radius,
+                            radius = smartScrimRadius,
                             center = Offset.Zero,
                         )
                     }
                 }
-            }
+            },
     ) {
+        if (visible && !expanded && showEducation) {
+            AnimatedVisibility(
+                visible = enterProgress == 1f,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+            ) {
+                FirstTimeEducation(Alignment.CenterHorizontally, onCloseClick = onCloseEducation)
+            }
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -172,11 +255,14 @@ fun NavBarPill(
                                 1f
                             }
                     }
-                    .align(Alignment.BottomCenter)
                     .padding(bottom = 4.dp),
         ) {
             val closeButtonSize = 28.dp
-            Spacer(modifier = Modifier.size(closeButtonSize))
+            val closeButtonTouchTargetSize = 36.dp
+            val filteredActions = FilterUtils.filterActions(actions)
+            val expandActionLabel = stringResource(id = R.string.ambient_cue_expand_action)
+
+            Spacer(modifier = Modifier.size(closeButtonTouchTargetSize))
 
             Box {
                 Row(
@@ -186,18 +272,30 @@ fun NavBarPill(
                         Modifier.clip(RoundedCornerShape(16.dp))
                             .widthIn(min = navBarWidth, max = maxPillWidth)
                             .background(backgroundColor)
-                            .animatedActionBorder(
-                                strokeWidth = 1.dp,
-                                cornerRadius = 16.dp,
-                                visible = visible,
+                            .then(
+                                if (expanded) Modifier
+                                else
+                                    Modifier.clickable(
+                                        // Set expand action when the action is not one-tap action.
+                                        onClickLabel =
+                                            if (
+                                                filteredActions.size == 1 &&
+                                                    filteredActions[0].actionType ==
+                                                        ActionType.MA &&
+                                                    filteredActions[0].oneTapEnabled
+                                            )
+                                                null
+                                            else expandActionLabel
+                                    ) {
+                                        onClick()
+                                    }
                             )
-                            .then(if (expanded) Modifier else Modifier.clickable { onClick() })
                             .padding(2.dp)
                             .onGloballyPositioned { expandedSize = it.size },
                 ) {
                     // Should have at most 1 expanded chip
                     var expandedChip = false
-                    actions.fastForEachIndexed { index, action ->
+                    filteredActions.fastForEachIndexed { index, action ->
                         val isMrAction = action.actionType == ActionType.MR
 
                         // Pill rounded container
@@ -219,12 +317,13 @@ fun NavBarPill(
                                         shape = CircleShape,
                                     )
                                 }
-                            if ((actions.size == 1 || isMrAction) && !expandedChip) {
+                            if ((filteredActions.size == 1 || isMrAction) && !expandedChip) {
                                 expandedChip = true
-                                val hasBackground = actions.size > 1
+                                val hasBackground = (!wasEverCollapsed && filteredActions.size > 1)
                                 // Expanded chip for single action or MR
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier =
                                         Modifier.padding(end = 3.dp)
                                             .clip(RoundedCornerShape(16.dp))
@@ -235,37 +334,64 @@ fun NavBarPill(
                                                     Color.Transparent
                                                 }
                                             )
-                                            .padding(4.dp),
+                                            .height(24.dp)
+                                            .padding(start = 6.dp, end = 6.dp),
                                 ) {
                                     Image(
-                                        painter = rememberDrawablePainter(action.icon),
-                                        contentDescription = action.label,
+                                        painter = rememberDrawablePainter(action.icon.small),
+                                        contentDescription =
+                                            stringResource(
+                                                id = R.string.ambient_cue_icon_content_description
+                                            ),
                                         modifier =
                                             Modifier.size(16.dp).then(iconBorder).clip(CircleShape),
                                     )
-                                    Text(
-                                        text = action.label,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.widthIn(0.dp, maxPillWidth * 0.5f),
-                                    )
+                                    if (
+                                        isMrAction &&
+                                            !(wasEverCollapsed && filteredActions.size > 1)
+                                    ) {
+                                        Text(
+                                            text = action.label,
+                                            style = actionTextStyle,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.widthIn(0.dp, maxPillWidth * 0.5f),
+                                        )
+                                        if (action.icon.repeatCount > 0) {
+                                            Text(
+                                                text = "+${action.icon.repeatCount}",
+                                                style = actionTextStyle,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(end = 3.dp),
+                                            )
+                                        }
+                                    } else if (action.icon.repeatCount == 0) {
+                                        Text(
+                                            text = action.label,
+                                            style = actionTextStyle,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.widthIn(0.dp, maxPillWidth * 0.5f),
+                                        )
+                                    }
                                 }
                             } else {
                                 // Smaller app icons
                                 Image(
-                                    painter = rememberDrawablePainter(action.icon),
+                                    painter = rememberDrawablePainter(action.icon.small),
                                     contentDescription = action.label,
                                     modifier =
                                         Modifier.then(
                                                 when (index) {
                                                     0 -> Modifier.padding(start = 5.dp)
-                                                    actions.size - 1 -> Modifier.padding(end = 5.dp)
+                                                    filteredActions.size - 1 ->
+                                                        Modifier.padding(end = 5.dp)
                                                     else -> Modifier
                                                 }
                                             )
-                                            .padding(3.dp)
+                                            .padding(horizontal = 3.dp, vertical = 4.dp)
                                             .size(16.dp)
                                             .then(iconBorder)
                                             .clip(CircleShape),
@@ -277,8 +403,13 @@ fun NavBarPill(
                 // Inner glow
                 Box(
                     Modifier.matchParentSize()
-                        .padding(1.dp)
-                        .blur(4.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                        // Prevent the border from being invisible due to blur.
+                        .animatedActionBorder(
+                            strokeWidth = 1.dp,
+                            cornerRadius = 16.dp,
+                            visible = visible,
+                        )
+                        .blur(blurRadius.value.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                         .animatedActionBorder(
                             strokeWidth = 1.dp,
                             cornerRadius = 16.dp,
@@ -287,25 +418,38 @@ fun NavBarPill(
                 )
             }
 
-            // Close button
-            PlatformIconButton(
+            // Expand the clickable area.
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier =
-                    Modifier.size(closeButtonSize)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .padding(6.dp),
-                iconResource = R.drawable.ic_close_white_rounded,
-                colors =
-                    IconButtonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        disabledContainerColor = Color.Transparent,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                contentDescription =
-                    stringResource(id = R.string.underlay_close_button_content_description),
-                onClick = onCloseClick,
-            )
+                    Modifier.size(closeButtonTouchTargetSize)
+                        .clickable(
+                            onClick = onCloseClick,
+                            interactionSource = null,
+                            indication = null,
+                        ),
+            ) {
+                // Close button
+                FilledIconButton(
+                    onClick = onCloseClick,
+                    modifier = Modifier.size(closeButtonSize),
+                    colors =
+                        IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
+                        ),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close_white_rounded),
+                        contentDescription =
+                            stringResource(id = R.string.underlay_close_button_content_description),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(6.dp),
+                    )
+                }
+            }
         }
     }
 }
+
+private const val BLUR_DURATION_MILLIS = 1500L
+private const val BLUR_FADE_DURATION_MILLIS = 500

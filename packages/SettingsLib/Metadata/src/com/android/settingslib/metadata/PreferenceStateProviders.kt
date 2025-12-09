@@ -24,6 +24,7 @@ import androidx.activity.result.ActivityResultCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.fragment.app.FragmentManager
+import androidx.lifecycle.LifecycleOwner
 import com.android.settingslib.datastore.KeyValueStore
 import kotlinx.coroutines.CoroutineScope
 
@@ -70,6 +71,27 @@ interface PreferenceIconProvider {
 
     /** Provides preference icon. */
     fun getIcon(context: Context): Int
+}
+
+/** Interface to provide information for settings search. */
+interface PreferenceIndexableProvider {
+
+    /**
+     * Returns if preference is indexable for settings search.
+     *
+     * Return `false` only when the preference is unavailable for indexing on current device.
+     *
+     * Note:
+     * - For [PreferenceScreenMetadata], all the preferences on the screen are not indexable if
+     *   [isIndexable] returns `false`.
+     * - If [PreferenceScreenMetadata.isEnabled] is implemented, it should also implement this
+     *   interface to tell that the screen might be disabled and thus not accessible, in which case
+     *   all the preferences on the screen are not indexable.
+     * - Implement [PreferenceAvailabilityProvider] if it is available on condition but check
+     *   [PreferenceAvailabilityProvider.isAvailable] inside [isIndexable] is optional. Unavailable
+     *   preference is always non indexable no matter what [isIndexable] returns.
+     */
+    fun isIndexable(context: Context): Boolean
 }
 
 /** Interface to provide the state of preference availability. */
@@ -161,6 +183,9 @@ interface PreferenceLifecycleProvider {
  */
 abstract class PreferenceLifecycleContext(context: Context) : ContextWrapper(context) {
 
+    /** Returns the fragment [LifecycleOwner]. */
+    abstract val lifecycleOwner: LifecycleOwner
+
     /**
      * [CoroutineScope] tied to the lifecycle, which is cancelled when the lifecycle is destroyed.
      *
@@ -184,6 +209,9 @@ abstract class PreferenceLifecycleContext(context: Context) : ContextWrapper(con
      */
     abstract val childFragmentManager: FragmentManager
 
+    /** Returns the key of current preference screen. */
+    abstract val preferenceScreenKey: String
+
     /** Returns the preference widget object associated with given key. */
     abstract fun <T> findPreference(key: String): T?
 
@@ -192,7 +220,7 @@ abstract class PreferenceLifecycleContext(context: Context) : ContextWrapper(con
      *
      * @throws NullPointerException if preference is not found
      */
-    abstract fun <T : Any> requirePreference(key: String): T
+    open fun <T : Any> requirePreference(key: String): T = findPreference(key)!!
 
     /** Returns the [KeyValueStore] attached to the preference of given key *on the same screen*. */
     abstract fun getKeyValueStore(key: String): KeyValueStore?
@@ -201,10 +229,22 @@ abstract class PreferenceLifecycleContext(context: Context) : ContextWrapper(con
     abstract fun notifyPreferenceChange(key: String)
 
     /**
-     * Switches preference hierarchy to given type, the screen metadata must implement
-     * `PreferenceHierarchyGenerator`.
+     * Switches to given preference hierarchy type for [PreferenceHierarchyGenerator].
+     *
+     * [PreferenceScreenMetadata.hasCompleteHierarchy] must return true.
      */
-    open fun switchPreferenceHierarchy(type: Any?): Unit = TODO()
+    abstract fun switchPreferenceHierarchy(hierarchyType: Any?)
+
+    /**
+     * Regenerates preference hierarchy.
+     *
+     * A new [PreferenceHierarchy] will be generated and applied to the preference screen. This is
+     * to support the case that dynamic preference hierarchy is changed at runtime (e.g. app list
+     * needs to be updated if new app is installed).
+     *
+     * [PreferenceScreenMetadata.hasCompleteHierarchy] must return true.
+     */
+    abstract fun regeneratePreferenceHierarchy()
 
     /**
      * Starts activity for result, see [android.app.Activity.startActivityForResult].

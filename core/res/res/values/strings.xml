@@ -199,21 +199,74 @@
     <!-- Displayed to confirm to the user that caller ID will not be restricted on the next call or in general. -->
     <string name="CLIRDefaultOffNextCallOff">Caller ID defaults to not restricted. Next call: Not restricted</string>
 
-    <!-- Message displayed in dialog when APK is not 16 KB aligned. [CHAR LIMIT=NONE] -->
+    <!-- Message displayed in dialog when APK is not 16 KB aligned on 16 KB device. [CHAR LIMIT=NONE] -->
     <string name="page_size_compat_apk_warning">This app isn’t 16 KB compatible. APK alignment check failed.
         This app will be run using page size compatible mode. For best compatibility, please recompile the application with 16 KB support.
-        For more information, see &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt; </string>
+        For more information, see &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;
+        &lt;br&gt;&lt;br&gt;
+        The following libraries are not 16 KB aligned:
+        &lt;br&gt;&lt;br&gt;
+    </string>
 
-    <!-- Message displayed in dialog when ELF is not 16 KB aligned. [CHAR LIMIT=NONE] -->
+    <!-- Message displayed in dialog when ELF is not 16 KB aligned on 16 KB device . [CHAR LIMIT=NONE] -->
     <string name="page_size_compat_elf_warning">This app isn’t 16 KB compatible. ELF alignment check failed.
         This app will be run using page size compatible mode. For best compatibility, please recompile the application with 16 KB support.
-        For more information, see &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;</string>
+        For more information, see &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;
+        &lt;br&gt;&lt;br&gt;
+        The following libraries are not 16 KB aligned:
+        &lt;br&gt;&lt;br&gt;
+    </string>
 
-    <!-- Message displayed in dialog when APK and ELF are not 16 KB aligned. [CHAR LIMIT=NONE] -->
+    <!-- Message displayed in dialog when APK and ELF are not 16 KB aligned on 16 KB device. [CHAR LIMIT=NONE] -->
     <string name="page_size_compat_apk_and_elf_warning">This app isn’t 16 KB compatible. APK and ELF alignment checks failed.
         This app will be run using page size compatible mode. For best compatibility, please recompile the application with 16 KB support.
-        For more information, see &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;</string>
+        For more information, see &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;
+        &lt;br&gt;&lt;br&gt;
+        The following libraries are not 16 KB aligned:
+        &lt;br&gt;&lt;br&gt;
+    </string>
 
+
+    <!-- Message displayed in dialog when APK is not 16 KB aligned on 4 KB device. [CHAR LIMIT=NONE] -->
+    <string name="page_size_compat_apk_warning_4kb">This warning is showing because this is a debuggable app which is currently being tested.
+        If you are not the developer, please report this to the developer and ask for a non-debuggable app.
+        &lt;br&gt;&lt;br&gt;
+        This app isn\’t 16 KB compatible. APK alignment check failed.
+        Please follow the steps on &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;
+        &lt;br&gt;&lt;br&gt;
+        The following libraries are not 16 KB aligned:
+        &lt;br&gt;&lt;br&gt;
+    </string>
+
+    <!-- Message displayed in dialog when ELF is not 16 KB aligned on 4 KB device. [CHAR LIMIT=NONE] -->
+    <string name="page_size_compat_elf_warning_4kb">This warning is showing because this is a debuggable app which is currently being tested.
+        If you are not the developer, please report this to the developer and ask for a non-debuggable app.
+        &lt;br&gt;&lt;br&gt;
+        This app isn\’t 16 KB compatible. ELF alignment check failed.
+        Please follow the steps on &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;
+        &lt;br&gt;&lt;br&gt;
+        The following libraries are not 16 KB aligned:
+        &lt;br&gt;&lt;br&gt;
+    </string>
+
+    <!-- Message displayed in dialog when APK and ELF are not 16 KB aligned on 4 KB device. [CHAR LIMIT=NONE] -->
+    <string name="page_size_compat_apk_and_elf_warning_4kb">This warning is showing because this is a debuggable app which is currently being tested.
+        If you are not the developer, please report this to the developer and ask for a non-debuggable app.
+        &lt;br&gt;&lt;br&gt;
+        This app isn\’t 16 KB compatible. APK and ELF alignment checks failed.
+        Please follow the steps on &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;.
+        &lt;br&gt;&lt;br&gt;
+        The following libraries are not 16 KB aligned:
+        &lt;br&gt;&lt;br&gt;
+    </string>
+    <!--Confirmation text for page size mismatch dialog to never show-->
+    <string name="page_size_compat_never_show"> Don\'t Show Again</string>
+    <string name="page_size_compat_title">Android App Compatibility</string>
+
+    <string name="page_size_compat_elf_not_aligned">&amp;#8226; %1$s : LOAD segment not aligned&lt;br&gt;</string>
+    <string name="page_size_compat_apk_not_aligned">&amp;#8226; %1$s : Uncompressed library not aligned&lt;br&gt;</string>
+    <string name="page_size_compat_apk_and_elf_not_aligned">&amp;#8226; %1$s : LOAD segment and uncompressed library are not aligned&lt;br&gt;</string>
+    <string name="page_size_compat_unknown">&amp;#8226; %1$s : Unknown error&lt;br&gt;</string>
 
     <!-- Displayed to tell the user that caller ID is not provisioned for their SIM. -->
     <string name="serviceNotProvisioned">Service not provisioned.</string>
@@ -425,9 +478,15 @@
     <!-- Title of the safety center issue and notification when the phone's identifier is shared over the network. -->
     <string name="scIdentifierDisclosureIssueTitle">Device ID accessed</string>
     <!-- Summary of the safety center notification when the phone's identifier is shared over the network. -->
-    <string name="scIdentifierDisclosureIssueSummaryNotification">At <xliff:g id="disclosure_time">%1$s</xliff:g>, a nearby network recorded your device\'s unique ID (IMSI or IMEI) while using your <xliff:g id="disclosure_network">%2$s</xliff:g> SIM</string>
+    <string name="scIDIssueSummaryNotificationWithCellularID">At <xliff:g id="disclosure_time">%1$s</xliff:g>, a nearby network recorded your device\'s unique ID (<xliff:g id="cellular_identifier">%2$s</xliff:g>) while using your <xliff:g id="disclosure_network">%3$s</xliff:g> SIM</string>
+    <string name="scIdentifierDisclosureIssueSummaryNotification">At <xliff:g id="disclosure_time">%1$s</xliff:g>, a nearby network recorded your device\'s unique ID while using your <xliff:g id="disclosure_network">%3$s</xliff:g> SIM</string>
     <!-- Summary of the safety center detail card when the phone's identifier is shared over the network. -->
-    <string name="scIdentifierDisclosureIssueSummary">At <xliff:g id="disclosure_time">%1$s</xliff:g>, a nearby network recorded your device\'s unique ID (IMSI or IMEI) while using your <xliff:g id="disclosure_network">%2$s</xliff:g> SIM.\n\nThis means that your location, activity, or identity have been logged. This is common practice but may be an issue for people concerned about privacy.</string>
+    <string name="scIDIssueSummaryWithCellularID">At <xliff:g id="disclosure_time">%1$s</xliff:g>, a nearby network recorded your device\'s unique ID (<xliff:g id="cellular_identifier">%2$s</xliff:g>) while using your <xliff:g id="disclosure_network">%3$s</xliff:g> SIM.\n\nThis means that your location, activity, or identity have been logged. This is common practice but may be an issue for people concerned about privacy.</string>
+    <string name="scIdentifierDisclosureIssueSummary">At <xliff:g id="disclosure_time">%1$s</xliff:g>, a nearby network recorded your device\'s unique ID while using your <xliff:g id="disclosure_network">%3$s</xliff:g> SIM.\n\nThis means that your location, activity, or identity have been logged. This is common practice but may be an issue for people concerned about privacy.</string>
+    <!-- cellular identifier used to display in between summary of identifier disclosure issue. -->
+    <string name="cellular_identifier_imsi" translatable="false">IMSI</string>
+    <string name="cellular_identifier_imei" translatable="false">IMEI</string>
+    <string name="cellular_identifier_suci" translatable="false">SUCI</string>
 
     <!-- Title of the safety center issue and notification when the phone restores an encrypted connection to the network. -->
     <string name="scNullCipherIssueEncryptedTitle">Connected to encrypted network <xliff:g id="network_name">%1$s</xliff:g></string>
@@ -808,6 +867,9 @@
     <!-- label for item that locks the phone and enforces that it can't be unlocked without strong authentication. [CHAR LIMIT=24] -->
     <string name="global_action_lockdown">Lockdown</string>
 
+    <!-- label for item in phone options dialog that locks the phone and doesn't enforce unlocking with strong authentication. [CHAR LIMIT=24] -->
+    <string name="global_action_unrestricted_lock">Lock</string>
+
     <!-- @deprecated No longer used. -->
     <string name="status_bar_notification_info_overflow">999+</string>
 
@@ -939,9 +1001,9 @@
     <string name="managed_profile_app_label">Switch to work <xliff:g id="app_name" example="Gmail">%1$s</xliff:g></string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permgrouplab_contacts">Contacts</string>
+    <string name="permgrouplab_contacts">Contacts and accounts</string>
     <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permgroupdesc_contacts">access your contacts</string>
+    <string name="permgroupdesc_contacts">access your contacts and see the list of your accounts that can save contacts on this device</string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
     <string name="permgrouplab_location">Location</string>
@@ -1015,19 +1077,19 @@
     <string name="permgroupdesc_notifications">show notifications</string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=40]-->
-    <string name="permgrouplab_xr_eye_sensitive">XR sensitive eye tracking data</string>
+    <string name="permgrouplab_xr_eye_sensitive">Eye tracking data</string>
     <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=NONE]-->
-    <string name="permgroupdesc_xr_eye_sensitive">access sensitive eye gaze data</string>
+    <string name="permgroupdesc_xr_eye_sensitive">precisely track eye movement</string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=40]-->
-    <string name="permgrouplab_xr_tracking">XR tracking data</string>
+    <string name="permgrouplab_xr_tracking">Movement and area data</string>
     <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=NONE]-->
-    <string name="permgroupdesc_xr_tracking">access XR data about you and the environment around you</string>
+    <string name="permgroupdesc_xr_tracking">track eyes, face, body, and scan area</string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=40]-->
-    <string name="permgrouplab_xr_tracking_sensitive">Sensitive XR tracking data</string>
+    <string name="permgrouplab_xr_tracking_sensitive">Precise movement and area data</string>
     <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=NONE]-->
-    <string name="permgroupdesc_xr_tracking_sensitive">access sensitive tracking data about you and the environment around you</string>
+    <string name="permgroupdesc_xr_tracking_sensitive">precisely scan area and track head</string>
 
     <!-- Title for the capability of an accessibility service to retrieve window content. -->
     <string name="capability_title_canRetrieveWindowContent">Retrieve window content</string>
@@ -1814,6 +1876,11 @@
     <string name="permdesc_nearby_wifi_devices">Allows the app to advertise, connect, and determine the relative position of nearby Wi\u2011Fi devices</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=50]-->
+    <string name="permlab_access_local_network">access local network devices</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=120]-->
+    <string name="permdesc_access_local_network">Allows the app to access local network devices</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=50]-->
     <string name="permlab_ranging">determine relative position between nearby devices</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. [CHAR LIMIT=120]-->
     <string name="permdesc_ranging">Allow the app to determine relative position between nearby devices</string>
@@ -1898,44 +1965,49 @@
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
     <string name="permdesc_mediaLocation">Allows the app to read locations from your media collection.</string>
 
-    <string name="permlab_eye_tracking_coarse">track your approximate eye gaze</string>
+    <string name="permlab_eye_tracking_coarse">track eye movement</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_eye_tracking_coarse">Allows the app to track your approximate eye gaze.</string>
+    <string name="permdesc_eye_tracking_coarse">Allows the app to track the approximate direction of your gaze.</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permlab_eye_tracking_fine">track where you are looking</string>
+    <string name="permlab_eye_tracking_fine">precisely track eye movement</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_eye_tracking_fine">Allows the app to access precise eye gaze data.</string>
+    <string name="permdesc_eye_tracking_fine">Allows the app to track the direction of your gaze.</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permlab_face_tracking">track your face</string>
+    <string name="permlab_face_tracking">track facial movements</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_face_tracking">Allows the app to access face tracking data.</string>
+    <string name="permdesc_face_tracking">Allows the app to track your facial movements and expressions.</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permlab_hand_tracking">track your hands</string>
+    <string name="permlab_hand_tracking">track hand movements</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_hand_tracking">Allows the app to access hand tracking data.</string>
+    <string name="permdesc_hand_tracking">Allows the app to track your hand movements.</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permlab_head_tracking">track your head</string>
+    <string name="permlab_head_tracking">track head movements</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_head_tracking">Allows the app to access head tracking data.</string>
+    <string name="permdesc_head_tracking">Allows the app to track your head movements.</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permlab_scene_understanding_coarse">understand your immediate environment</string>
+    <string name="permlab_scene_understanding_coarse">scan your surrounding area</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_scene_understanding_coarse">Allows the app to access tracking data about the environment directly around you.</string>
+    <string name="permdesc_scene_understanding_coarse">Allows the app to scan your surroundings.</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permlab_scene_understanding_fine">understand your immediate environment at high detail</string>
+    <string name="permlab_scene_understanding_fine">precisely scan your surrounding area</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_scene_understanding_fine">Allows the app to access tracking data about the environment directly around you with very high detail.</string>
+    <string name="permdesc_scene_understanding_fine">Allows the app to precisely scan your surroundings.</string>
 
     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permlab_xr_tracking_in_background">access XR data while not in the foreground</string>
+    <string name="permlab_xr_tracking_in_background">access XR tracking in the background</string>
     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
-    <string name="permdesc_xr_tracking_in_background">Allows the app to access XR data while not in the foreground.</string>
+    <string name="permdesc_xr_tracking_in_background">Allows the app to access XR data in the background.</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permlab_capture_keyboard">capture keys</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_capture_keyboard">Allows the app to capture keys before system can process system shortcuts and actions.</string>
 
     <!-- Name for an app setting that lets the user authenticate for that app using biometrics (e.g. fingerprint or face). [CHAR LIMIT=30] -->
     <string name="biometric_app_setting_name">Use biometrics</string>
@@ -1947,6 +2019,11 @@
     <string name="biometric_dialog_default_subtitle">Use your biometric to continue</string>
     <!-- Subtitle shown on the system-provided biometric dialog, asking the user to authenticate with a biometric (e.g. fingerprint or face) or their screen lock credential (i.e. PIN, pattern, or password). [CHAR LIMIT=90] -->
     <string name="biometric_or_screen_lock_dialog_default_subtitle">Use your biometric or screen lock to continue</string>
+
+    <!-- Message shown on secondary screens to direct users to use their phone to finish biometric authorization [CHAR LIMIT=NONE] -->
+    <string name="biometric_dialog_secondary_display_toast" product="default">Verify it\'s you on your phone to continue</string>
+    <!-- Message shown on secondary screens to direct users to use their tablet to finish biometric authorization [CHAR LIMIT=NONE] -->
+    <string name="biometric_dialog_secondary_display_toast" product="tablet">Verify it\'s you on your tablet to continue</string>
 
     <!-- Message shown when biometric hardware is not available [CHAR LIMIT=50] -->
     <string name="biometric_error_hw_unavailable">Biometric hardware unavailable</string>
@@ -2454,6 +2531,9 @@
     <string name="policylab_disableKeyguardFeatures">Disable some screen lock features</string>
     <!-- Description of policy access to disable keyguard features. [CHAR LIMIT=110]-->
     <string name="policydesc_disableKeyguardFeatures">Prevent use of some screen lock features.</string>
+
+    <!-- Text for toast instructing user to long press escape to exit the current application. [CHAR LIMIT=TOAST]-->
+    <string name="exit_toast_on_long_press_escape">Long press Esc key to close this app</string>
 
     <!-- The order of these is important, don't reorder without changing Contacts.java --> <skip />
     <!-- Phone number types from android.provider.Contacts. This could be used when adding a new phone number for a contact, for example. -->
@@ -2979,6 +3059,8 @@
     <string name="keyguard_accessibility_sim_puk_unlock">Sim Puk unlock.</string>
     <!-- Accessibility description of the password lock. [CHAR_LIMIT=none] -->
     <string name="keyguard_accessibility_password_unlock">Password unlock.</string>
+    <!-- Accessibility description of the secure lock device biometric unlock. [CHAR_LIMIT=none] -->
+    <string name="keyguard_accessibility_secure_lock_device_biometric_unlock">Biometric unlock for secure lock device.</string>
     <!-- Accessibility description of the unlock pattern area. [CHAR_LIMIT=none] -->
     <string name="keyguard_accessibility_pattern_area">Pattern area.</string>
     <!-- Accessibility description of the unlock slide area. [CHAR_LIMIT=none] -->
@@ -3996,11 +4078,6 @@
     <!-- Content description of the button to access the language settings of the current input method
          from the Input Method Switcher menu, for accessibility (not shown on the screen). [CHAR LIMIT=NONE]-->
     <string name="input_method_language_settings">Language Settings</string>
-    <!-- Summary text of a toggle switch to enable/disable use of the IME while a physical
-         keyboard is connected -->
-    <string name="show_ime">Keep it on screen while physical keyboard is active</string>
-    <!-- Title of the physical keyboard category in the input method selector [CHAR LIMIT=30] -->
-    <string name="hardware">Use on-screen keyboard</string>
 
     <!-- Title of the notification to prompt the user to configure physical keyboard settings. [CHAR LIMIT=NOTIF_TITLE] -->
     <string name="select_keyboard_layout_notification_title">Configure <xliff:g id="device_name" example="Foobar USB Keyboard">%s</xliff:g></string>
@@ -5038,6 +5115,8 @@
     <!-- Default name of the headless system user, on HSUM devices. This users hosts the system, but
     is not a human user. [CHAR LIMIT=35] -->
     <string name="headless_system_user_name">System User</string>
+    <!-- Used when the name of a user is not explicitly set [CHAR LIMIT=35] -->
+    <string name="unnamed_user_name">User</string>
     <!-- Error message title [CHAR LIMIT=35] -->
     <string name="error_message_title">Error</string>
     <!-- Message informing user that the change was disallowed by an administrator. [CHAR LIMIT=none] -->
@@ -5358,16 +5437,16 @@
     <string name="time_placeholder">--</string>
 
     <!-- DO NOT TRANSLATE -->
-    <string name="radial_numbers_typeface">@string/config_bodyFontFamily</string>
+    <string name="radial_numbers_typeface">sans-serif</string>
     <!-- DO NOT TRANSLATE -->
-    <string name="sans_serif">@string/config_bodyFontFamily</string>
+    <string name="sans_serif">sans-serif</string>
 
     <!-- DO NOT TRANSLATE -->
-    <string name="date_picker_month_typeface">@string/config_bodyFontFamilyMedium</string>
+    <string name="date_picker_month_typeface">sans-serif-medium</string>
     <!-- DO NOT TRANSLATE -->
-    <string name="date_picker_day_of_week_typeface">@string/config_bodyFontFamilyMedium</string>
+    <string name="date_picker_day_of_week_typeface">sans-serif-medium</string>
     <!-- DO NOT TRANSLATE -->
-    <string name="date_picker_day_typeface">@string/config_bodyFontFamilyMedium</string>
+    <string name="date_picker_day_typeface">sans-serif-medium</string>
 
     <!-- Lock-to-app unlock pin string -->
     <string name="lock_to_app_unlock_pin">Ask for PIN before unpinning</string>
@@ -5386,11 +5465,11 @@
     <!-- [CHAR LIMIT=25] String for confirmation button to enable a feature gated by the battery saver warning-->
     <string name="confirm_battery_saver">OK</string>
 
-    <!-- [CHAR_LIMIT=NONE] Battery saver: Feature description, with a "learn more" link. -->
-    <string name="battery_saver_description_with_learn_more">Battery Saver turns on Dark theme and limits or turns off background activity, some visual effects, certain features, and some network connections.</string>
+    <!-- [CHAR_LIMIT=NONE] [BACKUP_MESSAGE_ID: 5444908404021316250] Battery saver: Feature description, with a "learn more" link. -->
+    <string name="battery_saver_description_with_learn_more">Battery Saver turns on dark theme and limits or turns off background activity, some visual effects, certain features, and some network connections.</string>
 
-    <!-- [CHAR_LIMIT=NONE] Battery saver: Feature description, without a "learn more" link. -->
-    <string name="battery_saver_description">Battery Saver turns on Dark theme and limits or turns off background activity, some visual effects, certain features, and some network connections.</string>
+    <!-- [CHAR_LIMIT=NONE] [BACKUP_MESSAGE_ID: 8518809702138617167] Battery saver: Feature description, without a "learn more" link. -->
+    <string name="battery_saver_description">Battery Saver turns on dark theme and limits or turns off background activity, some visual effects, certain features, and some network connections.</string>
 
     <!-- [CHAR_LIMIT=NONE] Data saver: Feature description -->
     <string name="data_saver_description">To help reduce data usage, Data Saver prevents some apps from sending or receiving data in the background. An app you’re currently using can access data, but may do so less frequently. This may mean, for example, that images don’t display until you tap them.</string>
@@ -5586,6 +5665,13 @@
 
     <!-- Tempalate for Notification.MessagingStyle to join a conversation name with the name of the sender of a message, to make a notification title [CHAR LIMIT=NONE] -->
     <string name="notification_messaging_title_template"><xliff:g id="conversation_title" example="Tasty Treat Team">%1$s</xliff:g>: <xliff:g id="sender_name" example="Adrian Baker">%2$s</xliff:g></string>
+
+    <!-- Template for Notification.MetricStyle to join Metric label with its unit, e.g. "Speed (km/h)". -->
+    <string name="notification_metric_label_unit"><xliff:g id="metric_label" example="Speed">%1$s</xliff:g> (<xliff:g id="metric_unit" example="km/h">%2$s</xliff:g>)</string>
+    <!-- Template for Notification.MetricStyle to join Metric label with its unit and a separator, e.g. "Speed (km/h):". -->
+    <string name="notification_metric_label_unit_separator"><xliff:g id="metric_label" example="Speed">%1$s</xliff:g> (<xliff:g id="metric_unit" example="km/h">%2$s</xliff:g>):</string>
+    <!-- Template for Notification.MetricStyle to join Metric label with a separator e.g.: "Speed:". -->
+    <string name="notification_metric_label_separator"><xliff:g id="metric_label" example="Steps">%1$s</xliff:g>:</string>
 
     <!-- Action text to be displayed for the "answer" action of an incoming call [CHAR LIMIT=13] -->
     <string name="call_notification_answer_action">Answer</string>
@@ -6710,7 +6796,7 @@ ul.</string>
     <!-- Notification summary when satellite service is auto connected. [CHAR LIMIT=NONE] -->
     <string name="satellite_notification_summary">You can send and receive messages without a mobile or Wi-Fi network</string>
     <!-- Notification summary when satellite service connected with data service supported. [CHAR LIMIT=NONE] -->
-    <string name="satellite_notification_summary_with_data">You can send and receive messages and use limited data by satellite</string>
+    <string name="satellite_notification_summary_with_data">You can send and receive messages and use select apps over satellite</string>
     <!-- Notification title when satellite service can be manually enabled. -->
     <string name="satellite_notification_manual_title">Use satellite messaging?</string>
     <!-- Notification summary when satellite service can be manually enabled. [CHAR LIMIT=NONE] -->
@@ -6824,6 +6910,8 @@ ul.</string>
     <string name="keyboard_shortcut_group_applications_calculator">Calculator</string>
     <!-- User visible title for the keyboard shortcut that takes the user to the maps app. [CHAR LIMIT=70] -->
     <string name="keyboard_shortcut_group_applications_maps">Maps</string>
+    <!-- User visible title for the keyboard shortcut that takes the user to the files app. [CHAR LIMIT=70] -->
+    <string name="keyboard_shortcut_group_applications_files">Files</string>
     <!-- User visible title for the keyboard shortcut group containing system-wide application launch shortcuts. [CHAR-LIMIT=70] -->
     <string name="keyboard_shortcut_group_applications">Applications</string>
 
@@ -6831,29 +6919,48 @@ ul.</string>
     <string name="fingerprint_loe_notification_msg">Your fingerprints can no longer be recognized. Set up Fingerprint Unlock again.</string>
 
     <!--  AdvancedProtectionService USB notifications -->
+    <!-- Notification app title for all notifications. -->
     <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title">Security &amp; privacy</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title">Advanced Protection for USB</string>
 
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text">Unlock device for data transfer</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text">You may need to unlock and reconnect your device for data transfer</string>
+    <!-- Notification title for when USB is plugged in when USB is disabled with replug notification. -->
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_title">Unlock screen and reconnect USB</string>
+    <!-- Notification title for when USB is plugged in when USB is disabled notification. -->
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title">Unlock screen to connect USB</string>
 
-    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text">Unlock device for fast charging and data transferring</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text">You may need to unlock and reconnect your device for fast charging and data transferring</string>
+    <!-- Notification text for when USB is plugged in when USB is disabled with replug notification. -->
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text">Advanced Protection requires your screen to be unlocked to initiate USB connectivity</string>
+    <!-- Notification text for when a USB data device is plugged in when USB is disabled notification. -->
+    <string name="usb_apm_usb_plugged_in_when_locked_data_notification_text">Advanced Protection requires your screen to be unlocked to initiate USB connectivity
+</string>
+    <!-- Notification text for when a USB charger that needs data lines is plugged and USB is disabled notification. -->
+    <string name="usb_apm_usb_plugged_in_when_locked_charge_notification_text">Advanced Protection requires your screen to be unlocked for faster charging</string>
+    <!-- Notification text for when a USB data device that also charges is plugged and USB is disabled notification. -->
+    <string name="usb_apm_usb_plugged_in_when_locked_charge_data_notification_text">For faster charging or to initiate USB connectivity, Advanced Protection requires your screen to be unlocked</string>
 
-    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text">Unlock device for fast charging</string>
-    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text">You may need to unlock and reconnect your device for fast charging</string>
-
+    <!-- Notification button label to silence the notification. -->
     <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text">Silence</string>
 
-    <string name="usb_apm_usb_notification_silenced_title">Notification silenced</string>
-    <string name="usb_apm_usb_notification_silenced_text">Silenced until you restart your device</string>
+    <!-- Notification title when notifications are silenced. -->
+    <string name="usb_apm_usb_notification_silenced_title">Notifications silenced</string>
+    <!-- Notification text when notifications are silenced. -->
+    <string name="usb_apm_usb_notification_silenced_text">You won’t receive Advanced Protection USB notifications until you restart your device</string>
 
     <string name="usb_apm_usb_suspicious_activity_notification_title">Suspicious USB activity</string>
-    <string name="usb_apm_usb_suspicious_activity_notification_text">USB data signal has been disabled.</string>
+    <string name="usb_apm_usb_suspicious_activity_notification_text">USB data signal has been disabled</string>
 
     <!-- Fingerprint failed rate too high notification title -->
     <string name="fingerprint_frr_notification_title">Having trouble with Fingerprint Unlock?</string>
     <!-- Fingerprint failed rate too high notification msg -->
     <string name="fingerprint_frr_notification_msg">Tap to review tips to improve your unlocking experience</string>
 
+    <!-- Label describing no blinking for Settings.Secure.ACCESSIBILITY_TEXT_CURSOR_BLINK_INTERVAL_MS. -->
+    <string name="no_blink_accessibility_text_cursor_blink_label">Don\'t blink</string>
+
+    <!-- Toast message that is shown when dream is triggered by short press power button. [CHAR LIMIT=TOAST] -->
+    <string name="long_press_power_to_turn_off_tv_toast">Long press Power button to turn off TV</string>
+
+    <!-- TvWatchdogService notification related messages -->
+    <string name="tv_watchdog_notification_channel_name">System Resource Alerts</string>
+    <string name="tv_watchdog_notification_title">Resource Overuse</string>
+    <string name="tv_watchdog_notification_content">"App '<xliff:g id="app_name">%1$s</xliff:g>' is using too many resources."</string>
 </resources>

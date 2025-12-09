@@ -21,8 +21,10 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import android.content.Context;
+import android.hardware.biometrics.IIdentityCheckStateListener.WatchRangingState;
 import android.os.Handler;
 import android.os.RemoteException;
 import android.platform.test.annotations.Presubmit;
@@ -67,9 +69,23 @@ public class WatchRangingHelperTest {
         final AuthenticationPolicyManager authenticationPolicyManager =
                 new AuthenticationPolicyManager(mContext, mAuthenticationPolicyService);
         mWatchRangingHelper = new WatchRangingHelper(AUTHENTICATION_REQUEST_ID,
-                authenticationPolicyManager, new Handler(TestableLooper.get(this).getLooper()));
+                authenticationPolicyManager, new Handler(TestableLooper.get(this).getLooper()),
+                watchRangingState -> {});
         mProximityResultCallbackArgumentCaptor = ArgumentCaptor.forClass(
                 IProximityResultCallback.class);
+    }
+
+    @Test
+    public void testNullAuthenticationPolicyManager() {
+        mWatchRangingHelper = new WatchRangingHelper(AUTHENTICATION_REQUEST_ID,
+                null, new Handler(TestableLooper.get(this).getLooper()),
+                watchRangingState -> {});
+
+        mWatchRangingHelper.startWatchRanging();
+
+        verifyNoInteractions(mAuthenticationPolicyService);
+        assertThat(mWatchRangingHelper.getWatchRangingState()).isEqualTo(
+                WatchRangingState.WATCH_RANGING_IDLE);
     }
 
     @Test
@@ -79,7 +95,7 @@ public class WatchRangingHelperTest {
         verify(mAuthenticationPolicyService).startWatchRangingForIdentityCheck(
                 eq(AUTHENTICATION_REQUEST_ID), any());
         assertThat(mWatchRangingHelper.getWatchRangingState()).isEqualTo(
-                WatchRangingHelper.WATCH_RANGING_STARTED);
+                WatchRangingState.WATCH_RANGING_STARTED);
     }
 
     @Test
@@ -97,7 +113,7 @@ public class WatchRangingHelperTest {
         verify(mAuthenticationPolicyService).cancelWatchRangingForRequestId(
                 AUTHENTICATION_REQUEST_ID);
         assertThat(mWatchRangingHelper.getWatchRangingState()).isEqualTo(
-                WatchRangingHelper.WATCH_RANGING_STOPPED);
+                WatchRangingState.WATCH_RANGING_STOPPED);
     }
 
     @Test
@@ -115,7 +131,7 @@ public class WatchRangingHelperTest {
         verify(mAuthenticationPolicyService).cancelWatchRangingForRequestId(
                 AUTHENTICATION_REQUEST_ID);
         assertThat(mWatchRangingHelper.getWatchRangingState()).isEqualTo(
-                WatchRangingHelper.WATCH_RANGING_SUCCESSFUL);
+                WatchRangingState.WATCH_RANGING_SUCCESSFUL);
     }
 
     @Test

@@ -21,6 +21,7 @@ import android.app.ActivityTaskManager;
 import android.app.ApplicationErrorReport;
 import android.app.ContentProviderHolder;
 import android.app.GrantedUriPermission;
+import android.app.HandoffActivityData;
 import android.app.IApplicationThread;
 import android.app.IActivityClientController;
 import android.app.IActivityController;
@@ -85,7 +86,7 @@ import java.util.List;
  * System private API for talking with the activity task manager that handles how activities are
  * managed on screen.
  *
- * {@hide}
+ * @hide
  */
 // TODO(b/174040395): Make this interface private to ActivityTaskManager.java and have external
 // caller go through that call instead. This would help us better separate and control the API
@@ -230,6 +231,7 @@ interface IActivityTaskManager {
             boolean focused, boolean newSessionId);
     boolean requestAutofillData(in IAssistDataReceiver receiver, in Bundle receiverExtras,
             in IBinder activityToken, int flags);
+    // @deprecated Use ActivityTaskManagerInternal#isAssistDataAllowed instead.
     boolean isAssistDataAllowed();
     boolean requestAssistDataForTask(in IAssistDataReceiver receiver, int taskId,
             in String callingPackageName, String callingAttributionTag, boolean fetchStructure);
@@ -375,6 +377,13 @@ interface IActivityTaskManager {
             in RemoteCallback navigationObserver, in BackAnimationAdapter adaptor);
 
     /**
+     * This setups the leashed for sysui to animate the current back gesture.
+     * Only valid after startBackNavigation.
+     * @return Returns whether system can prepare back animation.
+     */
+    boolean startPredictiveBackAnimation();
+
+    /**
      * registers a callback to be invoked when a background activity launch is aborted.
      *
      * @param observer callback to be registered.
@@ -419,4 +428,16 @@ interface IActivityTaskManager {
     * @hide
     */
     void moveRootTaskToDisplayOnTopOrBottom(int taskId, int displayId, boolean onTop);
+
+    /**
+     * Reports HandoffActivityData for a given set of activities back to
+     * ActivityTaskManager.
+     *
+     * @param requestToken A request token used by ActivityTaskManager to
+     * identify the request.
+     * @param data A list of HandoffActivityData objects containing the data for the requested
+     * activities in the same order as the request.
+     * @hide
+     */
+    void reportHandoffActivityData(in IBinder requestToken, in List<HandoffActivityData> data);
 }

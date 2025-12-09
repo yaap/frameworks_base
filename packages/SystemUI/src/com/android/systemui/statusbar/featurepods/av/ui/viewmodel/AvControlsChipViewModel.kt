@@ -25,15 +25,15 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
 import com.android.systemui.res.R
+import com.android.systemui.statusbar.featurepods.av.domain.interactor.AvControlsChipInteractor
+import com.android.systemui.statusbar.featurepods.av.shared.model.AvControlsChipModel
+import com.android.systemui.statusbar.featurepods.av.shared.model.SensorActivityModel
 import com.android.systemui.statusbar.featurepods.popups.ui.model.ChipIcon
 import com.android.systemui.statusbar.featurepods.popups.ui.model.ColorsModel
 import com.android.systemui.statusbar.featurepods.popups.ui.model.HoverBehavior
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipId
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipModel
 import com.android.systemui.statusbar.featurepods.popups.ui.viewmodel.StatusBarPopupChipViewModel
-import com.android.systemui.statusbar.featurepods.vc.domain.interactor.AvControlsChipInteractor
-import com.android.systemui.statusbar.featurepods.vc.shared.model.AvControlsChipModel
-import com.android.systemui.statusbar.featurepods.vc.shared.model.SensorActivityModel
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.map
@@ -98,7 +98,7 @@ constructor(
                 listOf(CAMERA_DRAWABLE, MICROPHONE_DRAWABLE)
         }.map {
             // TODO(b/414566470): Add content description for accessibility.
-            ChipIcon(Icon.Resource(res = it, contentDescription = null))
+            ChipIcon(Icon.Resource(resId = it, contentDescription = null))
         }
 
     @AssistedFactory

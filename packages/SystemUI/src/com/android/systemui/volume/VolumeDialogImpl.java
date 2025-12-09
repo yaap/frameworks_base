@@ -38,8 +38,6 @@ import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 import static com.android.internal.jank.InteractionJankMonitor.CUJ_VOLUME_CONTROL;
 import static com.android.internal.jank.InteractionJankMonitor.Configuration.Builder;
-import static com.android.settingslib.flags.Flags.audioSharingDeveloperOption;
-import static com.android.settingslib.flags.Flags.volumeDialogAudioSharingFix;
 import static com.android.systemui.volume.Events.DISMISS_REASON_POSTURE_CHANGED;
 import static com.android.systemui.volume.Events.DISMISS_REASON_SETTINGS_CLICKED;
 
@@ -1834,8 +1832,7 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             }
 
             // Always show the stream for audio sharing if it exists.
-            if ((volumeDialogAudioSharingFix() || audioSharingDeveloperOption())
-                    && row.ss != null
+            if (row.ss != null
                     && mContext.getString(R.string.volume_dialog_guest_device_volume_description)
                             .equals(row.ss.remoteLabel)) {
                 return true;
@@ -2044,10 +2041,9 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             if (!ss.dynamic) continue;
             mDynamic.put(stream, true);
             if (findRow(stream) == null) {
-                if ((volumeDialogAudioSharingFix() || audioSharingDeveloperOption())
-                        && (mContext.getString(
+                if (mContext.getString(
                                         R.string.volume_dialog_guest_device_volume_description)
-                                .equals(ss.remoteLabel))) {
+                                .equals(ss.remoteLabel)) {
                     addRow(
                             stream,
                             R.drawable.ic_volume_media_bt,

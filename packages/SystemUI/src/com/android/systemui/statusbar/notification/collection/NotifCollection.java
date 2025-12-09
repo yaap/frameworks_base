@@ -70,6 +70,7 @@ import androidx.annotation.Nullable;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.statusbar.IStatusBarService;
 import com.android.systemui.Dumpable;
+import com.android.systemui.Flags;
 import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
@@ -119,6 +120,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
@@ -161,7 +163,8 @@ public class NotifCollection implements Dumpable, PipelineDumpable {
     private final NotificationDismissibilityProvider mDismissibilityProvider;
     private final BundleInteractionLogger mBundleLogger;
 
-    private final Map<String, NotificationEntry> mNotificationSet = new ArrayMap<>();
+    private final Map<String, NotificationEntry> mNotificationSet =
+            Flags.doNotUseRunBlocking() ? new ConcurrentHashMap<>() : new ArrayMap<>();
     private final Collection<NotificationEntry> mReadOnlyNotificationSet =
             Collections.unmodifiableCollection(mNotificationSet.values());
     private final HashMap<String, FutureDismissal> mFutureDismissals = new HashMap<>();
@@ -238,7 +241,9 @@ public class NotifCollection implements Dumpable, PipelineDumpable {
 
     /** @see NotifPipeline#getAllNotifs() */
     Collection<NotificationEntry> getAllNotifs() {
-        Assert.isMainThread();
+        if (!Flags.doNotUseRunBlocking()) {
+            Assert.isMainThread();
+        }
         return mReadOnlyNotificationSet;
     }
 
@@ -548,7 +553,7 @@ public class NotifCollection implements Dumpable, PipelineDumpable {
     }
 
     private void onNotificationsInitialized() {
-        mInitializedTimestamp = UseElapsedRealtimeForCreationTime.getCurrentTime(mClock);
+        mInitializedTimestamp = mClock.elapsedRealtime();
     }
 
     private void postNotification(
@@ -558,8 +563,7 @@ public class NotifCollection implements Dumpable, PipelineDumpable {
 
         if (entry == null) {
             // A new notification!
-            entry = new NotificationEntry(sbn, ranking,
-                    UseElapsedRealtimeForCreationTime.getCurrentTime(mClock));
+            entry = new NotificationEntry(sbn, ranking, mClock.elapsedRealtime());
             mEventQueue.add(new InitEntryEvent(entry));
             mEventQueue.add(new BindEntryEvent(entry, sbn));
             mNotificationSet.put(sbn.getKey(), entry);
@@ -888,8 +892,8 @@ public class NotifCollection implements Dumpable, PipelineDumpable {
     // messages from system server.
     private void crashIfNotInitializing(RuntimeException exception) {
         final boolean isRecentlyInitialized = mInitializedTimestamp == 0
-                || UseElapsedRealtimeForCreationTime.getCurrentTime(mClock) - mInitializedTimestamp
-                        < INITIALIZATION_FORGIVENESS_WINDOW;
+                || mClock.elapsedRealtime() - mInitializedTimestamp
+                < INITIALIZATION_FORGIVENESS_WINDOW;
 
         if (isRecentlyInitialized) {
             mLogger.logIgnoredError(exception.getMessage());

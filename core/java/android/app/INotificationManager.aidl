@@ -44,7 +44,7 @@ import android.app.AutomaticZenRule;
 import android.service.notification.ZenModeConfig;
 import android.service.notification.ZenDeviceEffects;
 
-/** {@hide} */
+/** @hide */
 interface INotificationManager
 {
     @UnsupportedAppUsage
@@ -179,7 +179,6 @@ interface INotificationManager
     void setInterruptionFilter(String pkg, int interruptionFilter, boolean fromUser);
 
     NotificationChannel createConversationNotificationChannelForPackageFromPrivilegedListener(in INotificationListener token, String pkg, in UserHandle user, String parentChannelId, String conversationId);
-    void updateNotificationChannelGroupFromPrivilegedListener(in INotificationListener token, String pkg, in UserHandle user, in NotificationChannelGroup group);
     void updateNotificationChannelFromPrivilegedListener(in INotificationListener token, String pkg, in UserHandle user, in NotificationChannel channel);
     ParceledListSlice getNotificationChannelsFromPrivilegedListener(in INotificationListener token, String pkg, in UserHandle user);
     ParceledListSlice getNotificationChannelGroupsFromPrivilegedListener(in INotificationListener token, String pkg, in UserHandle user);
@@ -274,7 +273,4 @@ interface INotificationManager
     String[] getAdjustmentDeniedPackages(int userId, String key);
     boolean isAdjustmentSupportedForPackage(int userId, String key, String pkg);
     void setAdjustmentSupportedForPackage(int userId, String key, String pkg, boolean enabled);
-
-    // TODO: b/389918945 - Remove once nm_binder_perf flags are going to Nextfood.
-    void incrementCounter(String metricId);
 }

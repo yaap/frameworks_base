@@ -107,7 +107,7 @@ class BroadcastProcessQueue {
     private boolean mTimeoutScheduled;
 
      /**
-     * Snapshotted value of {@link ProcessStateRecord#getCurProcState()} before
+     * Snapshotted value of {@link ProcessRecord#getCurProcState()} before
      * dispatching the current broadcast to the receiver in this process.
      */
     int lastProcessState;
@@ -729,10 +729,6 @@ class BroadcastProcessQueue {
     }
 
     public boolean wasActiveBroadcastReEnqueued() {
-        // If the flag is not enabled, treat as if the broadcast was never re-enqueued.
-        if (!Flags.avoidRepeatedBcastReEnqueues()) {
-            return false;
-        }
         return mActiveReEnqueued;
     }
 

@@ -18,8 +18,11 @@ package com.android.settingslib.bluetooth;
 import static com.android.settingslib.bluetooth.BluetoothUtils.getInputDevice;
 import static com.android.settingslib.bluetooth.BluetoothUtils.getSelectedChannelIndex;
 import static com.android.settingslib.bluetooth.BluetoothUtils.isAvailableAudioSharingMediaBluetoothDevice;
+import static com.android.settingslib.bluetooth.BluetoothUtils.isBluetoothDiagnosisAvailable;
 import static com.android.settingslib.bluetooth.BluetoothUtils.isDeviceStylus;
 import static com.android.settingslib.bluetooth.BluetoothUtils.modifySelectedChannelIndex;
+import static com.android.settingslib.bluetooth.BluetoothUtils.showConnectionFailure;
+import static com.android.settingslib.bluetooth.BluetoothUtils.showPairingFailure;
 import static com.android.settingslib.bluetooth.LocalBluetoothLeBroadcast.UNKNOWN_VALUE_PLACEHOLDER;
 import static com.android.settingslib.bluetooth.LocalBluetoothLeBroadcastAssistant.UNKNOWN_CHANNEL;
 import static com.android.settingslib.flags.Flags.FLAG_ENABLE_DETERMINING_ADVANCED_DETAILS_HEADER_WITH_METADATA;
@@ -64,6 +67,7 @@ import android.media.AudioDeviceAttributes;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
@@ -110,7 +114,6 @@ public class BluetoothUtilsTest {
     @Mock private PackageManager mPackageManager;
     @Mock private LeAudioProfile mA2dpProfile;
     @Mock private LeAudioProfile mLeAudioProfile;
-    @Mock private LeAudioProfile mHearingAid;
     @Mock private LocalBluetoothLeBroadcast mBroadcast;
     @Mock private LocalBluetoothProfileManager mProfileManager;
     @Mock private LocalBluetoothManager mLocalBluetoothManager;
@@ -140,6 +143,9 @@ public class BluetoothUtilsTest {
     private static final String TEST_EXCLUSIVE_MANAGER_PACKAGE = "com.test.manager";
     private static final String TEST_EXCLUSIVE_MANAGER_COMPONENT = "com.test.manager/.component";
     private static final String TEST_ADDRESS = "11:22:33:44:55:66";
+
+    private static final String BLUETOOTH_DIAGNOSIS_KEY = "cs_bt_diagnostics_enabled";
+
     private static final int TEST_BROADCAST_ID = 25;
 
     @Rule public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
@@ -158,7 +164,6 @@ public class BluetoothUtilsTest {
         when(mProfileManager.getLeAudioProfile()).thenReturn(mLeAudioProfile);
         when(mA2dpProfile.getProfileId()).thenReturn(BluetoothProfile.A2DP);
         when(mLeAudioProfile.getProfileId()).thenReturn(BluetoothProfile.LE_AUDIO);
-        when(mHearingAid.getProfileId()).thenReturn(BluetoothProfile.HEARING_AID);
         when(mContext.getSystemService(InputManager.class)).thenReturn(mInputManager);
         when(mInputManager.getInputDeviceIds()).thenReturn(new int[]{TEST_DEVICE_ID});
         when(mInputManager.getInputDeviceBluetoothAddress(TEST_DEVICE_ID)).thenReturn(TEST_ADDRESS);
@@ -233,6 +238,23 @@ public class BluetoothUtilsTest {
                                         RuntimeEnvironment.application, mCachedBluetoothDevice)
                                 .first)
                 .isInstanceOf(AdaptiveIcon.class);
+    }
+
+    @Test
+    public void getBtDrawableWithDescription_untetheredHeadset_returnUntetheredIcon() {
+        when(mBluetoothDevice.getMetadata(BluetoothDevice.METADATA_IS_UNTETHERED_HEADSET))
+                .thenReturn("true".getBytes());
+        when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
+        when(mCachedBluetoothDevice.getAddress()).thenReturn("1f:aa:bb");
+        Drawable icon = mock(Drawable.class);
+        when(mContext.getDrawable(com.android.settingslib.R.drawable.ic_earbuds_advanced))
+                .thenReturn(icon);
+
+        assertThat(
+                BluetoothUtils.getBtDrawableWithDescription(
+                        mContext, mCachedBluetoothDevice)
+                        .first)
+                .isSameInstanceAs(icon);
     }
 
     @Test
@@ -320,6 +342,89 @@ public class BluetoothUtilsTest {
                 .isEqualTo(STRING_METADATA);
     }
 
+    @Test
+    public void isBatteryAllTheTimeSupported_nullDevice_returnsFalse() {
+        assertFalse(BluetoothUtils.isBatteryAllTheTimeSupported(null));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_noMetadata_returnsFalse() {
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(null);
+
+        assertFalse(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_emptyMetadataString_returnsFalse() {
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn("".getBytes());
+
+        assertFalse(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_metadataWithoutBattTag_returnsFalse() {
+        String metadata = "<OTHERTAG>someValue</OTHERTAG>";
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(metadata.getBytes());
+
+        assertFalse(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_metadataWithBattTagTrue_returnsTrue() {
+        String metadata = "<BATT>true</BATT>";
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(metadata.getBytes());
+
+        assertTrue(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_metadataWithBattTagTRUECaseInsensitive_returnsTrue() {
+        String metadata = "<BATT>TRUE</BATT>";
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(metadata.getBytes());
+
+        assertTrue(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_metadataWithBattTagFalse_returnsFalse() {
+        String metadata = "<BATT>false</BATT>";
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(metadata.getBytes());
+
+        assertFalse(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_metadataWithBattTagEmptyValue_returnsFalse() {
+        String metadata = "<BATT></BATT>";
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(metadata.getBytes());
+
+        assertFalse(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_metadataWithBattTagOtherString_returnsFalse() {
+        String metadata = "<BATT>someOtherValue</BATT>";
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(metadata.getBytes());
+
+        assertFalse(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
+
+    @Test
+    public void isBatteryAllTheTimeSupported_metadataWithBattTagAndOtherTags_returnsTrue() {
+        String metadata = "<OTHER>info</OTHER><BATT>true</BATT><MORE>data</MORE>";
+        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
+                .thenReturn(metadata.getBytes());
+
+        assertTrue(BluetoothUtils.isBatteryAllTheTimeSupported(mBluetoothDevice));
+    }
     @Test
     public void isAdvancedDetailsHeader_untetheredHeadset_returnTrue() {
         when(mBluetoothDevice.getMetadata(BluetoothDevice.METADATA_IS_UNTETHERED_HEADSET))
@@ -676,111 +781,7 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    public void testHasConnectedBroadcastSource_leadDeviceConnectedToBroadcastSource() {
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
-        when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
-        CachedBluetoothDevice memberCachedDevice = mock(CachedBluetoothDevice.class);
-        BluetoothDevice memberDevice = mock(BluetoothDevice.class);
-        when(memberCachedDevice.getDevice()).thenReturn(memberDevice);
-        Set<CachedBluetoothDevice> memberCachedDevices = new HashSet<>();
-        memberCachedDevices.add(memberCachedDevice);
-        when(mCachedBluetoothDevice.getMemberDevice()).thenReturn(memberCachedDevices);
-
-        List<Long> bisSyncState = new ArrayList<>();
-        bisSyncState.add(1L);
-        when(mLeBroadcastReceiveState.getBisSyncState()).thenReturn(bisSyncState);
-
-        List<BluetoothLeBroadcastReceiveState> sourceList = new ArrayList<>();
-        sourceList.add(mLeBroadcastReceiveState);
-        when(mAssistant.getAllSources(mBluetoothDevice)).thenReturn(sourceList);
-        when(mAssistant.getAllSources(memberDevice)).thenReturn(Collections.emptyList());
-
-        assertThat(
-                        BluetoothUtils.hasConnectedBroadcastSource(
-                                mCachedBluetoothDevice, mLocalBluetoothManager))
-                .isTrue();
-    }
-
-    @Test
-    public void testHasConnectedBroadcastSource_memberDeviceConnectedToBroadcastSource() {
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
-        when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
-        CachedBluetoothDevice memberCachedDevice = mock(CachedBluetoothDevice.class);
-        BluetoothDevice memberDevice = mock(BluetoothDevice.class);
-        when(memberCachedDevice.getDevice()).thenReturn(memberDevice);
-        Set<CachedBluetoothDevice> memberCachedDevices = new HashSet<>();
-        memberCachedDevices.add(memberCachedDevice);
-        when(mCachedBluetoothDevice.getMemberDevice()).thenReturn(memberCachedDevices);
-
-        List<Long> bisSyncState = new ArrayList<>();
-        bisSyncState.add(1L);
-        when(mLeBroadcastReceiveState.getBisSyncState()).thenReturn(bisSyncState);
-
-        List<BluetoothLeBroadcastReceiveState> sourceList = new ArrayList<>();
-        sourceList.add(mLeBroadcastReceiveState);
-        when(mAssistant.getAllSources(memberDevice)).thenReturn(sourceList);
-        when(mAssistant.getAllSources(mBluetoothDevice)).thenReturn(Collections.emptyList());
-
-        assertThat(
-                        BluetoothUtils.hasConnectedBroadcastSource(
-                                mCachedBluetoothDevice, mLocalBluetoothManager))
-                .isTrue();
-    }
-
-    @Test
-    public void testHasConnectedBroadcastSource_deviceNotConnectedToBroadcastSource() {
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
-        when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
-
-        List<Long> bisSyncState = new ArrayList<>();
-        when(mLeBroadcastReceiveState.getBisSyncState()).thenReturn(bisSyncState);
-
-        List<BluetoothLeBroadcastReceiveState> sourceList = new ArrayList<>();
-        sourceList.add(mLeBroadcastReceiveState);
-        when(mAssistant.getAllSources(mBluetoothDevice)).thenReturn(sourceList);
-
-        assertThat(
-                        BluetoothUtils.hasConnectedBroadcastSource(
-                                mCachedBluetoothDevice, mLocalBluetoothManager))
-                .isFalse();
-    }
-
-    @Test
-    public void testHasConnectedBroadcastSourceForBtDevice_deviceConnectedToBroadcastSource() {
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
-        List<Long> bisSyncState = new ArrayList<>();
-        bisSyncState.add(1L);
-        when(mLeBroadcastReceiveState.getBisSyncState()).thenReturn(bisSyncState);
-
-        List<BluetoothLeBroadcastReceiveState> sourceList = new ArrayList<>();
-        sourceList.add(mLeBroadcastReceiveState);
-        when(mAssistant.getAllSources(mBluetoothDevice)).thenReturn(sourceList);
-
-        assertThat(
-                        BluetoothUtils.hasConnectedBroadcastSourceForBtDevice(
-                                mBluetoothDevice, mLocalBluetoothManager))
-                .isTrue();
-    }
-
-    @Test
-    public void testHasConnectedBroadcastSourceForBtDevice_deviceNotConnectedToBroadcastSource() {
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
-        List<Long> bisSyncState = new ArrayList<>();
-        when(mLeBroadcastReceiveState.getBisSyncState()).thenReturn(bisSyncState);
-
-        List<BluetoothLeBroadcastReceiveState> sourceList = new ArrayList<>();
-        sourceList.add(mLeBroadcastReceiveState);
-        when(mAssistant.getAllSources(mBluetoothDevice)).thenReturn(sourceList);
-
-        assertThat(
-                        BluetoothUtils.hasConnectedBroadcastSourceForBtDevice(
-                                mBluetoothDevice, mLocalBluetoothManager))
-                .isFalse();
-    }
-
-    @Test
-    public void hasConnectedBroadcastSource_hysteresisFix_leadDeviceHasActiveLocalSource() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
+    public void hasConnectedBroadcastSource_leadDeviceHasActiveLocalSource() {
         when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
         CachedBluetoothDevice memberCachedDevice = mock(CachedBluetoothDevice.class);
         BluetoothDevice memberDevice = mock(BluetoothDevice.class);
@@ -805,8 +806,7 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    public void hasConnectedBroadcastSource_hysteresisFix_memberDeviceHasActiveLocalSource() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
+    public void hasConnectedBroadcastSource_memberDeviceHasActiveLocalSource() {
         when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
         CachedBluetoothDevice memberCachedDevice = mock(CachedBluetoothDevice.class);
         BluetoothDevice memberDevice = mock(BluetoothDevice.class);
@@ -830,8 +830,7 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    public void hasConnectedBroadcastSource_hysteresisFix_deviceNoActiveLocalSource() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
+    public void hasConnectedBroadcastSource_deviceNoActiveLocalSource() {
         when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
 
         when(mBroadcast.getLatestBroadcastId()).thenReturn(UNKNOWN_VALUE_PLACEHOLDER);
@@ -847,8 +846,7 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    public void hasConnectedBroadcastSourceForBtDevice_hysteresisFix_deviceHasActiveLocalSource() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
+    public void hasConnectedBroadcastSourceForBtDevice_deviceHasActiveLocalSource() {
         when(mBroadcast.getLatestBroadcastId()).thenReturn(TEST_BROADCAST_ID);
         when(mLeBroadcastReceiveState.getBroadcastId()).thenReturn(TEST_BROADCAST_ID);
 
@@ -863,8 +861,7 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    public void hasConnectedBroadcastSourceForBtDevice_hysteresisFix_deviceNoActiveLocalSource() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
+    public void hasConnectedBroadcastSourceForBtDevice_deviceNoActiveLocalSource() {
         when(mBroadcast.getLatestBroadcastId()).thenReturn(TEST_BROADCAST_ID);
         when(mLeBroadcastReceiveState.getBroadcastId()).thenReturn(UNKNOWN_VALUE_PLACEHOLDER);
 
@@ -1229,25 +1226,6 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    public void getAudioDeviceAttributesForSpatialAudio_hearingAid() {
-        when(mCachedBluetoothDevice.getDevice()).thenReturn(mBluetoothDevice);
-        when(mCachedBluetoothDevice.getAddress()).thenReturn(TEST_ADDRESS);
-        when(mCachedBluetoothDevice.getProfiles()).thenReturn(List.of(mHearingAid));
-        when(mHearingAid.isEnabled(mBluetoothDevice)).thenReturn(true);
-
-        AudioDeviceAttributes attr =
-                BluetoothUtils.getAudioDeviceAttributesForSpatialAudio(
-                        mCachedBluetoothDevice, AudioManager.AUDIO_DEVICE_CATEGORY_HEARING_AID);
-
-        assertThat(attr)
-                .isEqualTo(
-                        new AudioDeviceAttributes(
-                                AudioDeviceAttributes.ROLE_OUTPUT,
-                                AudioDeviceInfo.TYPE_HEARING_AID,
-                                TEST_ADDRESS));
-    }
-
-    @Test
     public void isAudioSharingEnabled_flagOff_returnsFalse() {
         mSetFlagsRule.disableFlags(Flags.FLAG_ENABLE_LE_AUDIO_SHARING);
 
@@ -1375,36 +1353,14 @@ public class BluetoothUtilsTest {
     @Test
     public void isAudioSharingHysteresisModeFixAvailable_mainAndPreviewFlagOff_returnsFalse() {
         mSetFlagsRule.disableFlags(Flags.FLAG_ENABLE_LE_AUDIO_SHARING);
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
         mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_DEVELOPER_OPTION);
 
         assertThat(BluetoothUtils.isAudioSharingHysteresisModeFixAvailable(mContext)).isFalse();
-    }
-
-    @Test
-    public void isAudioSharingHysteresisModeFixAvailable_hysteresisFixFlagOff_returnsFalse() {
-        mSetFlagsRule.enableFlags(Flags.FLAG_ENABLE_LE_AUDIO_SHARING);
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_DEVELOPER_OPTION);
-
-        assertThat(BluetoothUtils.isAudioSharingHysteresisModeFixAvailable(mContext)).isFalse();
-    }
-
-    @Test
-    public void isAudioSharingHysteresisModeFixAvailable_previewFlagOn_returnsTrue() {
-        mSetFlagsRule.disableFlags(Flags.FLAG_ENABLE_LE_AUDIO_SHARING);
-        mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_DEVELOPER_OPTION);
-        Settings.Global.putInt(mContext.getContentResolver(),
-                BluetoothUtils.DEVELOPER_OPTION_PREVIEW_KEY, 1);
-
-        assertThat(BluetoothUtils.isAudioSharingHysteresisModeFixAvailable(mContext)).isTrue();
     }
 
     @Test
     public void isAudioSharingHysteresisModeFixAvailable_mainAndPreviewFlagOn_returnsTrue() {
         mSetFlagsRule.enableFlags(Flags.FLAG_ENABLE_LE_AUDIO_SHARING);
-        mSetFlagsRule.enableFlags(Flags.FLAG_AUDIO_SHARING_HYSTERESIS_MODE_FIX);
         mSetFlagsRule.disableFlags(Flags.FLAG_AUDIO_SHARING_DEVELOPER_OPTION);
 
         assertThat(BluetoothUtils.isAudioSharingHysteresisModeFixAvailable(mContext)).isTrue();
@@ -1449,17 +1405,6 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    @DisableFlags(Flags.FLAG_ENABLE_TEMPORARY_BOND_DEVICES_UI)
-    public void setTemporaryBondDevice_flagOff_doNothing() {
-        when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
-                .thenReturn(new byte[]{});
-        BluetoothUtils.setTemporaryBondMetadata(mBluetoothDevice);
-        verify(mBluetoothDevice, never()).setMetadata(eq(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS),
-                any());
-    }
-
-    @Test
-    @EnableFlags(Flags.FLAG_ENABLE_TEMPORARY_BOND_DEVICES_UI)
     public void setTemporaryBondDevice_flagOn_setCorrectValue() {
         when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
                 .thenReturn(new byte[]{});
@@ -1469,7 +1414,6 @@ public class BluetoothUtilsTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_ENABLE_TEMPORARY_BOND_DEVICES_UI)
     public void setTemporaryBondDevice_flagOff_replaceAndSetCorrectValue() {
         when(mBluetoothDevice.getMetadata(METADATA_FAST_PAIR_CUSTOMIZED_FIELDS))
                 .thenReturn(FAKE_TEMP_BOND_METADATA.getBytes());
@@ -1798,6 +1742,98 @@ public class BluetoothUtilsTest {
         assertFalse(updatedChannels.get(1).isSelected());
         assertEquals(3, updatedChannels.get(2).getChannelIndex());
         assertTrue(updatedChannels.get(2).isSelected());
+    }
+
+    @Test
+    public void hasConnectedBroadcastAssistantDevice_assistantProfileNull_returnFalse() {
+        when(mProfileManager.getLeAudioBroadcastAssistantProfile()).thenReturn(null);
+
+        boolean isAssistantConnected =
+                BluetoothUtils.hasConnectedBroadcastAssistantDevice(mLocalBluetoothManager);
+
+        assertThat(isAssistantConnected).isFalse();
+    }
+
+    @Test
+    public void hasConnectedBroadcastAssistantDevice_noConnectedDevice_returnFalse() {
+        when(mAssistant.getAllConnectedDevices()).thenReturn(List.of());
+
+        boolean isAssistantConnected =
+                BluetoothUtils.hasConnectedBroadcastAssistantDevice(mLocalBluetoothManager);
+
+        assertThat(isAssistantConnected).isFalse();
+    }
+
+    @Test
+    public void hasConnectedBroadcastAssistantDevice_hasConnectedDevice_returnFalse() {
+        when(mAssistant.getAllConnectedDevices()).thenReturn(ImmutableList.of(mBluetoothDevice));
+
+        boolean isAssistantConnected =
+                BluetoothUtils.hasConnectedBroadcastAssistantDevice(mLocalBluetoothManager);
+
+        assertThat(isAssistantConnected).isTrue();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_BLUETOOTH_DIAGNOSIS)
+    public void isBluetoothDiagnosisAvailable_featureIsEnabled_returnTrue() {
+        Settings.Secure.putInt(mContext.getContentResolver(), BLUETOOTH_DIAGNOSIS_KEY, 1);
+
+        assertThat(isBluetoothDiagnosisAvailable(mContext)).isTrue();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_BLUETOOTH_DIAGNOSIS)
+    public void isBluetoothDiagnosisAvailable_featureIsNotEnabled_returnFalse() {
+        assertThat(isBluetoothDiagnosisAvailable(mContext)).isFalse();
+    }
+
+    @Test
+    public void showPairingFailure_failureWithinTimeout_returnTrue() {
+        when(mCachedBluetoothDevice.getBondFailureTimeMillis()).thenReturn(10000L);
+        SystemClock.setCurrentTimeMillis(20000L);
+
+        assertThat(showPairingFailure(mCachedBluetoothDevice)).isTrue();
+    }
+
+    @Test
+    public void showPairingFailure_noFailure_returnFalse() {
+        when(mCachedBluetoothDevice.getBondFailureTimeMillis()).thenReturn(-1L);
+        SystemClock.setCurrentTimeMillis(20000L);
+
+        assertThat(showPairingFailure(mCachedBluetoothDevice)).isFalse();
+    }
+
+    @Test
+    public void showPairingFailure_failureOutOfTimeout_returnFalse() {
+        when(mCachedBluetoothDevice.getBondFailureTimeMillis()).thenReturn(10000L);
+        SystemClock.setCurrentTimeMillis(80000L);
+
+        assertThat(showPairingFailure(mCachedBluetoothDevice)).isFalse();
+    }
+
+    @Test
+    public void showConnectionFailure_failureOutOfTimeout_returnFalse() {
+        when(mCachedBluetoothDevice.getConnectionFailureTimeMillis()).thenReturn(10000L);
+        SystemClock.setCurrentTimeMillis(80000L);
+
+        assertThat(showConnectionFailure(mCachedBluetoothDevice)).isFalse();
+    }
+
+    @Test
+    public void showConnectionFailure_failureWithinTimeout_returnTrue() {
+        when(mCachedBluetoothDevice.getConnectionFailureTimeMillis()).thenReturn(10000L);
+        SystemClock.setCurrentTimeMillis(20000L);
+
+        assertThat(showConnectionFailure(mCachedBluetoothDevice)).isTrue();
+    }
+
+    @Test
+    public void showConnectionFailure_noFailure_returnFalse() {
+        when(mCachedBluetoothDevice.getConnectionFailureTimeMillis()).thenReturn(-1L);
+        SystemClock.setCurrentTimeMillis(20000L);
+
+        assertThat(showConnectionFailure(mCachedBluetoothDevice)).isFalse();
     }
 
     private BluetoothLeBroadcastMetadata createMetadataWithChannels(

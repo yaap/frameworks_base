@@ -1,4 +1,4 @@
-# Only classes listed here can use the Ravenwood annotations.
+# Only classes listed here can use the Ravenwood annotations. Keep the list alphabetically sorted.
 
 android.aconfig.*
 android.app.compat.*
@@ -12,18 +12,26 @@ android.accounts.Account
 
 android.app.ActivityManager
 android.app.ActivityOptions
+android.app.ActivityThread
 android.app.AppCompatCallbacks
+android.app.AppComponentFactory
 android.app.Application
 android.app.ApplicationPackageManager
 android.app.BroadcastOptions
+android.app.ClientTransactionHandler
 android.app.ComponentOptions
+android.app.ConfigurationChangedListenerController
+android.app.ContextImpl
 android.app.Instrumentation
+android.app.LoadedApk
 android.app.LocaleConfig
 android.app.PropertyInvalidatedCache
 android.app.ResourcesManager
+android.app.SystemServiceRegistry
 android.app.UiAutomation
 android.app.WindowConfiguration
 
+android.content.AttributionSource
 android.content.ClipData
 android.content.ClipDescription
 android.content.ClipboardManager
@@ -33,6 +41,7 @@ android.content.ContentProvider
 android.content.ContentUris
 android.content.ContentValues
 android.content.Context
+android.content.ContextParams
 android.content.ContextWrapper
 android.content.Intent
 android.content.IntentFilter
@@ -55,6 +64,7 @@ android.content.pm.UserInfo
 android.content.res.ApkAssets
 android.content.res.AssetFileDescriptor
 android.content.res.AssetManager
+android.content.res.CameraCompatibilityInfo
 android.content.res.ColorStateList
 android.content.res.CompatibilityInfo
 android.content.res.ComplexColor
@@ -67,6 +77,7 @@ android.content.res.FontResourcesParser
 android.content.res.FontScaleConverter
 android.content.res.FontScaleConverterFactory
 android.content.res.FontScaleConverterImpl
+android.content.res.GradientColor
 android.content.res.ResourceId
 android.content.res.Resources
 android.content.res.ResourcesImpl
@@ -191,8 +202,36 @@ android.graphics.Typeface
 android.graphics.Xfermode
 android.graphics.YuvImage
 
-android.graphics.drawable.BitmapDrawable$BitmapState
-android.graphics.drawable.Drawable$ConstantState
+android.graphics.drawable.AdaptiveIconDrawable
+android.graphics.drawable.BitmapDrawable
+android.graphics.drawable.ClipDrawable
+android.graphics.drawable.ColorDrawable
+android.graphics.drawable.ColorStateListDrawable
+android.graphics.drawable.Drawable
+android.graphics.drawable.DrawableContainer
+android.graphics.drawable.DrawableInflater
+android.graphics.drawable.DrawableWrapper
+android.graphics.drawable.GradientDrawable
+android.graphics.drawable.Icon
+android.graphics.drawable.InsetDrawable
+android.graphics.drawable.LayerDrawable
+android.graphics.drawable.LevelListDrawable
+android.graphics.drawable.NinePatchDrawable
+android.graphics.drawable.PaintDrawable
+android.graphics.drawable.PictureDrawable
+android.graphics.drawable.RotateDrawable
+android.graphics.drawable.ScaleDrawable
+android.graphics.drawable.ShapeDrawable
+android.graphics.drawable.StateListDrawable
+android.graphics.drawable.TransitionDrawable
+android.graphics.drawable.VectorDrawable
+
+android.graphics.drawable.shapes.ArcShape
+android.graphics.drawable.shapes.OvalShape
+android.graphics.drawable.shapes.PathShape
+android.graphics.drawable.shapes.RectShape
+android.graphics.drawable.shapes.RoundRectShape
+android.graphics.drawable.shapes.Shape
 
 android.graphics.fonts.Font
 android.graphics.fonts.FontCustomizationParser
@@ -210,9 +249,6 @@ android.graphics.text.LineBreaker
 android.graphics.text.MeasuredText
 android.graphics.text.PositionedGlyphs
 android.graphics.text.TextRunShaper
-
-android.hardware.SerialManager
-android.hardware.SerialManagerInternal
 
 android.metrics.LogMaker
 
@@ -235,6 +271,7 @@ android.os.CancellationSignal
 android.os.ConditionVariable
 android.os.DeadObjectException
 android.os.DeadSystemException
+android.os.Environment
 android.os.FileUtils
 android.os.Handler
 android.os.HandlerExecutor
@@ -244,7 +281,9 @@ android.os.IpcDataCache
 android.os.LocaleList
 android.os.Looper
 android.os.Message
+android.os.MessageHeap
 android.os.MessageQueue
+android.os.MessageStack
 android.os.PackageTagsList
 android.os.Parcel
 android.os.ParcelFileDescriptor
@@ -277,6 +316,7 @@ android.os.UserBatteryConsumer
 android.os.UserHandle
 android.os.UserManager
 android.os.VibrationAttributes
+android.os.WaitState
 android.os.WakeLockStats
 android.os.WorkSource
 
@@ -393,8 +433,11 @@ android.text.style.BackgroundColorSpan
 android.text.style.BulletSpan
 android.text.style.CharacterStyle
 android.text.style.ClickableSpan
+android.text.style.DrawableMarginSpan
+android.text.style.DynamicDrawableSpan
 android.text.style.ForegroundColorSpan
 android.text.style.IconMarginSpan
+android.text.style.ImageSpan
 android.text.style.LeadingMarginSpan
 android.text.style.LineBackgroundSpan
 android.text.style.LineBreakConfigSpan
@@ -487,6 +530,7 @@ android.util.MutableLong
 android.util.MutableShort
 android.util.NoSuchPropertyException
 android.util.Pair
+android.util.PathParser
 android.util.Patterns
 android.util.Pools
 android.util.PrefixPrintWriter
@@ -529,11 +573,19 @@ android.util.proto.ProtoStream
 android.util.proto.ProtoUtils
 android.util.proto.WireTypeMismatchException
 
+android.view.animation.AnimationUtils
+android.view.Choreographer
+android.view.ContextThemeWrapper
 android.view.Display
 android.view.DisplayAdjustments
+android.view.DisplayEventReceiver
 android.view.DisplayInfo
+android.view.Gravity
+android.view.InflateException
 
 android.view.inputmethod.InputBinding
+
+android.window.DesktopExperienceFlags
 
 com.android.internal.display.BrightnessSynchronizer
 
@@ -607,6 +659,7 @@ com.android.internal.util.IntPair
 com.android.internal.util.LineBreakBufferedWriter
 com.android.internal.util.LocalLog
 com.android.internal.util.MessageUtils
+com.android.internal.util.NamedLock
 com.android.internal.util.ObjectUtils
 com.android.internal.util.Parcelling
 com.android.internal.util.ParseUtils
@@ -615,8 +668,10 @@ com.android.internal.util.QuickSelect
 com.android.internal.util.RateLimitingCache
 com.android.internal.util.RingBuffer
 com.android.internal.util.SizedInputStream
+com.android.internal.util.StringCache
 com.android.internal.util.StringPool
 com.android.internal.util.TokenBucket
+com.android.internal.util.VirtualRefBasePtr
 com.android.internal.util.XmlPullParserWrapper
 com.android.internal.util.XmlSerializerWrapper
 com.android.internal.util.XmlUtils
@@ -627,11 +682,17 @@ com.android.modules.utils.ravenwood.RavenwoodHelper
 
 com.android.server.FgThread
 com.android.server.LocalServices
-com.android.server.SerialService
 com.android.server.ServiceThread
 com.android.server.SystemService
 com.android.server.SystemServiceManager
 
+com.android.server.am.BoundServiceSession
+com.android.server.am.ConnectionRecord
+com.android.server.am.OomAdjuster
+com.android.server.am.psc.AsyncBatchSession
+com.android.server.am.psc.BatchSession
+com.android.server.am.psc.ConnectionRecordInternal
+com.android.server.am.psc.SyncBatchSession
 com.android.server.utils.TimingsTraceAndSlog
 
 com.google.android.collect.Lists

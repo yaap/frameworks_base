@@ -16,6 +16,8 @@
 
 package com.android.server.media;
 
+import static android.bluetooth.BluetoothAdapter.ACTIVE_DEVICE_AUDIO;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.bluetooth.BluetoothA2dp;
@@ -31,6 +33,7 @@ import android.bluetooth.BluetoothLeBroadcastReceiveState;
 import android.bluetooth.BluetoothLeBroadcastSettings;
 import android.bluetooth.BluetoothLeBroadcastSubgroupSettings;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothVolumeControl;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.os.Handler;
@@ -46,6 +49,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 /* package */ class BluetoothProfileMonitor {
@@ -53,7 +57,14 @@ import java.util.concurrent.ThreadLocalRandom;
     private static final String TAG = BluetoothProfileMonitor.class.getSimpleName();
 
     /* package */ static final long GROUP_ID_NO_GROUP = -1L;
+    /* package */ static final int INVALID_VOLUME = -1;
+    /* package */ static final int MAXIMUM_DEVICE_VOLUME = 255;
+    // TODO(b/397568136): remove reading primary group id from SettingsProvider once
+    //  adopt_primary_group_management_api_v2  is rolled out
+    private static final String KEY_PRIMARY_GROUP_ID =
+            "bluetooth_le_broadcast_fallback_active_group_id";
 
+    private static final int INVALID_BROADCAST_ID = 0;
     private static final String UNDERLINE = "_";
     private static final int DEFAULT_CODE_MAX = 9999;
     private static final int DEFAULT_CODE_MIN = 1000;
@@ -69,6 +80,7 @@ import java.util.concurrent.ThreadLocalRandom;
     @NonNull
     private final ProfileListener mProfileListener = new ProfileListener();
     @NonNull private final BroadcastCallback mBroadcastCallback = new BroadcastCallback();
+    @NonNull private final VolumeControlCallback mVolumeCallback = new VolumeControlCallback();
 
     @NonNull
     private final BroadcastAssistantCallback mBroadcastAssistantCallback =
@@ -86,11 +98,19 @@ import java.util.concurrent.ThreadLocalRandom;
     private BluetoothLeAudio mLeAudioProfile;
 
     @GuardedBy("this")
+    @Nullable
     private BluetoothLeBroadcast mBroadcastProfile;
 
-    private BluetoothLeBroadcastAssistant mAssistantProfile;
+    @Nullable private BluetoothLeBroadcastAssistant mAssistantProfile;
+    @Nullable private BluetoothVolumeControl mVolumeProfile;
+
     private final List<BluetoothDevice> mDevicesToAdd = new ArrayList<>();
-    private int mBroadcastId = 0;
+    private int mBroadcastId = INVALID_BROADCAST_ID;
+    private final ConcurrentHashMap<BluetoothDevice, Integer> mVolumeMap =
+            new ConcurrentHashMap<>();
+
+    @NonNull
+    private BluetoothDeviceRoutesManager.OnBroadcastSinkChangedListener mSinkChangedListener;
 
     BluetoothProfileMonitor(
             @NonNull Context context,
@@ -99,9 +119,15 @@ import java.util.concurrent.ThreadLocalRandom;
         mContext = Objects.requireNonNull(context);
         mHandler = new Handler(Objects.requireNonNull(looper));
         mBluetoothAdapter = Objects.requireNonNull(bluetoothAdapter);
+        // no-op listener, will be overridden in start()
+        mSinkChangedListener = () -> {};
     }
 
-    /* package */ void start() {
+    /* package */ void start(
+            @NonNull
+                    BluetoothDeviceRoutesManager.OnBroadcastSinkChangedListener
+                            sinkChangedListener) {
+        mSinkChangedListener = sinkChangedListener;
         mBluetoothAdapter.getProfileProxy(mContext, mProfileListener, BluetoothProfile.A2DP);
         mBluetoothAdapter.getProfileProxy(mContext, mProfileListener, BluetoothProfile.HEARING_AID);
         mBluetoothAdapter.getProfileProxy(mContext, mProfileListener, BluetoothProfile.LE_AUDIO);
@@ -110,6 +136,8 @@ import java.util.concurrent.ThreadLocalRandom;
                     mContext, mProfileListener, BluetoothProfile.LE_AUDIO_BROADCAST);
             mBluetoothAdapter.getProfileProxy(
                     mContext, mProfileListener, BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT);
+            mBluetoothAdapter.getProfileProxy(
+                    mContext, mProfileListener, BluetoothProfile.VOLUME_CONTROL);
         }
     }
 
@@ -128,8 +156,8 @@ import java.util.concurrent.ThreadLocalRandom;
                     bluetoothProfile = mHearingAidProfile;
                     break;
                 default:
-                    throw new IllegalArgumentException(profile
-                            + " is not supported as Bluetooth profile");
+                    throw new IllegalArgumentException(
+                            profile + " is not supported as Bluetooth profile");
             }
         }
 
@@ -202,8 +230,6 @@ import java.util.concurrent.ThreadLocalRandom;
                         isImproveQualityFlagEnabled());
         BluetoothLeBroadcastSettings settings =
                 buildBroadcastSettings(
-                        /* isPublic= */ true, // TODO(b/421062071): Set to false after framework
-                        // fix.
                         broadcastName,
                         getBroadcastCode(),
                         List.of(subgroupSettings));
@@ -213,13 +239,48 @@ import java.util.concurrent.ThreadLocalRandom;
         mBroadcastProfile.startBroadcast(settings);
     }
 
-    /** Stops the broadcast. */
+    /** Stops the broadcast */
     public synchronized void stopBroadcast() {
-        if (mBroadcastProfile != null) {
-            mBroadcastProfile.stopBroadcast(mBroadcastId);
-        } else {
+        if (mBroadcastProfile == null) {
             Slog.e(TAG, "Fail to stop broadcast, LeBroadcast is null");
+            return;
         }
+        mBroadcastProfile.stopBroadcast(mBroadcastId);
+    }
+
+    /**
+     * Stops the broadcast, optionally making a new BT device active.
+     *
+     * <p>This method is expected to use the given device to determine which unicast fallback group
+     * should be set or which classic device should be active when the broadcast stops.
+     *
+     * @param device BT device that should become active once the broadcast stops, or null if no BT
+     *     device should become active once broadcast stops.
+     */
+    public synchronized void stopBroadcast(@Nullable BluetoothDevice device) {
+        if (mBroadcastProfile == null) {
+            Slog.e(TAG, "Fail to stop broadcast, LeBroadcast is null");
+            return;
+        }
+        if (mLeAudioProfile == null) {
+            Slog.e(TAG, "Fail to set fall back group, LeProfile is null");
+        } else {
+            // if no valid group id, set the fallback to -1, no LEA device should become active
+            // once broadcast stops
+            int groupId =
+                    (device == null || !isProfileSupported(BluetoothProfile.LE_AUDIO, device))
+                            ? BluetoothLeAudio.GROUP_ID_INVALID
+                            : (int) getGroupId(BluetoothProfile.LE_AUDIO, device);
+            if (device != null && groupId == BluetoothLeAudio.GROUP_ID_INVALID) {
+                // for classic device, we need set active for it explicitly, because when broadcast
+                // stops, bt stack will only deal with fallback LEA device.
+                Slog.d(TAG, "stopBroadcast: set active device to " + device.getAnonymizedAddress());
+                mBluetoothAdapter.setActiveDevice(device, ACTIVE_DEVICE_AUDIO);
+            }
+            Slog.d(TAG, "stopBroadcast: set broadcast fallabck group to " + groupId);
+            mLeAudioProfile.setBroadcastToUnicastFallbackGroup(groupId);
+        }
+        mBroadcastProfile.stopBroadcast(mBroadcastId);
     }
 
     /**
@@ -359,13 +420,14 @@ import java.util.concurrent.ThreadLocalRandom;
     }
 
     private BluetoothLeBroadcastSettings buildBroadcastSettings(
-            boolean isPublic,
             String broadcastName,
             byte[] broadcastCode,
             List<BluetoothLeBroadcastSubgroupSettings> subgroupSettingsList) {
         BluetoothLeBroadcastSettings.Builder builder =
                 new BluetoothLeBroadcastSettings.Builder()
-                        .setPublicBroadcast(isPublic)
+                        .setPublicBroadcast(
+                                /* isPublicBroadcast= */ true) // To advertise the broadcast
+                                                               // settings, e.g. name.
                         .setBroadcastName(broadcastName)
                         .setBroadcastCode(broadcastCode);
         for (BluetoothLeBroadcastSubgroupSettings subgroupSettings : subgroupSettingsList) {
@@ -390,6 +452,64 @@ import java.util.concurrent.ThreadLocalRandom;
                                 : BluetoothLeBroadcastSubgroupSettings.QUALITY_HIGH)
                 .setContentMetadata(metadata)
                 .build();
+    }
+
+    /* package */ boolean isDeviceInBroadcast(@NonNull BluetoothDevice device) {
+        return mAssistantProfile != null
+                && mBroadcastId != INVALID_BROADCAST_ID
+                && mAssistantProfile.getAllSources(device).stream()
+                        .anyMatch(source -> source.getBroadcastId() == mBroadcastId);
+    }
+
+    /* package */ void setDeviceVolume(
+            @NonNull BluetoothDevice device, int volume, boolean isGroupOp) {
+        if (mVolumeProfile != null) {
+            mVolumeProfile.setDeviceVolume(device, volume, isGroupOp);
+        }
+    }
+
+    /* package */ int getDeviceVolume(@NonNull BluetoothDevice device) {
+        return isDeviceInBroadcast(device)
+                ? mVolumeMap.getOrDefault(device, INVALID_VOLUME)
+                : INVALID_VOLUME;
+    }
+
+    /**
+     * Check if the BT device is the media only device in broadcast.
+     *
+     * <p>There are two types of sinks in the broadcast session, primary sink and media only sink.
+     *
+     * <p>Primary sink is the sink can listen to the call, usually it is the one belongs to the
+     * broadcast owner.
+     *
+     * <p>Media only sink can only listen to audio shared by the broadcaster, including media and
+     * notification.
+     */
+    /* package */ boolean isMediaOnlyDeviceInBroadcast(@NonNull BluetoothDevice device) {
+        // Media only device, other than primary device, can only listen to the broadcast content
+        // and is not the default one to listen to the call.
+        long groupId = getGroupId(BluetoothProfile.LE_AUDIO, device);
+        if (groupId == GROUP_ID_NO_GROUP) {
+            Slog.d(TAG, "isMediaOnlyDeviceInBroadcast, invalid group id");
+            return false;
+        }
+        long primaryGroupId = GROUP_ID_NO_GROUP;
+        if (com.android.settingslib.flags.Flags.adoptPrimaryGroupManagementApiV2()) {
+            if (mLeAudioProfile != null) {
+                primaryGroupId = mLeAudioProfile.getBroadcastToUnicastFallbackGroup();
+            }
+        } else {
+            // TODO(b/397568136): remove reading primary group id from SettingsProvider once
+            //  adopt_primary_group_management_api_v2 is rolled out
+            ContentResolver contentResolver = mContext.getContentResolver();
+            primaryGroupId =
+                    Settings.Secure.getIntForUser(
+                            contentResolver,
+                            KEY_PRIMARY_GROUP_ID,
+                            (int) GROUP_ID_NO_GROUP,
+                            contentResolver.getUserId());
+        }
+        return groupId != primaryGroupId;
     }
 
     private final class ProfileListener implements BluetoothProfile.ServiceListener {
@@ -419,6 +539,12 @@ import java.util.concurrent.ThreadLocalRandom;
                                     mHandler::post, mBroadcastAssistantCallback);
                         }
                         break;
+                    case BluetoothProfile.VOLUME_CONTROL:
+                        if (Flags.enableOutputSwitcherPersonalAudioSharing()) {
+                            mVolumeProfile = (BluetoothVolumeControl) proxy;
+                            mVolumeProfile.registerCallback(mHandler::post, mVolumeCallback);
+                        }
+                        break;
                 }
             }
         }
@@ -440,13 +566,19 @@ import java.util.concurrent.ThreadLocalRandom;
                         if (Flags.enableOutputSwitcherPersonalAudioSharing()) {
                             mBroadcastProfile.unregisterCallback(mBroadcastCallback);
                             mBroadcastProfile = null;
-                            mBroadcastId = 0;
+                            mBroadcastId = INVALID_BROADCAST_ID;
                         }
                         break;
                     case BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT:
                         if (Flags.enableOutputSwitcherPersonalAudioSharing()) {
                             mAssistantProfile.unregisterCallback(mBroadcastAssistantCallback);
                             mAssistantProfile = null;
+                        }
+                        break;
+                    case BluetoothProfile.VOLUME_CONTROL:
+                        if (Flags.enableOutputSwitcherPersonalAudioSharing()) {
+                            mVolumeProfile.unregisterCallback(mVolumeCallback);
+                            mVolumeProfile = null;
                         }
                         break;
                 }
@@ -494,7 +626,7 @@ import java.util.concurrent.ThreadLocalRandom;
         }
     }
 
-    private static final class BroadcastAssistantCallback
+    private final class BroadcastAssistantCallback
             implements BluetoothLeBroadcastAssistant.Callback {
         @Override
         public void onSearchStarted(int reason) {}
@@ -512,7 +644,9 @@ import java.util.concurrent.ThreadLocalRandom;
         public void onSourceFound(@NonNull BluetoothLeBroadcastMetadata source) {}
 
         @Override
-        public void onSourceAdded(@NonNull BluetoothDevice sink, int sourceId, int reason) {}
+        public void onSourceAdded(@NonNull BluetoothDevice sink, int sourceId, int reason) {
+            mSinkChangedListener.onBroadcastSinkChanged();
+        }
 
         @Override
         public void onSourceAddFailed(
@@ -527,7 +661,9 @@ import java.util.concurrent.ThreadLocalRandom;
         public void onSourceModifyFailed(@NonNull BluetoothDevice sink, int sourceId, int reason) {}
 
         @Override
-        public void onSourceRemoved(@NonNull BluetoothDevice sink, int sourceId, int reason) {}
+        public void onSourceRemoved(@NonNull BluetoothDevice sink, int sourceId, int reason) {
+            mSinkChangedListener.onBroadcastSinkChanged();
+        }
 
         @Override
         public void onSourceRemoveFailed(@NonNull BluetoothDevice sink, int sourceId, int reason) {}
@@ -537,5 +673,15 @@ import java.util.concurrent.ThreadLocalRandom;
                 @NonNull BluetoothDevice sink,
                 int sourceId,
                 @NonNull BluetoothLeBroadcastReceiveState state) {}
+    }
+
+    private final class VolumeControlCallback implements BluetoothVolumeControl.Callback {
+        @Override
+        public void onDeviceVolumeChanged(@NonNull BluetoothDevice device, int volume) {
+            mVolumeMap.put(device, volume);
+            if (isMediaOnlyDeviceInBroadcast(device)) {
+                mSinkChangedListener.onBroadcastSinkChanged();
+            }
+        }
     }
 }

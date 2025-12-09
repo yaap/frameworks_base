@@ -1520,21 +1520,20 @@ public class AccountManagerService
     private void purgeOldGrants(UserAccounts accounts) {
         synchronized (accounts.dbLock) {
             synchronized (accounts.cacheLock) {
-                List<Integer> uids;
                 try {
-                    uids = accounts.accountsDb.findAllUidGrants();
+                    int[] uids = accounts.accountsDb.findAllUidGrants();
+                    for (int uid : uids) {
+                        boolean packageExists = mPackageManager.getPackagesForUid(uid) != null;
+                        if (packageExists) {
+                            continue;
+                        }
+                        Log.d(TAG, "deleting grants for UID " + uid
+                                + " because its package is no longer installed");
+                        accounts.accountsDb.deleteGrantsByUid(uid);
+                    }
                 } catch (SQLiteException e) {
                     Log.w(TAG, "Could not delete grants for user = " + accounts.userId, e);
                     return;
-                }
-                for (int uid : uids) {
-                    final boolean packageExists = mPackageManager.getPackagesForUid(uid) != null;
-                    if (packageExists) {
-                        continue;
-                    }
-                    Log.d(TAG, "deleting grants for UID " + uid
-                            + " because its package is no longer installed");
-                    accounts.accountsDb.deleteGrantsByUid(uid);
                 }
             }
         }
@@ -4843,10 +4842,7 @@ public class AccountManagerService
         try {
             UserAccounts accounts = getUserAccounts(userId);
             synchronized (accounts.dbLock) {
-                List<Account> accountList = accounts.accountsDb.getSharedAccounts();
-                Account[] accountArray = new Account[accountList.size()];
-                accountList.toArray(accountArray);
-                return accountArray;
+                return accounts.accountsDb.getSharedAccounts();
             }
         } catch (SQLiteException e) {
             Log.w(TAG, "Could not get shared accounts for user " + userId, e);

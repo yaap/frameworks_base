@@ -323,6 +323,11 @@ class AndroidPackageTest : ParcelableComponentTest(AndroidPackage::class, Packag
             PackageImpl::setAttributionsAreUserVisible,
             true
         ),
+        getSetByValue(
+            AndroidPackage::shouldRunInPccSandbox,
+            PackageImpl::setRunInPccSandbox,
+            true
+        ),
         getSetByValue2(
             AndroidPackage::getOverlayables,
             PackageImpl::addOverlayable,
@@ -484,23 +489,6 @@ class AndroidPackageTest : ParcelableComponentTest(AndroidPackage::class, Packag
             transformGet = { it.singleOrNull()?.name.orEmpty() },
             transformSet = { ParsedPermissionImpl()
                 .apply { name = it } }
-        ),
-        getSetByValue(
-            AndroidPackage::getUsesPermissions,
-            PackageImpl::addUsesPermission,
-            "test.USES_PERMISSION",
-            transformGet = {
-                // Need to strip implicit permission, which calls addUsesPermission when added
-                it.filterNot { it.name == "test.implicit.PERMISSION" || it.name == "test.USES_PERMISSION_MAPPING" }
-                    .singleOrNull()?.name.orEmpty()
-            },
-            transformSet = {
-                ParsedUsesPermissionImpl(
-                    it,
-                    0,
-                    setOf(),
-                )
-            }
         ),
         getSetByValue(
             AndroidPackage::getUsesPermissionMapping,
@@ -693,8 +681,6 @@ class AndroidPackageTest : ParcelableComponentTest(AndroidPackage::class, Packag
         expect.that(after.isCoreApp).isTrue()
         expect.that(after.isIsolatedSplitLoading).isEqualTo(true)
         expect.that(after.longVersionCode).isEqualTo(38654705667)
-        expect.that(after.requestedPermissions)
-            .containsExactlyElementsIn(after.usesPermissions.map { it.name })
 
         expect.that(after.mimeGroups).containsExactly(
             "TestActivityName/mimeGroup",

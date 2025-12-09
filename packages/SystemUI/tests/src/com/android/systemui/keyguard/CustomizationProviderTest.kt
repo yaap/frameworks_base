@@ -31,10 +31,10 @@ import android.view.SurfaceControlViewHost
 import androidx.test.filters.SmallTest
 import com.android.internal.widget.LockPatternUtils
 import com.android.keyguard.logging.KeyguardQuickAffordancesLogger
-import com.android.systemui.SystemUIAppComponentFactoryBase
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.accessibility.domain.interactor.accessibilityInteractor
 import com.android.systemui.animation.DialogTransitionAnimator
+import com.android.systemui.application.ContentProviderContextAvailableCallback
 import com.android.systemui.dock.DockManagerFake
 import com.android.systemui.flags.FakeFeatureFlags
 import com.android.systemui.flags.Flags
@@ -46,6 +46,7 @@ import com.android.systemui.keyguard.data.quickaffordance.KeyguardQuickAffordanc
 import com.android.systemui.keyguard.data.quickaffordance.KeyguardQuickAffordanceRemoteUserSelectionManager
 import com.android.systemui.keyguard.data.repository.FakeBiometricSettingsRepository
 import com.android.systemui.keyguard.data.repository.KeyguardQuickAffordanceRepository
+import com.android.systemui.keyguard.data.repository.biometricSettingsRepository
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractorFactory
 import com.android.systemui.keyguard.domain.interactor.KeyguardQuickAffordanceInteractor
 import com.android.systemui.keyguard.shared.quickaffordance.KeyguardQuickAffordancesMetricsLogger
@@ -59,6 +60,7 @@ import com.android.systemui.kosmos.useUnconfinedTestDispatcher
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
 import com.android.systemui.scene.domain.interactor.sceneInteractor
+import com.android.systemui.securelockdevice.domain.interactor.secureLockDeviceInteractor
 import com.android.systemui.settings.UserFileManager
 import com.android.systemui.settings.UserTracker
 import com.android.systemui.shade.domain.interactor.shadeInteractor
@@ -124,7 +126,7 @@ class CustomizationProviderTest : SysuiTestCase() {
         whenever(backgroundHandler.looper).thenReturn(TestableLooper.get(this).looper)
 
         dockManager = DockManagerFake()
-        biometricSettingsRepository = FakeBiometricSettingsRepository()
+        biometricSettingsRepository = kosmos.biometricSettingsRepository
 
         underTest = CustomizationProvider()
         val localUserSelectionManager =
@@ -201,6 +203,7 @@ class CustomizationProviderTest : SysuiTestCase() {
                 launchAnimator = launchAnimator,
                 logger = logger,
                 metricsLogger = metricsLogger,
+                secureLockDeviceInteractor = { kosmos.secureLockDeviceInteractor },
                 devicePolicyManager = devicePolicyManager,
                 dockManager = dockManager,
                 biometricSettingsRepository = biometricSettingsRepository,
@@ -239,7 +242,7 @@ class CustomizationProviderTest : SysuiTestCase() {
 
     @Test
     fun onAttachInfo_reportsContext() {
-        val callback: SystemUIAppComponentFactoryBase.ContextAvailableCallback = mock()
+        val callback: ContentProviderContextAvailableCallback = mock()
         underTest.setContextAvailableCallback(callback)
 
         underTest.attachInfo(context, null)

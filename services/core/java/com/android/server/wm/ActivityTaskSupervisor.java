@@ -50,6 +50,7 @@ import static android.os.Process.SYSTEM_UID;
 import static android.os.Trace.TRACE_TAG_WINDOW_MANAGER;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.INVALID_DISPLAY;
+import static android.view.WindowManager.TRANSIT_START_LOCK_TASK_MODE;
 import static android.view.WindowManager.TRANSIT_TO_BACK;
 import static android.view.WindowManager.TRANSIT_TO_FRONT;
 
@@ -359,8 +360,18 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
     /**
      * Flag indicating whether we're currently waiting for the previous top activity to handle the
      * loss of the state and report back before making new activity top resumed.
+     * TODO b/417956804 - Remove it along with the flag removal
      */
     private boolean mTopResumedActivityWaitingForPrev;
+
+    /**
+     * The previous top activity that we're currently waiting for. Allowing it to handle the
+     * loss of the state and report back before making new activity top resumed.
+     */
+    private ActivityRecord mWaitingTopResumedLostActivity;
+
+    /** Whether a process state update of top resumed activity is deferred. */
+    private boolean mHasPendingTopResumedProcessState;
 
     /** The target root task bounds for the picture-in-picture mode changed that we need to
      * report to the application */
@@ -899,8 +910,32 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                     || task.mLockTaskAuth == LOCK_TASK_AUTH_LAUNCHABLE_PRIV
                     || (task.mLockTaskAuth == LOCK_TASK_AUTH_ALLOWLISTED
                             && lockTaskController.getLockTaskModeState()
-                                    == LOCK_TASK_MODE_LOCKED)) {
-                lockTaskController.startLockTaskMode(task, false, 0 /* blank UID */);
+                    == LOCK_TASK_MODE_LOCKED)) {
+
+                if (DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_ENTERPRISE_BUGFIX.isTrue()
+                        && task.mTransitionController.isShellTransitionsEnabled()) {
+                    final Transition transition = new Transition(TRANSIT_START_LOCK_TASK_MODE,
+                            0 /* flags */,
+                            task.mTransitionController, mWindowManager.mSyncEngine);
+                    task.mTransitionController.startCollectOrQueue(transition,
+                            (deferred) -> {
+                                final ActionChain chain = mService.mChainTracker.start(
+                                        "realStartActivity",
+                                        transition);
+                                task.mTransitionController.requestStartTransition(transition, task,
+                                        null /* remoteTransition */, null /* displayChange */);
+                                chain.collect(task);
+                                // When starting lock task mode the root task must be in front and
+                                // focused
+                                lockTaskController.startLockTaskMode(task, false,
+                                        0 /* blank UID */);
+                                transition.setReady(task, true);
+                                mService.mChainTracker.end();
+                            });
+                } else {
+                    lockTaskController.startLockTaskMode(task, false,
+                            0 /* blank UID */);
+                }
             }
 
             final RemoteException e = tryRealStartActivityInner(
@@ -1031,7 +1066,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                 results, newIntents, r.takeSceneTransitionInfo(), isTransitionForward,
                 proc.createProfilerInfoIfNeeded(), r.assistToken, activityClientController,
                 r.shareableActivityToken, r.getLaunchedFromBubble(), fragmentToken,
-                r.initialCallerInfoAccessToken, activityWindowInfo);
+                r.initialCallerInfoAccessToken, activityWindowInfo, r.getDisplayId());
 
         // Set desired final state.
         final ActivityLifecycleItem lifecycleItem;
@@ -1118,6 +1153,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         if (app != null && mService.mHomeProcess != app) {
             scheduleStartHome("homeChanged");
             mService.mHomeProcess = app;
+            mService.mActivityStateUpdater.setHomeProcessAsync(app);
         }
     }
 
@@ -1282,6 +1318,15 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             return false;
         }
 
+        if (DesktopExperienceFlags.ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT.isTrue()
+                && DesktopExperienceFlags.ENABLE_MIRROR_DISPLAY_NO_ACTIVITY.isTrue()) {
+            if (!displayContent.mDisplay.canHostTasks()) {
+                Slog.w(TAG, "Launch on display check: activity launch is not allowed on a "
+                        + "display that cannot host tasks");
+                return false;
+            }
+        }
+
         // Check if the caller has enough privileges to embed activities and launch to private
         // displays.
         final int startAnyPerm = mService.checkPermission(INTERNAL_SYSTEM_WINDOW, callingPid,
@@ -1354,16 +1399,11 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         if (displayId == DEFAULT_DISPLAY || displayId == INVALID_DISPLAY)  {
             return Context.DEVICE_ID_DEFAULT;
         }
-        if (mVirtualDeviceManagerInternal == null) {
-            if (mService.mHasCompanionDeviceSetupFeature) {
-                mVirtualDeviceManagerInternal =
-                        LocalServices.getService(VirtualDeviceManagerInternal.class);
-            }
-            if (mVirtualDeviceManagerInternal == null) {
-                return Context.DEVICE_ID_DEFAULT;
-            }
+        var virtualDeviceManagerInternal = getVirtualDeviceManagerInternal();
+        if (virtualDeviceManagerInternal == null) {
+            return Context.DEVICE_ID_DEFAULT;
         }
-        return mVirtualDeviceManagerInternal.getDeviceIdForDisplayId(displayId);
+        return virtualDeviceManagerInternal.getDeviceIdForDisplayId(displayId);
     }
 
     boolean isDeviceOwnerUid(int displayId, int callingUid) {
@@ -1372,6 +1412,17 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             return false;
         }
         return mVirtualDeviceManagerInternal.getDeviceOwnerUid(deviceId) == callingUid;
+    }
+
+    @Nullable
+    Intent createAutomatedAppLaunchWarningIntent(String packageName, int userId,
+            String callingPackageName, int displayId) {
+        var virtualDeviceManagerInternal = getVirtualDeviceManagerInternal();
+        if (virtualDeviceManagerInternal == null) {
+            return null;
+        }
+        return virtualDeviceManagerInternal.createAutomatedAppLaunchWarningIntent(
+                packageName, userId, callingPackageName, displayId);
     }
 
     private AppOpsManager getAppOpsManager() {
@@ -1386,6 +1437,14 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             mPermissionManager = mService.mContext.getSystemService(PermissionManager.class);
         }
         return mPermissionManager;
+    }
+
+    private VirtualDeviceManagerInternal getVirtualDeviceManagerInternal() {
+        if (mVirtualDeviceManagerInternal == null && mService.mHasCompanionDeviceSetupFeature) {
+            mVirtualDeviceManagerInternal =
+                    LocalServices.getService(VirtualDeviceManagerInternal.class);
+        }
+        return mVirtualDeviceManagerInternal;
     }
 
     BackgroundActivityStartController getBackgroundActivityLaunchController() {
@@ -1892,7 +1951,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                 mService.mAmInternal, task.mUserId, component, new Intent(baseIntent));
         mService.mH.sendMessage(msg);
 
-        if (!killProcess) {
+        if (!killProcess || task.mKillProcessesOnDestroyed) {
             return;
         }
         // Give a chance for the client to handle Activity#onStop(). The timeout waits for
@@ -2368,6 +2427,17 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         }
     }
 
+    /** This is only used for switching between resumed activities without activity state change. */
+    private void updateTopResumedProcessState() {
+        if (mTopResumedActivity == null || mTopResumedActivity.app == null) {
+            return;
+        }
+        mTopResumedActivity.app.updateProcessInfo(
+                false /* updateServiceConnectionActivities */, true /* activityChange */,
+                false /* updateOomAdj */, true /* addPendingTopUid */);
+        mService.updateOomAdj();
+    }
+
     /**
      * Updates the record of top resumed activity when it changes and handles reporting of the
      * state changes to previous and new top activities. It will immediately dispatch top resumed
@@ -2402,10 +2472,11 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
         // If the previous top is null, there should be activity state change from it, Then the
         // process state should also have been updated so no need to update again.
         if (mTopResumedActivity != null && prevTopActivity != null) {
-            if (mTopResumedActivity.app != null) {
-                mTopResumedActivity.app.addToPendingTop();
+            if (readyToResume()) {
+                updateTopResumedProcessState();
+            } else {
+                mHasPendingTopResumedProcessState = true;
             }
-            mService.updateOomAdj();
         }
         // Update the last resumed activity and focused app when the top resumed activity changed
         // because the new top resumed activity might be already resumed and thus won't have
@@ -2430,23 +2501,45 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
             return;
         }
 
-        // mTopResumedActivityWaitingForPrev == true at this point would mean that an activity
-        // before the prevTopActivity one hasn't reported back yet. So server never sent the top
-        // resumed state change message to prevTopActivity.
-        if (!mTopResumedActivityWaitingForPrev && readyToResume()
-                && mLastReportedTopResumedActivity.scheduleTopResumedActivityChanged(
-                        false /* onTop */)) {
-            scheduleTopResumedStateLossTimeout(mLastReportedTopResumedActivity);
-            mTopResumedActivityWaitingForPrev = true;
-            mLastReportedTopResumedActivity = null;
+        if (com.android.window.flags.Flags.fixRapidTopResumedSwitch()) {
+            // mWaitingTopResumedLostActivity != null at this point would mean that an activity
+            // before the prevTopActivity one hasn't reported back yet. So server never sent the top
+            // resumed state change message to prevTopActivity.
+            if (mWaitingTopResumedLostActivity == null && readyToResume()
+                    && mLastReportedTopResumedActivity.scheduleTopResumedActivityChanged(
+                    false /* onTop */)) {
+                scheduleTopResumedStateLossTimeout(mLastReportedTopResumedActivity);
+                mWaitingTopResumedLostActivity = mLastReportedTopResumedActivity;
+                mLastReportedTopResumedActivity = null;
+            }
+        } else {
+            // mTopResumedActivityWaitingForPrev == true at this point would mean that an activity
+            // before the prevTopActivity one hasn't reported back yet. So server never sent the top
+            // resumed state change message to prevTopActivity.
+            if (!mTopResumedActivityWaitingForPrev && readyToResume()
+                    && mLastReportedTopResumedActivity.scheduleTopResumedActivityChanged(
+                    false /* onTop */)) {
+                scheduleTopResumedStateLossTimeout(mLastReportedTopResumedActivity);
+                mTopResumedActivityWaitingForPrev = true;
+                mLastReportedTopResumedActivity = null;
+            }
         }
     }
 
     /** Schedule top resumed state change if previous top activity already reported back. */
     private void scheduleTopResumedActivityStateIfNeeded() {
-        if (mTopResumedActivity != null && !mTopResumedActivityWaitingForPrev && readyToResume()) {
-            mTopResumedActivity.scheduleTopResumedActivityChanged(true /* onTop */);
-            mLastReportedTopResumedActivity = mTopResumedActivity;
+        if (com.android.window.flags.Flags.fixRapidTopResumedSwitch()) {
+            if (mTopResumedActivity != null && mWaitingTopResumedLostActivity == null
+                    && readyToResume()) {
+                mTopResumedActivity.scheduleTopResumedActivityChanged(true /* onTop */);
+                mLastReportedTopResumedActivity = mTopResumedActivity;
+            }
+        } else {
+            if (mTopResumedActivity != null && !mTopResumedActivityWaitingForPrev
+                    && readyToResume()) {
+                mTopResumedActivity.scheduleTopResumedActivityChanged(true /* onTop */);
+                mLastReportedTopResumedActivity = mTopResumedActivity;
+            }
         }
     }
 
@@ -2465,16 +2558,32 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
      * Handle a loss of top resumed state by an activity - update internal state and inform next top
      * activity if needed.
      */
-    void handleTopResumedStateReleased(boolean timeout) {
+    void handleTopResumedStateReleasedIfNeeded(ActivityRecord r, boolean timeout) {
+        if (com.android.window.flags.Flags.fixRapidTopResumedSwitch()) {
+            if (mWaitingTopResumedLostActivity == null || mWaitingTopResumedLostActivity != r) {
+                return;
+            }
+
+            if (!timeout && r.isState(PAUSING)) {
+                // Do not handle the top-resumed-state-lost if the activity is currently pausing to
+                // prevent rapid top-resumed activity switch.
+                return;
+            }
+        }
+
         ProtoLog.v(WM_DEBUG_STATES, "Top resumed state released %s",
                     (timeout ? "(due to timeout)" : "(transition complete)"));
 
         mHandler.removeMessages(TOP_RESUMED_STATE_LOSS_TIMEOUT_MSG);
-        if (!mTopResumedActivityWaitingForPrev) {
-            // Top resumed activity state loss already handled.
-            return;
+        if (com.android.window.flags.Flags.fixRapidTopResumedSwitch()) {
+            mWaitingTopResumedLostActivity = null;
+        } else {
+            if (!mTopResumedActivityWaitingForPrev) {
+                // Top resumed activity state loss already handled.
+                return;
+            }
+            mTopResumedActivityWaitingForPrev = false;
         }
-        mTopResumedActivityWaitingForPrev = false;
         scheduleTopResumedActivityStateIfNeeded();
     }
 
@@ -2633,7 +2742,11 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
     void endActivityVisibilityUpdate() {
         mVisibilityTransactionDepth--;
         if (mVisibilityTransactionDepth == 0) {
-            computeProcessActivityStateBatch();
+            // Multiple OomAdjuster affecting state changes can occur, wrap those state changes in
+            // a BatchSession.
+            try (var unused = mService.mActivityStateUpdater.startBatchSession()) {
+                computeProcessActivityStateBatch();
+            }
         }
     }
 
@@ -2698,6 +2811,10 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
     void endDeferResume() {
         mDeferResumeCount--;
         if (readyToResume()) {
+            if (mHasPendingTopResumedProcessState) {
+                mHasPendingTopResumedProcessState = false;
+                updateTopResumedProcessState();
+            }
             if (mLastReportedTopResumedActivity != null
                     && mTopResumedActivity != mLastReportedTopResumedActivity) {
                 scheduleTopResumedActivityStateLossIfNeeded();
@@ -2825,7 +2942,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                 case TOP_RESUMED_STATE_LOSS_TIMEOUT_MSG: {
                     final ActivityRecord r = (ActivityRecord) msg.obj;
                     Slog.w(TAG, "Activity top resumed state loss timeout for " + r);
-                    handleTopResumedStateReleased(true /* timeout */);
+                    handleTopResumedStateReleasedIfNeeded(r, true /* timeout */);
                 } break;
                 default:
                     return false;
@@ -2898,8 +3015,7 @@ public class ActivityTaskSupervisor implements RecentTasks.Callbacks {
                     // activity from whatever is started from the recents activity, so move
                     // the home root task forward.
                     // TODO (b/115289124): Multi-display supports for recents.
-                    mRootWindowContainer.getDefaultTaskDisplayArea().moveHomeRootTaskToFront(
-                            "startActivityFromRecents");
+                    task.getTaskDisplayArea().moveHomeRootTaskToFront("startActivityFromRecents");
                 }
 
                 // If the user must confirm credentials (e.g. when first launching a work

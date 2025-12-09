@@ -19,6 +19,7 @@ package com.android.systemui.statusbar.notification.collection.render
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.flags.DisableSceneContainer
 import com.android.systemui.log.logcatLogBuffer
 import com.android.systemui.statusbar.notification.NotificationSectionsFeatureManager
 import com.android.systemui.statusbar.notification.OnboardingAffordanceManager
@@ -38,6 +39,7 @@ import com.android.systemui.statusbar.notification.stack.BUCKET_SILENT
 import com.android.systemui.statusbar.notification.stack.PriorityBucket
 import com.android.systemui.util.mockito.any
 import com.android.systemui.util.mockito.mock
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -114,13 +116,20 @@ class NodeSpecBuilderTest : SysuiTestCase() {
         )
     }
 
-    @Test(expected = RuntimeException::class)
+    @Test
     fun testMultipleSectionsWithSameControllerNonConsecutive() {
         whenever(sectionHeaderVisibilityProvider.sectionHeadersVisible).thenReturn(true)
-        checkOutput(
-            listOf(notif(0, section0), notif(1, section1), notif(2, section3), notif(3, section1)),
-            tree(),
-        )
+        assertThrows(RuntimeException::class.java) {
+            checkOutput(
+                listOf(
+                    notif(0, section0),
+                    notif(1, section1),
+                    notif(2, section3),
+                    notif(3, section1),
+                ),
+                tree(),
+            )
+        }
     }
 
     @Test
@@ -141,6 +150,7 @@ class NodeSpecBuilderTest : SysuiTestCase() {
     }
 
     @Test
+    @DisableSceneContainer
     fun testSimpleMappingWithMedia() {
         whenever(sectionHeaderVisibilityProvider.sectionHeadersVisible).thenReturn(true)
         // WHEN media controls are enabled
@@ -249,16 +259,18 @@ class NodeSpecBuilderTest : SysuiTestCase() {
         )
     }
 
-    @Test(expected = RuntimeException::class)
+    @Test
     fun testRepeatedSectionsThrow() {
         whenever(sectionHeaderVisibilityProvider.sectionHeadersVisible).thenReturn(true)
-        checkOutput(
-            // GIVEN a malformed list where sections are not contiguous
-            listOf(notif(0, section0), notif(1, section1), notif(2, section0)),
+        assertThrows(RuntimeException::class.java) {
+            checkOutput(
+                // GIVEN a malformed list where sections are not contiguous
+                listOf(notif(0, section0), notif(1, section1), notif(2, section0)),
 
-            // THEN an exception is thrown
-            tree(),
-        )
+                // THEN an exception is thrown
+                tree(),
+            )
+        }
     }
 
     private fun checkOutput(list: List<ListEntry>, desiredTree: NodeSpecImpl) {

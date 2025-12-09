@@ -16,7 +16,6 @@
 
 package com.android.systemui.statusbar;
 
-import static android.app.admin.DevicePolicyManager.DEVICE_OWNER_TYPE_FINANCED;
 import static android.app.admin.DevicePolicyResources.Strings.SystemUi.KEYGUARD_MANAGEMENT_DISCLOSURE;
 import static android.app.admin.DevicePolicyResources.Strings.SystemUi.KEYGUARD_NAMED_MANAGEMENT_DISCLOSURE;
 import static android.hardware.biometrics.BiometricFaceConstants.FACE_ACQUIRED_START;
@@ -24,6 +23,7 @@ import static android.hardware.biometrics.BiometricFaceConstants.FACE_ACQUIRED_T
 import static android.hardware.biometrics.BiometricFaceConstants.FACE_ERROR_TIMEOUT;
 import static android.hardware.biometrics.BiometricSourceType.FACE;
 import static android.hardware.biometrics.BiometricSourceType.FINGERPRINT;
+import static android.security.Flags.secureLockDevice;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
@@ -43,6 +43,7 @@ import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewCont
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_LOGOUT;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_OWNER_INFO;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_PERSISTENT_UNLOCK_MESSAGE;
+import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_SECURE_LOCK_DEVICE;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_TRUST;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_USER_LOCKED;
 import static com.android.systemui.keyguard.KeyguardIndicationRotateTextViewController.INDICATION_TYPE_WATCH_DISCONNECTED;
@@ -69,7 +70,6 @@ import android.os.Message;
 import android.os.RemoteException;
 import android.os.UserHandle;
 import android.os.UserManager;
-import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.text.format.Formatter;
@@ -115,6 +115,7 @@ import com.android.systemui.log.core.LogLevel;
 import com.android.systemui.plugins.FalsingManager;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.res.R;
+import com.android.systemui.securelockdevice.domain.interactor.SecureLockDeviceInteractor;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.statusbar.phone.KeyguardBypassController;
 import com.android.systemui.statusbar.phone.KeyguardIndicationTextView;
@@ -125,6 +126,8 @@ import com.android.systemui.util.AlarmTimeout;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.wakelock.SettableWakeLock;
 import com.android.systemui.util.wakelock.WakeLock;
+
+import dagger.Lazy;
 
 import java.io.PrintWriter;
 import java.text.NumberFormat;
@@ -167,6 +170,7 @@ public class KeyguardIndicationController {
     private final KeyguardLogger mKeyguardLogger;
     private final UserTracker mUserTracker;
     private final BouncerMessageInteractor mBouncerMessageInteractor;
+    private final Lazy<SecureLockDeviceInteractor> mSecureLockDeviceInteractor;
 
     private ViewGroup mIndicationArea;
     private KeyguardIndicationTextView mTopIndicationView;
@@ -325,7 +329,8 @@ public class KeyguardIndicationController {
             BiometricMessageInteractor biometricMessageInteractor,
             DeviceEntryFingerprintAuthInteractor deviceEntryFingerprintAuthInteractor,
             DeviceEntryFaceAuthInteractor deviceEntryFaceAuthInteractor,
-            UserLogoutInteractor userLogoutInteractor
+            UserLogoutInteractor userLogoutInteractor,
+            Lazy<SecureLockDeviceInteractor> secureLockDeviceInteractor
     ) {
         mContext = context;
         mBroadcastDispatcher = broadcastDispatcher;
@@ -358,7 +363,7 @@ public class KeyguardIndicationController {
         mDeviceEntryFingerprintAuthInteractor = deviceEntryFingerprintAuthInteractor;
         mDeviceEntryFaceAuthInteractor = deviceEntryFaceAuthInteractor;
         mUserLogoutInteractor = userLogoutInteractor;
-
+        mSecureLockDeviceInteractor = secureLockDeviceInteractor;
 
         mFaceAcquiredMessageDeferral = faceHelpMessageDeferral.create();
 
@@ -539,6 +544,9 @@ public class KeyguardIndicationController {
         if (showLockedByYourWatchKeyguardIndicator()) {
             updateLockScreenWatchDisconnectedMsg(userId);
         }
+        if (secureLockDevice()) {
+            updateLockScreenSecureLockDeviceMsg();
+        }
     }
 
     private void updateOrganizedOwnedDevice() {
@@ -589,24 +597,11 @@ public class KeyguardIndicationController {
     private CharSequence getDisclosureText(@Nullable CharSequence organizationName) {
         final Resources packageResources = mContext.getResources();
 
-        // TODO(b/259908270): remove and inline
-        boolean isFinanced;
-        if (DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_DEVICE_POLICY_MANAGER,
-                DevicePolicyManager.ADD_ISFINANCED_DEVICE_FLAG,
-                DevicePolicyManager.ADD_ISFINANCED_FEVICE_DEFAULT)) {
-            isFinanced = mDevicePolicyManager.isFinancedDevice();
-        } else {
-            isFinanced = mDevicePolicyManager.isDeviceManaged()
-                    && mDevicePolicyManager.getDeviceOwnerType(
-                    mDevicePolicyManager.getDeviceOwnerComponentOnAnyUser())
-                    == DEVICE_OWNER_TYPE_FINANCED;
-        }
-
         if (organizationName == null) {
             return mDevicePolicyManager.getResources().getString(
                     KEYGUARD_MANAGEMENT_DISCLOSURE,
                     () -> packageResources.getString(R.string.do_disclosure_generic));
-        } else if (isFinanced) {
+        } else if (mDevicePolicyManager.isFinancedDevice()) {
             return packageResources.getString(R.string.do_financed_disclosure_with_name,
                     organizationName);
         } else {
@@ -842,7 +837,6 @@ public class KeyguardIndicationController {
             mRotateTextViewController.hideIndication(INDICATION_TYPE_ADAPTIVE_AUTH);
         }
     }
-
     private void updateLockScreenWatchDisconnectedMsg(int userId) {
         final boolean deviceLocked = mAuthenticationFlags != null
                 && mAuthenticationFlags.isSomeAuthRequiredAfterWatchDisconnected();
@@ -858,6 +852,23 @@ public class KeyguardIndicationController {
                     true);
         } else {
             mRotateTextViewController.hideIndication(INDICATION_TYPE_WATCH_DISCONNECTED);
+        }
+    }
+
+    private void updateLockScreenSecureLockDeviceMsg() {
+        boolean isSecureLockDeviceEnabled = secureLockDevice()
+                && mSecureLockDeviceInteractor.get().isSecureLockDeviceEnabled().getValue();
+        if (isSecureLockDeviceEnabled) {
+            mRotateTextViewController.updateIndication(
+                    INDICATION_TYPE_SECURE_LOCK_DEVICE,
+                    new KeyguardIndication.Builder()
+                            .setMessage(mContext.getString(
+                                    R.string.keyguard_indication_after_secure_lock_device))
+                            .setTextColor(getInitialTextColorState())
+                            .build(),
+                    true);
+        } else {
+            mRotateTextViewController.hideIndication(INDICATION_TYPE_SECURE_LOCK_DEVICE);
         }
     }
 

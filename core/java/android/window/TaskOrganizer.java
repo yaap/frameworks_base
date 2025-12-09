@@ -185,6 +185,16 @@ public class TaskOrganizer extends WindowOrganizer {
     @BinderThread
     public void onImeDrawnOnTask(int taskId) {}
 
+    /** @hide */
+    @BinderThread
+    public void onTransitionReady(@NonNull IBinder iBinder, @NonNull TransitionInfo transitionInfo,
+            @NonNull SurfaceControl.Transaction t, @NonNull SurfaceControl.Transaction finishT) {}
+
+    /** @hide */
+    @BinderThread
+    public void requestStartTransition(@NonNull IBinder iBinder,
+            @NonNull TransitionRequestInfo request) {}
+
     /**
      * @deprecated Use {@link #createRootTask(CreateRootTaskRequest)}
      * @hide
@@ -311,6 +321,37 @@ public class TaskOrganizer extends WindowOrganizer {
     }
 
     /**
+     * Set layers to be excluded when taking a task snapshot.
+     *
+     * Warning: MUST NOT pass layers that are managed by the Window Manager (e.g., from a Task or
+     * Activity). Doing so may cause the corresponding layer to be destroyed when
+     * clearExcludeLayersFromTaskSnapshot is called.
+     * @hide
+     */
+    @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS)
+    public void setExcludeLayersFromTaskSnapshot(@NonNull WindowContainerToken task,
+            SurfaceControl[] layers) {
+        try {
+            mTaskOrganizerController.setExcludeLayersFromTaskSnapshot(task, layers);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Clears all layers that were set for exclusion via setExcludeLayersFromTaskSnapshot.
+     * @hide
+     */
+    @RequiresPermission(android.Manifest.permission.MANAGE_ACTIVITY_TASKS)
+    public void clearExcludeLayersFromTaskSnapshot(@NonNull WindowContainerToken task) {
+        try {
+            mTaskOrganizerController.clearExcludeLayersFromTaskSnapshot(task);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * Gets the executor to run callbacks on.
      * @hide
      */
@@ -363,6 +404,18 @@ public class TaskOrganizer extends WindowOrganizer {
         @Override
         public void onImeDrawnOnTask(int taskId) {
             mExecutor.execute(() -> TaskOrganizer.this.onImeDrawnOnTask(taskId));
+        }
+
+        @Override
+        public void onTransitionReady(IBinder iBinder, TransitionInfo transitionInfo,
+                SurfaceControl.Transaction t, SurfaceControl.Transaction finishT) {
+            mExecutor.execute(() -> TaskOrganizer.this.onTransitionReady(
+                    iBinder, transitionInfo, t, finishT));
+        }
+
+        @Override
+        public void requestStartTransition(IBinder iBinder, TransitionRequestInfo request) {
+            mExecutor.execute(() -> TaskOrganizer.this.requestStartTransition(iBinder, request));
         }
     };
 

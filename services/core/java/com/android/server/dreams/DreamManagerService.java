@@ -24,8 +24,10 @@ import static android.os.BatteryManager.EXTRA_CHARGING_STATUS;
 import static android.service.dreams.Flags.allowDreamWhenPostured;
 import static android.service.dreams.Flags.allowDreamWithChargeLimit;
 import static android.service.dreams.Flags.cleanupDreamSettingsOnUninstall;
+import static android.service.dreams.Flags.disallowDreamOnAutoProjection;
 import static android.service.dreams.Flags.dreamHandlesBeingObscured;
 import static android.service.dreams.Flags.dreamsV2;
+import static android.service.dreams.Flags.wakeOnStoppingDoze;
 
 import static com.android.server.wm.ActivityInterceptorCallback.DREAM_MANAGER_ORDERED_ID;
 
@@ -35,6 +37,7 @@ import android.annotation.Nullable;
 import android.app.ActivityManager;
 import android.app.IAppTask;
 import android.app.TaskInfo;
+import android.app.UiModeManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -136,6 +139,7 @@ public final class DreamManagerService extends SystemService {
     private final Handler mHandler;
     private final DreamController mController;
     private final PowerManager mPowerManager;
+    private final UiModeManager mUiModeManager;
     private final PowerManagerInternal mPowerManagerInternal;
     private final BatteryManagerInternal mBatteryManagerInternal;
     private final PowerManager.WakeLock mDozeWakeLock;
@@ -264,28 +268,29 @@ public final class DreamManagerService extends SystemService {
     }
 
     public DreamManagerService(Context context) {
-        this(context, new DreamHandler(FgThread.get().getLooper()));
+        this(new DefaultInjector(context, new DreamHandler(FgThread.get().getLooper())));
     }
 
     @VisibleForTesting
-    DreamManagerService(Context context, Handler handler) {
-        super(context);
-        mContext = context;
-        mHandler = handler;
-        mController = new DreamController(context, mHandler, mControllerListener);
+    DreamManagerService(Injector injector) {
+        super(injector.getContext());
+        mContext = injector.getContext();
+        mHandler = injector.getHandler();
+        mController = injector.getDreamController(mControllerListener);
 
-        mPowerManager = (PowerManager)context.getSystemService(Context.POWER_SERVICE);
+        mPowerManager = mContext.getSystemService(PowerManager.class);
         mPowerManagerInternal = getLocalService(PowerManagerInternal.class);
+        mUiModeManager = mContext.getSystemService(UiModeManager.class);
         mAtmInternal = getLocalService(ActivityTaskManagerInternal.class);
         mPmInternal = getLocalService(PackageManagerInternal.class);
-        mUserManager = context.getSystemService(UserManager.class);
+        mUserManager = mContext.getSystemService(UserManager.class);
         mDozeWakeLock = mPowerManager.newWakeLock(PowerManager.DOZE_WAKE_LOCK, DOZE_WAKE_LOCK_TAG);
-        mDozeConfig = new AmbientDisplayConfiguration(mContext);
+        mDozeConfig = injector.getDozeConfig();
         mUiEventLogger = new UiEventLoggerImpl();
         mDreamUiEventLogger = new DreamUiEventLoggerImpl(
                 mContext.getResources().getStringArray(R.array.config_loggable_dream_prefixes));
-        AmbientDisplayConfiguration adc = new AmbientDisplayConfiguration(mContext);
-        mAmbientDisplayComponent = ComponentName.unflattenFromString(adc.ambientDisplayComponent());
+        mAmbientDisplayComponent =
+                ComponentName.unflattenFromString(mDozeConfig.ambientDisplayComponent());
         mDreamsOnlyEnabledForDockUser =
                 mContext.getResources().getBoolean(R.bool.config_dreamsOnlyEnabledForDockUser);
         mDismissDreamOnActivityStart = mContext.getResources().getBoolean(
@@ -597,12 +602,20 @@ public final class DreamManagerService extends SystemService {
     }
 
     /** Whether dreaming can start given user settings and the current dock/charge state. */
-    private boolean canStartDreamingInternal(boolean isScreenOn) {
+    @VisibleForTesting
+    boolean canStartDreamingInternal(boolean isScreenOn) {
         synchronized (mLock) {
             // Can't start dreaming if we are already dreaming and the dream has focus. If we are
             // dreaming but the dream does not have focus, then the dream can be brought to the
             // front so it does have focus.
             if (isScreenOn && isDreamingInternal() && dreamIsFrontmost()) {
+                return false;
+            }
+
+            if (disallowDreamOnAutoProjection()
+                    && (mUiModeManager.getActiveProjectionTypes()
+                        & UiModeManager.PROJECTION_TYPE_AUTOMOTIVE) != 0) {
+                // Don't dream when connected to Android Auto unit as dreams can't start anyways.
                 return false;
             }
 
@@ -690,7 +703,8 @@ public final class DreamManagerService extends SystemService {
         }
     }
 
-    private void startDreamInternal(boolean doze, String reason) {
+    @VisibleForTesting
+    void startDreamInternal(boolean doze, String reason) {
         final int userId = ActivityManager.getCurrentUser();
         final ComponentName dream = chooseDreamForUser(doze, userId);
         if (dream != null) {
@@ -704,30 +718,29 @@ public final class DreamManagerService extends SystemService {
         stopDreamInternal(false, "stopping dream from shell");
     }
 
-    private void stopDreamInternal(boolean immediate, String reason) {
+    @VisibleForTesting
+    void stopDreamInternal(boolean immediate, String reason) {
         synchronized (mLock) {
             stopDreamLocked(immediate, reason);
         }
     }
 
-    private void startDozingInternal(IBinder token, int screenState,
-            @Display.StateReason int reason, float screenBrightnessFloat, int screenBrightnessInt,
+    @VisibleForTesting
+    void startDozingInternal(IBinder token, int screenState,
+            @Display.StateReason int reason, float screenBrightness,
             boolean useNormalBrightnessForDoze) {
         Slog.d(TAG, "Dream requested to start dozing: " + token
                 + ", screenState=" + Display.stateToString(screenState)
                 + ", reason=" + Display.stateReasonToString(reason)
-                + ", screenBrightnessFloat=" + screenBrightnessFloat
-                + ", screenBrightnessInt=" + screenBrightnessInt
+                + ", screenBrightness=" + screenBrightness
                 + ", useNormalBrightnessForDoze=" + useNormalBrightnessForDoze);
 
         synchronized (mLock) {
             if (mCurrentDream != null && mCurrentDream.token == token && mCurrentDream.canDoze) {
                 mCurrentDream.dozeScreenState = screenState;
-                mCurrentDream.dozeScreenBrightness = screenBrightnessInt;
-                mCurrentDream.dozeScreenBrightnessFloat = screenBrightnessFloat;
+                mCurrentDream.dozeScreenBrightness = screenBrightness;
                 mPowerManagerInternal.setDozeOverrideFromDreamManager(
-                        screenState, reason, screenBrightnessFloat, screenBrightnessInt,
-                        useNormalBrightnessForDoze);
+                        screenState, reason, screenBrightness, useNormalBrightnessForDoze);
                 if (!mCurrentDream.isDozing) {
                     mCurrentDream.isDozing = true;
                     mDozeWakeLock.acquire();
@@ -749,7 +762,6 @@ public final class DreamManagerService extends SystemService {
                         Display.STATE_UNKNOWN,
                         Display.STATE_REASON_DREAM_MANAGER,
                         PowerManager.BRIGHTNESS_INVALID_FLOAT,
-                        PowerManager.BRIGHTNESS_DEFAULT,
                         /* useNormalBrightnessForDoze= */ false);
             }
         }
@@ -1000,6 +1012,12 @@ public final class DreamManagerService extends SystemService {
                     mCurrentDream.name.flattenToString());
         }
         if (mCurrentDream.isDozing) {
+            if (wakeOnStoppingDoze()) {
+                mPowerManager.wakeUp(
+                        SystemClock.uptimeMillis(),
+                        PowerManager.WAKE_REASON_DOZE_STOPPED,
+                        "android.server.dreams:requestAwaken");
+            }
             mDozeWakeLock.release();
         }
         mCurrentDream = null;
@@ -1076,6 +1094,48 @@ public final class DreamManagerService extends SystemService {
             writePulseGestureEnabled();
         }
     };
+
+    /**
+     * A helper interface to inject dependencies into {@link DreamManagerService}.
+     * @hide
+     */
+    @VisibleForTesting
+    interface Injector {
+        Context getContext();
+        Handler getHandler();
+        AmbientDisplayConfiguration getDozeConfig();
+        DreamController getDreamController(DreamController.Listener controllerListener);
+    }
+
+    private static final class DefaultInjector implements Injector {
+        private final Context mContext;
+        private final Handler mHandler;
+
+        DefaultInjector(Context context, Handler handler) {
+            mContext = context;
+            mHandler = handler;
+        }
+
+        @Override
+        public Context getContext() {
+            return mContext;
+        }
+
+        @Override
+        public Handler getHandler() {
+            return mHandler;
+        }
+
+        @Override
+        public AmbientDisplayConfiguration getDozeConfig() {
+            return new AmbientDisplayConfiguration(mContext);
+        }
+
+        @Override
+        public DreamController getDreamController(DreamController.Listener controllerListener) {
+            return new DreamController(mContext, mHandler, controllerListener);
+        }
+    }
 
     /**
      * Handler for asynchronous operations performed by the dream manager.
@@ -1307,8 +1367,7 @@ public final class DreamManagerService extends SystemService {
         @Override // Binder call
         public void startDozing(
                 IBinder token, int screenState, @Display.StateReason int reason,
-                float screenBrightnessFloat, int screeBrightnessInt,
-                boolean useNormalBrightnessForDoze) {
+                float screenBrightness, boolean useNormalBrightnessForDoze) {
             // Requires no permission, called by Dream from an arbitrary process.
             if (token == null) {
                 throw new IllegalArgumentException("token must not be null");
@@ -1316,8 +1375,8 @@ public final class DreamManagerService extends SystemService {
 
             final long ident = Binder.clearCallingIdentity();
             try {
-                startDozingInternal(token, screenState, reason, screenBrightnessFloat,
-                        screeBrightnessInt, useNormalBrightnessForDoze);
+                startDozingInternal(token, screenState, reason, screenBrightness,
+                        useNormalBrightnessForDoze);
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }
@@ -1326,8 +1385,7 @@ public final class DreamManagerService extends SystemService {
         @Override // Binder call
         public void startDozingOneway(
                 IBinder token, int screenState, @Display.StateReason int reason,
-                float screenBrightnessFloat, int screeBrightnessInt,
-                boolean useNormalBrightnessForDoze) {
+                float screenBrightness, boolean useNormalBrightnessForDoze) {
             // Requires no permission, called by Dream from an arbitrary process.
             if (token == null) {
                 throw new IllegalArgumentException("token must not be null");
@@ -1335,8 +1393,8 @@ public final class DreamManagerService extends SystemService {
 
             final long ident = Binder.clearCallingIdentity();
             try {
-                startDozingInternal(token, screenState, reason, screenBrightnessFloat,
-                        screeBrightnessInt, useNormalBrightnessForDoze);
+                startDozingInternal(token, screenState, reason, screenBrightness,
+                        useNormalBrightnessForDoze);
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }
@@ -1528,8 +1586,7 @@ public final class DreamManagerService extends SystemService {
         public boolean isDozing = false;
         public boolean isWaking = false;
         public int dozeScreenState = Display.STATE_UNKNOWN;
-        public int dozeScreenBrightness = PowerManager.BRIGHTNESS_DEFAULT;
-        public float dozeScreenBrightnessFloat = PowerManager.BRIGHTNESS_INVALID_FLOAT;
+        public float dozeScreenBrightness = PowerManager.BRIGHTNESS_INVALID_FLOAT;
 
         DreamRecord(ComponentName name, int userId, boolean isPreview, boolean canDoze) {
             this.name = name;
@@ -1550,7 +1607,6 @@ public final class DreamManagerService extends SystemService {
                     + ", isWaking=" + isWaking
                     + ", dozeScreenState=" + dozeScreenState
                     + ", dozeScreenBrightness=" + dozeScreenBrightness
-                    + ", dozeScreenBrightnessFloat=" + dozeScreenBrightnessFloat
                     + '}';
         }
     }

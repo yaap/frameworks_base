@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onLayoutRectChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.android.systemui.common.ui.compose.load
@@ -65,7 +65,14 @@ fun BatteryWithChargeStatus(
         rememberViewModel(traceName = "BatteryWithPercent") { viewModelFactory.create() }
 
     val batteryHeight =
-        with(LocalDensity.current) { BatteryViewModel.STATUS_BAR_BATTERY_HEIGHT.toDp() }
+        with(LocalDensity.current) {
+            BatteryViewModel.getStatusBarBatteryHeight(LocalContext.current).toDp()
+        }
+
+    val textStyle =
+        with(LocalDensity.current) {
+            BatteryViewModel.getStatusBarBatteryTextStyle(LocalContext.current)
+        }
 
     var bounds by remember { mutableStateOf(Rect()) }
 
@@ -80,7 +87,7 @@ fun BatteryWithChargeStatus(
         val path = viewModel.batteryFrame
 
         val colorProvider = {
-            if (isDarkProvider().isDark(bounds)) {
+            if (isDarkProvider().isDarkTheme(bounds)) {
                 viewModel.colorProfile.dark
             } else {
                 viewModel.colorProfile.light
@@ -102,7 +109,7 @@ fun BatteryWithChargeStatus(
         if (shouldShowPercent(showPercentMode, viewModel)) {
             // The text can just use the Default.fill color, since we don't want to colorize it
             val colorProducer = {
-                if (isDarkProvider().isDark(bounds)) {
+                if (isDarkProvider().isDarkTheme(bounds)) {
                     BatteryColors.DarkTheme.Default.fill
                 } else {
                     BatteryColors.LightTheme.Default.fill
@@ -117,11 +124,7 @@ fun BatteryWithChargeStatus(
 
             textToShow?.let {
                 Spacer(modifier.width(4.dp))
-                BasicText(
-                    text = it,
-                    color = colorProducer,
-                    style = MaterialTheme.typography.bodyMediumEmphasized,
-                )
+                BasicText(text = it, color = colorProducer, style = textStyle)
             }
         }
     }

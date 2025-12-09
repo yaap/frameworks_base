@@ -34,6 +34,8 @@ import android.platform.test.annotations.RequiresFlagsDisabled
 import android.platform.test.annotations.RequiresFlagsEnabled
 import android.platform.test.flag.junit.CheckFlagsRule
 import android.platform.test.flag.junit.DeviceFlagsValueProvider
+import android.provider.Settings
+import android.testing.TestableContext
 import android.util.ArraySet
 import android.util.MathUtils.sqrt
 import android.view.InputDevice
@@ -65,6 +67,7 @@ class MouseKeysInterceptorTest {
     companion object {
         const val DISPLAY_ID = 1
         const val DEVICE_ID = 123
+        const val VIRTUAL_DEVICE_ID = 456
         // This delay is required for key events to be sent and handled correctly.
         // The handler only performs a move/scroll event if it receives the key event
         // at INTERVAL_MILLIS (which happens in practice). Hence, we need this delay in the tests.
@@ -75,13 +78,6 @@ class MouseKeysInterceptorTest {
         // when the handler processes the initial key down event, satisfying the required
         // time interval (MOVE_REPEAT_DELAY_MILLS). It should be >= MOVE_REPEAT_DELAY_MILLS.
         const val KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER = 30L
-        // The maximum movement step, in pixels per interval, that the mouse pointer can reach when
-        // FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT is enabled. This directly corresponds to
-        // `mMaxMovementStep` in the MouseKeysInterceptor.
-        const val MAX_MOVEMENT_STEP = 10.0f
-        // The acceleration factor applied to the mouse pointer's movement step per interval.
-        // This directly corresponds to `mAcceleration` in the MouseKeysInterceptor.
-        const val ACCELERATION = 0.1f
         // The initial movement step for the mouse pointer before acceleration begins.
         // This directly corresponds to `INITIAL_MOUSE_POINTER_MOVEMENT_STEP` in the
         // MouseKeysInterceptor.
@@ -90,10 +86,14 @@ class MouseKeysInterceptorTest {
         // are repeated when a key is held down and FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT is enabled.
         // This directly corresponds to `INTERVAL_MILLIS_MOUSE_POINTER` in the MouseKeysInterceptor.
         const val MOVE_REPEAT_DELAY_MILLS = 25L
+        const val USER_ID = 0
+        const val USE_PRIMARY_KEYS = true
+        const val USE_NUMPAD_KEYS = false
     }
 
     private lateinit var mouseKeysInterceptor: MouseKeysInterceptor
     private lateinit var inputDevice: InputDevice
+    private lateinit var virtualInputDevice: InputDevice
 
     private val clock = OffsettableClock()
     private val testLooper = TestLooper { clock.now() }
@@ -101,6 +101,9 @@ class MouseKeysInterceptorTest {
 
     @get:Rule
     val mCheckFlagsRule: CheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule()
+
+    @get:Rule
+    val testableContext = TestableContext(ApplicationProvider.getApplicationContext<Context>())
 
     @Mock
     private lateinit var mockAms: AccessibilityManagerService
@@ -130,13 +133,16 @@ class MouseKeysInterceptorTest {
     @Throws(RemoteException::class)
     fun setUp() {
         MockitoAnnotations.initMocks(this)
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        testSession = InputManagerGlobal.createTestSession(iInputManager)
-        mockInputManager = InputManager(context)
 
-        inputDevice = createInputDevice(DEVICE_ID)
+        testSession = InputManagerGlobal.createTestSession(iInputManager)
+        mockInputManager = InputManager(testableContext)
+
+        inputDevice = createInputDevice(DEVICE_ID, /* isVirtual= */ false)
+        virtualInputDevice = createInputDevice(VIRTUAL_DEVICE_ID, /* isVirtual */ true)
         Mockito.`when`(iInputManager.getInputDevice(DEVICE_ID))
                 .thenReturn(inputDevice)
+        Mockito.`when`(iInputManager.getInputDevice(VIRTUAL_DEVICE_ID))
+            .thenReturn(virtualInputDevice)
 
         Mockito.`when`(mockVirtualDeviceManagerInternal.getDeviceIdsForUid(Mockito.anyInt()))
             .thenReturn(ArraySet(setOf(DEVICE_ID)))
@@ -152,12 +158,9 @@ class MouseKeysInterceptorTest {
             Mockito.any(VirtualMouseConfig::class.java)
         )).thenReturn(mockVirtualMouse)
 
-        Mockito.`when`(iInputManager.inputDeviceIds).thenReturn(intArrayOf(DEVICE_ID))
+        Mockito.`when`(iInputManager.inputDeviceIds)
+            .thenReturn(intArrayOf(DEVICE_ID, VIRTUAL_DEVICE_ID))
         Mockito.`when`(mockAms.traceManager).thenReturn(mockTraceManager)
-
-        mouseKeysInterceptor = MouseKeysInterceptor(mockAms, mockInputManager,
-                testLooper.looper, DISPLAY_ID, testTimeSource)
-        mouseKeysInterceptor.next = nextInterceptor
     }
 
     @After
@@ -168,8 +171,33 @@ class MouseKeysInterceptorTest {
         }
     }
 
+    /**
+     * Ensure that the MouseKeysInterceptor is created with the correct configuration for the
+     * specific test being run. This will prevent any race conditions between
+     * the ContentObserver correctly reading the primary keys settings and the test being run
+     * with a stale setting when mouseKeysInterceptor.onKeyEvent() is called.
+     * This will ensure the test is run with the correct primary keys setting.
+     * This function should be called at the beginning of each test.
+     */
+    private fun setupMouseKeysInterceptor(usePrimaryKeys: Boolean) {
+        val setting = if (usePrimaryKeys) 1 else 0
+        Settings.Secure.putIntForUser(testableContext.getContentResolver(),
+            Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_USE_PRIMARY_KEYS, setting, USER_ID)
+        Settings.Secure.putIntForUser(testableContext.getContentResolver(),
+            Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_MAX_SPEED, 5, USER_ID)
+        Settings.Secure.putFloatForUser(testableContext.getContentResolver(),
+            Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_ACCELERATION, 0.2f, USER_ID)
+
+        mouseKeysInterceptor = MouseKeysInterceptor(mockAms, testableContext,
+            testLooper.looper, DISPLAY_ID, testTimeSource, USER_ID)
+
+        mouseKeysInterceptor.next = nextInterceptor
+        mouseKeysInterceptor.mCreateVirtualMouseThread.join()
+    }
+
     @Test
     fun whenNonMouseKeyEventArrives_eventIsPassedToNextInterceptor() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         val downTime = clock.now()
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             KeyEvent.KEYCODE_Q, 0, 0, DEVICE_ID, 0)
@@ -177,15 +205,17 @@ class MouseKeysInterceptorTest {
         testLooper.dispatchAll()
 
         assertThat(nextInterceptor.events).hasSize(1)
-        assertThat(nextInterceptor.events.poll()).isEqualTo(downEvent)
+        verifyKeyEventsEqual(downEvent, nextInterceptor.events.poll()!!)
     }
 
     @Test
     @RequiresFlagsDisabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
     fun whenMouseDirectionalKeyIsPressed_relativeEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         // There should be some delay between the downTime of the key event and calling onKeyEvent
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.DIAGONAL_DOWN_LEFT_MOVE.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.DIAGONAL_DOWN_LEFT_MOVE.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
 
@@ -202,26 +232,29 @@ class MouseKeysInterceptorTest {
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
     fun whenMouseDirectionalKeyIsPressedWithFlagOn_relativeEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         // There should be some delay between the downTime of the key event and calling onKeyEvent
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.DIAGONAL_DOWN_LEFT_MOVE.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.DIAGONAL_DOWN_LEFT_MOVE.getKeyCodeValue(
+                USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
-        val expectedStepValue = INITIAL_STEP_BEFORE_ACCEL * (1.0f + ACCELERATION)
-
         mouseKeysInterceptor.onKeyEvent(downEvent, 0)
         testLooper.dispatchAll()
 
         // Verify the sendRelativeEvent method is called once and capture the arguments
+        val expectedStepValue = INITIAL_STEP_BEFORE_ACCEL * (1.0f + mouseKeysInterceptor.mAcceleration)
         verifyRelativeEvents(expectedX = floatArrayOf(-expectedStepValue / sqrt(2.0f)),
             expectedY = floatArrayOf(expectedStepValue / sqrt(2.0f)))
     }
 
     @Test
     fun whenClickKeyIsPressed_buttonEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         // There should be some delay between the downTime of the key event and calling onKeyEvent
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.LEFT_CLICK.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.LEFT_CLICK.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
         mouseKeysInterceptor.onKeyEvent(downEvent, 0)
@@ -239,8 +272,10 @@ class MouseKeysInterceptorTest {
 
     @Test
     fun whenHoldKeyIsPressed_buttonEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.HOLD.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.HOLD.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
         mouseKeysInterceptor.onKeyEvent(downEvent, 0)
@@ -255,8 +290,10 @@ class MouseKeysInterceptorTest {
 
     @Test
     fun whenReleaseKeyIsPressed_buttonEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.RELEASE.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.RELEASE.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
         mouseKeysInterceptor.onKeyEvent(downEvent, 0)
@@ -270,11 +307,14 @@ class MouseKeysInterceptorTest {
     }
 
     @Test
-    fun whenScrollToggleOn_scrollUpKeyIsPressed_scrollEventIsSent() {
+    fun whenScrollToggleOn_ScrollUpKeyIsPressed_scrollEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         // There should be some delay between the downTime of the key event and calling onKeyEvent
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
-        val keyCodeScrollToggle = MouseKeysInterceptor.MouseKeyEvent.SCROLL_TOGGLE.keyCodeValue
-        val keyCodeScroll = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.keyCodeValue
+        val keyCodeScrollToggle = MouseKeysInterceptor.MouseKeyEvent.SCROLL_TOGGLE.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
+        val keyCodeScroll = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
 
         val scrollToggleDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCodeScrollToggle, 0, 0, DEVICE_ID, 0)
@@ -292,11 +332,14 @@ class MouseKeysInterceptorTest {
     }
 
     @Test
-    fun whenScrollToggleOn_scrollRightKeyIsPressed_scrollEventIsSent() {
+    fun whenScrollToggleOn_ScrollRightKeyIsPressed_scrollEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         // There should be some delay between the downTime of the key event and calling onKeyEvent
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
-        val keyCodeScrollToggle = MouseKeysInterceptor.MouseKeyEvent.SCROLL_TOGGLE.keyCodeValue
-        val keyCodeScroll = MouseKeysInterceptor.MouseKeyEvent.RIGHT_MOVE_OR_SCROLL.keyCodeValue
+        val keyCodeScrollToggle = MouseKeysInterceptor.MouseKeyEvent.SCROLL_TOGGLE.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
+        val keyCodeScroll = MouseKeysInterceptor.MouseKeyEvent.RIGHT_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
 
         val scrollToggleDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCodeScrollToggle, 0, 0, DEVICE_ID, 0)
@@ -314,11 +357,38 @@ class MouseKeysInterceptorTest {
     }
 
     @Test
-    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
-    fun whenScrollToggleOff_directionalUpKeyIsPressed_relativeEventIsSent() {
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
+    fun whenScrollToggleOn_NumpadScrollRightKeyIsPressed_scrollEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = false)
         // There should be some delay between the downTime of the key event and calling onKeyEvent
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.keyCodeValue
+        val keyCodeScrollToggle = MouseKeysInterceptor.MouseKeyEvent.SCROLL_TOGGLE.getKeyCodeValue(
+            USE_NUMPAD_KEYS)
+        val keyCodeScroll = MouseKeysInterceptor.MouseKeyEvent.RIGHT_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_NUMPAD_KEYS)
+
+        val scrollToggleDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
+            keyCodeScrollToggle, 0, 0, DEVICE_ID, 0)
+        val scrollDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
+            keyCodeScroll, 0, 0, DEVICE_ID, 0)
+
+        mouseKeysInterceptor.onKeyEvent(scrollToggleDownEvent, 0)
+        mouseKeysInterceptor.onKeyEvent(scrollDownEvent, 0)
+        testLooper.dispatchAll()
+
+        // Verify the sendScrollEvent method is called once and capture the arguments
+        verifyScrollEvents(xAxisMovements = floatArrayOf(-MouseKeysInterceptor.MOUSE_SCROLL_STEP),
+            yAxisMovements = floatArrayOf(0f))
+    }
+
+    @Test
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
+    fun whenScrollToggleOff_DirectionalUpKeyIsPressed_RelativeEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
+        // There should be some delay between the downTime of the key event and calling onKeyEvent
+        val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
 
@@ -333,18 +403,38 @@ class MouseKeysInterceptorTest {
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
-    fun whenScrollToggleOffWithFlagOn_directionalUpKeyIsPressed_relativeEventIsSent() {
+    fun whenScrollToggleOffWithFlagOn_NumpadDirectionalUpKeyIsPressed_relativeEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = false)
         // There should be some delay between the downTime of the key event and calling onKeyEvent
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_NUMPAD_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
-        val expectedStepValue = INITIAL_STEP_BEFORE_ACCEL * (1.0f + ACCELERATION)
-
         mouseKeysInterceptor.onKeyEvent(downEvent, 0)
         testLooper.dispatchAll()
 
         // Verify the sendRelativeEvent method is called once and capture the arguments
+        val expectedStepValue = INITIAL_STEP_BEFORE_ACCEL * (1.0f + mouseKeysInterceptor.mAcceleration)
+        verifyRelativeEvents(expectedX = floatArrayOf(0f),
+            expectedY = floatArrayOf(-expectedStepValue))
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
+    fun whenScrollToggleOffWithFlagOn_directionalUpKeyIsPressed_relativeEventIsSent() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
+        // There should be some delay between the downTime of the key event and calling onKeyEvent
+        val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
+        val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
+            keyCode, 0, 0, DEVICE_ID, 0)
+        mouseKeysInterceptor.onKeyEvent(downEvent, 0)
+        testLooper.dispatchAll()
+
+        // Verify the sendRelativeEvent method is called once and capture the arguments
+        val expectedStepValue = INITIAL_STEP_BEFORE_ACCEL * (1.0f + mouseKeysInterceptor.mAcceleration)
         verifyRelativeEvents(expectedX = floatArrayOf(0f),
             expectedY = floatArrayOf(-expectedStepValue))
     }
@@ -352,8 +442,10 @@ class MouseKeysInterceptorTest {
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
     fun whenDirectionalKeyHeld_movementAccelerates() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.UP_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
 
@@ -366,7 +458,8 @@ class MouseKeysInterceptorTest {
 
         // Update initial calculations
         currentMovementStepForExpectation = minOf(
-            currentMovementStepForExpectation * (1 + ACCELERATION), MAX_MOVEMENT_STEP)
+            currentMovementStepForExpectation * (1 + mouseKeysInterceptor.mAcceleration),
+            mouseKeysInterceptor.mMaxMovementStep)
         expectedRelativeXs.add(0f)
         expectedRelativeYs.add(-currentMovementStepForExpectation)
 
@@ -376,7 +469,8 @@ class MouseKeysInterceptorTest {
             clock.fastForward(MOVE_REPEAT_DELAY_MILLS)
             testLooper.dispatchAll()
             currentMovementStepForExpectation = minOf(
-                currentMovementStepForExpectation * (1 + ACCELERATION), MAX_MOVEMENT_STEP)
+                currentMovementStepForExpectation * (1 + mouseKeysInterceptor.mAcceleration),
+                    mouseKeysInterceptor.mMaxMovementStep)
             expectedRelativeXs.add(0f)
             expectedRelativeYs.add(-currentMovementStepForExpectation)
         }
@@ -399,8 +493,10 @@ class MouseKeysInterceptorTest {
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
     fun whenDirectionalKeyHeldLong_movementCapsAtMaxMovementStep() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
         val downTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.RIGHT_MOVE_OR_SCROLL.keyCodeValue
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.RIGHT_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
         val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
             keyCode, 0, 0, DEVICE_ID, 0)
 
@@ -422,19 +518,22 @@ class MouseKeysInterceptorTest {
 
         val allEvents = captor.allValues
         val lastCapturedEvent = allEvents.last()
-        assertThat(lastCapturedEvent.relativeX).isEqualTo(MAX_MOVEMENT_STEP)
+        assertThat(lastCapturedEvent.relativeX).isEqualTo(mouseKeysInterceptor.mMaxMovementStep)
         assertThat(lastCapturedEvent.relativeY).isEqualTo(0f)
 
         // Also check a few before last to ensure it was capped
         val thirdLastCapturedEvent = allEvents[allEvents.size - 3]
-        assertThat(thirdLastCapturedEvent.relativeX).isEqualTo(MAX_MOVEMENT_STEP)
+        assertThat(thirdLastCapturedEvent.relativeX).isEqualTo(
+                mouseKeysInterceptor.mMaxMovementStep)
         assertThat(thirdLastCapturedEvent.relativeY).isEqualTo(0f)
     }
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
     fun whenKeyReleasedAndPressedAgain_accelerationResets() {
-        val keyCode = MouseKeysInterceptor.MouseKeyEvent.DOWN_MOVE_OR_SCROLL.keyCodeValue
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
+        val keyCode = MouseKeysInterceptor.MouseKeyEvent.DOWN_MOVE_OR_SCROLL.getKeyCodeValue(
+            USE_PRIMARY_KEYS)
 
         // First Press and Hold
         var downTime1 = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
@@ -468,11 +567,65 @@ class MouseKeysInterceptorTest {
         testLooper.dispatchAll()
 
         // Calculate expected first step for a new press
-        val expectedFirstStepAfterReset = INITIAL_STEP_BEFORE_ACCEL * (1 + ACCELERATION)
-
+        val expectedFirstStepAfterReset = INITIAL_STEP_BEFORE_ACCEL * (1 + mouseKeysInterceptor.mAcceleration)
         // Verify the sendRelativeEvent method is called once and capture the arguments
         verifyRelativeEvents(expectedX = floatArrayOf(0f),
             expectedY = floatArrayOf(expectedFirstStepAfterReset))
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_MOUSE_KEY_ENHANCEMENT)
+    fun whenSettingIsNumpad_respondsToNumpadKeysAndIgnoresPrimaryKeys() {
+        setupMouseKeysInterceptor(usePrimaryKeys = false)
+        val numpadDownTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
+        val numpadKeyDownEvent = KeyEvent(
+            numpadDownTime, numpadDownTime, KeyEvent.ACTION_DOWN,
+            MouseKeysInterceptor.MouseKeyEvent.LEFT_MOVE_OR_SCROLL.getKeyCodeValue(USE_NUMPAD_KEYS),
+            0, 0, DEVICE_ID, 0
+        )
+        mouseKeysInterceptor.onKeyEvent(numpadKeyDownEvent, 0)
+        testLooper.dispatchAll()
+
+        val expectedStepValue = INITIAL_STEP_BEFORE_ACCEL * (1.0f + mouseKeysInterceptor.mAcceleration)
+        verifyRelativeEvents(expectedX = floatArrayOf(-expectedStepValue), expectedY = floatArrayOf(0f))
+        assertThat(nextInterceptor.events).isEmpty()
+
+        Mockito.clearInvocations(mockVirtualMouse)
+        nextInterceptor.events.clear()
+
+        // Send the primary key 'U', which also corresponds to moving left.
+        var primaryDownTime = clock.now() - KEYBOARD_POST_EVENT_DELAY_MILLIS_FOR_MOUSE_POINTER
+        val primaryKeyDownEvent = KeyEvent(
+            primaryDownTime, primaryDownTime, KeyEvent.ACTION_DOWN,
+            MouseKeysInterceptor.MouseKeyEvent.LEFT_MOVE_OR_SCROLL.getKeyCodeValue(USE_PRIMARY_KEYS),
+            0, 0, DEVICE_ID, 0
+        )
+        mouseKeysInterceptor.onKeyEvent(primaryKeyDownEvent, 0)
+        testLooper.dispatchAll()
+
+        // Verify the corresponding primary key is ignored
+        assertThat(nextInterceptor.events).hasSize(1)
+        Mockito.verify(mockVirtualMouse, Mockito.never()).sendRelativeEvent(Mockito.any())
+
+        // Verify that the received event is the same as the primary key that was pressed
+        verifyKeyEventsEqual(primaryKeyDownEvent, nextInterceptor.events.poll()!!)
+    }
+
+    @Test
+    fun whenMouseKeyEventArrives_fromVirtualKeyboard_eventIsPassedToNextInterceptor() {
+        setupMouseKeysInterceptor(usePrimaryKeys = true)
+        for (ev in MouseKeysInterceptor.MouseKeyEvent.entries) {
+            val downTime = clock.now()
+            val keyCode = ev.getKeyCodeValue(USE_PRIMARY_KEYS)
+            val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN,
+                keyCode, 0, 0, VIRTUAL_DEVICE_ID, 0
+            )
+            mouseKeysInterceptor.onKeyEvent(downEvent, 0)
+            testLooper.dispatchAll()
+
+            assertThat(nextInterceptor.events).hasSize(1)
+            verifyKeyEventsEqual(downEvent, nextInterceptor.events.poll()!!)
+        }
     }
 
     private fun verifyRelativeEvents(expectedX: FloatArray, expectedY: FloatArray) {
@@ -529,16 +682,27 @@ class MouseKeysInterceptorTest {
         assertThat(actualYAxis).containsExactlyElementsIn(yAxisMovements.toList()).inOrder()
     }
 
+    private fun verifyKeyEventsEqual(expected: KeyEvent, received: KeyEvent) {
+        assertThat(received.keyCode).isEqualTo(expected.keyCode)
+        assertThat(received.action).isEqualTo(expected.action)
+        assertThat(received.downTime).isEqualTo(expected.downTime)
+        assertThat(received.eventTime).isEqualTo(expected.eventTime)
+    }
+
     private fun createInputDevice(
-            deviceId: Int,
-            generation: Int = -1
+        deviceId: Int,
+        isVirtual: Boolean,
+        generation: Int = -1
     ): InputDevice =
-            InputDevice.Builder()
-                    .setId(deviceId)
-                    .setName("Device $deviceId")
-                    .setDescriptor("descriptor $deviceId")
-                    .setGeneration(generation)
-                    .build()
+        InputDevice.Builder()
+            .setId(deviceId)
+            .setName("Device $deviceId")
+            .setDescriptor("descriptor $deviceId")
+            .setGeneration(generation)
+            .setIsVirtualDevice(isVirtual)
+            .setSources(InputDevice.SOURCE_KEYBOARD)
+            .setKeyboardType(InputDevice.KEYBOARD_TYPE_ALPHABETIC)
+            .build()
 
     private class TrackingInterceptor : BaseEventStreamTransformation() {
         val events: Queue<KeyEvent> = LinkedList()

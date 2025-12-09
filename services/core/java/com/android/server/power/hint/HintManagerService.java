@@ -32,8 +32,8 @@ import static com.android.internal.util.FrameworkStatsLog.GPU_HEADROOM_REPORTED_
 import static com.android.internal.util.FrameworkStatsLog.GPU_HEADROOM_REPORTED__TYPE__MIN;
 import static com.android.internal.util.FrameworkStatsLog.GPU_HEADROOM_REPORTED__TYPE__AVERAGE;
 import static com.android.internal.util.FrameworkStatsLog.GPU_HEADROOM_REPORTED__TYPE__UNKNOWN_CALCULATION_TYPE;
-import static com.android.server.power.hint.Flags.adpfSessionTag;
 import static com.android.server.power.hint.Flags.resetOnForkEnabled;
+import static com.android.server.power.hint.Flags.useSysuiSessionTag;
 
 import android.Manifest;
 import android.adpf.ISessionManager;
@@ -41,11 +41,14 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
 import android.app.ActivityManagerInternal;
+import android.app.IActivityManager;
 import android.app.StatsManager;
 import android.app.UidObserver;
+import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageManagerInternal;
 import android.hardware.power.ChannelConfig;
 import android.hardware.power.CpuHeadroomParams;
 import android.hardware.power.CpuHeadroomResult;
@@ -163,14 +166,6 @@ public final class HintManagerService extends SystemService {
     @GuardedBy("mSessionSnapshotMapLock")
     private ArrayMap<Integer, ArrayMap<Integer, AppHintSessionSnapshot>> mSessionSnapshotMap;
 
-    /*
-     * App UID to Thread mapping.
-     * Thread is a sub class bookkeeping TID, thread mode (especially graphics pipeline mode)
-     * This is to bookkeep and track the thread usage.
-     */
-    @GuardedBy("mThreadsUsageObject")
-    private ArrayMap<Integer, ArraySet<ThreadUsageTracker>> mThreadsUsageMap;
-
     /** Lock to protect mActiveSessions and the UidObserver. */
     private final Object mLock = new Object();
 
@@ -186,9 +181,6 @@ public final class HintManagerService extends SystemService {
      */
     private final Object mSessionSnapshotMapLock = new Object();
 
-    /** Lock to protect mThreadsUsageMap. */
-    private final Object mThreadsUsageObject = new Object();
-
     @GuardedBy("mNonIsolatedTidsLock")
     private final Map<Integer, Set<Long>> mNonIsolatedTids;
 
@@ -199,6 +191,7 @@ public final class HintManagerService extends SystemService {
     private final NativeWrapper mNativeWrapper;
     private final CleanUpHandler mCleanUpHandler;
 
+    private final IActivityManager mActivityManager;
     private final ActivityManagerInternal mAmInternal;
 
     private final Context mContext;
@@ -245,6 +238,8 @@ public final class HintManagerService extends SystemService {
     private boolean mEnforceCpuHeadroomUserModeCpuTimeCheck = false;
 
     private ISessionManager mSessionManager;
+
+    private int mSysuiUid = Process.INVALID_UID;
 
     // this cache tracks the expiration time of the items and performs cleanup on lookup
     private static class HeadroomCache<K, V> {
@@ -317,19 +312,15 @@ public final class HintManagerService extends SystemService {
         mContext = context;
         mCleanUpHandler = new CleanUpHandler(createCleanUpThread().getLooper());
         mNonIsolatedTids = new HashMap<>();
-        if (adpfSessionTag()) {
-            mPackageManager = mContext.getPackageManager();
-        } else {
-            mPackageManager = null;
-        }
+        mPackageManager = mContext.getPackageManager();
         mActiveSessions = new ArrayMap<>();
         mChannelMap = new ArrayMap<>();
         mSessionSnapshotMap = new ArrayMap<>();
-        mThreadsUsageMap = new ArrayMap<>();
         mNativeWrapper = injector.createNativeWrapper();
         mNativeWrapper.halInit();
         mHintSessionPreferredRate = mNativeWrapper.halGetHintSessionPreferredRate();
         mUidObserver = new MyUidObserver();
+        mActivityManager = Objects.requireNonNull(injector.getIActivityManager());
         mAmInternal = Objects.requireNonNull(
                 LocalServices.getService(ActivityManagerInternal.class));
         mPowerHal = injector.createIPower();
@@ -429,29 +420,6 @@ public final class HintManagerService extends SystemService {
         mEnforceCpuHeadroomUserModeCpuTimeCheck = true;
     }
 
-    private boolean tooManyPipelineThreads(int uid) {
-        synchronized (mThreadsUsageObject) {
-            ArraySet<ThreadUsageTracker> threadsSet = mThreadsUsageMap.get(uid);
-            int graphicsPipelineThreadCount = 0;
-            if (threadsSet != null) {
-                // We count the graphics pipeline threads that are
-                // *not* in this session, since those in this session
-                // will be replaced. Then if the count plus the new tids
-                // is over max available graphics pipeline threads we raise
-                // an exception.
-                for (ThreadUsageTracker t : threadsSet) {
-                    if (t.isGraphicsPipeline()) {
-                        graphicsPipelineThreadCount++;
-                    }
-                }
-                if (graphicsPipelineThreadCount > MAX_GRAPHICS_PIPELINE_THREADS_COUNT) {
-                    return true;
-                }
-            }
-            return false;
-        }
-    }
-
     private ServiceThread createCleanUpThread() {
         final ServiceThread handlerThread = new ServiceThread(TAG,
                 Process.THREAD_PRIORITY_LOWEST, true /*allowIo*/);
@@ -468,35 +436,8 @@ public final class HintManagerService extends SystemService {
             return IPower.Stub.asInterface(
                 ServiceManager.waitForDeclaredService(IPower.DESCRIPTOR + "/default"));
         }
-    }
-
-    private static class ThreadUsageTracker {
-        /*
-         * Thread object for tracking thread usage per UID
-         */
-        int mTid;
-        boolean mIsGraphicsPipeline;
-
-        ThreadUsageTracker(int tid) {
-            mTid = tid;
-            mIsGraphicsPipeline = false;
-        }
-
-        ThreadUsageTracker(int tid, boolean isGraphicsPipeline) {
-            mTid = tid;
-            mIsGraphicsPipeline = isGraphicsPipeline;
-        }
-
-        public int getTid() {
-            return mTid;
-        }
-
-        public boolean isGraphicsPipeline() {
-            return mIsGraphicsPipeline;
-        }
-
-        public void setGraphicsPipeline(boolean isGraphicsPipeline) {
-            mIsGraphicsPipeline = isGraphicsPipeline;
+        IActivityManager getIActivityManager() {
+            return ActivityManager.getService();
         }
     }
 
@@ -660,13 +601,16 @@ public final class HintManagerService extends SystemService {
     private void systemReady() {
         Slogf.v(TAG, "Initializing HintManager service...");
         try {
-            ActivityManager.getService().registerUidObserver(mUidObserver,
+            mActivityManager.registerUidObserver(mUidObserver,
                     ActivityManager.UID_OBSERVER_PROCSTATE | ActivityManager.UID_OBSERVER_GONE,
                     ActivityManager.PROCESS_STATE_UNKNOWN, null);
         } catch (RemoteException e) {
             // ignored; both services live in system_server
         }
 
+        PackageManagerInternal pm = LocalServices.getService(PackageManagerInternal.class);
+        mSysuiUid = pm.getPackageUid(pm.getSystemUiServiceComponent().getPackageName(),
+            PackageManager.MATCH_SYSTEM_ONLY, UserHandle.USER_SYSTEM);
     }
 
     private void registerStatsCallbacks() {
@@ -1453,20 +1397,8 @@ public final class HintManagerService extends SystemService {
                     }
                 }
 
-                if (adpfSessionTag() && tag == SessionTag.APP) {
-                    // If the category of the app is a game,
-                    // we change the session tag to SessionTag.GAME
-                    // as it was not previously classified
-                    switch (getUidApplicationCategory(callingUid)) {
-                        case ApplicationInfo.CATEGORY_GAME -> tag = SessionTag.GAME;
-                        case ApplicationInfo.CATEGORY_UNDEFINED ->
-                            // We use CATEGORY_UNDEFINED to filter the case when
-                            // PackageManager.NameNotFoundException is caught,
-                            // which should not happen.
-                            tag = SessionTag.APP;
-                        default -> tag = SessionTag.APP;
-                    }
-                }
+                tag = updateSessionTag(tag, callingUid);
+
                 config.id = -1;
                 Long halSessionPtr = null;
                 if (mConfigCreationSupport.get()) {
@@ -1558,16 +1490,6 @@ public final class HintManagerService extends SystemService {
                             && creationConfig.layerTokens.length > 0) {
                         hs.associateToLayers(creationConfig.layerTokens);
                     }
-
-                    synchronized (mThreadsUsageObject) {
-                        mThreadsUsageMap.computeIfAbsent(callingUid, k -> new ArraySet<>());
-                        ArraySet<ThreadUsageTracker> threadsSet = mThreadsUsageMap.get(callingUid);
-                        if (threadsSet != null) {
-                            for (int i = 0; i < tids.length; ++i) {
-                                threadsSet.add(new ThreadUsageTracker(tids[i], isGraphicsPipeline));
-                            }
-                        }
-                    }
                 }
 
                 if (Flags.adpf25q2Metrics()) {
@@ -1585,7 +1507,8 @@ public final class HintManagerService extends SystemService {
                 }
 
                 IHintManager.SessionCreationReturn out = new IHintManager.SessionCreationReturn();
-                out.pipelineThreadLimitExceeded = tooManyPipelineThreads(callingUid);
+                // TODO(b/441120571): Check if the thread limit should be re-implemented or removed
+                out.pipelineThreadLimitExceeded = false;
                 out.session = hs;
                 return out;
             } finally {
@@ -2126,6 +2049,51 @@ public final class HintManagerService extends SystemService {
                     powerEfficiency, graphicsPipeline);
         }
 
+        private @SessionTag int updateSessionTag(@SessionTag int incomingTag, int callingUid) {
+            if (useSysuiSessionTag() && (isUidSysui(callingUid) || isUidLauncher(callingUid))) {
+                return SessionTag.SYSUI;
+            }
+
+            if (incomingTag != SessionTag.APP) {
+                return incomingTag;
+            }
+
+            return switch (getUidApplicationCategory(callingUid)) {
+                case ApplicationInfo.CATEGORY_GAME -> SessionTag.GAME;
+                case ApplicationInfo.CATEGORY_UNDEFINED ->
+                    // We use CATEGORY_UNDEFINED to filter the case when
+                    // PackageManager.NameNotFoundException is caught,
+                    // which should not happen.
+                    SessionTag.APP;
+                default -> SessionTag.APP;
+            };
+        }
+
+        private boolean isUidSysui(int uid) {
+            return mSysuiUid != Process.INVALID_UID && mSysuiUid == uid;
+        }
+
+        private boolean isUidLauncher(int uid) {
+            RoleManager roleManager = Objects.requireNonNull(
+                    mContext.getSystemService(RoleManager.class));
+
+            List<String> packages = roleManager.getRoleHolders(RoleManager.ROLE_HOME);
+            if (packages.size() != 1) {
+                Slog.w(TAG, "Unexpected number of role holders for ROLE_HOME.");
+                return false;
+            }
+
+            int launcherUid;
+            try {
+                launcherUid = mPackageManager.getPackageUid(packages.getFirst(),
+                        PackageManager.MATCH_DEFAULT_ONLY);
+            } catch (PackageManager.NameNotFoundException exception) {
+                return false;
+            }
+
+            return uid == launcherUid;
+        }
+
         private int getUidApplicationCategory(int uid) {
             try {
                 final String packageName = mPackageManager.getNameForUid(uid);
@@ -2308,24 +2276,6 @@ public final class HintManagerService extends SystemService {
                 sessionSnapshot.updateUponSessionClose();
             }
 
-            if (mGraphicsPipeline) {
-                synchronized (mThreadsUsageObject) {
-                    ArraySet<ThreadUsageTracker> threadsSet = mThreadsUsageMap.get(mUid);
-                    if (threadsSet == null) {
-                        Slogf.w(TAG, "Threads Set is null for uid " + mUid);
-                        return;
-                    }
-                    // remove all tids associated with this session
-                    for (int i = 0; i < threadsSet.size(); ++i) {
-                        if (contains(mThreadIds, threadsSet.valueAt(i).getTid())) {
-                            threadsSet.removeAt(i);
-                        }
-                    }
-                    if (threadsSet.isEmpty()) {
-                        mThreadsUsageMap.remove(mUid);
-                    }
-                }
-            }
             synchronized (mNonIsolatedTidsLock) {
                 final int[] tids = getTidsInternal();
                 for (int tid : tids) {
@@ -2371,11 +2321,6 @@ public final class HintManagerService extends SystemService {
 
         public void setThreads(@NonNull int[] tids) {
             setThreadsInternal(tids, true);
-            if (tooManyPipelineThreads(Binder.getCallingUid())) {
-                // This is technically a success but we are going to throw a fit anyway
-                throw new ServiceSpecificException(5,
-                                    "Not enough available graphics pipeline threads.");
-            }
         }
 
         private void setThreadsInternal(int[] tids, boolean checkTid) {
@@ -2439,23 +2384,6 @@ public final class HintManagerService extends SystemService {
                     }
                 }
                 mNativeWrapper.halSetThreads(mHalSessionPtr, tids);
-
-                synchronized (mThreadsUsageObject) {
-                    // replace old tids with new ones
-                    ArraySet<ThreadUsageTracker> threadsSet = mThreadsUsageMap.get(callingUid);
-                    if (threadsSet == null) {
-                        mThreadsUsageMap.put(callingUid, new ArraySet<ThreadUsageTracker>());
-                        threadsSet = mThreadsUsageMap.get(callingUid);
-                    }
-                    for (int i = 0; i < threadsSet.size(); ++i) {
-                        if (contains(mThreadIds, threadsSet.valueAt(i).getTid())) {
-                            threadsSet.removeAt(i);
-                        }
-                    }
-                    for (int tid : tids) {
-                        threadsSet.add(new ThreadUsageTracker(tid, mGraphicsPipeline));
-                    }
-                }
                 mThreadIds = tids;
                 mNewThreadIds = null;
                 // if the update is allowed but the session is force paused by tid clean up, then

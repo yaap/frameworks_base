@@ -127,6 +127,7 @@ public class Watchdog implements Dumpable {
         "/system/bin/audioserver",
         "/system/bin/cameraserver",
         "/system/bin/drmserver",
+        "/system/bin/idmap2d",
         "/system/bin/keystore2",
         "/system/bin/mediadrmserver",
         "/system/bin/mediaserver",
@@ -142,7 +143,9 @@ public class Watchdog implements Dumpable {
         "media.transcoding", // Media transcoding service
         "com.android.bluetooth",  // Bluetooth service
         "/apex/com.android.art/bin/artd",  // ART daemon
+        "/apex/com.android.compos/bin/composd",  // CompOS daemon (lazy service)
         "/apex/com.android.os.statsd/bin/statsd",  // Stats daemon
+        "/apex/com.android.virt/bin/virtualizationservice",  // Core process in AVF
     };
 
     public static final List<String> HAL_INTERFACES_OF_INTEREST = Arrays.asList(
@@ -188,6 +191,7 @@ public class Watchdog implements Dumpable {
             "android.hardware.health.IHealth/",
             "android.hardware.input.processor.IInputProcessor/",
             "android.hardware.light.ILights/",
+            "android.hardware.media.c2.IComponentStore/",
             "android.hardware.neuralnetworks.IDevice/",
             "android.hardware.power.IPower/",
             "android.hardware.power.stats.IPowerStats/",

@@ -27,7 +27,6 @@ import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class ChipsMaxWidthTest : SysuiTestCase() {
     @Test
     fun chipsMaxWidth_ltr_noAppHandles_usesClockAndStartSideContainerBounds() {
@@ -35,6 +34,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = emptyList(),
                 startSideContainerBounds = rect(left = 10, right = 100, top = 0, bottom = 50),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -45,11 +45,28 @@ class ChipsMaxWidthTest : SysuiTestCase() {
     }
 
     @Test
+    fun chipsMaxWidth_ltr_withDate_usesDateAndStartSideContainerBounds() {
+        val result =
+            chipsMaxWidth(
+                appHandles = emptyList(),
+                startSideContainerBounds = rect(left = 10, right = 100, top = 0, bottom = 50),
+                dateBounds = rect(left = 30, right = 60, top = 0, bottom = 50),
+                clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
+                isRtl = false,
+                density = 1f,
+            )
+
+        // 60 -> 100
+        assertThat(result).isEqualTo(40.dp)
+    }
+
+    @Test
     fun chipsMaxWidth_rtl_noAppHandles_usesClockAndStartSideContainerBounds() {
         val result =
             chipsMaxWidth(
                 appHandles = emptyList(),
                 startSideContainerBounds = rect(left = 1000, right = 1400, top = 0, bottom = 50),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -60,11 +77,28 @@ class ChipsMaxWidthTest : SysuiTestCase() {
     }
 
     @Test
+    fun chipsMaxWidth_rtl_withDates_noAppHandles_usesClockAndStartSideContainerBounds() {
+        val result =
+            chipsMaxWidth(
+                appHandles = emptyList(),
+                startSideContainerBounds = rect(left = 1000, right = 1400, top = 0, bottom = 50),
+                dateBounds = rect(left = 1200, right = 1350, top = 0, bottom = 50),
+                clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
+                isRtl = true,
+                density = 1f,
+            )
+
+        // 1000 <- 1200
+        assertThat(result).isEqualTo(200.dp)
+    }
+
+    @Test
     fun chipsMaxWidth_ltr_oneAppHandle_yOutside_usesClockAndStartSideContainerBounds() {
         val result =
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 100, bottom = 150, left = 80, right = 120)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -81,6 +115,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 100, bottom = 150, left = 800, right = 1200)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 1000, right = 1400),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -97,6 +132,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 10, bottom = 40, left = 120, right = 200)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -113,6 +149,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 10, bottom = 40, left = 600, right = 800)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 1000, right = 1400),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -129,6 +166,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 0, bottom = 0, left = 0, right = 0)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -144,6 +182,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 1400, bottom = 1400, left = 1400, right = 1400)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 1000, right = 1400),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -159,6 +198,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 10, bottom = 40, left = 80, right = 120)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -169,11 +209,28 @@ class ChipsMaxWidthTest : SysuiTestCase() {
     }
 
     @Test
+    fun chipsMaxWidth_withDateBounds_ltr_oneAppHandle_closerThanStartSideEnd_usesAppHandleBounds() {
+        val result =
+            chipsMaxWidth(
+                appHandles = listOf(rect(top = 10, bottom = 40, left = 80, right = 120)),
+                startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = rect(left = 30, right = 45, top = 0, bottom = 50),
+                clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
+                isRtl = false,
+                density = 1f,
+            )
+
+        // 45 -> 80, 80 from app handle
+        assertThat(result).isEqualTo(35.dp)
+    }
+
+    @Test
     fun chipsMaxWidth_rtl_oneAppHandle_closerThanStartSideEnd_usesAppHandleBounds() {
         val result =
             chipsMaxWidth(
                 appHandles = listOf(rect(left = 800, right = 1100, top = 10, bottom = 40)),
                 startSideContainerBounds = rect(left = 1000, right = 1400, top = 0, bottom = 50),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -181,6 +238,22 @@ class ChipsMaxWidthTest : SysuiTestCase() {
 
         // 1100 <- 1350, 1100 from app handle
         assertThat(result).isEqualTo(250.dp)
+    }
+
+    @Test
+    fun chipsMaxWidth_withDateBounds_rtl_oneAppHandle_closerThanStartSideEnd_usesAppHandleBounds() {
+        val result =
+            chipsMaxWidth(
+                appHandles = listOf(rect(left = 800, right = 1100, top = 10, bottom = 40)),
+                startSideContainerBounds = rect(left = 1000, right = 1400, top = 0, bottom = 50),
+                dateBounds = rect(left = 1200, right = 1350, top = 0, bottom = 50),
+                clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
+                isRtl = true,
+                density = 1f,
+            )
+
+        // 1100 <- 1200, 1100 from app handle
+        assertThat(result).isEqualTo(100.dp)
     }
 
     @Test
@@ -193,6 +266,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 40, bottom = 80, left = 80, right = 120)
                     ),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -212,6 +286,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 40, bottom = 80, left = 800, right = 1100)
                     ),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 1000, right = 1400),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -231,6 +306,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 0, bottom = 40, left = 80, right = 120)
                     ),
                 startSideContainerBounds = rect(top = 10, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -250,6 +326,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 0, bottom = 40, left = 800, right = 1100)
                     ),
                 startSideContainerBounds = rect(top = 10, bottom = 50, left = 1000, right = 1400),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -271,6 +348,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 10, bottom = 40, left = 90, right = 120),
                     ),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -292,6 +370,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 10, bottom = 40, left = 1300, right = 1450),
                     ),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 1000, right = 1600),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1550, right = 1600, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -315,6 +394,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 10, bottom = 40, left = 90, right = 120),
                     ),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 10, right = 100),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 1f,
@@ -338,6 +418,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(top = 100, bottom = 200, left = 1300, right = 1450),
                     ),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 1000, right = 1600),
+                dateBounds = Rect(),
                 clockBounds = rect(top = 0, bottom = 50, left = 1550, right = 1600),
                 isRtl = true,
                 density = 1f,
@@ -357,6 +438,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                         rect(left = 80, right = 120, top = 10, bottom = 40)
                     ),
                 // Clock ends at 100
+                dateBounds = Rect(),
                 clockBounds = rect(left = 0, right = 100, top = 0, bottom = 50),
                 startSideContainerBounds = rect(left = 0, right = 200, top = 0, bottom = 50),
                 isRtl = false,
@@ -378,6 +460,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
                     ),
                 startSideContainerBounds = rect(left = 800, right = 1300, top = 0, bottom = 50),
                 // Clock starts at 1200
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1200, right = 1300, top = 0, bottom = 50),
                 isRtl = true,
                 density = 1f,
@@ -393,6 +476,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(left = 80, right = 120, top = 10, bottom = 40)),
                 startSideContainerBounds = rect(left = 10, right = 100, top = 0, bottom = 50),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 10, right = 30, top = 0, bottom = 50),
                 isRtl = false,
                 density = 5f,
@@ -408,6 +492,7 @@ class ChipsMaxWidthTest : SysuiTestCase() {
             chipsMaxWidth(
                 appHandles = listOf(rect(top = 10, bottom = 40, left = 800, right = 1100)),
                 startSideContainerBounds = rect(top = 0, bottom = 50, left = 1000, right = 1400),
+                dateBounds = Rect(),
                 clockBounds = rect(left = 1350, right = 1400, top = 0, bottom = 50),
                 isRtl = true,
                 density = 10f,

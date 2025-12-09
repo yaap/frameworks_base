@@ -26,7 +26,6 @@ import android.util.Log
 import com.android.app.animation.Interpolators
 import com.android.app.tracing.coroutines.flow.traceAs
 import com.android.app.tracing.coroutines.withContextTraced as withContext
-import com.android.systemui.Flags.transitionRaceConditionPart2
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.keyguard.shared.model.KeyguardState
@@ -35,6 +34,7 @@ import com.android.systemui.keyguard.shared.model.TransitionModeOnCanceled
 import com.android.systemui.keyguard.shared.model.TransitionState
 import com.android.systemui.keyguard.shared.model.TransitionStep
 import com.android.systemui.keyguard.shared.transition.KeyguardTransitionAnimationCallback
+import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
@@ -180,7 +180,6 @@ constructor(
 
     override suspend fun startTransition(info: TransitionInfo): UUID? {
         currentTransitionInfo = info
-        Log.d(TAG, "(Internal) Setting current transition info: $info")
 
         // There is no fairness guarantee with 'withContext', which means that transitions could
         // be processed out of order. Use a Mutex to guarantee ordering. [updateTransition]
@@ -193,14 +192,9 @@ constructor(
 
         // Animators must be started on the main thread.
         return withContext("$TAG#startTransition", mainDispatcher) {
-            if (!transitionRaceConditionPart2()) {
-                withContextMutex.unlock()
-            }
             if (lastStep.from == info.from && lastStep.to == info.to) {
                 Log.i(TAG, "Duplicate call to start the transition, rejecting: $info")
-                if (transitionRaceConditionPart2()) {
-                    withContextMutex.unlock()
-                }
+                withContextMutex.unlock()
                 return@withContext null
             }
             val isAnimatorRunning = lastAnimator?.isRunning() ?: false
@@ -270,9 +264,7 @@ constructor(
                 animator.addListener(animatorListener)
                 animator.addUpdateListener(updateListener)
                 animator.start()
-                if (transitionRaceConditionPart2()) {
-                    withContextMutex.unlock()
-                }
+                withContextMutex.unlock()
                 return@withContext null
             }
                 ?: run {
@@ -283,9 +275,7 @@ constructor(
 
                     // No animator, so it's manual. Provide a mechanism to callback
                     updateTransitionId = UUID.randomUUID()
-                    if (transitionRaceConditionPart2()) {
-                        withContextMutex.unlock()
-                    }
+                    withContextMutex.unlock()
                     return@withContext updateTransitionId
                 }
         }
@@ -301,15 +291,8 @@ constructor(
         // requires the same lock
         withContextMutex.lock()
         withContext("$TAG#updateTransition", mainDispatcher) {
-            if (!transitionRaceConditionPart2()) {
-                withContextMutex.unlock()
-            }
-
             updateTransitionInternal(transitionId, value, state)
-
-            if (transitionRaceConditionPart2()) {
-                withContextMutex.unlock()
-            }
+            withContextMutex.unlock()
         }
     }
 
@@ -321,10 +304,6 @@ constructor(
         withContextMutex.lock()
 
         return withContext("$TAG#forceFinishCurrentTransition", mainDispatcher) {
-            if (!transitionRaceConditionPart2()) {
-                withContextMutex.unlock()
-            }
-
             Log.d(TAG, "forceFinishCurrentTransition() - emitting FINISHED early.")
 
             lastAnimator?.apply {
@@ -339,10 +318,7 @@ constructor(
                 // Ask the listener to emit FINISHED and clean up its state.
                 animatorListener?.onAnimationEnd(this)
             }
-
-            if (transitionRaceConditionPart2()) {
-                withContextMutex.unlock()
-            }
+            withContextMutex.unlock()
         }
     }
 
@@ -365,6 +341,15 @@ constructor(
     }
 
     private fun emitTransition(nextStep: TransitionStep, isManual: Boolean = false) {
+        if (SceneContainerFlag.isEnabled) {
+            if (
+                nextStep.from == KeyguardState.UNDEFINED && nextStep.to == KeyguardState.UNDEFINED
+            ) {
+                Log.i(TAG, "Skipping UNDEFINED->UNDEFINED transition")
+                return
+            }
+        }
+
         logAndTrace(nextStep, isManual)
         _transitions.tryEmit(nextStep)
         lastStep = nextStep

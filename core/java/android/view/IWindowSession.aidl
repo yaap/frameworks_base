@@ -46,7 +46,7 @@ import java.util.List;
 /**
  * System private per-application interface to the window manager.
  *
- * {@hide}
+ * @hide
  */
 interface IWindowSession {
 
@@ -208,19 +208,13 @@ interface IWindowSession {
      */
     oneway void setShouldZoomOutWallpaper(IBinder windowToken, boolean shouldZoom);
 
-    @UnsupportedAppUsage
-    oneway void wallpaperOffsetsComplete(IBinder window);
-
     /**
      * Apply a raw offset to the wallpaper service when shown behind this window.
      */
     oneway void setWallpaperDisplayOffset(IBinder windowToken, int x, int y);
 
     oneway void sendWallpaperCommand(IBinder window, String action, int x, int y,
-            int z, in Bundle extras, boolean sync);
-
-    @UnsupportedAppUsage
-    oneway void wallpaperCommandComplete(IBinder window, in Bundle result);
+            int z, in Bundle extras);
 
     /**
      * Notifies that a rectangle on the screen has been requested.
@@ -300,11 +294,11 @@ interface IWindowSession {
     * the IWindow binder object. For other requests, the token can be any unique IBinder token to
     * be used as unique identifier.
     */
-    void grantInputChannel(int displayId, in SurfaceControl surface, in IBinder clientToken,
+    @nullable
+    InputChannel grantInputChannel(int displayId, in SurfaceControl surface, in IBinder clientToken,
             in @nullable InputTransferToken hostInputTransferToken, int flags, int privateFlags,
             int inputFeatures, int type, in IBinder windowToken,
-            in InputTransferToken embeddedInputTransferToken, String inputHandleName,
-            out InputChannel outInputChannel);
+            in InputTransferToken embeddedInputTransferToken, String inputHandleName);
 
     /**
      * Update the flags on an input channel associated with a particular surface.

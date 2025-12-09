@@ -20,10 +20,16 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.android.compose.PlatformButton
+import com.android.compose.PlatformOutlinedButton
 import com.android.compose.theme.PlatformTheme
 import com.android.internal.jank.InteractionJankMonitor
 import com.android.systemui.animation.DialogCuj
@@ -63,25 +69,21 @@ constructor(
 
     init {
         if (FlashlightStrength.isUnexpectedlyInLegacyMode()) {
-            logger.w("$TAG#init: UnexpectedlyInLegacyMode")
+            logger.dialogW("UnexpectedlyInLegacyMode on init")
         }
     }
 
     override fun createDialog(): SystemUIDialog {
         if (FlashlightStrength.isUnexpectedlyInLegacyMode()) {
-            logger.w("$TAG#createDialog: UnexpectedlyInLegacyMode!")
+            logger.dialogW("UnexpectedlyInLegacyMode on create dialog")
         }
 
         Assert.isMainThread()
         if (currentDialog != null) {
-            logger.w(
-                "$TAG#createDialog: " +
-                    "Dialog is already open, dismissing it and creating a new one."
-            )
+            logger.dialogW("Already open when creating, dismissing it and creating a new one")
             currentDialog?.dismiss()
             return currentDialog!!
         }
-
         currentDialog =
             sysuiDialogFactory.create(context = shadeDialogContextInteractor.context) {
                 FlashlightDialogContent(it)
@@ -108,22 +110,38 @@ constructor(
         //  as a workaround, we remember the original theme and keep it on recomposition.
         val isCurrentlyInDarkTheme = isSystemInDarkTheme()
         val cachedDarkTheme = remember { isCurrentlyInDarkTheme }
+        val flashlightSliderViewModel =
+            rememberViewModel("FlashlightSliderViewModel") { viewModelFactory.create() }
         PlatformTheme(isDarkTheme = cachedDarkTheme) {
             AlertDialogContent(
-                title = { Text(text = stringResource(R.string.flashlight_dialog_title)) },
-                content = {
-                    FlashlightSliderContainer(
-                        viewModel =
-                            rememberViewModel("FlashlightSliderViewModel") {
-                                viewModelFactory.create()
-                            }
+                modifier = Modifier.semantics { testTagsAsResourceId = true },
+                title = {
+                    Text(
+                        modifier = Modifier.testTag(FLASHLIGHT_TITLE_TAG),
+                        text = stringResource(R.string.flashlight_dialog_title),
                     )
                 },
+                content = { FlashlightSliderContainer(viewModel = flashlightSliderViewModel) },
                 positiveButton = {
-                    PlatformButton(onClick = { dialog.dismiss() }) {
+                    PlatformButton(
+                        modifier = Modifier.testTag(FLASHLIGHT_DONE_TAG),
+                        onClick = { dialog.dismiss() },
+                    ) {
                         Text(stringResource(R.string.quick_settings_done))
                     }
                 },
+                neutralButton = {
+                    PlatformOutlinedButton(
+                        modifier = Modifier.testTag(FLASHLIGHT_OFF_TAG),
+                        onClick = {
+                            flashlightSliderViewModel.setFlashlightLevel(0)
+                            dialog.dismiss()
+                        },
+                    ) {
+                        Text(stringResource(R.string.flashlight_dialog_turn_off))
+                    }
+                },
+                contentBottomPadding = 8.dp,
             )
         }
     }
@@ -131,7 +149,7 @@ constructor(
     /** Runs on @Main CoroutineContext */
     suspend fun showDialog(expandable: Expandable? = null): SystemUIDialog? {
         if (FlashlightStrength.isUnexpectedlyInLegacyMode()) {
-            logger.w("$TAG#showDialog: UnexpectedlyInLegacyMode!")
+            logger.dialogW("UnexpectedlyInLegacyMode on show")
             return null
         }
 
@@ -153,7 +171,9 @@ constructor(
     }
 
     companion object {
-        private const val TAG = "FlashlightDialogDelegate"
         private const val INTERACTION_JANK_TAG = "flashlight"
+        private const val FLASHLIGHT_TITLE_TAG = "flashlight_title"
+        private const val FLASHLIGHT_DONE_TAG = "flashlight_done"
+        private const val FLASHLIGHT_OFF_TAG = "flashlight_off"
     }
 }

@@ -117,7 +117,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     boolean mCanForceShowingInsets;
     private final boolean mCanStartTasksFromRecents;
 
-    final boolean mCanCreateSystemApplicationOverlay;
+    private boolean mCanCreateSystemApplicationOverlay;
     final boolean mCanHideNonSystemOverlayWindows;
     final boolean mCanSetUnrestrictedGestureExclusion;
     final boolean mCanAlwaysUpdateWallpaper;
@@ -157,15 +157,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
                 HIDE_NON_SYSTEM_OVERLAY_WINDOWS) == PERMISSION_GRANTED
                 || service.mContext.checkCallingOrSelfPermission(HIDE_OVERLAY_WINDOWS)
                 == PERMISSION_GRANTED;
-        mCanCreateSystemApplicationOverlay =
-                com.android.media.projection.flags.Flags.recordingOverlay()
-                ? service.mContext.getSystemService(
-                        PermissionManager.class).checkPermissionForPreflight(
-                        Manifest.permission.SYSTEM_APPLICATION_OVERLAY,
-                        new AttributionSource(mUid, mPackageName, null))
-                        == PermissionManager.PERMISSION_GRANTED
-                : service.mContext.checkCallingOrSelfPermission(SYSTEM_APPLICATION_OVERLAY)
-                        == PERMISSION_GRANTED;
+        updateCanCreateSystemApplicationOverlay(service.mPermissionManager);
         mCanStartTasksFromRecents = service.mContext.checkCallingOrSelfPermission(
                 START_TASKS_FROM_RECENTS) == PERMISSION_GRANTED;
         mSetsUnrestrictedKeepClearAreas =
@@ -200,6 +192,27 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
             mCallback.asBinder().linkToDeath(this, 0);
         } catch (RemoteException e) {
             mClientDead = true;
+        }
+    }
+
+    boolean canCreateSystemApplicationOverlay() {
+        return mCanCreateSystemApplicationOverlay;
+    }
+
+    void updateCanCreateSystemApplicationOverlay(PermissionManager permissionManager) {
+        if (com.android.media.projection.flags.Flags.recordingOverlay()) {
+            mCanCreateSystemApplicationOverlay = permissionManager.checkPermissionForPreflight(
+                    Manifest.permission.SYSTEM_APPLICATION_OVERLAY,
+                    new AttributionSource(mUid, mPackageName, null))
+                    == PermissionManager.PERMISSION_GRANTED;
+
+            for (int i = 0; i < mAddedWindows.size(); i++) {
+                mAddedWindows.get(i).updateTrustedOverlay();
+            }
+        } else {
+            mCanCreateSystemApplicationOverlay = mService.mContext.checkCallingOrSelfPermission(
+                    SYSTEM_APPLICATION_OVERLAY)
+                    == PERMISSION_GRANTED;
         }
     }
 
@@ -564,8 +577,10 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
 
     private void actionOnWallpaper(IBinder window,
             BiConsumer<WallpaperController, WindowState> action) {
-        final WindowState windowState = mService.windowForClientLocked(this, window, true);
-        action.accept(windowState.getDisplayContent().mWallpaperController, windowState);
+        final WindowState windowState = mService.windowForClient(this, window);
+        if (windowState != null) {
+            action.accept(windowState.mDisplayContent.mWallpaperController, windowState);
+        }
     }
 
     @Override
@@ -607,14 +622,6 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     }
 
     @Override
-    public void wallpaperOffsetsComplete(IBinder window) {
-        synchronized (mService.mGlobalLock) {
-            actionOnWallpaper(window, (wpController, windowState) ->
-                    wpController.wallpaperOffsetsComplete(window));
-        }
-    }
-
-    @Override
     public void setWallpaperDisplayOffset(IBinder window, int x, int y) {
         synchronized (mService.mGlobalLock) {
             final long ident = Binder.clearCallingIdentity();
@@ -629,30 +636,23 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
 
     @Override
     public void sendWallpaperCommand(IBinder window, String action, int x, int y,
-            int z, Bundle extras, boolean sync) {
+            int z, Bundle extras) {
         synchronized (mService.mGlobalLock) {
             final long ident = Binder.clearCallingIdentity();
             try {
-                final WindowState windowState = mService.windowForClientLocked(this, window, true);
+                final WindowState windowState = mService.windowForClient(this, window);
+                if (windowState == null) return;
                 WallpaperController wallpaperController =
                         windowState.getDisplayContent().mWallpaperController;
                 if (mCanAlwaysUpdateWallpaper
                         || windowState == wallpaperController.getWallpaperTarget()
                         || windowState == wallpaperController.getPrevWallpaperTarget()) {
                     wallpaperController.sendWindowWallpaperCommandUnchecked(
-                            windowState, action, x, y, z, extras, sync);
+                            windowState, action, x, y, z, extras);
                 }
             } finally {
                 Binder.restoreCallingIdentity(ident);
             }
-        }
-    }
-
-    @Override
-    public void wallpaperCommandComplete(IBinder window, Bundle result) {
-        synchronized (mService.mGlobalLock) {
-            actionOnWallpaper(window, (wpController, windowState) ->
-                    wpController.wallpaperCommandComplete(window));
         }
     }
 
@@ -698,8 +698,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     public void updateRequestedVisibleTypes(IWindow window, @InsetsType int requestedVisibleTypes,
             @Nullable ImeTracker.Token imeStatsToken) {
         synchronized (mService.mGlobalLock) {
-            final WindowState win = mService.windowForClientLocked(this, window,
-                    false /* throwOnError */);
+            final WindowState win = mService.windowForClient(this, window);
             if (win != null) {
                 ImeTracker.forLogging().onProgress(imeStatsToken,
                         ImeTracker.PHASE_WM_UPDATE_REQUESTED_VISIBLE_TYPES);
@@ -737,8 +736,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     public void updateAnimatingTypes(IWindow window, @InsetsType int animatingTypes,
             @Nullable ImeTracker.Token statsToken) {
         synchronized (mService.mGlobalLock) {
-            final WindowState win = mService.windowForClientLocked(this, window,
-                    false /* throwOnError */);
+            final WindowState win = mService.windowForClient(this, window);
             if (win != null) {
                 ImeTracker.forLogging().onProgress(statsToken,
                         ImeTracker.PHASE_WM_UPDATE_ANIMATING_TYPES);
@@ -907,29 +905,15 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
     }
 
     @Override
-    public void grantInputChannel(int displayId, SurfaceControl surface,
+    public InputChannel grantInputChannel(int displayId, SurfaceControl surface,
             IBinder clientToken, @Nullable InputTransferToken hostInputTransferToken, int flags,
             int privateFlags, int inputFeatures, int type, IBinder windowToken,
-            InputTransferToken inputTransferToken, String inputHandleName,
-            InputChannel outInputChannel) {
-        if (!Flags.updateHostInputTransferToken()) {
-            // This is not a valid security check, callers can pass in a bogus token. If the
-            // token is not known to wm, then input APIs is request focus or transferTouchGesture
-            // will fail. Removing this check allows SCVH to be created before associating with a
-            // host window.
-            if (hostInputTransferToken == null && !mCanAddInternalSystemWindow) {
-                // Callers without INTERNAL_SYSTEM_WINDOW permission cannot grant input channel to
-                // embedded windows without providing a host window input token
-                throw new SecurityException("Requires INTERNAL_SYSTEM_WINDOW permission");
-            }
-        }
-
+            InputTransferToken inputTransferToken, String inputHandleName) {
         final long identity = Binder.clearCallingIdentity();
         try {
-            mService.grantInputChannel(this, mUid, mPid, displayId, surface, clientToken,
+            return mService.grantInputChannel(this, mUid, mPid, displayId, surface, clientToken,
                     hostInputTransferToken, flags, mCanAddInternalSystemWindow ? privateFlags : 0,
-                    inputFeatures, type, windowToken, inputTransferToken, inputHandleName,
-                    outInputChannel);
+                    inputFeatures, type, windowToken, inputTransferToken, inputHandleName);
         } finally {
             Binder.restoreCallingIdentity(identity);
         }
@@ -975,8 +959,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
         final long identity = Binder.clearCallingIdentity();
         try {
             synchronized (mService.mGlobalLock) {
-                final WindowState win =
-                        mService.windowForClientLocked(this, fromWindow, false /* throwOnError */);
+                final WindowState win = mService.windowForClient(this, fromWindow);
                 if (win == null) {
                     return false;
                 }
@@ -1003,7 +986,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
             IWindow window,
             OnBackInvokedCallbackInfo callbackInfo) {
         synchronized (mService.mGlobalLock) {
-            WindowState windowState = mService.windowForClientLocked(this, window, false);
+            final WindowState windowState = mService.windowForClient(this, window);
             if (windowState == null) {
                 Slog.i(TAG_WM,
                         "setOnBackInvokedCallback(): No window state for package:" + mPackageName);
@@ -1019,8 +1002,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
         synchronized (mService.mGlobalLock) {
             // TODO(b/353463205) check if we can use mService.getDefaultDisplayContentLocked()
             //  instead of window
-            final WindowState win = mService.windowForClientLocked(this, window,
-                    false /* throwOnError */);
+            final WindowState win = mService.windowForClient(this, window);
             if (win != null) {
                 final InsetsStateController insetsStateController =
                         win.getDisplayContent().getInsetsStateController();

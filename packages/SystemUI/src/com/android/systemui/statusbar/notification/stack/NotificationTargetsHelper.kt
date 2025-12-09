@@ -9,12 +9,7 @@ import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow
 import com.android.systemui.statusbar.notification.row.ExpandableView
 import javax.inject.Inject
 
-/**
- * Utility class that helps us find the targets of an animation, often used to find the notification
- * ([Roundable]) above and below the current one (see [findRoundableTargets]).
- */
-@SysUISingleton
-class NotificationTargetsHelper @Inject constructor() {
+interface NotificationTargetsHelper {
 
     /**
      * This method looks for views that can be rounded (and implement [Roundable]) during a
@@ -28,50 +23,7 @@ class NotificationTargetsHelper @Inject constructor() {
         viewSwiped: ExpandableNotificationRow,
         stackScrollLayout: NotificationStackScrollLayout,
         sectionsManager: NotificationSectionsManager,
-    ): RoundableTargets {
-        val viewBefore: Roundable?
-        val viewAfter: Roundable?
-
-        val notificationParent = viewSwiped.notificationParent
-        val childrenContainer = notificationParent?.childrenContainer
-        val visibleStackChildren =
-            stackScrollLayout.children
-                .filterIsInstance<ExpandableView>()
-                .filter { it.isVisible }
-                .toList()
-        if (notificationParent != null && childrenContainer != null) {
-            // We are inside a notification group
-
-            val visibleGroupChildren = childrenContainer.attachedChildren.filter { it.isVisible }
-            val indexOfParentSwipedView = visibleGroupChildren.indexOf(viewSwiped)
-
-            viewBefore =
-                visibleGroupChildren.getOrNull(indexOfParentSwipedView - 1)
-                    ?: childrenContainer.notificationHeaderWrapper
-
-            viewAfter =
-                visibleGroupChildren.getOrNull(indexOfParentSwipedView + 1)
-                    ?: visibleStackChildren.indexOf(notificationParent).let {
-                        visibleStackChildren.getOrNull(it + 1)
-                    }
-        } else {
-            // Assumption: we are inside the NotificationStackScrollLayout
-
-            val indexOfSwipedView = visibleStackChildren.indexOf(viewSwiped)
-
-            viewBefore =
-                visibleStackChildren.getOrNull(indexOfSwipedView - 1)?.takeIf {
-                    !sectionsManager.beginsSection(viewSwiped, it)
-                }
-
-            viewAfter =
-                visibleStackChildren.getOrNull(indexOfSwipedView + 1)?.takeIf {
-                    !sectionsManager.beginsSection(it, viewSwiped)
-                }
-        }
-
-        return RoundableTargets(before = viewBefore, swiped = viewSwiped, after = viewAfter)
-    }
+    ): RoundableTargets
 
     /**
      * This method looks for [MagneticRoundableTarget]s that can magnetically attach to a swiped
@@ -102,6 +54,70 @@ class NotificationTargetsHelper @Inject constructor() {
         stackScrollLayout: NotificationStackScrollLayout,
         sectionsManager: NotificationSectionsManager,
         numTargets: Int,
+    ): List<MagneticRoundableTarget>
+}
+
+/**
+ * Utility class that helps us find the targets of an animation, often used to find the notification
+ * ([Roundable]) above and below the current one (see [findRoundableTargets]).
+ */
+@SysUISingleton
+class NotificationTargetsHelperImpl @Inject constructor() : NotificationTargetsHelper {
+
+    override fun findRoundableTargets(
+        viewSwiped: ExpandableNotificationRow,
+        stackScrollLayout: NotificationStackScrollLayout,
+        sectionsManager: NotificationSectionsManager,
+    ): RoundableTargets {
+        val viewBefore: Roundable?
+        val viewAfter: Roundable?
+
+        val notificationParent = viewSwiped.notificationParent
+        val childrenContainer = notificationParent?.childrenContainer
+        val visibleStackChildren =
+            stackScrollLayout.children
+                .filterIsInstance<ExpandableView>()
+                .filter { it.isVisible }
+                .toList()
+
+        if (notificationParent != null && childrenContainer != null) {
+            // We are inside a notification group
+            val visibleGroupChildren = childrenContainer.attachedChildren.filter { it.isVisible }
+            val indexOfParentSwipedView = visibleGroupChildren.indexOf(viewSwiped)
+
+            viewBefore =
+                visibleGroupChildren.getOrNull(indexOfParentSwipedView - 1)
+                    ?: childrenContainer.roundableHeaderWrapper
+
+            viewAfter =
+                visibleGroupChildren.getOrNull(indexOfParentSwipedView + 1)
+                    ?: visibleStackChildren.indexOf(notificationParent).let {
+                        visibleStackChildren.getOrNull(it + 1)
+                    }
+        } else {
+            // Assumption: we are inside the NotificationStackScrollLayout
+
+            val indexOfSwipedView = visibleStackChildren.indexOf(viewSwiped)
+
+            viewBefore =
+                visibleStackChildren.getOrNull(indexOfSwipedView - 1)?.takeIf {
+                    !sectionsManager.beginsSection(viewSwiped, it)
+                }
+
+            viewAfter =
+                visibleStackChildren.getOrNull(indexOfSwipedView + 1)?.takeIf {
+                    !sectionsManager.beginsSection(it, viewSwiped)
+                }
+        }
+
+        return RoundableTargets(before = viewBefore, swiped = viewSwiped, after = viewAfter)
+    }
+
+    override fun findMagneticRoundableTargets(
+        viewSwiped: ExpandableNotificationRow,
+        stackScrollLayout: NotificationStackScrollLayout,
+        sectionsManager: NotificationSectionsManager,
+        numTargets: Int,
     ): List<MagneticRoundableTarget> {
         val notificationParent = viewSwiped.notificationParent
         val childrenContainer = notificationParent?.childrenContainer
@@ -115,7 +131,7 @@ class NotificationTargetsHelper @Inject constructor() {
         val container: List<ExpandableView>
         if (notificationParent != null && childrenContainer != null) {
             // We are inside a notification group
-            notificationHeaderWrapper = childrenContainer.notificationHeaderWrapper
+            notificationHeaderWrapper = childrenContainer.roundableHeaderWrapper
             container = childrenContainer.attachedChildren.filter { it.isVisible }
         } else {
             container = visibleStackChildren

@@ -17,7 +17,6 @@
 package com.android.systemui.statusbar.notification.row;
 
 import static android.app.Flags.notificationsRedesignTemplates;
-import static android.app.Flags.notificationsRedesignThemedAppIcons;
 import static android.app.Notification.EXTRA_BUILDER_APPLICATION_INFO;
 import static android.app.NotificationChannel.SYSTEM_RESERVED_IDS;
 import static android.app.NotificationManager.IMPORTANCE_DEFAULT;
@@ -51,6 +50,7 @@ import android.graphics.drawable.Drawable;
 import android.metrics.LogMaker;
 import android.os.Handler;
 import android.os.RemoteException;
+import android.os.UserHandle;
 import android.service.notification.NotificationAssistantService;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
@@ -294,7 +294,8 @@ public class NotificationInfo extends LinearLayout implements NotificationGuts.G
         }
 
         View turnOffButton = findViewById(R.id.turn_off_notifications);
-        turnOffButton.setOnClickListener(getTurnOffNotificationsClickListener());
+        turnOffButton.setOnClickListener(
+                getTurnOffNotificationsClickListener(mSingleNotificationChannel));
         turnOffButton.setVisibility(turnOffButton.hasOnClickListeners() && !mIsNonblockable
                 ? VISIBLE : GONE);
 
@@ -340,11 +341,8 @@ public class NotificationInfo extends LinearLayout implements NotificationGuts.G
                 try {
                     mAppName = String.valueOf(mPm.getApplicationLabel(info));
                     // The app icon is likely already in the cache, so let's use it
-                    boolean withWorkProfileBadge =
-                            mIconStyleProvider.shouldShowWorkProfileBadge(mSbn, getContext());
-                    mPkgIcon = mAppIconProvider.getOrFetchAppIcon(info.packageName, getContext(),
-                            withWorkProfileBadge,
-                            /* themed = */ notificationsRedesignThemedAppIcons());
+                    mPkgIcon = mAppIconProvider.getOrFetchAppIcon(info.packageName,
+                            UserHandle.of(mSbn.getNormalizedUserId()), /* instanceKey= */ "LEGACY");
                 } catch (Exception ignored) {
                 }
             }
@@ -368,8 +366,7 @@ public class NotificationInfo extends LinearLayout implements NotificationGuts.G
         bindDelegate();
 
 
-        if (Flags.notificationClassificationUi() &&
-                SYSTEM_RESERVED_IDS.contains(mSingleNotificationChannel.getId())) {
+        if (Flags.notificationClassificationUi()) {
             bindFeedback();
         } else {
             // Set up app settings link (i.e. Customize)
@@ -396,6 +393,9 @@ public class NotificationInfo extends LinearLayout implements NotificationGuts.G
 
     private void bindFeedback() {
         View feedbackButton = findViewById(R.id.feedback);
+        if (feedbackButton == null) {
+            return;
+        }
         Intent intent = getAssistantFeedbackIntent(
                 mINotificationManager, mPm, mSbn.getKey(), mRanking);
         if ((!android.app.Flags.notificationClassificationUi() &&
@@ -447,8 +447,13 @@ public class NotificationInfo extends LinearLayout implements NotificationGuts.G
             intent.setClassName(activityInfo.packageName, activityInfo.name);
 
             intent.putExtra(NotificationAssistantService.EXTRA_NOTIFICATION_KEY, key);
-            intent.putExtra(NotificationAssistantService.EXTRA_NOTIFICATION_ADJUSTMENT,
-                    ranking.getSummarization() != null ? KEY_SUMMARIZATION : KEY_TYPE);
+            if (ranking.getSummarization() != null ||
+                    SYSTEM_RESERVED_IDS.contains(ranking.getChannel().getId())) {
+                intent.putExtra(NotificationAssistantService.EXTRA_NOTIFICATION_ADJUSTMENT,
+                        ranking.getSummarization() != null
+                        ? KEY_SUMMARIZATION
+                        : KEY_TYPE);
+            }
             ArrayList<String> keys = new ArrayList<>();
             NotificationChannel channel = ranking.getChannel(); // Get channel from ranking
 
@@ -508,13 +513,13 @@ public class NotificationInfo extends LinearLayout implements NotificationGuts.G
         return null;
     }
 
-    private OnClickListener getTurnOffNotificationsClickListener() {
+    OnClickListener getTurnOffNotificationsClickListener(NotificationChannel channel) {
         return ((View view) -> {
             if (!mPresentingChannelEditorDialog && mChannelEditorDialogController != null) {
                 mPresentingChannelEditorDialog = true;
 
                 mChannelEditorDialogController.prepareDialogForApp(mAppName, mPackageName, mAppUid,
-                        mSingleNotificationChannel, mPkgIcon, mOnSettingsClickListener);
+                        channel, mPkgIcon, mOnSettingsClickListener);
                 mChannelEditorDialogController.setOnFinishListener(() -> {
                     mPresentingChannelEditorDialog = false;
                     mGutsContainer.closeControls(this, false);

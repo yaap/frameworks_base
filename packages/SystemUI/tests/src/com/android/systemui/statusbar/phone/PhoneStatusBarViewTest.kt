@@ -20,6 +20,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Insets
 import android.graphics.Rect
+import android.graphics.Region
 import android.hardware.display.DisplayManagerGlobal
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
@@ -35,10 +36,10 @@ import android.view.MotionEvent
 import android.view.PrivacyIndicatorBounds
 import android.view.RoundedCorners
 import android.view.View
+import android.view.ViewRootImpl
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.test.filters.SmallTest
-import com.android.systemui.Flags.FLAG_STATUS_BAR_SWIPE_OVER_CHIP
 import com.android.systemui.Gefingerpoken
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.SysuiTestableContext
@@ -47,10 +48,12 @@ import com.android.systemui.shade.StatusBarLongPressGestureDetector
 import com.android.systemui.shared.Flags.FLAG_STATUS_BAR_CONNECTED_DISPLAYS
 import com.android.systemui.statusbar.window.StatusBarWindowController
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore
+import com.android.window.flags.Flags.FLAG_ENABLE_REMOVE_STATUS_BAR_INPUT_LAYER
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
+import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.spy
 import org.mockito.Mockito.times
@@ -77,13 +80,11 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     fun setUp() {
         MockitoAnnotations.initMocks(this)
         whenever(windowControllerStore.defaultDisplay).thenReturn(windowController)
-        mDependency.injectTestDependency(
-            StatusBarWindowControllerStore::class.java,
-            windowControllerStore,
-        )
         context.ensureTestableResources()
         view = spy(createStatusBarView(context))
         whenever(view.rootWindowInsets).thenReturn(emptyWindowInsets())
+        whenever(view.viewRootImpl).thenReturn(mock(ViewRootImpl::class.java))
+        view.updateTouchableRegion(DEFAULT_TOUCHABLE_REGION)
 
         val contextForSecondaryDisplay =
             SysuiTestableContext(
@@ -97,6 +98,8 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
                 )
             )
         viewForSecondaryDisplay = spy(createStatusBarView(contextForSecondaryDisplay))
+        whenever(viewForSecondaryDisplay.viewRootImpl).thenReturn(mock(ViewRootImpl::class.java))
+        viewForSecondaryDisplay.updateTouchableRegion(DEFAULT_TOUCHABLE_REGION)
     }
 
     @Test
@@ -189,8 +192,7 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     }
 
     @Test
-    @DisableFlags(FLAG_STATUS_BAR_SWIPE_OVER_CHIP)
-    fun onInterceptTouchEvent_flagOff_listenerNotified() {
+    fun onInterceptTouchEvent_listenerNotified() {
         val handler = TestTouchEventHandler()
         view.setTouchEventHandler(handler)
 
@@ -201,20 +203,7 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     }
 
     @Test
-    @EnableFlags(FLAG_STATUS_BAR_SWIPE_OVER_CHIP)
-    fun onInterceptTouchEvent_flagOn_listenerNotified() {
-        val handler = TestTouchEventHandler()
-        view.setTouchEventHandler(handler)
-
-        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
-        view.onInterceptTouchEvent(event)
-
-        assertThat(handler.lastInterceptEvent).isEqualTo(event)
-    }
-
-    @Test
-    @DisableFlags(FLAG_STATUS_BAR_SWIPE_OVER_CHIP)
-    fun onInterceptTouchEvent_listenerReturnsFalse_flagOff_viewReturnsFalse() {
+    fun onInterceptTouchEvent_listenerReturnsFalse_viewReturnsFalse() {
         val handler = TestTouchEventHandler()
         view.setTouchEventHandler(handler)
         val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
@@ -225,32 +214,7 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     }
 
     @Test
-    @EnableFlags(FLAG_STATUS_BAR_SWIPE_OVER_CHIP)
-    fun onInterceptTouchEvent_listenerReturnsFalse_flagOn_viewReturnsFalse() {
-        val handler = TestTouchEventHandler()
-        view.setTouchEventHandler(handler)
-        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
-
-        handler.handleTouchReturnValue = false
-
-        assertThat(view.onInterceptTouchEvent(event)).isFalse()
-    }
-
-    @Test
-    @DisableFlags(FLAG_STATUS_BAR_SWIPE_OVER_CHIP)
-    fun onInterceptTouchEvent_listenerReturnsTrue_flagOff_viewReturnsFalse() {
-        val handler = TestTouchEventHandler()
-        view.setTouchEventHandler(handler)
-        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
-
-        handler.handleTouchReturnValue = true
-
-        assertThat(view.onInterceptTouchEvent(event)).isFalse()
-    }
-
-    @Test
-    @EnableFlags(FLAG_STATUS_BAR_SWIPE_OVER_CHIP)
-    fun onInterceptTouchEvent_listenerReturnsTrue_flagOn_viewReturnsTrue() {
+    fun onInterceptTouchEvent_listenerReturnsTrue_viewReturnsTrue() {
         val handler = TestTouchEventHandler()
         view.setTouchEventHandler(handler)
         val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 0f, 0f, 0)
@@ -291,14 +255,43 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     @Test
     @DisableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
     fun onAttachedToWindow_connectedDisplayFlagOff_updatesWindowHeight() {
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+
         view.onAttachedToWindow()
 
         verify(windowController).refreshStatusBarHeight()
     }
 
     @Test
+    @DisableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
+    fun onAttachedToWindow_connectedDisplayFlagOff_updatesWindowHeightAfterControllerStoreSet() {
+        // windowControllerStore is not yet set in the view
+        view.onAttachedToWindow()
+
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+
+        verify(windowController).refreshStatusBarHeight()
+    }
+
+    @Test
+    @DisableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
+    fun onAttachedToWindow_connectedDisplayFlagOff_updatesWindowHeightOnceAfterControllerStoreSet() {
+        // windowControllerStore is not yet set in the view
+        view.onAttachedToWindow()
+
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+
+        verify(windowController, times(1)).refreshStatusBarHeight()
+    }
+
+    @Test
     @EnableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
     fun onAttachedToWindow_connectedDisplayFlagOn_doesNotUpdateWindowHeight() {
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+
         view.onAttachedToWindow()
 
         verify(windowController, never()).refreshStatusBarHeight()
@@ -307,6 +300,8 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     @Test
     @DisableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
     fun onConfigurationChanged_connectedDisplayFlagOff_updatesWindowHeight() {
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
@@ -318,6 +313,8 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
     @Test
     @EnableFlags(FLAG_STATUS_BAR_CONNECTED_DISPLAYS)
     fun onConfigurationChanged_connectedDisplayFlagOn_neverUpdatesWindowHeight() {
+        view.setStatusBarWindowControllerStore(windowControllerStore)
+
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
         view.onConfigurationChanged(Configuration())
@@ -514,6 +511,67 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
         assertThat(view.paddingBottom).isEqualTo(0)
     }
 
+    @Test
+    @EnableFlags(FLAG_ENABLE_REMOVE_STATUS_BAR_INPUT_LAYER)
+    fun onTouchEvent_downEventNotHandledIfOutsideTouchableRegion_whenFlagEnabled() {
+        val touchableRegion = Region.obtain().apply { set(0, 0, 200, 200) }
+        view.updateTouchableRegion(touchableRegion)
+        val touchEventHandler = mock(Gefingerpoken::class.java)
+        view.setTouchEventHandler(touchEventHandler)
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 250f, 250f, 0)
+        view.onTouchEvent(event)
+
+        // Assert touch event is not consumed by status bar
+        assertThat(view.onTouchEvent(event)).isFalse()
+        verify(touchEventHandler, never()).onTouchEvent(event)
+    }
+
+    @Test
+    @DisableFlags(FLAG_ENABLE_REMOVE_STATUS_BAR_INPUT_LAYER)
+    fun onTouchEvent_downEventHandledOutsideTouchableRegion_whenFlagDisabled() {
+        val touchableRegion = Region.obtain().apply { set(0, 0, 200, 200) }
+        view.updateTouchableRegion(touchableRegion)
+        val touchEventHandler = mock(Gefingerpoken::class.java)
+        view.setTouchEventHandler(touchEventHandler)
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 250f, 250f, 0)
+        view.onTouchEvent(event)
+
+        // Assert touch event is consumed by status bar
+        verify(touchEventHandler).onTouchEvent(event)
+    }
+
+    @Test
+    @EnableFlags(FLAG_ENABLE_REMOVE_STATUS_BAR_INPUT_LAYER)
+    fun onTouchEvent_moveEventHandledEvenIfOutsideTouchableRegion() {
+        val touchableRegion = Region.obtain().apply { set(100, 100, 200, 200) }
+        view.updateTouchableRegion(touchableRegion)
+        val touchEventHandler = mock(Gefingerpoken::class.java)
+        view.setTouchEventHandler(touchEventHandler)
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_MOVE, 250f, 250f, 0)
+        view.onTouchEvent(event)
+
+        // Assert touch event is handled by status bar
+        verify(touchEventHandler).onTouchEvent(event)
+    }
+
+    @Test
+    @EnableFlags(FLAG_ENABLE_REMOVE_STATUS_BAR_INPUT_LAYER)
+    fun onTouchEvent_upEventHandledEvenIfOutsideTouchableRegion() {
+        val touchableRegion = Region.obtain().apply { set(100, 100, 200, 200) }
+        view.updateTouchableRegion(touchableRegion)
+        val touchEventHandler = mock(Gefingerpoken::class.java)
+        view.setTouchEventHandler(touchEventHandler)
+
+        val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_UP, 250f, 250f, 0)
+        view.onTouchEvent(event)
+
+        // Assert touch event is handled by status bar
+        verify(touchEventHandler).onTouchEvent(event)
+    }
+
     private class TestTouchEventHandler : Gefingerpoken {
         var lastInterceptEvent: MotionEvent? = null
         var lastEvent: MotionEvent? = null
@@ -558,4 +616,8 @@ class PhoneStatusBarViewTest : SysuiTestCase() {
             /* frameWidth = */ 0,
             /* frameHeight = */ 0,
         )
+
+    companion object {
+        val DEFAULT_TOUCHABLE_REGION = Region(0, 0, 500, 500)
+    }
 }

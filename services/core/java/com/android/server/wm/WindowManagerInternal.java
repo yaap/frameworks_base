@@ -22,6 +22,7 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.UserIdInt;
+import android.app.IAssistDataReceiver;
 import android.content.ClipData;
 import android.content.Context;
 import android.graphics.Matrix;
@@ -48,12 +49,13 @@ import android.view.SurfaceControl;
 import android.view.SurfaceControlViewHost;
 import android.view.WindowManager.DisplayImePolicy;
 import android.view.inputmethod.ImeTracker;
-import android.window.ScreenCapture;
-import android.window.ScreenCapture.ScreenshotHardwareBuffer;
+import android.window.ScreenCaptureInternal;
+import android.window.ScreenCaptureInternal.ScreenshotHardwareBuffer;
 
 import com.android.internal.policy.KeyInterceptionInfo;
 import com.android.server.input.InputManagerService;
 import com.android.server.policy.WindowManagerPolicy;
+import com.android.server.wm.DisplayPolicy;
 import com.android.server.wm.SensitiveContentPackages.PackageInfo;
 
 import java.lang.annotation.Retention;
@@ -296,7 +298,6 @@ public abstract class WindowManagerInternal {
          *        bar caused by this app transition in millis
          *
          * @return Return any bit set of {@link WindowManagerPolicy#FINISH_LAYOUT_REDO_LAYOUT},
-         * {@link WindowManagerPolicy#FINISH_LAYOUT_REDO_CONFIG},
          * {@link WindowManagerPolicy#FINISH_LAYOUT_REDO_WALLPAPER},
          * or {@link WindowManagerPolicy#FINISH_LAYOUT_REDO_ANIM}.
          */
@@ -722,6 +723,29 @@ public abstract class WindowManagerInternal {
     public abstract void updateImeTargetWindow(@NonNull IBinder windowToken);
 
     /**
+     * Shows the IME screenshot and attaches it to the given IME target window.
+     *
+     * @param imeTarget the token of the IME target window.
+     * @param displayId the ID of the display to show the screenshot on.
+     * @return {@code true} if successful, {@code false} otherwise.
+     */
+    public abstract boolean showImeScreenshot(@NonNull IBinder imeTarget, int displayId);
+
+    /**
+     * Removes the IME screenshot from the given display.
+     *
+     * @param displayId The target display of showing IME screenshot.
+     * @return {@code true} if successful, {@code false} otherwise.
+     */
+    public abstract boolean removeImeScreenshot(int displayId);
+
+    /**
+     * Enables/disables window and transition animations for the given display. Animations are
+     * enabled by default on any display.
+     */
+    public abstract void setAnimationsDisabledForDisplay(int displayId, boolean disabled);
+
+    /**
       * Returns true when the hardware keyboard is available.
       */
     public abstract boolean isHardKeyboardAvailable();
@@ -858,6 +882,15 @@ public abstract class WindowManagerInternal {
     public abstract Context getDisplayUiContext(int displayId);
 
     /**
+     * Returns the display policy for a given display.
+     *
+     * @param displayId The display id.
+     * @return The display policy, or null if display not found.
+     */
+    @Nullable
+    public abstract DisplayPolicy getDisplayPolicy(int displayId);
+
+    /**
      * Sets the rotation of a non-default display.
      *
      * @param displayId The id of the display
@@ -913,6 +946,13 @@ public abstract class WindowManagerInternal {
      * @return The policy for how the display should show IME.
      */
     public abstract @DisplayImePolicy int getDisplayImePolicy(int displayId);
+
+    /**
+     * Called by UiModeManager when the UI mode for the given display has changed.
+     *
+     * @param displayId The id of the display
+     */
+    public abstract void onDisplayUiModeChanged(int displayId);
 
     /**
      * Tell window manager about a package that should be running with a restricted range of
@@ -1092,9 +1132,10 @@ public abstract class WindowManagerInternal {
      * Captures the entire display specified by the displayId using the args provided. If the args
      * are null or if the sourceCrop is invalid or null, the entire display bounds will be captured.
      */
-    public abstract void captureDisplay(int displayId,
-                                        @Nullable ScreenCapture.CaptureArgs captureArgs,
-                                        ScreenCapture.ScreenCaptureListener listener);
+    public abstract void captureDisplay(
+            int displayId,
+            @Nullable ScreenCaptureInternal.CaptureArgs captureArgs,
+            ScreenCaptureInternal.ScreenCaptureListener listener);
 
     /**
      * Device has a software navigation bar (separate from the status bar) on specific display.
@@ -1180,9 +1221,42 @@ public abstract class WindowManagerInternal {
      * services - such as the cursor or any current contextual search window.
      *
      * @param uid the UID of the contextual search application. System alert windows belonging
-     * to this UID will be excluded from the screenshot.
+     *            to this UID will be excluded from the screenshot.
+     * @param displayId the display ID of the display to capture the screenshot of
      */
-    public abstract ScreenshotHardwareBuffer takeContextualSearchScreenshot(int uid);
+    public abstract ScreenshotHardwareBuffer takeContextualSearchScreenshot(int uid, int displayId);
+
+    /**
+     * Used only for assist -- request a screenshot of the current application on the display of
+     * the given activity token.
+     */
+    public abstract void requestAssistScreenshot(IAssistDataReceiver receiver,
+            IBinder activityToken);
+
+    /**
+     * Creates a backup payload of overridden display window settings for a specific user.
+     * <p>
+     * This method reads the user-specific display settings file, filters out any device-specific
+     * values, and returns the result as a byte array suitable for backup.
+     *
+     * @param userId The user for whom to back up the settings.
+     * @return A byte array representing the filtered settings data, or {@code null} if no settings
+     *         file exists for the user or an error occurs during reading.
+     */
+    public abstract byte[] backupDisplayWindowSettings(int userId);
+
+    /**
+     * Restores overridden display window settings from a backup payload for a specific user.
+     * <p>
+     * This method writes the provided payload to the user's display settings file and then
+     * triggers a reload of these settings to apply the changes immediately.
+     *
+     * @param userId The user for whom to restore the settings.
+     * @param payload The settings data to restore, typically obtained from
+     *                {@link #backupDisplayWindowSettings(int)}.
+     * @throws RuntimeException if the payload cannot be written to the settings file.
+     */
+    public abstract void restoreDisplayWindowSettings(int userId, byte[] payload);
 
     /**
      * Register/unregister callbacks for secure content showing up on the display.

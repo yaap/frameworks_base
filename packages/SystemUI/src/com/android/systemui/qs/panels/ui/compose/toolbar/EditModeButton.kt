@@ -18,10 +18,7 @@ package com.android.systemui.qs.panels.ui.compose.toolbar
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,8 +42,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -58,6 +53,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -68,9 +64,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupPositionProvider
 import com.android.systemui.Flags
-import com.android.systemui.qs.panels.ui.compose.icons.Edit
+import com.android.systemui.common.ui.icons.Edit
+import com.android.systemui.compose.modifiers.sysuiResTag
 import com.android.systemui.qs.panels.ui.compose.toolbar.EditModeButtonDefaults.SpacingBetweenTooltipAndAnchor
-import com.android.systemui.qs.panels.ui.compose.toolbar.EditModeButtonDefaults.TooltipHeight
+import com.android.systemui.qs.panels.ui.compose.toolbar.EditModeButtonDefaults.TooltipMaxWidth
 import com.android.systemui.qs.panels.ui.viewmodel.toolbar.EditModeButtonViewModel
 import com.android.systemui.qs.ui.compose.borderOnFocus
 import com.android.systemui.res.R
@@ -82,7 +79,6 @@ fun EditModeButton(
     viewModel: EditModeButtonViewModel,
     modifier: Modifier = Modifier,
     isVisible: Boolean = true,
-    tooltipEnabled: Boolean = true,
 ) {
     if (!viewModel.isEditButtonVisible) {
         return
@@ -91,8 +87,14 @@ fun EditModeButton(
         value = LocalContentColor provides MaterialTheme.colorScheme.onSurface
     ) {
         val tooltipState = rememberTooltipState(isPersistent = true)
-        val showTooltip = tooltipEnabled && isVisible && viewModel.showTooltip
+        val showTooltip = isVisible && viewModel.showTooltip
         LaunchedEffect(showTooltip) { if (showTooltip) tooltipState.show() }
+
+        // Make sure to dismiss the tooltip if it's still visible when it shouldn't be due to always
+        // composing QS.
+        LaunchedEffect(isVisible) {
+            if (!isVisible && tooltipState.isVisible) tooltipState.dismiss()
+        }
 
         val density = LocalDensity.current
         val windowContainerSizePx =
@@ -120,13 +122,13 @@ fun EditModeButton(
             tooltip = {
                 DisposableEffect(Unit) { onDispose(viewModel::onTooltipDisposed) }
                 PlainTooltip(
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(16.dp),
                     containerColor = tertiaryColor,
                     contentColor = MaterialTheme.colorScheme.onTertiary,
                     shadowElevation = EditModeButtonDefaults.TooltipShadowElevation,
+                    maxWidth = TooltipMaxWidth,
                     modifier =
-                        Modifier.height(TooltipHeight)
-                            .layoutCaret(
+                        Modifier.layoutCaret(
                                 caretPath,
                                 density,
                                 windowContainerSizePx,
@@ -141,8 +143,10 @@ fun EditModeButton(
                 ) {
                     Text(
                         stringResource(R.string.qs_edit_mode_tooltip),
-                        modifier =
-                            Modifier.fillMaxHeight().wrapContentHeight(Alignment.CenterVertically),
+                        style = MaterialTheme.typography.labelLarge,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
                     )
                 }
             },
@@ -151,10 +155,11 @@ fun EditModeButton(
                 onClick = viewModel::onButtonClick,
                 shape = RoundedCornerShape(CornerSize(28.dp)),
                 modifier =
-                    Modifier.borderOnFocus(
-                        color = MaterialTheme.colorScheme.secondary,
-                        cornerSize = CornerSize(24.dp),
-                    ),
+                    Modifier.sysuiResTag("qs_edit_mode_button")
+                        .borderOnFocus(
+                            color = MaterialTheme.colorScheme.secondary,
+                            cornerSize = CornerSize(24.dp),
+                        ),
             ) {
                 Icon(
                     imageVector = if (Flags.iconRefresh2025()) Edit else Icons.Default.Edit,
@@ -178,13 +183,9 @@ private fun rememberTooltipPositionProvider(
     windowInsets: WindowInsets,
     spacingBetweenTooltipAndAnchor: Dp = SpacingBetweenTooltipAndAnchor,
 ): PopupPositionProvider {
-    // We grab the top window inset and remove it manually from the position as it is not consumed
-    // in the QS panel (b/424438896)
-    val topInset = windowInsets.getTop(LocalDensity.current)
-
-    val tooltipAnchorSpacing =
-        with(LocalDensity.current) { spacingBetweenTooltipAndAnchor.roundToPx() }
-    return remember(tooltipAnchorSpacing, topInset) {
+    val density = LocalDensity.current
+    val tooltipAnchorSpacing = with(density) { spacingBetweenTooltipAndAnchor.roundToPx() }
+    return remember(tooltipAnchorSpacing, windowInsets, density) {
         object : PopupPositionProvider {
             override fun calculatePosition(
                 anchorBounds: IntRect,
@@ -207,6 +208,11 @@ private fun rememberTooltipPositionProvider(
                     // right side of the screen
                     x = anchorBounds.right - popupContentSize.width
                 }
+
+                // We grab the top window inset and remove it manually from the position as it is
+                // not consumed
+                // in the QS panel (b/424438896)
+                val topInset = windowInsets.getTop(density)
 
                 // Tooltip prefers to be below the anchor,
                 // but if this causes the tooltip to be outside the window
@@ -316,6 +322,6 @@ private fun Modifier.layoutCaret(
 
 private object EditModeButtonDefaults {
     val SpacingBetweenTooltipAndAnchor = 4.dp
-    val TooltipHeight = 40.dp
+    val TooltipMaxWidth = 360.dp
     val TooltipShadowElevation = 2.dp
 }

@@ -398,7 +398,7 @@ public class CompanionDeviceDiscoveryService extends Service {
             // First: make change.
             mDevicesFound.add(device);
             // Then: notify observers.
-            sScanResultsLiveData.setValue(mDevicesFound);
+            sScanResultsLiveData.setValue(new ArrayList<>(mDevicesFound));
             // Stop discovery when there's one device found for singleDevice.
             if (mStopAfterFirstMatch) {
                 stopDiscoveryAndFinish();
@@ -413,7 +413,7 @@ public class CompanionDeviceDiscoveryService extends Service {
             // First: make change.
             mDevicesFound.remove(device);
             // Then: notify observers.
-            sScanResultsLiveData.setValue(mDevicesFound);
+            sScanResultsLiveData.setValue(new ArrayList<>(mDevicesFound));
         });
     }
 

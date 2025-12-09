@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import android.graphics.PointF;
 import android.hardware.display.DisplayManagerInternal;
 import android.hardware.input.IInputDevicesChangedListener;
 import android.hardware.input.InputManagerGlobal;
@@ -43,6 +44,7 @@ import android.os.RemoteException;
 import android.platform.test.annotations.Presubmit;
 import android.testing.AndroidTestingRunner;
 import android.testing.TestableLooper;
+import android.util.SparseArray;
 import android.view.DisplayInfo;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -59,8 +61,10 @@ import org.mockito.invocation.InvocationOnMock;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 @Presubmit
@@ -77,16 +81,20 @@ public class VirtualInputDeviceControllerTest {
     private static final String LANGUAGE_TAG = "en-US";
     private static final String LAYOUT_TYPE = "qwerty";
     private static final String NAME = "testInputDeviceName";
+    private static final String NAME_2 = "testInputDeviceName2";
     private static final long EVENT_TIMESTAMP = 5000L;
 
     private TestableLooper mTestableLooper;
     private InputManagerGlobal.TestSession mInputSession;
     private final List<InputDevice> mDevices = new ArrayList<>();
     private IInputDevicesChangedListener mDevicesChangedListener;
+    // deviceId -> phys
+    private final SparseArray<String> mPhysByDeviceId = new SparseArray<>();
     // uniqueId -> displayId
     private final Map<String, Integer> mDisplayIdMapping = new HashMap<>();
     // phys -> uniqueId
     private final Map<String, String> mUniqueIdAssociationByPort = new HashMap<>();
+    private final Set<String> mVirtualDevices = new HashSet<>();
 
     @Mock
     private DisplayManagerInternal mDisplayManagerInternalMock;
@@ -122,6 +130,13 @@ public class VirtualInputDeviceControllerTest {
                 .when(mInputManagerService).addUniqueIdAssociationByPort(anyString(), anyString());
         doAnswer(inv -> mUniqueIdAssociationByPort.remove(inv.getArgument(0)))
                 .when(mInputManagerService).removeUniqueIdAssociationByPort(anyString());
+        doAnswer(inv -> mVirtualDevices.add(inv.getArgument(0)))
+                .when(mInputManagerService).addVirtualDevice(anyString());
+        doAnswer(inv -> mVirtualDevices.remove(inv.getArgument(0)))
+                .when(mInputManagerService).removeVirtualDevice(anyString());
+        doAnswer(inv -> mPhysByDeviceId.get(inv.getArgument(0)))
+                .when(mInputManagerService).getPhysicalLocationPath(anyInt());
+
 
         // Set a new instance of InputManager for testing that uses the IInputManager mock as the
         // interface to the server.
@@ -163,9 +178,11 @@ public class VirtualInputDeviceControllerTest {
                 .setProductId(inv.getArgument(2))
                 .setDescriptor(phys)
                 .setExternal(true)
+                .setIsVirtualDevice(mVirtualDevices.contains(phys))
                 .setAssociatedDisplayId(mDisplayIdMapping.get(mUniqueIdAssociationByPort.get(phys)))
                 .build();
         mDevices.add(device);
+        mPhysByDeviceId.put(device.getId(), phys);
         try {
             mDevicesChangedListener.onInputDevicesChanged(
                     mDevices.stream().flatMapToInt(
@@ -216,6 +233,48 @@ public class VirtualInputDeviceControllerTest {
                 IllegalArgumentException.class,
                 () -> mInputController.createDpad(
                         NAME, VENDOR_ID, PRODUCT_ID, TOKEN_2, DISPLAY_ID_2));
+    }
+
+    @Test
+    public void createInputDevice_duplicateTokensAreNotAllowed() {
+        mInputController.createDpad(NAME, VENDOR_ID, PRODUCT_ID, TOKEN_1, DISPLAY_ID_1);
+        assertThrows("Device tokens need to be unique",
+                IllegalArgumentException.class,
+                () -> mInputController.createDpad(
+                        NAME_2, VENDOR_ID, PRODUCT_ID, TOKEN_1, DISPLAY_ID_2));
+    }
+
+    @Test
+    public void createInputDevice_differentDevices_haveUniquePhys() throws RemoteException {
+        final int d1 = mInputController.createDpad(NAME, VENDOR_ID, PRODUCT_ID, TOKEN_1,
+                DISPLAY_ID_1).getInputDeviceId();
+        final int d2 = mInputController.createDpad(NAME_2, VENDOR_ID, PRODUCT_ID, TOKEN_2,
+                DISPLAY_ID_1).getInputDeviceId();
+
+        final String phys1 = mPhysByDeviceId.get(d1);
+        final String phys2 = mPhysByDeviceId.get(d2);
+        assertThat(phys1).isNotEmpty();
+        assertThat(phys2).isNotEmpty();
+        assertThat(phys1).isNotEqualTo(phys2);
+    }
+
+    @Test
+    public void getCursorPosition_returnsPositionFromService() {
+        mInputController.createMouse(NAME, VENDOR_ID, PRODUCT_ID, TOKEN_1, DISPLAY_ID_1);
+        final PointF physicalPoint = new PointF(10.0f, 20.0f);
+        when(mInputManagerService.getCursorPositionInPhysicalDisplay(DISPLAY_ID_1))
+                .thenReturn(physicalPoint);
+        final PointF logicalPoint = new PointF(30.0f, 40.0f);
+        when(mInputManagerService.getCursorPositionInLogicalDisplay(DISPLAY_ID_1))
+                .thenReturn(logicalPoint);
+
+        assertThat(mInputController.getCursorPositionInPhysicalDisplay(TOKEN_1))
+                .isEqualTo(physicalPoint);
+        verify(mInputManagerService).getCursorPositionInPhysicalDisplay(DISPLAY_ID_1);
+
+        assertThat(mInputController.getCursorPositionInLogicalDisplay(TOKEN_1))
+                .isEqualTo(logicalPoint);
+        verify(mInputManagerService).getCursorPositionInLogicalDisplay(DISPLAY_ID_1);
     }
 
     @Test

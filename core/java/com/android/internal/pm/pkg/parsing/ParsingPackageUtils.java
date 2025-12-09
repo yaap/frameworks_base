@@ -139,6 +139,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.security.PublicKey;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -296,6 +297,19 @@ public class ParsingPackageUtils {
         }
 
         return input.success(pkg);
+    }
+
+    /** Utility method for parsing min and max SDK version attributes. */
+    public static int parseMinOrMaxSdkVersion(TypedArray sa, int attr, int defaultValue) {
+        int val = defaultValue;
+        TypedValue peekVal = sa.peekValue(attr);
+        if (peekVal != null) {
+            if (peekVal.type >= TypedValue.TYPE_FIRST_INT
+                    && peekVal.type <= TypedValue.TYPE_LAST_INT) {
+                val = peekVal.data;
+            }
+        }
+        return val;
     }
 
     private final String[] mSeparateProcesses;
@@ -1372,18 +1386,6 @@ public class ParsingPackageUtils {
         return input.success(pkg.addPermission(result.getResult()));
     }
 
-    private int parseMinOrMaxSdkVersion(TypedArray sa, int attr, int defaultValue) {
-        int val = defaultValue;
-        TypedValue peekVal = sa.peekValue(attr);
-        if (peekVal != null) {
-            if (peekVal.type >= TypedValue.TYPE_FIRST_INT
-                    && peekVal.type <= TypedValue.TYPE_LAST_INT) {
-                val = peekVal.data;
-            }
-        }
-        return val;
-    }
-
     private ParseResult<ParsingPackage> parseUsesPermission(ParseInput input,
             ParsingPackage pkg, Resources res, XmlResourceParser parser)
             throws IOException, XmlPullParserException {
@@ -1505,10 +1507,9 @@ public class ParsingPackageUtils {
             // Quietly ignore duplicate permission requests, but fail loudly if
             // the two requests have conflicting flags or purposes.
             boolean found = false;
-            final List<ParsedUsesPermission> usesPermissions = pkg.getUsesPermissions();
-            final int size = usesPermissions.size();
-            for (int i = 0; i < size; i++) {
-                final ParsedUsesPermission usesPermission = usesPermissions.get(i);
+            final Collection<ParsedUsesPermission> usesPermissions =
+                    pkg.getUsesPermissionMapping().values();
+            for (ParsedUsesPermission usesPermission : usesPermissions) {
                 if (Objects.equals(usesPermission.getName(), name)) {
                     if (usesPermission.getUsesPermissionFlags() != usesPermissionFlags) {
                         return input.error("Conflicting uses-permissions flags: "
@@ -2504,9 +2505,12 @@ public class ParsingPackageUtils {
                 // accessing Build.VERSION_CODES directly and suppressing
                 // AndroidFrameworkCompatChange warning
                 .setOnBackInvokedCallbackEnabled(bool(
-                        com.android.window.flags.Flags.predictiveBackDefaultEnableSdk36()
-                            && targetSdk > Build.VERSION_CODES.VANILLA_ICE_CREAM,
+                        targetSdk > Build.VERSION_CODES.VANILLA_ICE_CREAM,
                         R.styleable.AndroidManifestApplication_enableOnBackInvokedCallback, sa))
+                .setRunInPccSandbox(
+                        android.app.privatecompute.flags.Flags.enablePccFrameworkSupport()
+                        && bool(false,
+                        R.styleable.AndroidManifestApplication_runInPccSandbox, sa))
                 // Ints Default 0
                 .setUiOptions(anInt(R.styleable.AndroidManifestApplication_uiOptions, sa))
                 // Ints

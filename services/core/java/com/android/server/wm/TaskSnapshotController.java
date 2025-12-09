@@ -16,6 +16,7 @@
 
 package com.android.server.wm;
 
+import static android.os.Trace.TRACE_TAG_WINDOW_MANAGER;
 import static android.window.TaskSnapshot.REFERENCE_NONE;
 
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_SCREENSHOT;
@@ -28,10 +29,12 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Trace;
 import android.util.ArraySet;
 import android.util.Slog;
 import android.view.Display;
-import android.window.ScreenCapture;
+import android.window.ScreenCapture.ScreenCaptureParams;
+import android.window.ScreenCaptureInternal;
 import android.window.TaskSnapshot;
 import android.window.TaskSnapshotManager;
 
@@ -40,6 +43,7 @@ import com.android.server.wm.BaseAppSnapshotPersister.PersistInfoProvider;
 import com.android.window.flags.Flags;
 
 import java.util.ArrayList;
+import java.util.function.Consumer;
 
 /**
  * When an app token becomes invisible, we take a snapshot (bitmap) of the corresponding task and
@@ -62,6 +66,7 @@ class TaskSnapshotController extends AbsAppSnapshotController<Task, TaskSnapshot
     private final Handler mHandler = new Handler();
 
     private final PersistInfoProvider mPersistInfoProvider;
+    final boolean mOnlyCacheLowResSnapshot;
 
     TaskSnapshotController(WindowManagerService service, SnapshotPersistQueue persistQueue) {
         super(service);
@@ -78,6 +83,9 @@ class TaskSnapshotController extends AbsAppSnapshotController<Task, TaskSnapshot
                 mPersistInfoProvider,
                 shouldDisableSnapshots());
         initialize(new TaskSnapshotCache(new AppSnapshotLoader(mPersistInfoProvider)));
+        mOnlyCacheLowResSnapshot = Flags.reduceTaskSnapshotMemoryUsage()
+                && Flags.respectRequestedTaskSnapshotResolution()
+                && mPersistInfoProvider.enableLowResSnapshots();
     }
 
     static PersistInfoProvider createPersistInfoProvider(WindowManagerService service,
@@ -163,10 +171,69 @@ class TaskSnapshotController extends AbsAppSnapshotController<Task, TaskSnapshot
                 snapshot.addReference(initialUsage);
             }
             if (!task.isActivityTypeHome()) {
-                mPersister.persistSnapshot(task.mTaskId, task.mUserId, snapshot);
+                final var updateCacheFunction = mOnlyCacheLowResSnapshot
+                        ? updateLowResToCacheFunction(task, snapshot.getId()) : null;
+                mPersister.persistSnapshotAndConvert(
+                        task.mTaskId, task.mUserId, snapshot, updateCacheFunction);
                 task.onSnapshotChanged(snapshot);
             }
         });
+    }
+
+    private Consumer<BaseAppSnapshotPersister.LowResSnapshotSupplier> updateLowResToCacheFunction(
+            Task task, long snapshotId) {
+        return supplier -> mHandler.post(() -> {
+            boolean abort = false;
+            synchronized (mService.mGlobalLock) {
+                if (!task.isAttached()) {
+                    abort = true;
+                } else {
+                    final TaskSnapshot previous = mCache.getSnapshot(task.mTaskId,
+                            TaskSnapshotManager.RESOLUTION_ANY, TaskSnapshot.REFERENCE_NONE);
+                    if (previous == null || previous.isLowResolution()
+                            || previous.getId() != snapshotId) {
+                        abort = true;
+                    }
+                }
+            }
+            if (abort) {
+                supplier.abort();
+                return;
+            }
+            try {
+                Trace.traceBegin(TRACE_TAG_WINDOW_MANAGER, "updateLowSnapshotToCache");
+                final TaskSnapshot converted = supplier.getLowResSnapshot();
+                if (converted == null) {
+                    return;
+                }
+                synchronized (mService.mGlobalLock) {
+                    if (!task.isAttached()
+                            || !updateCacheWithLowResSnapshotIfNeeded(task, converted)) {
+                        converted.closeBuffer();
+                    }
+                }
+            } finally {
+                Trace.traceEnd(TRACE_TAG_WINDOW_MANAGER);
+            }
+        });
+    }
+
+    /**
+     * Updates the cache with the low-resolution snapshot if the existing snapshot in the cache
+     * is a high-resolution snapshot with the same id.
+     *
+     * @param task The task associated with the snapshot.
+     * @param lowSnapshot The low-resolution snapshot to update the cache with.
+     * @return {@code true} if the cache was updated, {@code false} otherwise.
+     */
+    boolean updateCacheWithLowResSnapshotIfNeeded(Task task, TaskSnapshot lowSnapshot) {
+        final TaskSnapshot tmp = getSnapshot(
+                task.mTaskId, TaskSnapshotManager.RESOLUTION_ANY);
+        if (tmp != null && !tmp.isLowResolution() && tmp.getId() == lowSnapshot.getId()) {
+            mCache.putSnapshot(task, lowSnapshot);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -227,6 +294,23 @@ class TaskSnapshotController extends AbsAppSnapshotController<Task, TaskSnapshot
     }
 
     /**
+     * Creates a low-resolution snapshot from a given high-resolution snapshot.
+     * This is only valid if persisting low-resolution snapshots is enabled.
+     *
+     * @param inCacheSnapshot The high-resolution snapshot from cache which to create the
+     *                        low-resolution version.
+     * @return The low-resolution snapshot, or {@code null} if persisting low-resolution snapshots
+     *         is not enabled.
+     */
+    TaskSnapshot createLowResSnapshot(TaskSnapshot inCacheSnapshot) {
+        if (!mPersistInfoProvider.enableLowResSnapshots()) {
+            return null;
+        }
+        return TaskSnapshotConvertUtil.convertSnapshotToLowRes(
+                inCacheSnapshot, mPersistInfoProvider.lowResScaleFactor());
+    }
+
+    /**
      * Returns the elapsed real time (in nanoseconds) at which a snapshot for the given task was
      * last taken, or -1 if no such snapshot exists for that task.
      */
@@ -267,8 +351,8 @@ class TaskSnapshotController extends AbsAppSnapshotController<Task, TaskSnapshot
     }
 
     @Nullable
-    private ScreenCapture.ScreenshotHardwareBuffer createImeScreenshot(@NonNull Task task,
-            @PixelFormat.Format int pixelFormat) {
+    private ScreenCaptureInternal.ScreenshotHardwareBuffer createImeScreenshot(
+            @NonNull Task task, @PixelFormat.Format int pixelFormat) {
         if (task.getSurfaceControl() == null) {
             if (DEBUG_SCREENSHOT) {
                 Slog.w(TAG_WM, "Failed to create IME screenshot. No surface control for " + task);
@@ -279,14 +363,16 @@ class TaskSnapshotController extends AbsAppSnapshotController<Task, TaskSnapshot
         if (imeWindow != null && imeWindow.isVisible()) {
             final Rect bounds = imeWindow.getParentFrame();
             bounds.offsetTo(0, 0);
-            final var captureArgs = new ScreenCapture.LayerCaptureArgs.Builder(
-                    imeWindow.getSurfaceControl())
-                    .setSourceCrop(bounds)
-                    .setFrameScale(1.0f)
-                    .setPixelFormat(pixelFormat)
-                    .setCaptureSecureLayers(true)
-                    .build();
-            return ScreenCapture.captureLayers(captureArgs);
+            final var captureArgs =
+                    new ScreenCaptureInternal.LayerCaptureArgs.Builder(
+                                    imeWindow.getSurfaceControl())
+                            .setSourceCrop(bounds)
+                            .setFrameScale(1.0f)
+                            .setPixelFormat(pixelFormat)
+                            .setSecureContentPolicy(
+                                    ScreenCaptureParams.SECURE_CONTENT_POLICY_CAPTURE)
+                            .build();
+            return ScreenCaptureInternal.captureLayers(captureArgs);
         }
         return null;
     }
@@ -296,7 +382,8 @@ class TaskSnapshotController extends AbsAppSnapshotController<Task, TaskSnapshot
      * task snapshot, to maintain the IME visibility while transitioning to a different task.
      */
     @Nullable
-    ScreenCapture.ScreenshotHardwareBuffer screenshotImeFromAttachedTask(@NonNull Task task) {
+    ScreenCaptureInternal.ScreenshotHardwareBuffer screenshotImeFromAttachedTask(
+            @NonNull Task task) {
         // Check if the IME target task is ready to capture the IME screenshot. If not, this means
         // the task is not yet visible for some reason, so it doesn't need the screenshot.
         if (checkIfReadyToScreenshot(task) == null) {

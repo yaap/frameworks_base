@@ -68,10 +68,23 @@ constructor(private val blurConfig: BlurConfig, animationFlow: KeyguardTransitio
             onFinish = { 0f },
         )
 
-    val lockscreenAlpha: Flow<Float> = shortcutsAlpha
+    val lockscreenAlpha: Flow<Float> =
+        if (SceneContainerFlag.isEnabled) {
+            // Lockscreen -> Bouncer is a scene transition in Flexiglass.
+            // SharedNotificationContainerViewModel#alphaForShadeAndQsExpansion might be relevant
+            // instead.
+            emptyFlow()
+        } else {
+            shortcutsAlpha
+        }
 
     val notificationAlpha: Flow<Float> =
-        if (Flags.bouncerUiRevamp()) {
+        if (SceneContainerFlag.isEnabled) {
+            // Lockscreen -> Bouncer is a scene transition in Flexiglass.
+            // SharedNotificationContainerViewModel#alphaForShadeAndQsExpansion might be relevant
+            // instead.
+            emptyFlow()
+        } else if (Flags.bouncerUiRevamp()) {
             transitionAnimation.sharedFlowWithShade(
                 duration = 200.milliseconds,
                 onStep = { step, isShadeExpanded ->

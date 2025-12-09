@@ -21,6 +21,8 @@ import com.android.hoststubgen.filters.AnnotationBasedFilter
 import com.android.hoststubgen.filters.ClassWidePolicyPropagatingFilter
 import com.android.hoststubgen.filters.ConstantFilter
 import com.android.hoststubgen.filters.DefaultHookInjectingFilter
+import com.android.hoststubgen.filters.FilterPolicy
+import com.android.hoststubgen.filters.FilterPolicyWithReason
 import com.android.hoststubgen.filters.FilterRemapper
 import com.android.hoststubgen.filters.ImplicitOutputFilter
 import com.android.hoststubgen.filters.KeepNativeFilter
@@ -29,16 +31,17 @@ import com.android.hoststubgen.filters.SanitizationFilter
 import com.android.hoststubgen.filters.TextFileFilterPolicyBuilder
 import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsKeep
 import com.android.hoststubgen.utils.ClassPredicate
+import com.android.hoststubgen.utils.ZipEntryData
 import com.android.hoststubgen.visitors.ImplGeneratingAdapter
 import com.android.hoststubgen.visitors.JdkPatchVisitor
 import com.android.hoststubgen.visitors.PackageRedirectRemapper
-import java.io.PrintWriter
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.commons.ClassRemapper
 import org.objectweb.asm.util.CheckClassAdapter
 import org.objectweb.asm.util.TraceClassVisitor
+import java.io.PrintWriter
 
 /**
  * This class implements bytecode transformation of HostStubGen.
@@ -58,12 +61,13 @@ class HostStubGenClassProcessor(
         // Connect to the base visitor
         var outVisitor: ClassVisitor = base
 
-        if (!options.disableJdkPatch.get) {
-            outVisitor = JdkPatchVisitor(outVisitor)
-        }
-
+        // This should be the innermost visitor. This one checks the final bytecode.
         if (options.enableClassChecker.get) {
             outVisitor = CheckClassAdapter(outVisitor)
+        }
+
+        if (!options.disableJdkPatch.get) {
+            outVisitor = JdkPatchVisitor(outVisitor)
         }
 
         // Remapping should happen at the end.
@@ -74,6 +78,8 @@ class HostStubGenClassProcessor(
             deleteClassFinals = options.deleteFinals.get,
             deleteMethodFinals = options.deleteFinals.get,
             throwExceptionType = options.throwExceptionType.get,
+            annotationsToMakeVisible = options.allAnnotationSet,
+            experimentalMethodCallHook = options.experimentalMethodCallHook.get,
         )
 
         val verbosePrinter = PrintWriter(log.getWriter(LogLevel.Verbose))
@@ -130,6 +136,30 @@ class HostStubGenClassProcessor(
         return cw.toByteArray()
     }
 
+    data class ClassZipEntryInfo(
+        val classInternalName: String,
+        val renamedEntryName: String,
+        val policy: FilterPolicyWithReason,
+    )
+
+    fun applyFilterOnClass(zipEntry: ZipEntryData): ClassZipEntryInfo? {
+        val classInternalName = zipEntry.name.removeSuffix(".class")
+        val classPolicy = filter.getPolicyForClass(classInternalName)
+        if (classPolicy.policy == FilterPolicy.Remove) {
+            log.d("Removing class: %s %s", classInternalName, classPolicy)
+            return null
+        }
+        // If we're applying a remapper, we need to rename the file too.
+        var newName = zipEntry.name
+        remapper.mapType(classInternalName)?.let { remappedName ->
+            if (remappedName != classInternalName) {
+                log.d("Renaming class file: %s -> %s", classInternalName, remappedName)
+                newName = "$remappedName.class"
+            }
+        }
+        return ClassZipEntryInfo(classInternalName, newName, classPolicy)
+    }
+
     companion object {
         /**
          * Build the filter, which decides what classes/methods/fields should be put in stub or impl
@@ -153,7 +183,11 @@ class HostStubGenClassProcessor(
             var filter: OutputFilter
 
             // The first filter is for the default policy from the command line options.
-            filter = ConstantFilter(options.defaultPolicy.get, "default-by-options")
+            filter = ConstantFilter(
+                options.defaultPolicy.get.resolveDefaultForClass(),
+                options.defaultPolicy.get.resolveDefaultForFields(),
+                options.defaultPolicy.get.resolveDefaultForMethods(),
+            )
 
             // Next, we build a filter that preserves all native methods by default
             filter = KeepNativeFilter(allClasses, filter)

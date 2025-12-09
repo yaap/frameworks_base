@@ -17,14 +17,15 @@
 package com.android.systemui.keyguard.dagger
 
 import com.android.systemui.keyguard.ui.transitions.GlanceableHubTransition
+import com.android.systemui.keyguard.ui.viewmodel.AodToGlanceableHubTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.DozingToGlanceableHubTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.DreamingToGlanceableHubTransitionViewModel
+import com.android.systemui.keyguard.ui.viewmodel.GlanceableHubToAodTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.GlanceableHubToDozingTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.GlanceableHubToDreamingTransitionViewModel
-import com.android.systemui.keyguard.ui.viewmodel.GlanceableHubToGoneTransitionViewModel
+import com.android.systemui.keyguard.ui.viewmodel.GlanceableHubToEditModeTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.GlanceableHubToLockscreenTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.GlanceableHubToOccludedTransitionViewModel
-import com.android.systemui.keyguard.ui.viewmodel.GoneToGlanceableHubTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.LockscreenToGlanceableHubTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.OccludedToGlanceableHubTransitionViewModel
 import dagger.Binds
@@ -75,9 +76,11 @@ interface GlanceableHubTransitionImplModule {
 
     @Binds
     @IntoSet
-    fun fromGone(impl: GoneToGlanceableHubTransitionViewModel): GlanceableHubTransition
+    fun fromAod(impl: AodToGlanceableHubTransitionViewModel): GlanceableHubTransition
+
+    @Binds @IntoSet fun toAod(impl: GlanceableHubToAodTransitionViewModel): GlanceableHubTransition
 
     @Binds
     @IntoSet
-    fun toGone(impl: GlanceableHubToGoneTransitionViewModel): GlanceableHubTransition
+    fun toEditMode(impl: GlanceableHubToEditModeTransitionViewModel): GlanceableHubTransition
 }

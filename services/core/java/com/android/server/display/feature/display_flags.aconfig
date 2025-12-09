@@ -13,14 +13,6 @@ flag {
 }
 
 flag {
-    name: "enable_port_in_display_layout"
-    namespace: "display_manager"
-    description: "Allows refering to displays by port in display layout"
-    bug: "303058435"
-    is_fixed_read_only: true
-}
-
-flag {
     name: "resolution_backup_restore"
     namespace: "display_manager"
     description: "Backup/Restore support for High Resolution setting"
@@ -33,46 +25,6 @@ flag {
     namespace: "display_manager"
     description: "Feature flag for Power Throttling Clamper"
     bug: "294777007"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_adaptive_tone_improvements_1"
-    namespace: "display_manager"
-    description: "Feature flag for Adaptive Tone Improvements"
-    bug: "299550755"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_adaptive_tone_improvements_2"
-    namespace: "display_manager"
-    description: "Feature flag for Further Adaptive Tone Improvements"
-    bug: "294762632"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_display_resolution_range_voting"
-    namespace: "display_manager"
-    description: "Feature flag to enable voting for ranges of resolutions"
-    bug: "299297058"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_user_preferred_mode_vote"
-    namespace: "display_manager"
-    description: "Feature flag to use voting for UserPreferredMode for display"
-    bug: "297018612"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_mode_limit_for_external_display"
-    namespace: "display_manager"
-    description: "Feature limiting external display resolution and refresh rate"
-    bug: "242093547"
     is_fixed_read_only: true
 }
 
@@ -90,13 +42,14 @@ flag {
     description: "API for reading the current display topology"
     bug: "404269099"
     is_fixed_read_only: true
+    is_exported: true
 }
 
 flag {
-    name: "enable_displays_refresh_rates_synchronization"
+    name: "change_default_display_lid_closed"
     namespace: "display_manager"
-    description: "Enables synchronization of refresh rates across displays"
-    bug: "294015845"
+    description: "Make one of the secondary displays the default display when the device's lid is closed"
+    bug: "400351704"
 }
 
 flag {
@@ -132,35 +85,10 @@ flag {
 }
 
 flag {
-    name: "brightness_int_range_user_perception"
+    name: "configurable_default_doze_values"
     namespace: "display_manager"
-    description: "Feature flag for converting the brightness integer range to the user perception scale"
-    bug: "319236956"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_restrict_display_modes"
-    namespace: "display_manager"
-    description: "Feature flag for restriction display modes api"
-    bug: "284866750"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_vsync_low_power_vote"
-    namespace: "display_manager"
-    description: "Feature flag for vsync low power vote"
-    bug: "314920284"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_vsync_low_light_vote"
-    namespace: "display_manager"
-    description: "Feature flag for vsync low light vote"
-    bug: "314921657"
-    is_fixed_read_only: true
+    description: "Specify the default doze values in config.xml"
+    bug: "279161929"
 }
 
 flag {
@@ -184,25 +112,6 @@ flag {
     namespace: "display_manager"
     description: "Feature flag for fast transitions into/out of HDR"
     bug: "292124102"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "always_rotate_display_device"
-    namespace: "display_manager"
-    description: "Use rotation from WindowManager no matter whether FLAG_ROTATES_WITH_CONTENT is set or not"
-    bug: "302326003"
-    is_fixed_read_only: true
-    metadata {
-      purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "enable_pixel_anisotropy_correction"
-    namespace: "display_manager"
-    description: "Feature flag for enabling display anisotropy correction through LogicalDisplay upscaling"
-    bug: "317363416"
     is_fixed_read_only: true
 }
 
@@ -237,13 +146,6 @@ flag {
     bug: "335181559"
     is_fixed_read_only: true
     is_exported: true
-}
-
-flag {
-    name: "doze_brightness_float"
-    namespace: "display_manager"
-    description: "Define doze brightness in the float scale [0, 1]."
-    bug: "343796384"
 }
 
 flag {
@@ -296,33 +198,6 @@ flag {
 }
 
 flag {
-    name: "new_hdr_brightness_modifier"
-    namespace: "display_manager"
-    description: "Flag for new HDR brightness clamper."
-    bug: "331275392"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "virtual_display_limit"
-    namespace: "display_manager"
-    description: "Limit the number of virtual displays that can be created."
-    bug: "261791612"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_waiting_confirmation_before_mirroring"
-    namespace: "display_manager"
-    description: "Allow ContentRecorder checking whether user confirmed mirroring after boot"
-    bug: "361698995"
-    is_fixed_read_only: true
-    metadata {
-      purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "enable_battery_stats_for_all_displays"
     namespace: "display_manager"
     description: "Flag to enable battery stats for all displays."
@@ -331,33 +206,11 @@ flag {
 }
 
 flag {
-    name: "enable_apply_display_changed_during_display_added"
-    namespace: "display_manager"
-    description: "Apply display changes after display added"
-    bug: "368131655"
-    is_fixed_read_only: true
-    metadata {
-      purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "block_autobrightness_changes_on_stylus_usage"
     namespace: "display_manager"
     description: "Block the usage of ALS to control the display brightness when stylus is being used"
     bug: "352411468"
     is_fixed_read_only: true
-}
-
-flag {
-    name: "enable_user_refresh_rate_for_external_display"
-    namespace: "display_manager"
-    description: "Apply refresh rate from user preferred display mode to external displays"
-    bug: "370657357"
-    is_fixed_read_only: true
-    metadata {
-      purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -402,14 +255,6 @@ flag {
     bug: "365163968"
     is_fixed_read_only: true
     is_exported: true
-}
-
-flag {
-    name: "enable_plugin_manager"
-    namespace: "display_manager"
-    description: "Flag to enable DisplayManager plugins"
-    bug: "354059797"
-    is_fixed_read_only: true
 }
 
 flag {
@@ -474,6 +319,7 @@ flag {
     description: "Add a new category to get the built in displays."
     bug: "293651324"
     is_fixed_read_only: false
+    is_exported: true
 }
 
 flag {
@@ -530,16 +376,6 @@ flag {
 }
 
 flag {
-    name: "enable_on_mode_changed_vsync_phase_offset"
-    namespace: "core_graphics"
-    description: "Flag to utilize vsync offset and presentation deadline from onModeChanged callback"
-    bug: "398872242"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "enable_default_display_in_topology_switch"
     namespace: "lse_desktop_experience"
     description: "Add a switch that allows the user to include the default display in display topology. This is only used for projected mode."
@@ -566,4 +402,88 @@ flag {
     metadata {
       purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "enable_on_display_added_in_observer"
+    namespace: "display_manager"
+    description: "On display added should be called after the display listener is registered."
+    bug: "414778119"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_logging_for_display_events"
+    namespace: "display_manager"
+    description: "Enable logging statistics for display event occurrences."
+    bug: "433479938"
+}
+
+flag {
+    name: "minmode_cap_brightness_enabled"
+    namespace: "display_manager"
+    description: "Restrict the brightness due to minmode"
+    bug: "433557124"
+    metadata {
+      purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_synthetic_modes_v2"
+    namespace: "display_manager"
+    description: "Added synthetic mode flags, parentId. Construction moved to LocalDisplay "
+    bug: "428843411"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_anisotropy_corrected_modes"
+    namespace: "display_manager"
+    description: "Enable synthetic anisotropy corrected modes for external displays."
+    bug: "375563565"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_single_app_event_for_mode_and_frame_rate_override"
+    namespace: "display_manager"
+    description: "Enable single app event for mode and frame rate override changed event."
+    bug: "415850294"
+    metadata {
+      purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_display_mirror_in_lock_task_mode"
+    namespace: "lse_desktop_experience"
+    description: "Starts mirroring on the connected display if the device is in lock task mode."
+    bug: "408988940"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_size_override_for_external_displays"
+    namespace: "lse_desktop_experience"
+    description: "Enable size override for external displays without changing the surface flinger mode."
+    bug: "438485020"
+    metadata {
+      purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_app_resolution_change"
+    namespace: "display_manager"
+    description: "Enable dynamic resolution changing requested by apps"
+    bug: "414654227"
 }

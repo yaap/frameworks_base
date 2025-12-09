@@ -17,6 +17,7 @@
 package com.android.systemui.statusbar.phone;
 
 import static com.android.systemui.keyguard.shared.model.KeyguardState.ALTERNATE_BOUNCER;
+import static com.android.systemui.keyguard.shared.model.KeyguardState.DREAMING;
 import static com.android.systemui.keyguard.shared.model.KeyguardState.GLANCEABLE_HUB;
 import static com.android.systemui.keyguard.shared.model.KeyguardState.GONE;
 import static com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN;
@@ -66,7 +67,6 @@ import com.android.systemui.keyguard.KeyguardUnlockAnimationController;
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor;
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor;
 import com.android.systemui.keyguard.shared.model.Edge;
-import com.android.systemui.keyguard.shared.model.KeyguardState;
 import com.android.systemui.keyguard.shared.model.ScrimAlpha;
 import com.android.systemui.keyguard.shared.model.TransitionState;
 import com.android.systemui.keyguard.shared.model.TransitionStep;
@@ -92,6 +92,8 @@ import com.android.systemui.window.domain.interactor.WindowRootViewBlurInteracto
 
 import dagger.Lazy;
 
+import kotlin.Deprecated;
+
 import kotlinx.coroutines.CoroutineDispatcher;
 import kotlinx.coroutines.ExperimentalCoroutinesApi;
 
@@ -104,11 +106,12 @@ import javax.inject.Inject;
 
 /**
  * Controls both the scrim behind the notifications and in front of the notifications (when a
- * security method gets shown).
+ * security method gets shown). Unused when the scene_container flag is enabled.
  */
 @SuppressLint("DumpableNotRegistered") // CentralSurfaces dumps ScrimController
 @SysUISingleton
 @ExperimentalCoroutinesApi
+@Deprecated(message = "Scrim controller cannot be used when SceneContainerFlag is enabled")
 public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dumpable {
 
     static final String TAG = "ScrimController";
@@ -328,7 +331,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     private final Consumer<TransitionStep> mGlanceableHubConsumer = (TransitionStep step) -> {
         final float baseAlpha = ScrimState.KEYGUARD.getBehindAlpha();
         final float transitionProgress = step.getValue();
-        if (step.getTo() == KeyguardState.LOCKSCREEN) {
+        if (step.getTo() == LOCKSCREEN) {
             // Transitioning back to lock screen, fade in behind scrim again.
             mBehindAlpha = baseAlpha * transitionProgress;
         } else if (step.getTo() == GLANCEABLE_HUB) {
@@ -339,8 +342,30 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     };
 
     /**
-     * Consumer used to fade the behind scrim when entering the dream from a lockscreen state. This
-     * is done because the behind scrim is on top of the dream.
+     * Consumer that dispatches the scrim state at the end of the primary bouncer to dream
+     * transition. This triggers both when entering dream from lock screen with the bouncer open or
+     * when closing the bouncer on top of the dream.
+     *
+     * This extra dispatch is needed as scrim transitions are not directly tied to keyguard
+     * transitions and the scrim transition may end before the keyguard transition does. The last
+     * dispatch of the scrim visibility happens when the scrim transition ends, meaning that if the
+     * keyguard transition hasn't ended by then, the scrims aren't transparent yet as the bouncer to
+     * dream keyguard transition directly controls the scrim alpha. This issue does not occur in
+     * every shade configuration, but can cause the shade window to stay visible and steal touches
+     * on top of the dream. See b/434038809.
+     */
+    Consumer<TransitionStep> mBouncerToDreamTransition = (TransitionStep step) -> {
+        TransitionState state = step.getTransitionState();
+        if (state == TransitionState.FINISHED || state == TransitionState.CANCELED) {
+            dispatchScrimsVisible();
+            dispatchBackScrimState(mScrimBehind.getViewAlpha());
+        }
+    };
+
+    /**
+     * Consumer used to fade the behind scrim when entering the dream from a lockscreen state or
+     * when closing the primary bouncer from the dream. This is done because the behind scrim is on
+     * top of the dream.
      */
     private final Consumer<ScrimAlpha> mDreamBehindScrimAlphaConsumer =
             (ScrimAlpha alphas) -> {
@@ -377,6 +402,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
             BlurConfig blurConfig,
             @Main Context context,
             Lazy<WindowRootViewBlurInteractor> windowRootViewBlurInteractor) {
+        SceneContainerFlag.assertInLegacyMode();
         mContext = context;
         mScrimStateListener = lightBarController::setScrimState;
         mLargeScreenShadeInterpolator = largeScreenShadeInterpolator;
@@ -463,10 +489,6 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     }
 
     private void hydrateStateInternally(ScrimView behindScrim) {
-        if (SceneContainerFlag.isEnabled()) {
-            return;
-        }
-
         // Directly control transition to UNLOCKED scrim state from PRIMARY_BOUNCER, and make sure
         // to report back that keyguard has faded away. This fixes cases where the scrim state was
         // rapidly switching on unlock, due to shifts in state in CentralSurfacesImpl
@@ -492,7 +514,11 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                 };
 
         // PRIMARY_BOUNCER->DREAMING
-        if (Flags.dreamTransitionFixes()) {
+        if (Flags.dreamBouncerTransitionFix()) {
+            collectFlow(behindScrim, mKeyguardTransitionInteractor.transition(
+                            Edge.Companion.create(PRIMARY_BOUNCER, Scenes.Dream),
+                            Edge.Companion.create(PRIMARY_BOUNCER, DREAMING)),
+                    mBouncerToDreamTransition, mMainDispatcher);
             collectFlow(behindScrim, mPrimaryBouncerToDreamingTransitionViewModel.getScrimAlpha(),
                     mDreamBehindScrimAlphaConsumer, mMainDispatcher);
         }
@@ -514,10 +540,8 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                 mBouncerToGoneScrimAlphaConsumer, mMainDispatcher);
 
         // LOCKSCREEN->DREAMING
-        if (Flags.dreamTransitionFixes()) {
-            collectFlow(behindScrim, mLockscreenToDreamingTransitionViewModel.getScrimAlpha(),
-                    mDreamBehindScrimAlphaConsumer, mMainDispatcher);
-        }
+        collectFlow(behindScrim, mLockscreenToDreamingTransitionViewModel.getScrimAlpha(),
+                mDreamBehindScrimAlphaConsumer, mMainDispatcher);
 
         // LOCKSCREEN<->GLANCEABLE_HUB
         collectFlow(
@@ -591,22 +615,12 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         mScrimVisibleListener = listener;
     }
 
-    public void transitionTo(ScrimState state) {
-        if (SceneContainerFlag.isUnexpectedlyInLegacyMode() || !mViewsAttached) {
-            return;
-        }
-
-        internalTransitionTo(state, null);
-    }
-
     /**
      * Transitions to the given {@link ScrimState}.
      *
      * @deprecated Legacy codepath only. Do not call directly.
      */
-    @Deprecated
     public void legacyTransitionTo(ScrimState state) {
-        SceneContainerFlag.assertInLegacyMode();
         internalTransitionTo(state, null);
     }
 
@@ -615,9 +629,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
      *
      * @deprecated Legacy codepath only. Do not call directly.
      */
-    @Deprecated
     public void legacyTransitionTo(ScrimState state, Callback callback) {
-        SceneContainerFlag.assertInLegacyMode();
         internalTransitionTo(state, callback);
     }
 
@@ -1312,11 +1324,12 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         }
 
         // We also want to hide FLAG_SHOW_WHEN_LOCKED activities under the scrim.
-        boolean hideFlagShowWhenLockedActivities =
-                (mState == ScrimState.PULSING || mState == ScrimState.AOD)
-                && mKeyguardOccluded;
-        if (hideFlagShowWhenLockedActivities) {
-            mBehindAlpha = 1;
+        if (mState == ScrimState.PULSING || mState == ScrimState.AOD) {
+            if (mKeyguardOccluded) {
+                mBehindAlpha = 1;
+            } else {
+                mBehindAlpha = 0;
+            }
         }
         // Prevent notification scrim flicker when transitioning away from keyguard.
         if (mKeyguardStateController.isKeyguardGoingAway()) {

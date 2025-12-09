@@ -56,7 +56,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -128,13 +127,17 @@ constructor(
                         Settings.Secure.DOZE_ALWAYS_ON_WALLPAPER_ENABLED,
                     )
                     .onStart { emit(Unit) },
+                secureSettings
+                    .observerFlow(UserHandle.USER_ALL, Settings.Secure.DOZE_ALWAYS_ON)
+                    .onStart { emit(Unit) },
                 configurationInteractor.onAnyConfigurationChange,
-                ::Pair,
+                ::Triple,
             )
             .map {
-                val userEnabled =
-                    secureSettings.getInt(Settings.Secure.DOZE_ALWAYS_ON_WALLPAPER_ENABLED, 1) == 1
-                userEnabled && configEnabled() && ambientAod()
+                val aodEnabled = secureSettings.getInt(Settings.Secure.DOZE_ALWAYS_ON, 0) == 1
+                val wallpaperEnabled =
+                    secureSettings.getInt(Settings.Secure.DOZE_ALWAYS_ON_WALLPAPER_ENABLED, 0) == 1
+                aodEnabled && wallpaperEnabled && configEnabled() && ambientAod()
             }
             .flowOn(bgDispatcher)
 
@@ -176,7 +179,6 @@ constructor(
 
     override val shouldSendFocalArea =
         lockscreenWallpaperInfo
-            .filterNotNull()
             .map {
                 val focalAreaTarget = context.resources.getString(SysUIR.string.focal_area_target)
                 val shouldSendNotificationLayout = it?.component?.className == focalAreaTarget

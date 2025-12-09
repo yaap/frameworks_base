@@ -27,7 +27,6 @@ import static android.hardware.devicestate.DeviceState.PROPERTY_POWER_CONFIGURAT
 import static android.provider.Settings.Global.HEADS_UP_NOTIFICATIONS_ENABLED;
 import static android.provider.Settings.Global.HEADS_UP_ON;
 
-import static com.android.systemui.Flags.FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE;
 import static com.android.systemui.flags.Flags.SHORTCUT_LIST_SEARCH_LAYOUT;
 import static com.android.systemui.shared.Flags.FLAG_AMBIENT_AOD;
 import static com.android.systemui.statusbar.StatusBarState.KEYGUARD;
@@ -93,6 +92,7 @@ import android.view.WindowMetrics;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
+import com.android.app.displaylib.PerDisplayRepository;
 import com.android.compose.animation.scene.ObservableTransitionState;
 import com.android.internal.colorextraction.ColorExtractor;
 import com.android.internal.logging.UiEventLogger;
@@ -116,6 +116,7 @@ import com.android.systemui.classifier.FalsingManagerFake;
 import com.android.systemui.colorextraction.SysuiColorExtractor;
 import com.android.systemui.communal.shared.model.CommunalScenes;
 import com.android.systemui.demomode.DemoModeController;
+import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent;
 import com.android.systemui.dump.DumpManager;
 import com.android.systemui.emergency.EmergencyGestureModule.EmergencyGestureIntentFactory;
 import com.android.systemui.flags.DisableSceneContainer;
@@ -132,7 +133,6 @@ import com.android.systemui.navigationbar.NavigationBarController;
 import com.android.systemui.notetask.NoteTaskController;
 import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.plugins.ActivityStarter.OnDismissAction;
-import com.android.systemui.plugins.DarkIconDispatcher;
 import com.android.systemui.plugins.PluginDependencyProvider;
 import com.android.systemui.plugins.PluginManager;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
@@ -140,7 +140,6 @@ import com.android.systemui.power.domain.interactor.PowerInteractor;
 import com.android.systemui.qs.flags.QSComposeFragment;
 import com.android.systemui.res.R;
 import com.android.systemui.scene.domain.interactor.WindowRootViewVisibilityInteractor;
-import com.android.systemui.scene.domain.startable.ScrimStartable;
 import com.android.systemui.scene.shared.flag.SceneContainerFlag;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.settings.brightness.BrightnessSliderController;
@@ -201,6 +200,7 @@ import com.android.systemui.statusbar.policy.DeviceProvisionedController;
 import com.android.systemui.statusbar.policy.ExtensionController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.statusbar.policy.UserInfoControllerImpl;
+import com.android.systemui.statusbar.policy.domain.interactor.DeviceProvisioningInteractor;
 import com.android.systemui.statusbar.window.StatusBarWindowController;
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
@@ -322,6 +322,9 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     @Mock private StatusBarWindowControllerStore mStatusBarWindowControllerStore;
     @Mock private Provider<CollapsedStatusBarFragment> mCollapsedStatusBarFragmentProvider;
     @Mock private StatusBarWindowStateController mStatusBarWindowStateController;
+    @Mock private SystemUIDisplaySubcomponent mSystemUIDisplaySubcomponent;
+    @Mock
+    private PerDisplayRepository<SystemUIDisplaySubcomponent> mPerDisplaySubcomponentRepository;
     @Mock private Bubbles mBubbles;
     @Mock private NoteTaskController mNoteTaskController;
     @Mock private NotificationShadeWindowController mNotificationShadeWindowController;
@@ -416,6 +419,11 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
         when(mStatusBarWindowControllerStore.getDefaultDisplay())
                 .thenReturn(mStatusBarWindowController);
 
+        when(mSystemUIDisplaySubcomponent.getStatusBarWindowStateController())
+                .thenReturn(mStatusBarWindowStateController);
+        when(mPerDisplaySubcomponentRepository.get(anyInt()))
+                .thenReturn(mSystemUIDisplaySubcomponent);
+
         mVisualInterruptionDecisionProvider =
                 VisualInterruptionDecisionProviderTestUtil.INSTANCE.createProviderByFlag(
                         mAmbientDisplayConfiguration,
@@ -441,7 +449,8 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
                         Optional.of(mBubbles),
                         mContext,
                         mNotificationManager,
-                        mNotificationSettingsInteractor);
+                        mNotificationSettingsInteractor,
+                        mock(DeviceProvisioningInteractor.class));
         mVisualInterruptionDecisionProvider.start();
 
         mContext.addMockSystemService(TrustManager.class, mock(TrustManager.class));
@@ -544,13 +553,12 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
                         mStatusBarWindowController,
                         mStatusBarModePerDisplayRepository,
                         mock(StatusBarConfigurationController.class),
-                        mock(DarkIconDispatcher.class),
                         mCollapsedStatusBarFragmentProvider,
                         mock(StatusBarRootFactory.class),
                         mock(HomeStatusBarComponent.Factory.class),
                         emptySet()),
                 mStatusBarWindowControllerStore,
-                mStatusBarWindowStateController,
+                mPerDisplaySubcomponentRepository,
                 new FakeStatusBarModeRepository(),
                 mKeyguardUpdateMonitor,
                 mStatusBarSignalPolicy,
@@ -597,7 +605,7 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
                 (Lazy<NotificationActivityStarter>) () -> mNotificationActivityStarter,
                 mNotifTransitionAnimControllerProvider,
                 mDozeParameters,
-                mScrimController,
+                () -> mScrimController,
                 mBiometricUnlockControllerLazy,
                 mAuthRippleController,
                 mDozeServiceHost,
@@ -983,6 +991,8 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
+    // When the scene container is enabled, StatusBarStateController.setState() is no longer needed.
+    @DisableSceneContainer
     public void testShowKeyguardImplementation_setsState() {
         when(mLockscreenUserManager.getCurrentProfiles()).thenReturn(new SparseArray<>());
 
@@ -1133,6 +1143,8 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
+    // When the scene container is enabled, StatusBarStateController.setState() is no longer needed.
+    @DisableSceneContainer
     public void testKeyguardHideDelayedIfOcclusionAnimationRunning() {
         // Show the keyguard and verify we've done so.
         setKeyguardShowingAndOccluded(true /* showing */, false /* occluded */);
@@ -1152,6 +1164,8 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
+    // When the scene container is enabled, StatusBarStateController.setState() is no longer needed.
+    @DisableSceneContainer
     public void testKeyguardHideNotDelayedIfOcclusionAnimationNotRunning() {
         // Show the keyguard and verify we've done so.
         setKeyguardShowingAndOccluded(true /* showing */, false /* occluded */);
@@ -1183,25 +1197,7 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableSceneContainer
-    public void brightnesShowingChanged_sceneContainerFlagEnabled_ScrimControllerNotified() {
-        final ScrimStartable scrimStartable = mKosmos.getScrimStartable();
-        scrimStartable.start();
-
-        mBrightnessMirrorShowingRepository.setMirrorShowing(true);
-        mTestScope.getTestScheduler().runCurrent();
-        verify(mScrimController, atLeastOnce()).transitionTo(ScrimState.BRIGHTNESS_MIRROR);
-
-        mBrightnessMirrorShowingRepository.setMirrorShowing(false);
-        mTestScope.getTestScheduler().runCurrent();
-        ArgumentCaptor<ScrimState> captor = ArgumentCaptor.forClass(ScrimState.class);
-        // The default is to call the one with the callback argument
-        verify(mScrimController, atLeastOnce()).transitionTo(captor.capture());
-        assertThat(captor.getValue()).isNotEqualTo(ScrimState.BRIGHTNESS_MIRROR);
-    }
-
-    @Test
-    @DisableSceneContainer // ScrimStartable updates scrims when the scene framework is enabled.
+    @DisableSceneContainer // Scrims updated elsewhere when the scene framework is enabled.
     @EnableFlags(QSComposeFragment.FLAG_NAME)
     public void brightnesShowingChanged_qsUiRefactorFlagEnabled_ScrimControllerNotified() {
         mBrightnessMirrorShowingRepository.setMirrorShowing(true);
@@ -1218,7 +1214,7 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableSceneContainer // ScrimStartable updates scrims when the scene framework is enabled.
+    @DisableSceneContainer // Scrims updated elsewhere when the scene framework is enabled.
     @DisableFlags(QSComposeFragment.FLAG_NAME)
     public void brightnesShowingChanged_flagsDisabled_ScrimControllerNotified() {
         mBrightnessMirrorShowingRepository.setMirrorShowing(true);
@@ -1229,7 +1225,6 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
     public void dismissKeyboardShortcuts_largeScreen_bothFlagsEnabled_doesNotDismissAny() {
         switchToLargeScreen();
         mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
@@ -1241,32 +1236,6 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void dismissKeyboardShortcuts_largeScreen_newFlagsDisabled_dismissesTabletVersion() {
-        switchToLargeScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
-        createCentralSurfaces();
-
-        dismissKeyboardShortcuts();
-
-        verify(mKeyboardShortcutListSearch).dismissKeyboardShortcuts();
-    }
-
-    @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void dismissKeyboardShortcuts_largeScreen_bothFlagsDisabled_dismissesPhoneVersion() {
-        switchToLargeScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, false);
-        createCentralSurfaces();
-
-        dismissKeyboardShortcuts();
-
-        verify(mKeyboardShortcuts).dismissKeyboardShortcuts();
-        verifyNoMoreInteractions(mKeyboardShortcutListSearch);
-    }
-
-    @Test
-    @EnableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
     public void dismissKeyboardShortcuts_smallScreen_bothFlagsEnabled_doesNotDismissAny() {
         switchToSmallScreen();
         mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
@@ -1278,33 +1247,6 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void dismissKeyboardShortcuts_smallScreen_newFlagsDisabled_dismissesPhoneVersion() {
-        switchToSmallScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
-        createCentralSurfaces();
-
-        dismissKeyboardShortcuts();
-
-        verify(mKeyboardShortcuts).dismissKeyboardShortcuts();
-        verifyNoMoreInteractions(mKeyboardShortcutListSearch);
-    }
-
-    @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void dismissKeyboardShortcuts_smallScreen_bothFlagsDisabled_dismissesPhoneVersion() {
-        switchToSmallScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, false);
-        createCentralSurfaces();
-
-        dismissKeyboardShortcuts();
-
-        verify(mKeyboardShortcuts).dismissKeyboardShortcuts();
-        verifyNoMoreInteractions(mKeyboardShortcutListSearch);
-    }
-
-    @Test
-    @EnableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
     public void toggleKeyboardShortcuts_largeScreen_bothFlagsEnabled_doesNotTogglesAny() {
         switchToLargeScreen();
         mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
@@ -1317,35 +1259,6 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void toggleKeyboardShortcuts_largeScreen_newFlagsDisabled_togglesTabletVersion() {
-        switchToLargeScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
-        createCentralSurfaces();
-
-        int deviceId = 654;
-        toggleKeyboardShortcuts(deviceId);
-
-        verify(mKeyboardShortcutListSearch).showKeyboardShortcuts(deviceId);
-        verifyNoMoreInteractions(mKeyboardShortcuts);
-    }
-
-    @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void toggleKeyboardShortcuts_largeScreen_bothFlagsDisabled_togglesPhoneVersion() {
-        switchToLargeScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, false);
-        createCentralSurfaces();
-
-        int deviceId = 987;
-        toggleKeyboardShortcuts(deviceId);
-
-        verify(mKeyboardShortcuts).showKeyboardShortcuts(deviceId);
-        verifyNoMoreInteractions(mKeyboardShortcutListSearch);
-    }
-
-    @Test
-    @EnableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
     public void toggleKeyboardShortcuts_smallScreen_bothFlagsEnabled_doesNotToggleAny() {
         switchToSmallScreen();
         mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
@@ -1355,34 +1268,6 @@ public class CentralSurfacesImplTest extends SysuiTestCase {
         toggleKeyboardShortcuts(/* deviceId= */ deviceId);
 
         verifyNoMoreInteractions(mKeyboardShortcuts, mKeyboardShortcutListSearch);
-    }
-
-    @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void toggleKeyboardShortcuts_smallScreen_newFlagsDisabled_togglesPhoneVersion() {
-        switchToSmallScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, true);
-        createCentralSurfaces();
-
-        int deviceId = 456;
-        toggleKeyboardShortcuts(deviceId);
-
-        verify(mKeyboardShortcuts).showKeyboardShortcuts(deviceId);
-        verifyNoMoreInteractions(mKeyboardShortcutListSearch);
-    }
-
-    @Test
-    @DisableFlags(FLAG_KEYBOARD_SHORTCUT_HELPER_REWRITE)
-    public void toggleKeyboardShortcuts_smallScreen_bothFlagsDisabled_togglesPhoneVersion() {
-        switchToSmallScreen();
-        mFeatureFlags.set(SHORTCUT_LIST_SEARCH_LAYOUT, false);
-        createCentralSurfaces();
-
-        int deviceId = 123;
-        toggleKeyboardShortcuts(deviceId);
-
-        verify(mKeyboardShortcuts).showKeyboardShortcuts(deviceId);
-        verifyNoMoreInteractions(mKeyboardShortcutListSearch);
     }
 
     private void dismissKeyboardShortcuts() {

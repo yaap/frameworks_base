@@ -60,6 +60,7 @@ import com.android.settingslib.metadata.ReadWritePermit
 import com.android.settingslib.metadata.SensitivityLevel.Companion.HIGH_SENSITIVITY
 import com.android.settingslib.metadata.SensitivityLevel.Companion.UNKNOWN_SENSITIVITY
 import com.android.settingslib.metadata.getPreferenceIcon
+import com.android.settingslib.metadata.isPreferenceIndexable
 import com.android.settingslib.preference.PreferenceScreenCreator
 import com.android.settingslib.preference.PreferenceScreenFactory
 import com.android.settingslib.preference.PreferenceScreenProvider
@@ -86,10 +87,20 @@ private constructor(
     private val visitedScreens = request.visitedScreens.toMutableSet()
     private val screens = mutableMapOf<String, PreferenceScreenProto.Builder>()
     private val forceIncludeAllScreens = request.flags.forceIncludeAllScreens()
+    private val includeParameters = (request.flags and PreferenceGetterFlags.PARAMETERS) != 0
+    private val includeHierarchy = (request.flags and PreferenceGetterFlags.EXCLUDE_HIERARCHY) == 0
+    private val shrinkHierarchy = (request.flags and PreferenceGetterFlags.SHRINK_HIERARCHY) != 0
 
     private suspend fun init() {
+        val factories = PreferenceScreenRegistry.preferenceScreenMetadataFactories
         for (screen in request.screens) {
-            PreferenceScreenRegistry.create(context, screen)?.let { addPreferenceScreen(it) }
+            val screenKey = screen.screenKey
+            val factory = factories[screenKey] ?: continue
+            if (screen.args == null && factory is PreferenceScreenMetadataParameterizedFactory) {
+                addPreferenceScreen(screenKey, factory)
+            } else {
+                PreferenceScreenRegistry.create(context, screen)?.let { addPreferenceScreen(it) }
+            }
         }
     }
 
@@ -157,7 +168,7 @@ private constructor(
     private suspend fun addPreferenceScreenFromRegistry(key: String): Boolean {
         val factory =
             PreferenceScreenRegistry.preferenceScreenMetadataFactories[key] ?: return false
-        return addPreferenceScreen(factory)
+        return addPreferenceScreen(key, factory)
     }
 
     suspend fun addPreferenceScreenProvider(activityClass: Class<*>) {
@@ -208,25 +219,43 @@ private constructor(
         }
     }
 
-    suspend fun addPreferenceScreen(factory: PreferenceScreenMetadataFactory): Boolean {
-        if (factory is PreferenceScreenMetadataParameterizedFactory) {
+    suspend fun addPreferenceScreen(
+        screenKey: String,
+        factory: PreferenceScreenMetadataFactory,
+    ): Boolean {
+        if (factory !is PreferenceScreenMetadataParameterizedFactory) {
+            return addPreferenceScreen(factory.create(context))
+        }
+        if (visitedScreens.add(PreferenceScreenCoordinate(screenKey, null))) {
+            val screen = screens.getOrPut(screenKey) { PreferenceScreenProto.newBuilder() }
+            screen.root = preferenceGroupProto { preference = preferenceProto { key = screenKey } }
+            screen.parameterized = true
+            if (includeParameters) {
+                factory.parameters(context).collect { screen.addParameters(it.toProto()) }
+            }
+        }
+        if (includeHierarchy) {
             var flagEnabled: Boolean? = null
             factory.parameters(context).collect {
                 if (flagEnabled == false) return@collect
                 val screenMetadata = factory.create(context, it)
                 if (flagEnabled == null) flagEnabled = checkScreenFlag(screenMetadata)
-                if (flagEnabled == true) addPreferenceScreen(screenMetadata)
+                if (flagEnabled) addPreferenceScreen(screenMetadata)
             }
-            return true
         }
-        return addPreferenceScreen(factory.create(context))
+        return true
     }
 
     private suspend fun addPreferenceScreen(metadata: PreferenceScreenMetadata): Boolean {
         if (!checkScreenFlag(metadata)) return false
         return addPreferenceScreen(metadata.key, metadata.arguments) {
             completeHierarchy = metadata.hasCompleteHierarchy()
-            root = metadata.getPreferenceHierarchy(context, coroutineScope).toProto(metadata, true)
+            root =
+                if (includeHierarchy) {
+                    metadata.getPreferenceHierarchy(context, coroutineScope).toProto(metadata, true)
+                } else {
+                    preferenceGroupProto { preference = toProto(metadata, metadata, true) }
+                }
         }
     }
 
@@ -246,20 +275,19 @@ private constructor(
         args: Bundle?,
         init: suspend PreferenceScreenProto.Builder.() -> Unit,
     ): Boolean {
-        if (!visitedScreens.add(PreferenceScreenCoordinate(key, args))) {
-            Log.w(TAG, "$key $args visited")
-            return false
-        }
+        if (!visitedScreens.add(PreferenceScreenCoordinate(key, args))) return false
+        fun newParameterizedScreenBuilder() =
+            PreferenceScreenProto.newBuilder().also { it.parameterized = true }
         if (args == null) { // normal screen
             screens[key] = PreferenceScreenProto.newBuilder().also { init(it) }
         } else if (args.isEmpty) { // parameterized screen with backward compatibility
-            val builder = screens.getOrPut(key) { PreferenceScreenProto.newBuilder() }
+            val builder = screens.getOrPut(key) { newParameterizedScreenBuilder() }
             init(builder)
         } else { // parameterized screen with non-empty arguments
-            val builder = screens.getOrPut(key) { PreferenceScreenProto.newBuilder() }
+            val builder = screens.getOrPut(key) { newParameterizedScreenBuilder() }
             val parameterizedScreen = parameterizedPreferenceScreenProto {
                 setArgs(args.toProto())
-                setScreen(PreferenceScreenProto.newBuilder().also { init(it) })
+                setScreen(newParameterizedScreenBuilder().also { init(it) })
             }
             builder.addParameterizedScreens(parameterizedScreen)
         }
@@ -328,6 +356,7 @@ private constructor(
             metadata
                 .toProto(context, callingPid, callingUid, screenMetadata, isRoot, request.flags)
                 .also {
+                    if (!isRoot && shrinkHierarchy) return@also
                     if (metadata is PreferenceScreenMetadata) {
                         @Suppress("CheckReturnValue") addPreferenceScreen(metadata)
                     }
@@ -427,7 +456,7 @@ fun PreferenceMetadata.toProto(
     flags: Int,
 ) = preferenceProto {
     val metadata = this@toProto
-    key = metadata.key
+    key = metadata.bindingKey
     if (flags.includeMetadata()) {
         metadata.getTitleTextProto(context, isRoot)?.let { title = it }
         if (metadata.summary != 0) {
@@ -442,7 +471,7 @@ fun PreferenceMetadata.toProto(
         if (metadata.keywords != 0) keywords = metadata.keywords
         val preferenceExtras = metadata.extras(context)
         preferenceExtras?.let { extras = it.toProto() }
-        indexable = metadata.isIndexable(context)
+        indexable = metadata.isPreferenceIndexable(context)
         enabled = metadata.isEnabled(context)
         if (metadata is PreferenceAvailabilityProvider) {
             available = metadata.isAvailable(context)
@@ -450,7 +479,14 @@ fun PreferenceMetadata.toProto(
         if (metadata is PreferenceRestrictionProvider) {
             restricted = metadata.isRestricted(context)
         }
-        metadata.intent(context)?.let { actionTarget = it.toActionTarget(context) }
+        if (metadata is PreferenceScreenMetadata) {
+            actionTarget = actionTargetProto {
+                key = metadata.key
+                metadata.arguments?.let { args = it.toProto() }
+            }
+        } else {
+            metadata.intent(context)?.let { actionTarget = it.toActionTarget(context) }
+        }
         val launchTarget = if (screenMetadata != metadata) metadata else null
         screenMetadata.getLaunchIntent(context, launchTarget)?.let { launchIntent = it.toProto() }
         for (tag in metadata.tags(context)) addTags(tag)
@@ -473,13 +509,12 @@ fun PreferenceMetadata.toProto(
     ) {
         val storage = metadata.storage(context)
         value = preferenceValueProto {
+            val key = metadata.bindingKey
             when (metadata.valueType) {
-                Int::class.javaObjectType -> storage.getInt(metadata.key)?.let { intValue = it }
-                Boolean::class.javaObjectType ->
-                    storage.getBoolean(metadata.key)?.let { booleanValue = it }
-                Float::class.javaObjectType ->
-                    storage.getFloat(metadata.key)?.let { floatValue = it }
-                Long::class.javaObjectType -> storage.getLong(metadata.key)?.let { longValue = it }
+                Int::class.javaObjectType -> storage.getInt(key)?.let { intValue = it }
+                Boolean::class.javaObjectType -> storage.getBoolean(key)?.let { booleanValue = it }
+                Float::class.javaObjectType -> storage.getFloat(key)?.let { floatValue = it }
+                Long::class.javaObjectType -> storage.getLong(key)?.let { longValue = it }
                 else -> {}
             }
         }

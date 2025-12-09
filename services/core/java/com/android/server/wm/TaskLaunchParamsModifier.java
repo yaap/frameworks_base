@@ -36,12 +36,14 @@ import static android.util.DisplayMetrics.DENSITY_DEFAULT;
 import static android.window.DisplayAreaOrganizer.FEATURE_UNDEFINED;
 
 import static com.android.server.wm.ActivityStarter.Request;
+import static com.android.server.wm.DesktopModeHelper.canEnterDesktopMode;
 import static com.android.server.wm.LaunchParamsUtil.getPreferredLaunchTaskDisplayArea;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityOptions;
 import android.app.WindowConfiguration;
+import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Rect;
@@ -77,6 +79,7 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
     private static final int MINIMAL_STEP = 1;
 
     private final ActivityTaskSupervisor mSupervisor;
+    private final Context mContext;
     private final Rect mTmpBounds = new Rect();
     private final Rect mTmpStableBounds = new Rect();
     private final int[] mTmpDirections = new int[2];
@@ -85,8 +88,9 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
 
     private StringBuilder mLogBuilder;
 
-    TaskLaunchParamsModifier(ActivityTaskSupervisor supervisor) {
+    TaskLaunchParamsModifier(ActivityTaskSupervisor supervisor, Context context) {
         mSupervisor = supervisor;
+        mContext = context;
     }
 
     @Override
@@ -149,7 +153,7 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
         // source is a freeform window in a fullscreen display launching an activity on the same
         // display.
         if (launchMode == WINDOWING_MODE_UNDEFINED
-                && canInheritWindowingModeFromSource(display, suggestedDisplayArea, source)) {
+                && canInheritWindowingModeFromSource(display, suggestedDisplayArea, source, task)) {
             // The source's windowing mode may be different from its task, e.g. activity is set
             // to fullscreen and its task is pinned windowing mode when the activity is entering
             // pip.
@@ -291,9 +295,7 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
         } else {
             appendLog("non-freeform-task-display-area");
         }
-        boolean isNonRootLeafTask =
-                com.android.window.flags.Flags.fixFullscreenInMultiWindow() ? task != null
-                        && !task.isRootTask() : false;
+        final boolean isNonRootLeafTask = task != null && !task.isRootTask();
         if (launchMode == WINDOWING_MODE_FULLSCREEN && isNonRootLeafTask
                 && task.getRootTask().inMultiWindowMode()) {
             // Seems not making sense to have a fullscreen task in a multi-window Task, let it
@@ -409,9 +411,19 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
                 && launchMode != task.getRequestedOverrideWindowingMode();
     }
 
+    /**
+     * Determines whether a task can inherit the windowing mode from its source activity.
+     *
+     * @param display the display where the task will be launched.
+     * @param suggestedDisplayArea the suggested display area for the task.
+     * @param source the source activity that initiated the launch, or null if none.
+     * @param targetTask the task being launched, or null if creating a new task.
+     * @return true if the target task can inherit the source's windowing mode, false otherwise.
+     */
     private boolean canInheritWindowingModeFromSource(@NonNull DisplayContent display,
-            TaskDisplayArea suggestedDisplayArea, @Nullable ActivityRecord source) {
-        if (source == null) {
+            TaskDisplayArea suggestedDisplayArea, @Nullable ActivityRecord source,
+            @Nullable Task targetTask) {
+        if (source == null || source.getTask() == null) {
             return false;
         }
 
@@ -422,9 +434,17 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
             return false;
         }
 
+        // Only fullscreen and freeform sources are allowed to inherit their windowing mode.
         final int sourceWindowingMode = source.getTask().getWindowingMode();
         if (sourceWindowingMode != WINDOWING_MODE_FULLSCREEN
                 && sourceWindowingMode != WINDOWING_MODE_FREEFORM) {
+            return false;
+        }
+
+        // Bubble task can only inherit from the fullscreen source task.
+        // TODO(b/407669465): Replace mLaunchNextToBubble with property check in root task approach.
+        if (sourceWindowingMode == WINDOWING_MODE_FREEFORM && targetTask != null
+                && targetTask.mLaunchNextToBubble) {
             return false;
         }
 
@@ -557,9 +577,11 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
             @NonNull ActivityInfo.WindowLayout layout, int resolvedMode, boolean hasInitialBounds,
             @NonNull Rect inOutBounds) {
         if (resolvedMode != WINDOWING_MODE_FREEFORM
-                && resolvedMode != WINDOWING_MODE_FULLSCREEN) {
+                && (resolvedMode != WINDOWING_MODE_FULLSCREEN || canEnterDesktopMode(mContext))) {
             // This function should be used only for freeform bounds adjustment. Freeform bounds
-            // needs to be set to fullscreen tasks too as restore bounds.
+            // needs to be set to fullscreen tasks too as restore bounds for legacy use case only.
+            // If desktop mode is available on the device do not set freeform bounds for fullscreen
+            // task.
             appendLog("skip-bounds-" + WindowConfiguration.windowingModeToString(resolvedMode));
             return;
         }
@@ -664,14 +686,12 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
     private void adjustBoundsToAvoidConflictInDisplayArea(@NonNull TaskDisplayArea displayArea,
             @NonNull Rect inOutBounds) {
         final List<Rect> taskBoundsToCheck = new ArrayList<>();
-        displayArea.forAllRootTasks(task -> {
-            if (!task.inFreeformWindowingMode()) {
+        displayArea.forAllLeafTasks(task -> {
+            if (!task.inFreeformWindowingMode() || !task.isVisibleRequested()) {
                 return;
             }
+            taskBoundsToCheck.add(task.getBounds());
 
-            for (int j = 0; j < task.getChildCount(); ++j) {
-                taskBoundsToCheck.add(task.getChildAt(j).getBounds());
-            }
         }, false /* traverseTopToBottom */);
         adjustBoundsToAvoidConflict(displayArea.getBounds(), taskBoundsToCheck, inOutBounds);
     }
@@ -834,7 +854,7 @@ class TaskLaunchParamsModifier implements LaunchParamsModifier {
     }
 
     private void outputLog() {
-        ProtoLog.v(WmProtoLogGroups.WM_DEBUG_TASKS_LAUNCH_PARAMS, mLogBuilder.toString());
+        ProtoLog.v(WmProtoLogGroups.WM_DEBUG_TASKS_LAUNCH_PARAMS, "%s", mLogBuilder.toString());
     }
 
     private static int orientationFromBounds(Rect bounds) {

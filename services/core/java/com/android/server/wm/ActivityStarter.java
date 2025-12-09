@@ -91,6 +91,7 @@ import static com.android.server.wm.TaskFragment.EMBEDDING_DISALLOWED_UNTRUSTED_
 import static com.android.server.wm.WindowContainer.POSITION_TOP;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
 import static com.android.window.flags.Flags.balDontBringExistingBackgroundTaskStackToFg;
+import static com.android.window.flags.Flags.balReportAbortedActivityStarts;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -105,8 +106,6 @@ import android.app.WindowConfiguration;
 import android.app.WindowConfiguration.WindowingMode;
 import android.app.compat.CompatChanges;
 import android.compat.annotation.ChangeId;
-import android.compat.annotation.Disabled;
-import android.compat.annotation.EnabledSince;
 import android.compat.annotation.Overridable;
 import android.content.Context;
 import android.content.IIntentSender;
@@ -121,7 +120,6 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.UserInfo;
 import android.content.res.Configuration;
 import android.os.Binder;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.OperationCanceledException;
@@ -153,6 +151,7 @@ import com.android.server.wm.ActivityMetricsLogger.LaunchingState;
 import com.android.server.wm.BackgroundActivityStartController.BalVerdict;
 import com.android.server.wm.LaunchParamsController.LaunchParams;
 import com.android.server.wm.TaskFragment.EmbeddingCheckResult;
+import com.android.window.flags.Flags;
 
 import java.io.PrintWriter;
 import java.lang.annotation.Retention;
@@ -182,20 +181,6 @@ class ActivityStarter {
      */
     private static final long MAX_TASK_WEIGHT_FOR_ADDING_ACTIVITY = 300;
 
-    /**
-     * Feature flag to protect PendingIntent being abused to start background activity.
-     */
-    @ChangeId
-    @EnabledSince(targetSdkVersion = Build.VERSION_CODES.TIRAMISU)
-    static final long ENABLE_PENDING_INTENT_BAL_OPTION = 192341120L;
-
-    /**
-     * Feature flag for go/activity-security rules
-     */
-    @ChangeId
-    @Disabled
-    static final long ASM_RESTRICTIONS = 230590090L;
-
     @ChangeId
     @Overridable
     private static final long ENABLE_PREVENT_INTENT_REDIRECT_TAKE_ACTION = 29623414L;
@@ -216,7 +201,8 @@ class ActivityStarter {
 
     // If the code is BAL_BLOCK, background activity can only be started in an existing task that
     // contains an activity with same uid, or if activity starts are enabled in developer options.
-    private BalVerdict mBalVerdict;
+    @VisibleForTesting(visibility = VisibleForTesting.Visibility.PRIVATE)
+    BalVerdict mBalVerdict;
 
     private int mLaunchMode;
     private boolean mLaunchTaskBehind;
@@ -888,7 +874,8 @@ class ActivityStarter {
                     ProtoLog.v(WM_DEBUG_CONFIGURATION,
                                 "Updating to new configuration after starting activity.");
 
-                    mService.updateConfigurationLocked(mRequest.globalConfig, null, false);
+                    mService.updateConfigurationLocked(mRequest.globalConfig,
+                            false /* initLocale */);
                 }
 
                 // The original options may have additional info about metrics. The mOptions is not
@@ -1260,6 +1247,9 @@ class ActivityStarter {
                 callingPid, resolvedType, aInfo.applicationInfo);
         abort |= !mService.getPermissionPolicyInternal().checkStartActivity(intent, callingUid,
                 callingPackage);
+        abort |= sourceRecord != null && sourceRecord.getTaskFragment() != null
+                && sourceRecord.getTaskFragment().shouldAbortActivityLaunchOnFinishingTf(
+                        sourceRecord);
 
         if (intentCreatorUid != Request.DEFAULT_INTENT_CREATOR_UID) {
             try {
@@ -1577,6 +1567,9 @@ class ActivityStarter {
     }
 
     static int getExternalResult(int result) {
+        if (balReportAbortedActivityStarts()) {
+            return result;
+        }
         // Aborted results are treated as successes externally, but we must track them internally.
         return result != START_ABORTED ? result : START_SUCCESS;
     }
@@ -1790,25 +1783,36 @@ class ActivityStarter {
         // Apply setAlwaysOnTop when starting an activity is successful regardless of creating
         // a new Activity or reusing the existing activity.
         if (options != null && options.getTaskAlwaysOnTop()) {
-            startedActivityRootTask.setAlwaysOnTop(true);
+            // Sets always-on-top on the root-task because it only ensures the task be the top
+            // among the sibling tasks, but not the parent task (if any).
+            // However, do not apply to the created-by-organizer root-tasks because it should be
+            // controlled by the organizer.
+            Task nonCreateByOrganizerRootTask = mLastStartActivityRecord.getTask();
+            Task parentTask = nonCreateByOrganizerRootTask.getParent().asTask();
+            while (parentTask != null && !parentTask.mCreatedByOrganizer) {
+                nonCreateByOrganizerRootTask = parentTask;
+                parentTask = nonCreateByOrganizerRootTask.getParent().asTask();
+            }
+            nonCreateByOrganizerRootTask.setAlwaysOnTop(true);
         }
 
         if (com.android.wm.shell.Flags.enableCreateAnyBubble()) {
+            final Task activityTask = mLastStartActivityRecord.getTask();
             // Sets the launch-next-to-bubble policy if requested
             if (options != null && options.getLaunchNextToBubble()) {
-                startedActivityRootTask.mLaunchNextToBubble = true;
+                activityTask.mLaunchNextToBubble = true;
             }
 
             // Propagate the launch-next-to-bubble policy from the source Task if any
             if (mSourceRecord != null && mSourceRecord.getTask().mLaunchNextToBubble) {
-                startedActivityRootTask.mLaunchNextToBubble = true;
+                activityTask.mLaunchNextToBubble = true;
 
                 // Also propagate the windowingMode and bounds if not set.
                 if (options == null || (options.getLaunchWindowingMode() == WINDOWING_MODE_UNDEFINED
                         && options.getLaunchBounds() == null)) {
                     final Task sourceTask = mSourceRecord.getTask();
-                    startedActivityRootTask.setWindowingMode(sourceTask.getWindowingMode());
-                    startedActivityRootTask.setBounds(sourceTask.getBounds());
+                    activityTask.setWindowingMode(sourceTask.getWindowingMode());
+                    activityTask.setBounds(sourceTask.getBounds());
                 }
             }
         }
@@ -1901,6 +1905,20 @@ class ActivityStarter {
                 transition.setReady(started, false);
             }
         }
+
+        if (android.multiuser.Flags.hsuAllowlistActivities()
+                && isStarted && started.mUserId == UserHandle.USER_SYSTEM) {
+            // TODO(b/412177078): for now we're just logging activities launched on HSU, but once
+            // the allowlist mechanism is in place, we'll need to change this call to log a
+            // successful launch, but also log when it's blocked earlier on (probably before the
+            // check for voice session on executeRequest(), as voice interaction is not supported
+            // on the HSU)
+            var umi = mService.getUserManagerInternal();
+            if (umi.isHeadlessSystemUserMode()) {
+                umi.logLaunchedHsuActivity(started.mActivityComponent);
+            }
+        }
+
         return startedActivityRootTask;
     }
 
@@ -1923,17 +1941,6 @@ class ActivityStarter {
 
         computeLaunchingTaskFlags();
         mIntent.setFlags(mLaunchFlags);
-
-        boolean dreamStopping = false;
-        if (!com.android.window.flags.Flags.removeActivityStarterDreamCallback()) {
-            for (ActivityRecord stoppingActivity : mSupervisor.mStoppingActivities) {
-                if (stoppingActivity.getActivityType()
-                        == WindowConfiguration.ACTIVITY_TYPE_DREAM) {
-                    dreamStopping = true;
-                    break;
-                }
-            }
-        }
 
         // Get top task at beginning because the order may be changed when reusing existing task.
         final Task prevTopRootTask = mPreferredTaskDisplayArea.getFocusedRootTask();
@@ -1987,8 +1994,7 @@ class ActivityStarter {
             // To prevent interruption of the user's current focus, if a launch request
             // originates from activities within the same visible task, the task should not be
             // moved to the front, or an unfocused Task could be moved to top unexpectedly.
-            if (com.android.window.flags.Flags.fixMovingUnfocusedTask() && !avoidMoveToFront()
-                    && sourceRecord != null && sourceRecord.getTask() == targetTask
+            if (!avoidMoveToFront() && sourceRecord != null && sourceRecord.getTask() == targetTask
                     && targetTask.isVisible() && targetTask.inMultiWindowMode()) {
                 mCanMoveToFrontCode = MOVE_TO_FRONT_AVOID_VISIBLE_MULTI_WINDOW;
             }
@@ -2019,7 +2025,7 @@ class ActivityStarter {
             recordTransientLaunchIfNeeded(targetTaskTop);
             // Recycle the target task for this launch.
             startResult =
-                    recycleTask(targetTask, targetTaskTop, reusedTask, intentGrants, balVerdict);
+                    recycleTask(targetTask, targetTaskTop, reusedTask, intentGrants);
             if (startResult != START_SUCCESS) {
                 return startResult;
             }
@@ -2049,11 +2055,9 @@ class ActivityStarter {
                     ? mSourceRecord.getTask() : null;
             setNewTask(taskToAffiliate);
         } else if (mAddingToTask) {
-            if (com.android.window.flags.Flags.fixLayoutRestoredTask()) {
-                // Layout the task to ensure the Task is in correct bounds.
-                mSupervisor.getLaunchParamsController().layoutTask(targetTask,
-                        mStartActivity.info.windowLayout, mStartActivity, mSourceRecord, options);
-            }
+            // Layout the task to ensure the Task is in correct bounds.
+            mSupervisor.getLaunchParamsController().layoutTask(targetTask,
+                    mStartActivity.info.windowLayout, mStartActivity, mSourceRecord, options);
             addOrReparentStartingActivity(targetTask, "adding to task");
         }
 
@@ -2065,17 +2069,11 @@ class ActivityStarter {
                 mTargetRootTask.getRootTask().moveToFront("reuseOrNewTask", targetTask);
 
                 final boolean launchBehindDream;
-                if (com.android.window.flags.Flags.removeActivityStarterDreamCallback()) {
-                    final TaskDisplayArea tda = mTargetRootTask.getTaskDisplayArea();
-                    final Task top = (tda != null ? tda.getTopRootTask() : null);
-                    launchBehindDream = (top != null && top != mTargetRootTask)
-                            && top.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_DREAM
-                            && top.getTopNonFinishingActivity() != null;
-                } else {
-                    launchBehindDream = !mTargetRootTask.isTopRootTaskInDisplayArea()
-                            && mService.isDreaming()
-                            && !dreamStopping;
-                }
+                final TaskDisplayArea tda = mTargetRootTask.getTaskDisplayArea();
+                final Task top = (tda != null ? tda.getTopRootTask() : null);
+                launchBehindDream = (top != null && top != mTargetRootTask)
+                        && top.getActivityType() == WindowConfiguration.ACTIVITY_TYPE_DREAM
+                        && top.getTopNonFinishingActivity() != null;
 
                 if (launchBehindDream) {
                     // Launching underneath dream activity (fullscreen, always-on-top). Run the
@@ -2384,7 +2382,7 @@ class ActivityStarter {
      */
     @VisibleForTesting
     int recycleTask(Task targetTask, ActivityRecord targetTaskTop, Task reusedTask,
-            NeededUriGrants intentGrants, BalVerdict balVerdict) {
+            NeededUriGrants intentGrants) {
         // Should not recycle task which is from a different user, just adding the starting
         // activity to the task.
         if (targetTask.mUserId != mStartActivity.mUserId) {
@@ -2414,14 +2412,6 @@ class ActivityStarter {
                 targetTaskTop);
 
         setTargetRootTaskIfNeeded(targetTaskTop);
-
-        // When there is a reused activity and the current result is a trampoline activity,
-        // set the reused activity as the result.
-        if (mLastStartActivityRecord != null
-                && (mLastStartActivityRecord.finishing
-                    || mLastStartActivityRecord.isNoDisplay())) {
-            mLastStartActivityRecord = targetTaskTop;
-        }
 
         if ((mStartFlags & START_FLAG_ONLY_IF_NEEDED) != 0) {
             // We don't need to start a new activity, and the client said not to do anything
@@ -3087,11 +3077,19 @@ class ActivityStarter {
         Task intentTask = intentActivity.getTask();
         // The intent task might be reparented while in getOrCreateRootTask, caches the original
         // root task to distinguish if it is moving to front or not.
-        final Task origRootTask = intentTask != null ? intentTask.getRootTask() : null;
+        final Task origRootTask;
+        if (Flags.fixBalReparentExistingTask()) {
+            origRootTask = intentTask.getRootTask();
+        } else {
+            origRootTask = intentTask != null ? intentTask.getRootTask() : null;
+        }
 
+        // Update launch target task when it is not indicated.
         if (mTargetRootTask == null) {
-            // Update launch target task when it is not indicated.
-            if (mSourceRecord != null && mSourceRecord.mLaunchRootTask != null) {
+            if (Flags.fixBalReparentExistingTask() && mBalVerdict.blocks()) {
+                // Stays on the same root task if the activity launch is not allowed.
+                mTargetRootTask = origRootTask;
+            } else if (mSourceRecord != null && mSourceRecord.mLaunchRootTask != null) {
                 // Inherit the target-root-task from source to ensure trampoline activities will be
                 // launched into the same root task.
                 mTargetRootTask = Task.fromWindowContainerToken(mSourceRecord.mLaunchRootTask);
@@ -3288,8 +3286,9 @@ class ActivityStarter {
                 return null;
             }
             final TaskFragment taskFragment = wc.asTaskFragment();
-            if (taskFragment == null || taskFragment.isRemovalRequested()) {
-                // Skip if the TaskFragment is going to be finished.
+            if (taskFragment == null || taskFragment.isRemovalRequested()
+                    || taskFragment.isForceHidden()) {
+                // Skip if the TaskFragment is going to be finished or is hidden.
                 continue;
             }
             if (taskFragment.getActivity(ActivityRecord::canBeTopRunning) == null) {
@@ -3397,7 +3396,8 @@ class ActivityStarter {
         return launchFlags;
     }
 
-    private Task getOrCreateRootTask(ActivityRecord r, int launchFlags, Task task,
+    @VisibleForTesting(visibility = VisibleForTesting.Visibility.PRIVATE)
+    Task getOrCreateRootTask(ActivityRecord r, int launchFlags, Task task,
             ActivityOptions aOptions) {
         final boolean onTop =
                 (aOptions == null || !aOptions.getAvoidMoveToFront()) && !mLaunchTaskBehind;

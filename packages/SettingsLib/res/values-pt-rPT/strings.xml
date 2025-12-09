@@ -87,6 +87,8 @@
     <string name="bluetooth_connecting" msgid="5871702668260192755">"A ligar..."</string>
     <string name="bluetooth_connected" msgid="8065345572198502293">"Ligado<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_pairing" msgid="4269046942588193600">"A sincronizar..."</string>
+    <string name="bluetooth_pairing_failure" msgid="6914444518793157913">"Não é possível sincronizar"</string>
+    <string name="bluetooth_connection_failure" msgid="384203214661155324">"Não é possível estabelecer ligação"</string>
     <string name="bluetooth_connected_no_headset" msgid="2224101138659967604">"Ligado (sem telemóvel)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_a2dp" msgid="8566874395813947092">"Ligado (sem multimédia)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_headset_no_a2dp" msgid="2893204819854215433">"Ligado (sem telemóvel nem multimédia)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
@@ -103,6 +105,11 @@
     <string name="bluetooth_battery_level_untethered" msgid="1616774716076301755">"E: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>. D: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> de bateria."</string>
     <string name="bluetooth_battery_level_untethered_left" msgid="5725764679536058365">"Esquerdo: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> de bateria"</string>
     <string name="bluetooth_battery_level_untethered_right" msgid="8377995536997790142">"Direito: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> de bateria"</string>
+    <string name="bluetooth_battery_level_untethered_case" msgid="6783758530890124772">"Caixa: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> de bateria"</string>
+    <string name="bluetooth_battery_level_untethered_left_case" msgid="7676759299091682229">"Esquerdo: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, caixa: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> de bateria"</string>
+    <string name="bluetooth_battery_level_untethered_right_case" msgid="1299184574560442389">"Direito: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, caixa: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> de bateria"</string>
+    <string name="bluetooth_battery_level_untethered_left_right" msgid="6953449613092012043">"Esquerdo: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, direito: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> de bateria"</string>
+    <string name="bluetooth_battery_level_untethered_left_case_right" msgid="5434524614259536880">"E: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, C: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>, D: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_2">%3$s</xliff:g> de bateria"</string>
     <string name="tv_bluetooth_battery_level_untethered_left" msgid="337629670583744410">"Lado esquerdo: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_right" msgid="8610019317279155595">"Lado direito: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_active_no_battery_level" msgid="4155462233006205630">"Ativo"</string>
@@ -111,6 +118,8 @@
     <string name="bluetooth_hearing_aid_right_active" msgid="2244728507170385397">"Ativo (apenas direito)"</string>
     <string name="bluetooth_hearing_aid_left_and_right_active" msgid="4294571497939983181">"Ativo (esquerdo e direito)"</string>
     <string name="bluetooth_hearing_device_ambient_error" msgid="6035857289108813878">"Não foi possível atualizar o ambiente"</string>
+    <string name="bluetooth_hearing_aids_presets_error" msgid="4523942574698610976">"Não foi possível atualizar a predefinição"</string>
+    <string name="hearing_device_spinner_item_selected" msgid="3884049360428514878">"Selecionado"</string>
     <string name="bluetooth_active_media_only_battery_level" msgid="7772517511061834073">"Ativo (apenas para multimédia). <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> de bateria."</string>
     <string name="bluetooth_active_media_only_battery_level_untethered" msgid="7444753133664620926">"Ativo (apenas para multimédia). E: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g> de bateria. D: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> de bateria."</string>
     <string name="bluetooth_guest_battery_level" msgid="2820003593899467676">"Dispositivo convidado. <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> de bateria."</string>
@@ -340,7 +349,7 @@
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"Quando este modo estiver ativado, o endereço MAC deste dispositivo pode mudar sempre que o mesmo estabelece ligação a uma rede que tenha a seleção aleatória do MAC ativada."</string>
     <string name="wifi_metered_label" msgid="8737187690304098638">"Acesso limitado"</string>
     <string name="wifi_unmetered_label" msgid="6174142840934095093">"Acesso ilimitado"</string>
-    <string name="select_logd_size_title" msgid="1604578195914595173">"Tamanhos da memória intermédia do registo"</string>
+    <string name="select_logd_size_title" msgid="4393502933789367691">"Tamanho da memória intermédia do registo"</string>
     <string name="select_logd_size_dialog_title" msgid="2105401994681013578">"Selec. tam. reg. p/ mem. int. reg."</string>
     <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"Quer limpar o armazenamento persistente do registo?"</string>
     <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"Quando deixamos de monitorizar com o registo persistente, é necessário apagar os dados de registo que se encontram no seu dispositivo."</string>

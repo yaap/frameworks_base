@@ -17,8 +17,8 @@
 package com.android.systemui.statusbar.chips.ui.viewmodel
 
 import android.graphics.RectF
-import com.android.systemui.dagger.SysUISingleton
-import com.android.systemui.dagger.qualifiers.Background
+import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent.DisplayAware
+import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent.PerDisplaySingleton
 import com.android.systemui.display.domain.interactor.DisplayStateInteractor
 import com.android.systemui.log.LogBuffer
 import com.android.systemui.log.core.LogLevel
@@ -55,17 +55,17 @@ import kotlinx.coroutines.flow.stateIn
  * There may be multiple ongoing activities at the same time, but we can only ever show one chip at
  * any one time (for now). This class decides which ongoing activity to show if there are multiple.
  */
-@SysUISingleton
+@PerDisplaySingleton
 class OngoingActivityChipsViewModel
 @Inject
 constructor(
-    @Background scope: CoroutineScope,
+    @DisplayAware scope: CoroutineScope,
     screenRecordChipViewModel: ScreenRecordChipViewModel,
     shareToAppChipViewModel: ShareToAppChipViewModel,
     castToOtherDeviceChipViewModel: CastToOtherDeviceChipViewModel,
     callChipViewModel: CallChipViewModel,
     notifChipsViewModel: NotifChipsViewModel,
-    displayStateInteractor: DisplayStateInteractor,
+    @DisplayAware displayStateInteractor: DisplayStateInteractor,
     private val chipsRefiners: Set<@JvmSuppressWildcards OngoingActivityChipsRefiner>,
     @StatusBarChipsLog private val logger: LogBuffer,
 ) {
@@ -132,7 +132,6 @@ constructor(
                     LogLevel.INFO,
                     {
                         str1 = call.logName
-                        // TODO(b/364653005): Log other information for notification chips.
                         str2 = notifs.map { it.logName }.toString()
                     },
                     { "... > Call=$str1 > Notifs=$str2" },
@@ -377,7 +376,6 @@ constructor(
     val visibleChipsWithBounds: Flow<Map<String, RectF>> =
         if (StatusBarChipToHunAnimation.isEnabled) {
             combine(visibleChipKeys, chipBounds) { keys, chipBounds ->
-                    // TODO: Test chip w/o bounds isn't returned
                     // TODO(b/393369891): Should we provide the placeholder bounds as a backup and
                     // make those bounds public so that [NotificationStackScrollLayout] can do a
                     // good default animation for chips even if we couldn't fetch the bounds for

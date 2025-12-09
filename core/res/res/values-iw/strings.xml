@@ -72,9 +72,18 @@
     <string name="CLIRDefaultOnNextCallOff" msgid="5036749051007098105">"שירות השיחה המזוהה עובר כברירת מחדל למצב מוגבל. השיחה הבאה: לא מוגבלת"</string>
     <string name="CLIRDefaultOffNextCallOn" msgid="1022781126694885017">"שירות \'שיחה מזוהה\' עובר כברירת מחדל למצב לא מוגבל. השיחה הבאה: מוגבלת"</string>
     <string name="CLIRDefaultOffNextCallOff" msgid="2491576172356463443">"זיהוי מתקשר עובר כברירת מחדל למצב לא מוגבל. השיחה הבאה: לא מוגבלת"</string>
-    <string name="page_size_compat_apk_warning" msgid="2982396798449041224">"‏האפליקציה הזו לא תואמת לגודל דף של 16KB. בדיקות ההתאמה ל-APK נכשלה. האפליקציה הזו תופעל במצב תואם לגודל הדף. כדי לקבל את התאימות הטובה ביותר, צריך לקמפל את האפליקציה מחדש ולדאוג שהיא תומכת בגודל דף של 16KB. מידע נוסף זמין בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;"</string>
-    <string name="page_size_compat_elf_warning" msgid="6753874059564812651">"‏האפליקציה הזו לא תואמת לגודל דף של 16KB. בדיקות ההתאמה ל-ELF נכשלה. האפליקציה הזו תופעל במצב תואם לגודל הדף. כדי לקבל את התאימות הטובה ביותר, צריך לקמפל את האפליקציה מחדש ולדאוג שהיא תומכת בגודל דף של 16KB. מידע נוסף זמין בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;"</string>
-    <string name="page_size_compat_apk_and_elf_warning" msgid="7628675779500605390">"‏האפליקציה הזו לא תואמת לגודל דף של 16KB. בדיקות ההתאמה ל-APK ול-ELF נכשלו. האפליקציה הזו תופעל במצב תואם לגודל הדף. כדי לקבל את התאימות הטובה ביותר, צריך לקמפל את האפליקציה מחדש ולדאוג שהיא תומכת בגודל דף של 16KB. מידע נוסף זמין בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt;"</string>
+    <string name="page_size_compat_apk_warning" msgid="2297836366674721648">"‏האפליקציה הזו לא תואמת לדפים בגודל 16KB. בדיקת ההתאמה ל-APK נכשלה. האפליקציה הזו תופעל במצב תואם לגודל הדף. כדי לקבל את התאימות הטובה ביותר, צריך לקמפל מחדש את האפליקציה לתמיכה בדפים בגודל 16KB. מידע נוסף זמין בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt; &lt;br&gt;&lt;br&gt; הספריות הבאות לא מותאמות לדפים בגודל 16KB‏: &lt;br&gt;&lt;br&gt;"</string>
+    <string name="page_size_compat_elf_warning" msgid="8613720928493005883">"‏האפליקציה הזו לא תואמת לדפים בגודל 16KB. בדיקת ההתאמה ל-ELF נכשלה. האפליקציה הזו תופעל במצב תואם לגודל הדף. כדי לקבל את התאימות הטובה ביותר, צריך לקמפל מחדש את האפליקציה לתמיכה בדפים בגודל 16KB. מידע נוסף זמין בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt; &lt;br&gt;&lt;br&gt; הספריות הבאות לא מותאמות לדפים בגודל 16KB‏: &lt;br&gt;&lt;br&gt;"</string>
+    <string name="page_size_compat_apk_and_elf_warning" msgid="9034695801295605229">"‏האפליקציה הזו לא תואמת לדפים בגודל 16KB. בדיקות ההתאמה ל-APK ול-ELF נכשלו. האפליקציה הזו תופעל במצב תואם לגודל הדף. כדי לקבל את התאימות הטובה ביותר, צריך לקמפל מחדש את האפליקציה לתמיכה בדפים בגודל 16KB. מידע נוסף זמין בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt; &lt;br&gt;&lt;br&gt; הספריות הבאות לא מותאמות לדפים בגודל 16KB‏: &lt;br&gt;&lt;br&gt;"</string>
+    <string name="page_size_compat_apk_warning_4kb" msgid="5676451039424864495">"‏האזהרה הזו מוצגת כי זו אפליקציה שניתן לבצע בה ניפוי באגים, והיא נמצאת בבדיקה. אם אינך בצוות הפיתוח, צריך לדווח למפתחים ולבקש אפליקציה שלא ניתן לבצע בה ניפוי באגים. &lt;br&gt;&lt;br&gt; האפליקציה הזו לא תואמת לדפים בגודל 16KB. בדיקת ההתאמה ל-APK נכשלה. צריך להמשיך לפי השלבים שמפורטים בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt; &lt;br&gt;&lt;br&gt; הספריות הבאות לא מותאמות לדפים בגודל 16KB‏: &lt;br&gt;&lt;br&gt;"</string>
+    <string name="page_size_compat_elf_warning_4kb" msgid="5005239480522831311">"‏האזהרה הזו מוצגת כי זו אפליקציה שניתן לבצע בה ניפוי באגים, והיא נמצאת בבדיקה. אם אינך בצוות הפיתוח, צריך לדווח למפתחים ולבקש אפליקציה שלא ניתן לבצע בה ניפוי באגים. &lt;br&gt;&lt;br&gt; האפליקציה הזו לא תואמת לדפים בגודל 16KB. בדיקת ההתאמה ל-ELF נכשלה. צריך להמשיך לפי השלבים שמפורטים בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt; &lt;br&gt;&lt;br&gt; הספריות הבאות לא מותאמות לדפים בגודל 16KB‏: &lt;br&gt;&lt;br&gt;"</string>
+    <string name="page_size_compat_apk_and_elf_warning_4kb" msgid="997926487776340721">"‏האזהרה הזו מוצגת כי זו אפליקציה שניתן לבצע בה ניפוי באגים, והיא נמצאת בבדיקה. אם אינך בצוות הפיתוח, צריך לדווח למפתחים ולבקש אפליקציה שלא ניתן לבצע בה ניפוי באגים. &lt;br&gt;&lt;br&gt; האפליקציה הזו לא תואמת לדפים בגודל 16KB. בדיקות ההתאמה ל-APK ול-ELF נכשלו. צריך להמשיך לפי השלבים שמפורטים בכתובת &lt;a href=\"https://developer.android.com/16kb-page-size\"&gt;https://developer.android.com/16kb-page-size&lt;/a&gt; &lt;br&gt;&lt;br&gt; הספריות הבאות לא מותאמות לדפים בגודל 16KB:‏ &lt;br&gt;&lt;br&gt;"</string>
+    <string name="page_size_compat_never_show" msgid="3391282612422783097">"אין להציג שוב"</string>
+    <string name="page_size_compat_title" msgid="6497719153872572204">"‏תאימות של אפליקציות ל-Android"</string>
+    <string name="page_size_compat_elf_not_aligned" msgid="4404128993555194313">"‏&amp;#8226;‏ %1$s : אין התאמה למקטע הטעינה&lt;br&gt;"</string>
+    <string name="page_size_compat_apk_not_aligned" msgid="1434875607880657092">"‏&amp;#8226;‏ %1$s : אין התאמה לספרייה הלא דחוסה&lt;br&gt;"</string>
+    <string name="page_size_compat_apk_and_elf_not_aligned" msgid="7140216083697701972">"‏&amp;#8226;‏ %1$s : אין התאמה בין מקטע הטעינה והספרייה הלא דחוסה&lt;br&gt;"</string>
+    <string name="page_size_compat_unknown" msgid="5183026525148169891">"‏&amp;#8226;‏ %1$s : שגיאה לא ידועה&lt;br&gt;"</string>
     <string name="serviceNotProvisioned" msgid="8289333510236766193">"השירות לא הוקצה."</string>
     <string name="CLIRPermanent" msgid="166443681876381118">"אינך יכול לשנות את הגדרת זיהוי המתקשר."</string>
     <string name="auto_data_switch_title" msgid="3286350716870518297">"הנתונים עברו אל <xliff:g id="CARRIERDISPLAY">%s</xliff:g>"</string>
@@ -161,8 +170,10 @@
     <string name="scCellularNetworkSecurityTitle" msgid="7752521808690294384">"אבטחת הרשת הסלולרית"</string>
     <string name="scCellularNetworkSecuritySummary" msgid="7042036754550545005">"הצפנה, התראות על רשתות לא מוצפנות"</string>
     <string name="scIdentifierDisclosureIssueTitle" msgid="2898888825129970328">"בוצעה גישה למזהה המכשיר"</string>
-    <string name="scIdentifierDisclosureIssueSummaryNotification" msgid="3699930821270580416">"‏בשעה <xliff:g id="DISCLOSURE_TIME">%1$s</xliff:g>, רשת קרובה רשמה את המזהה הייחודי של המכשיר שלך (IMSI או IMEI) בזמן השימוש בכרטיס ה-SIM של <xliff:g id="DISCLOSURE_NETWORK">%2$s</xliff:g>"</string>
-    <string name="scIdentifierDisclosureIssueSummary" msgid="7283387338827749276">"‏בשעה <xliff:g id="DISCLOSURE_TIME">%1$s</xliff:g>, רשת קרובה רשמה את המזהה הייחודי של המכשיר שלך (IMSI או IMEI) בזמן השימוש בכרטיס ה-SIM של <xliff:g id="DISCLOSURE_NETWORK">%2$s</xliff:g>.\n\nמשמעות הדבר היא שהמיקום, הפעילות או הזהות שלך נרשמו. זוהי פעולה שגרתית, אך היא עשויה להוות בעיה לאנשים שמודאגים לגבי פרטיות."</string>
+    <string name="scIDIssueSummaryNotificationWithCellularID" msgid="8371590113242615316">"‏בשעה <xliff:g id="DISCLOSURE_TIME">%1$s</xliff:g>, בזמן השימוש בכרטיס ה-SIM של <xliff:g id="DISCLOSURE_NETWORK">%3$s</xliff:g>, המזהה הייחודי של המכשיר שלך (<xliff:g id="CELLULAR_IDENTIFIER">%2$s</xliff:g>) תועד ברשת שהייתה קרובה אליך."</string>
+    <string name="scIdentifierDisclosureIssueSummaryNotification" msgid="7106922007150754222">"‏בשעה <xliff:g id="DISCLOSURE_TIME">%1$s</xliff:g>, רשת שהייתה קרובה אליך תיעדה את המזהה הייחודי של המכשיר שלך בזמן השימוש בכרטיס ה-SIM של <xliff:g id="DISCLOSURE_NETWORK">%3$s</xliff:g>"</string>
+    <string name="scIDIssueSummaryWithCellularID" msgid="1189965658392583067">"‏בשעה <xliff:g id="DISCLOSURE_TIME">%1$s</xliff:g>, בזמן השימוש בכרטיס ה-SIM של <xliff:g id="DISCLOSURE_NETWORK">%3$s</xliff:g>, המזהה הייחודי של המכשיר שלך (<xliff:g id="CELLULAR_IDENTIFIER">%2$s</xliff:g>) תועד ברשת שהייתה קרובה אליך.\n\nזה אומר שהמיקום, הפעילות או הזהות שלך נרשמו. זאת פעולה שגרתית, אבל לאנשים שנושא הפרטיות חשוב להם - היא עלולה להיות בעייתית."</string>
+    <string name="scIdentifierDisclosureIssueSummary" msgid="4362014471570210380">"‏בשעה <xliff:g id="DISCLOSURE_TIME">%1$s</xliff:g>, רשת שהייתה קרובה אליך תיעדה את המזהה הייחודי של המכשיר שלך בזמן השימוש בכרטיס ה-SIM של <xliff:g id="DISCLOSURE_NETWORK">%3$s</xliff:g>.\n\nזה אומר שהמיקום, הפעילות או הזהות שלך נרשמו. זאת פעולה שגרתית, אבל לאנשים שנושא הפרטיות חשוב להם - היא עלולה להיות בעייתית."</string>
     <string name="scNullCipherIssueEncryptedTitle" msgid="234717016411824969">"יש חיבור לרשת המוצפנת <xliff:g id="NETWORK_NAME">%1$s</xliff:g>"</string>
     <string name="scNullCipherIssueEncryptedSummary" msgid="8577510708842150475">"‏החיבור של כרטיס ה-SIM של <xliff:g id="NETWORK_NAME">%1$s</xliff:g> מאובטח יותר עכשיו"</string>
     <string name="scNullCipherIssueNonEncryptedTitle" msgid="3978071464929453915">"יש חיבור לרשת לא מוצפנת"</string>
@@ -290,6 +301,7 @@
     <string name="global_action_assist" msgid="2517047220311505805">"סיוע"</string>
     <string name="global_action_voice_assist" msgid="6655788068555086695">"האסיסטנט"</string>
     <string name="global_action_lockdown" msgid="2475471405907902963">"נעילה"</string>
+    <string name="global_action_unrestricted_lock" msgid="7933224393323064116">"נעילה"</string>
     <string name="status_bar_notification_info_overflow" msgid="3330152558746563475">"999+"</string>
     <string name="notification_compact_heads_up_reply" msgid="2425293958371284340">"תשובה"</string>
     <string name="notification_hidden_text" msgid="2835519769868187223">"התראה חדשה"</string>
@@ -325,8 +337,8 @@
     <string name="managed_profile_label" msgid="7316778766973512382">"החלפה לפרופיל עבודה"</string>
     <string name="user_owner_app_label" msgid="1553595155465750298">"מעבר אל <xliff:g id="APP_NAME">%1$s</xliff:g> בפרופיל האישי"</string>
     <string name="managed_profile_app_label" msgid="367401088383965725">"מעבר אל <xliff:g id="APP_NAME">%1$s</xliff:g> בפרופיל העבודה"</string>
-    <string name="permgrouplab_contacts" msgid="4254143639307316920">"אנשי קשר"</string>
-    <string name="permgroupdesc_contacts" msgid="9163927941244182567">"גישה אל אנשי הקשר"</string>
+    <string name="permgrouplab_contacts" msgid="7443702399615347952">"אנשי קשר וחשבונות"</string>
+    <string name="permgroupdesc_contacts" msgid="2001771388402758264">"גישה לאנשי הקשר שלך והצגת רשימת החשבונות שיכולים לשמור אנשי קשר במכשיר הזה"</string>
     <string name="permgrouplab_location" msgid="1858277002233964394">"מיקום"</string>
     <string name="permgroupdesc_location" msgid="1995955142118450685">"גישה אל מיקום המכשיר הזה"</string>
     <string name="permgrouplab_calendar" msgid="6426860926123033230">"יומן"</string>
@@ -355,12 +367,12 @@
     <string name="permgroupdesc_sensors" msgid="2610631290633747752">"גישה אל נתוני חיישנים של הסימנים החיוניים שלך"</string>
     <string name="permgrouplab_notifications" msgid="5472972361980668884">"התראות"</string>
     <string name="permgroupdesc_notifications" msgid="4608679556801506580">"הצגת התראות"</string>
-    <string name="permgrouplab_xr_eye_sensitive" msgid="2099659100156643683">"‏נתונים רגישים של מעקב עיניים של XR"</string>
-    <string name="permgroupdesc_xr_eye_sensitive" msgid="1414121516133760271">"גישה לנתונים רגישים של תנועות העיניים"</string>
-    <string name="permgrouplab_xr_tracking" msgid="7418994009794287471">"‏נתונים של מעקב XR"</string>
-    <string name="permgroupdesc_xr_tracking" msgid="6777198859446500821">"‏גישה לנתוני XR לגביך ולגבי הסביבה הקרובה"</string>
-    <string name="permgrouplab_xr_tracking_sensitive" msgid="2993940754322250652">"‏נתונים רגישים של מעקב XR"</string>
-    <string name="permgroupdesc_xr_tracking_sensitive" msgid="8498501397939308918">"גישה לנתוני מעקב רגישים לגביך ולגבי הסביבה הקרובה"</string>
+    <string name="permgrouplab_xr_eye_sensitive" msgid="1709596126334620353">"נתוני מעקב עיניים"</string>
+    <string name="permgroupdesc_xr_eye_sensitive" msgid="6050967250223079001">"מעקב מדויק אחרי תנועות העיניים"</string>
+    <string name="permgrouplab_xr_tracking" msgid="766634536453394700">"נתוני תנועה ונתוני אזור"</string>
+    <string name="permgroupdesc_xr_tracking" msgid="812429788288001595">"מעקב אחרי העיניים, הפנים, הגוף ואזור הסריקה"</string>
+    <string name="permgrouplab_xr_tracking_sensitive" msgid="6574264227123545314">"נתונים מדויקים על התנועות והאזור"</string>
+    <string name="permgroupdesc_xr_tracking_sensitive" msgid="2480835734248509848">"סריקה מדויקת של האזור ומעקב אחרי הראש"</string>
     <string name="capability_title_canRetrieveWindowContent" msgid="7554282892101587296">"אחזור תוכן של חלון"</string>
     <string name="capability_desc_canRetrieveWindowContent" msgid="6195610527625237661">"בדיקת התוכן של חלון שאיתו מתבצעת אינטראקציה."</string>
     <string name="capability_title_canRequestTouchExploration" msgid="327598364696316213">"הפעלה של \'גילוי באמצעות מגע\'"</string>
@@ -628,6 +640,8 @@
     <string name="permdesc_uwb_ranging" msgid="2519723069604307055">"‏האפליקציה תזהה את המיקום היחסי בין מכשירים קרובים שמשדרים בטכנולוגיית Ultra Wideband ‏(UWB)"</string>
     <string name="permlab_nearby_wifi_devices" msgid="392774237063608500">"‏אינטראקציה עם מכשירי Wi-Fi בקרבת מקום"</string>
     <string name="permdesc_nearby_wifi_devices" msgid="3054307728646332906">"‏האפליקציה תוכל לפרסם במכשירי Wi-Fi בקרבת מקום, להתחבר אליהם ולהעריך את המיקום היחסי שלהם"</string>
+    <string name="permlab_access_local_network" msgid="3420360767259066877">"גישה למכשירים ברשת המקומית"</string>
+    <string name="permdesc_access_local_network" msgid="6364679803386822638">"ההרשאה מאפשרת לאפליקציה לגשת למכשירים ברשת המקומית"</string>
     <string name="permlab_ranging" msgid="2854543350668593390">"זיהוי המיקום היחסי בין מכשירים קרובים"</string>
     <string name="permdesc_ranging" msgid="6703905535621521710">"האפליקציה תזהה את המיקום היחסי בין מכשירים קרובים"</string>
     <string name="permlab_preferredPaymentInfo" msgid="5274423844767445054">"‏פרטים על שירות תשלום מועדף ב-NFC"</string>
@@ -658,27 +672,31 @@
     <string name="permdesc_imagesWrite" msgid="5195054463269193317">"מאפשרת לאפליקציה לשנות את אוסף התמונות שלך."</string>
     <string name="permlab_mediaLocation" msgid="7368098373378598066">"לקרוא מיקומים מאוסף המדיה שלך"</string>
     <string name="permdesc_mediaLocation" msgid="597912899423578138">"מאפשרת לאפליקציה לקרוא מיקומים מאוסף המדיה שלך."</string>
-    <string name="permlab_eye_tracking_coarse" msgid="7989596289790269059">"מעקב אחרי תנועות העיניים בקירוב"</string>
-    <string name="permdesc_eye_tracking_coarse" msgid="870510233930553355">"ההרשאה מאפשרת לאפליקציה לעקוב אחרי תנועות העיניים בקירוב."</string>
-    <string name="permlab_eye_tracking_fine" msgid="6914457357027049512">"מעקב אחרי הכיוון של המבט"</string>
-    <string name="permdesc_eye_tracking_fine" msgid="5788889152304524730">"ההרשאה מאפשרת לאפליקציה לגשת לנתונים מדויקים של תנועות עיניים."</string>
-    <string name="permlab_face_tracking" msgid="2272048395128283324">"מעקב אחרי תנועות הפנים"</string>
-    <string name="permdesc_face_tracking" msgid="2622783922311211866">"ההרשאה מאפשרת לאפליקציה לגשת לנתוני מעקב תנועות הפנים."</string>
-    <string name="permlab_hand_tracking" msgid="6478233866595566940">"מעקב אחר תנועות הידיים"</string>
-    <string name="permdesc_hand_tracking" msgid="8639715900104966456">"ההרשאה מאפשרת לאפליקציה לגשת לנתוני מעקב תנועות הידיים."</string>
-    <string name="permlab_head_tracking" msgid="1309731456372087270">"מעקב אחרי תנועות הראש"</string>
-    <string name="permdesc_head_tracking" msgid="231597390513699188">"ההרשאה מאפשרת לאפליקציה לגשת לנתוני מעקב תנועות הראש."</string>
-    <string name="permlab_scene_understanding_coarse" msgid="6518646430502858641">"גישה לנתונים מהסביבה הקרובה"</string>
-    <string name="permdesc_scene_understanding_coarse" msgid="4508880777646198656">"ההרשאה מאפשרת לאפליקציה לגשת לנתוני המעקב מהסביבה הקרובה."</string>
-    <string name="permlab_scene_understanding_fine" msgid="409126403264393251">"גישה לנתונים מהסביבה הקרובה ברמת פירוט גבוהה"</string>
-    <string name="permdesc_scene_understanding_fine" msgid="6223368011593524179">"ההרשאה מאפשרת לאפליקציה לגשת לנתוני מעקב מהסביבה הקרובה ברמת פירוט גבוהה מאוד."</string>
-    <string name="permlab_xr_tracking_in_background" msgid="7117098718465619023">"‏גישה לנתוני XR כשהאפליקציה לא בחזית"</string>
-    <string name="permdesc_xr_tracking_in_background" msgid="939504041387836853">"‏ההרשאה מאפשרת לאפליקציה לגשת לנתוני XR כשהיא לא בחזית."</string>
+    <string name="permlab_eye_tracking_coarse" msgid="1266477998416112440">"מעקב אחרי תנועות העיניים"</string>
+    <string name="permdesc_eye_tracking_coarse" msgid="1652112796672085320">"ההרשאה מאפשרת לאפליקציה לעקוב אחרי הכיוון המשוער של המבט שלך."</string>
+    <string name="permlab_eye_tracking_fine" msgid="6208991021186455002">"מעקב מדויק אחרי תנועות העיניים"</string>
+    <string name="permdesc_eye_tracking_fine" msgid="9215360948852654836">"ההרשאה מאפשרת לאפליקציה לעקוב אחרי הכיוון של המבט שלך."</string>
+    <string name="permlab_face_tracking" msgid="6052126246676474909">"מעקב אחרי תנועות הפנים"</string>
+    <string name="permdesc_face_tracking" msgid="185815778490412574">"ההרשאה מאפשרת לאפליקציה לעקוב אחרי תנועות הפנים וההבעות שלך."</string>
+    <string name="permlab_hand_tracking" msgid="21944950887649088">"מעקב אחרי תנועות הידיים"</string>
+    <string name="permdesc_hand_tracking" msgid="8083783248481460669">"ההרשאה מאפשרת לאפליקציה לעקוב אחרי תנועות הידיים שלך."</string>
+    <string name="permlab_head_tracking" msgid="4304699038992159853">"מעקב אחרי תנועות הראש"</string>
+    <string name="permdesc_head_tracking" msgid="2232184518548944223">"ההרשאה מאפשרת לאפליקציה לעקוב אחרי תנועות הראש שלך."</string>
+    <string name="permlab_scene_understanding_coarse" msgid="8765236119358852920">"סריקה של הסביבה שלך"</string>
+    <string name="permdesc_scene_understanding_coarse" msgid="847344305502345475">"ההרשאה מאפשרת לאפליקציה לסרוק את הסביבה."</string>
+    <string name="permlab_scene_understanding_fine" msgid="2899904960307462936">"סריקה מדויקת של הסביבה שלך"</string>
+    <string name="permdesc_scene_understanding_fine" msgid="4848943859506977588">"ההרשאה מאפשרת לאפליקציה לסרוק את הסביבה במדויק."</string>
+    <string name="permlab_xr_tracking_in_background" msgid="1714941204255185460">"‏גישה למעקב XR ברקע"</string>
+    <string name="permdesc_xr_tracking_in_background" msgid="3151744132692357005">"‏ההרשאה מאפשרת לאפליקציה לגשת לנתוני XR ברקע."</string>
+    <string name="permlab_capture_keyboard" msgid="4076894823382693032">"תיעוד השימוש במקשים"</string>
+    <string name="permdesc_capture_keyboard" msgid="4192269470684407219">"מתן הרשאה לאפליקציה לתעד את השימוש במקשים לפני שהמערכת מעבדת את מקשי הקיצור והפעולות."</string>
     <string name="biometric_app_setting_name" msgid="3339209978734534457">"שימוש במידע ביומטרי"</string>
     <string name="biometric_or_screen_lock_app_setting_name" msgid="5348462421758257752">"שימוש במידע ביומטרי בנעילת מסך"</string>
     <string name="biometric_dialog_default_title" msgid="55026799173208210">"אימות הזהות שלך"</string>
     <string name="biometric_dialog_default_subtitle" msgid="8457232339298571992">"יש להשתמש במידע ביומטרי כדי להמשיך"</string>
     <string name="biometric_or_screen_lock_dialog_default_subtitle" msgid="159539678371552009">"יש להשתמש במידע הביומטרי או בנעילת המסך כדי להמשיך"</string>
+    <string name="biometric_dialog_secondary_display_toast" product="default" msgid="256544327174107086">"כדי להמשיך, צריך לאמת את הזהות שלך בטלפון"</string>
+    <string name="biometric_dialog_secondary_display_toast" product="tablet" msgid="2855203015454795660">"כדי להמשיך, צריך לאמת את הזהות שלך דרך הטאבלט"</string>
     <string name="biometric_error_hw_unavailable" msgid="2494077380540615216">"חומרה ביומטרית לא זמינה"</string>
     <string name="biometric_error_user_canceled" msgid="6732303949695293730">"האימות בוטל"</string>
     <string name="biometric_not_recognized" msgid="5106687642694635888">"לא זוהתה"</string>
@@ -902,6 +920,7 @@
     <string name="policydesc_disableCamera" msgid="3204405908799676104">"מניעת שימוש בכל המצלמות שבמכשיר."</string>
     <string name="policylab_disableKeyguardFeatures" msgid="5071855750149949741">"השבתת חלק מתכונות נעילת המסך"</string>
     <string name="policydesc_disableKeyguardFeatures" msgid="6641673177041195957">"מניעת שימוש בחלק מהתכונות של נעילת המסך."</string>
+    <string name="exit_toast_on_long_press_escape" msgid="2983932499112557277">"‏כדי לסגור את האפליקציה, צריך ללחוץ לחיצה ארוכה על מקש Esc"</string>
   <string-array name="phoneTypes">
     <item msgid="8996339953292723951">"בית"</item>
     <item msgid="7740243458912727194">"נייד"</item>
@@ -1112,6 +1131,7 @@
     <string name="keyguard_accessibility_sim_pin_unlock" msgid="4895939120871890557">"‏ביטול הנעילה של קוד האימות ל-SIM."</string>
     <string name="keyguard_accessibility_sim_puk_unlock" msgid="3459003464041899101">"‏ביטול נעילה של PUK ל-SIM."</string>
     <string name="keyguard_accessibility_password_unlock" msgid="6130186108581153265">"ביטול נעילה באמצעות סיסמה."</string>
+    <string name="keyguard_accessibility_secure_lock_device_biometric_unlock" msgid="1884638289137214044">"פתיחת נעילה ביומטרית של מכשיר עם נעילה מאובטחת."</string>
     <string name="keyguard_accessibility_pattern_area" msgid="1419570880512350689">"אזור לשרטוט קו ביטול נעילה."</string>
     <string name="keyguard_accessibility_slide_area" msgid="4331399051142520176">"אזור הסטה."</string>
     <string name="password_keyboard_label_symbol_key" msgid="2716255580853511949">"?123"</string>
@@ -1469,8 +1489,6 @@
     <string name="decline_remote_bugreport_action" msgid="4040894777519784346">"עדיף שלא"</string>
     <string name="select_input_method" msgid="3971267998568587025">"בחירה של שיטת הזנה"</string>
     <string name="input_method_language_settings" msgid="8069089418056819437">"הגדרות שפה"</string>
-    <string name="show_ime" msgid="6406112007347443383">"להשאיר במסך בזמן שהמקלדת הפיזית פעילה"</string>
-    <string name="hardware" msgid="3611039921284836033">"שימוש במקלדת הווירטואלית"</string>
     <string name="select_keyboard_layout_notification_title" msgid="5823199895322205589">"הגדרה של <xliff:g id="DEVICE_NAME">%s</xliff:g>"</string>
     <string name="select_multiple_keyboards_layout_notification_title" msgid="6999491025126641938">"הגדרת מקלדות פיזיות"</string>
     <string name="select_keyboard_layout_notification_message" msgid="8835158247369158154">"יש ללחוץ כדי לבחור שפה ופריסה"</string>
@@ -1828,6 +1846,7 @@
     <string name="owner_name" msgid="8713560351570795743">"בעלים"</string>
     <string name="guest_name" msgid="8502103277839834324">"אורח"</string>
     <string name="headless_system_user_name" msgid="1849150903255530049">"משתמש המערכת"</string>
+    <string name="unnamed_user_name" msgid="6096699110534542980">"משתמש/ת"</string>
     <string name="error_message_title" msgid="4082495589294631966">"שגיאה"</string>
     <string name="error_message_change_not_allowed" msgid="843159705042381454">"מנהל המערכת שלך לא מאפשר את השינוי הזה"</string>
     <string name="app_not_found" msgid="3429506115332341800">"לא נמצאה אפליקציה שתומכת בפעולה הזו"</string>
@@ -1962,14 +1981,14 @@
     <string name="clone_profile_label_badge" msgid="1871997694718793964">"שכפול של <xliff:g id="LABEL">%1$s</xliff:g>"</string>
     <string name="private_profile_label_badge" msgid="1712086003787839183">"<xliff:g id="LABEL">%1$s</xliff:g> בפרופיל הפרטי"</string>
     <string name="lock_to_app_unlock_pin" msgid="3890940811866290782">"יש לבקש קוד אימות לפני ביטול הצמדה"</string>
-    <string name="lock_to_app_unlock_pattern" msgid="2694204070499712503">"צריך לבקש קו ביטול נעילה לפני ביטול הצמדה"</string>
+    <string name="lock_to_app_unlock_pattern" msgid="2694204070499712503">"צריך לבקש קו פתיחת נעילה לפני ביטול הצמדה"</string>
     <string name="lock_to_app_unlock_password" msgid="9126722403506560473">"יש לבקש סיסמה לפני ביטול הצמדה"</string>
     <string name="package_installed_device_owner" msgid="8684974629306529138">"החבילה הותקנה על ידי האדמין.\nצריך לעבור להגדרות כדי לראות את ההרשאות שניתנו"</string>
     <string name="package_updated_device_owner" msgid="7770195449213776218">"החבילה עודכנה על ידי האדמין.\nצריך לעבור להגדרות כדי לראות את ההרשאות שניתנו"</string>
     <string name="package_deleted_device_owner" msgid="2292335928930293023">"נמחקה על ידי מנהל המערכת"</string>
     <string name="confirm_battery_saver" msgid="5247976246208245754">"אישור"</string>
-    <string name="battery_saver_description_with_learn_more" msgid="5444908404021316250">"התכונה \'חיסכון בסוללה\' מפעילה עיצוב כהה ומגבילה או מכבה פעילות ברקע, חלק מהאפקטים החזותיים, תכונות מסוימות וחלק מהחיבורים לרשתות."</string>
-    <string name="battery_saver_description" msgid="8518809702138617167">"התכונה \'חיסכון בסוללה\' מפעילה עיצוב כהה ומגבילה או מכבה פעילות ברקע, חלק מהאפקטים החזותיים, תכונות מסוימות וחלק מהחיבורים לרשתות."</string>
+    <string name="battery_saver_description_with_learn_more" msgid="8969945879044849461">"במצב \"חיסכון בסוללה\" המסך עובר לעיצוב כהה והדברים הבאים מוגבלים או מכובים: פעילות ברקע, חלק מהאפקטים הויזואליים, חלק מהתכונות וחלק מהחיבורים לרשתות."</string>
+    <string name="battery_saver_description" msgid="2820475140307374570">"במצב \"חיסכון בסוללה\" המסך עובר לעיצוב כהה והדברים הבאים מוגבלים או מכובים: פעילות ברקע, חלק מהאפקטים הויזואליים, חלק מהתכונות וחלק מהחיבורים לרשתות."</string>
     <string name="data_saver_description" msgid="4995164271550590517">"‏כדי לסייע בהפחתת השימוש בנתונים, חוסך הנתונים (Data Saver) מונע מאפליקציות מסוימות לשלוח או לקבל נתונים ברקע. אפליקציות שבהן נעשה שימוש כרגע יכולות לגשת לנתונים, אבל בתדירות נמוכה יותר. המשמעות היא, למשל, שתמונות יוצגו רק לאחר שלוחצים עליהן."</string>
     <string name="data_saver_enable_title" msgid="7080620065745260137">"להפעיל את חוסך הנתונים?"</string>
     <string name="data_saver_enable_button" msgid="4399405762586419726">"הפעלה"</string>
@@ -2031,6 +2050,9 @@
     <string name="maximize_button_text" msgid="4258922519914732645">"הגדלה"</string>
     <string name="close_button_text" msgid="10603510034455258">"סגירה"</string>
     <string name="notification_messaging_title_template" msgid="772857526770251989">"<xliff:g id="CONVERSATION_TITLE">%1$s</xliff:g>: <xliff:g id="SENDER_NAME">%2$s</xliff:g>"</string>
+    <string name="notification_metric_label_unit" msgid="309618413505128451">"<xliff:g id="METRIC_LABEL">%1$s</xliff:g> (<xliff:g id="METRIC_UNIT">%2$s</xliff:g>)"</string>
+    <string name="notification_metric_label_unit_separator" msgid="5631839566551764472">"<xliff:g id="METRIC_LABEL">%1$s</xliff:g> (<xliff:g id="METRIC_UNIT">%2$s</xliff:g>):"</string>
+    <string name="notification_metric_label_separator" msgid="8416027475779515033">"‫<xliff:g id="METRIC_LABEL">%1$s</xliff:g>:"</string>
     <string name="call_notification_answer_action" msgid="5999246836247132937">"מענה"</string>
     <string name="call_notification_answer_video_action" msgid="2086030940195382249">"וידאו"</string>
     <string name="call_notification_decline_action" msgid="3700345945214000726">"דחייה"</string>
@@ -2068,7 +2090,7 @@
     <string name="work_mode_emergency_call_button" msgid="6818855962881612322">"שיחת חירום"</string>
     <string name="set_up_screen_lock_title" msgid="8346083801616474030">"הגדרת נעילת מסך"</string>
     <string name="set_up_screen_lock_action_label" msgid="2687634803649209367">"הגדרה של נעילת מסך"</string>
-    <string name="private_space_set_up_screen_lock_message" msgid="1109956797005149814">"כדי להשתמש במרחב הפרטי יש להגדיר נעילת מסך במכשיר"</string>
+    <string name="private_space_set_up_screen_lock_message" msgid="1109956797005149814">"כדי להשתמש במרחב הפרטי, עליך להגדיר נעילת מסך במכשיר"</string>
     <string name="private_space_set_up_screen_lock_for_reset" msgid="7817091386408432097">"כדי למחוק את המרחב הפרטי, צריך להגדיר נעילת מסך במכשיר הזה."</string>
     <string name="app_blocked_title" msgid="7353262160455028160">"האפליקציה לא זמינה"</string>
     <string name="app_blocked_message" msgid="542972921087873023">"האפליקציה <xliff:g id="APP_NAME">%1$s</xliff:g> לא זמינה בשלב זה."</string>
@@ -2499,7 +2521,7 @@
     <string name="screen_not_shared_sensitive_content" msgid="7058419185079565001">"תוכן האפליקציה מוסתר משיתוף המסך מטעמי אבטחה"</string>
     <string name="satellite_notification_title" msgid="4026338973463121526">"חיבור אוטומטי ללוויין"</string>
     <string name="satellite_notification_summary" msgid="5207364139430767162">"‏אפשר לשלוח ולקבל הודעות ללא רשת סלולרית או רשת Wi-Fi"</string>
-    <string name="satellite_notification_summary_with_data" msgid="6486843676720429049">"אפשר לשלוח ולקבל הודעות ולהשתמש בחבילת הגלישה באופן מוגבל באמצעות לוויין"</string>
+    <string name="satellite_notification_summary_with_data" msgid="8290202758586475712">"אפשר לשלוח ולקבל הודעות ולהשתמש באפליקציות נבחרות באמצעות לוויין"</string>
     <string name="satellite_notification_manual_title" msgid="1097504441849466279">"רוצה לשלוח הודעות באמצעות תקשורת לוויינית?"</string>
     <string name="satellite_notification_manual_summary" msgid="901206289846283445">"‏אפשר לשלוח ולקבל הודעות ללא רשת סלולרית או Wi-Fi"</string>
     <string name="satellite_notification_open_message" msgid="4149234979688273729">"‏לפתיחת Messages"</string>
@@ -2554,21 +2576,26 @@
     <string name="keyboard_shortcut_group_applications_calendar" msgid="3571770335653387606">"יומן"</string>
     <string name="keyboard_shortcut_group_applications_calculator" msgid="6753209559716091507">"מחשבון"</string>
     <string name="keyboard_shortcut_group_applications_maps" msgid="7950000659522589471">"מפות"</string>
+    <string name="keyboard_shortcut_group_applications_files" msgid="863938400765838051">"Files"</string>
     <string name="keyboard_shortcut_group_applications" msgid="3010389163951364798">"אפליקציות"</string>
     <string name="fingerprint_loe_notification_msg" msgid="3927447270148854546">"טביעות האצבע שלך נשחקו ואי אפשר לזהות אותן. צריך להגדיר \'פתיחה בטביעת אצבע\' מחדש."</string>
     <string name="usb_apm_usb_plugged_in_when_locked_notification_app_title" msgid="285421860627714333">"אבטחה ופרטיות"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="5205863500921477220">"‏הגנה מתקדמת ל-USB"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_notification_text" msgid="2147694109838597680">"כדי להעביר נתונים, צריך לפתוח את נעילת המכשיר"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text" msgid="1979414895616432005">"כדי להעביר נתונים, אולי יהיה צורך לפתוח את נעילת המכשיר ולחבר אותו מחדש לשקע"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_notification_text" msgid="5974307859193807824">"כדי להעביר נתונים ולטעון את המכשיר במהירות, צריך לפתוח את הנעילה שלו"</string>
-    <string name="usb_apm_usb_plugged_in_when_locked_low_power_charge_replug_notification_text" msgid="9045166614060168068">"כדי להעביר נתונים ולטעון את המכשיר במהירות, אולי יהיה צורך לפתוח את הנעילה שלו ולחבר אותו מחדש לשקע"</string>
-    <string name="usb_apm_usb_plugged_in_for_power_brick_notification_text" msgid="5538918232374470393">"כדי להשתמש בטעינה המהירה, צריך לפתוח את נעילת המכשיר"</string>
-    <string name="usb_apm_usb_plugged_in_for_power_brick_replug_notification_text" msgid="4301626745704703517">"כדי להשתמש בטעינה המהירה, אולי יהיה צורך לפתוח את נעילת המכשיר ולחבר אותו מחדש לשקע"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_title" msgid="3711633462195368964">"‏צריך לפתוח את נעילת המסך ולחבר מחדש את ה-USB"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_notification_title" msgid="2426356396215833585">"‏כדי להתחבר ל-USB צריך לפתוח את נעילת המסך"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_replug_notification_text" msgid="3936428118409384816">"‏כדי להתחיל חיבור USB כש\"הגנה מתקדמת\" מופעלת, צריך לפתוח את נעילת המסך"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_data_notification_text" msgid="8392199274984083972">"‏כדי להתחיל חיבור USB כש\"הגנה מתקדמת\" מופעלת, צריך לפתוח את נעילת המסך"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_charge_notification_text" msgid="6563939109526112446">"כדי שתתבצע טעינה מהירה יותר כש\"הגנה מתקדמת\" מופעלת, צריך לפתוח את נעילת המסך"</string>
+    <string name="usb_apm_usb_plugged_in_when_locked_charge_data_notification_text" msgid="411509882563364946">"‏כדי להשתמש בטעינה מהירה או להתחיל חיבור USB, כש\"הגנה מתקדמת\" מופעלת, צריך לפתוח את נעילת המסך"</string>
     <string name="usb_apm_usb_plugged_in_when_locked_notification_silence_action_text" msgid="5495539757631669634">"השתקה"</string>
-    <string name="usb_apm_usb_notification_silenced_title" msgid="7883902869771699533">"ההתראה מושתקת"</string>
-    <string name="usb_apm_usb_notification_silenced_text" msgid="7154391495952217529">"מושתקת עד שהמכשיר יופעל מחדש"</string>
+    <string name="usb_apm_usb_notification_silenced_title" msgid="5114203793430169863">"ההתראות מושתקות"</string>
+    <string name="usb_apm_usb_notification_silenced_text" msgid="8394777105856033342">"‏התראות USB של \"הגנה מתקדמת\" יתקבלו רק אחרי שהמכשיר יופעל מחדש"</string>
     <string name="usb_apm_usb_suspicious_activity_notification_title" msgid="3461195995882871461">"‏זוהתה פעילות חשודה בהתקן USB"</string>
-    <string name="usb_apm_usb_suspicious_activity_notification_text" msgid="6537085605929303187">"‏האות עם הנתונים מהתקן ה-USB הושבת."</string>
+    <string name="usb_apm_usb_suspicious_activity_notification_text" msgid="5772698072220844779">"‏האות עם הנתונים מה-USB הושבת"</string>
     <string name="fingerprint_frr_notification_title" msgid="3668331918920659093">"נתקלת בבעיה בפתיחה בטביעת אצבע?"</string>
     <string name="fingerprint_frr_notification_msg" msgid="2162966846624639252">"אפשר ללחוץ כאן כדי לקבל טיפים לפתיחה נוחה יותר של המכשיר"</string>
+    <string name="no_blink_accessibility_text_cursor_blink_label" msgid="223072797385428874">"ללא הבהוב"</string>
+    <string name="long_press_power_to_turn_off_tv_toast" msgid="2231397748028498986">"כדי לכבות את הטלוויזיה, צריך ללחוץ לחיצה ארוכה על כפתור ההפעלה"</string>
+    <string name="tv_watchdog_notification_channel_name" msgid="4936803270000103737">"התראות על משאבי מערכת"</string>
+    <string name="tv_watchdog_notification_title" msgid="195239206215922517">"שימוש יתר במשאבים"</string>
+    <string name="tv_watchdog_notification_content" msgid="6444873431710133936">"האפליקציה <xliff:g id="APP_NAME">%1$s</xliff:g> משתמשת ביותר מדי משאבים."</string>
 </resources>

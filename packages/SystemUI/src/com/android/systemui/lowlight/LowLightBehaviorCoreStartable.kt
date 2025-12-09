@@ -17,14 +17,16 @@ package com.android.systemui.lowlight
 
 import android.os.Flags
 import android.os.UserHandle
+import androidx.annotation.VisibleForTesting
 import com.android.internal.logging.UiEventLogger
 import com.android.systemui.CoreStartable
-import com.android.systemui.common.domain.interactor.BatteryInteractor
+import com.android.systemui.common.domain.interactor.BatteryInteractorDeprecated
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.display.domain.interactor.DisplayStateInteractor
 import com.android.systemui.dreams.domain.interactor.DreamSettingsInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
 import com.android.systemui.keyguard.shared.model.DozeStateModel.Companion.isDozeOff
+import com.android.systemui.lowlight.domain.interactor.AmbientLowLightMonitorInteractor
 import com.android.systemui.lowlight.domain.interactor.LowLightInteractor
 import com.android.systemui.lowlight.domain.interactor.LowLightSettingsInteractor
 import com.android.systemui.lowlight.shared.model.LowLightActionEntry
@@ -36,6 +38,8 @@ import com.android.systemui.lowlight.shell.LowLightShellCommand
 import com.android.systemui.lowlightclock.LowLightDockEvent
 import com.android.systemui.lowlightclock.LowLightLogger
 import com.android.systemui.power.domain.interactor.PowerInteractor
+import com.android.systemui.statusbar.pipeline.battery.domain.interactor.BatteryInteractor
+import com.android.systemui.statusbar.pipeline.battery.shared.StatusBarUniversalBatteryDataSource
 import com.android.systemui.user.domain.interactor.UserLockedInteractor
 import com.android.systemui.util.kotlin.BooleanFlowOperators.allOf
 import com.android.systemui.util.kotlin.BooleanFlowOperators.anyOf
@@ -43,13 +47,16 @@ import com.android.systemui.util.kotlin.BooleanFlowOperators.not
 import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import com.android.systemui.utils.coroutines.flow.flatMapLatestConflated
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.flowOf
@@ -71,10 +78,11 @@ constructor(
     private val userLockedInteractor: UserLockedInteractor,
     keyguardInteractor: KeyguardInteractor,
     powerInteractor: PowerInteractor,
-    private val ambientLightModeMonitor: AmbientLightModeMonitor,
+    ambientLightModeMonitorInteractor: AmbientLowLightMonitorInteractor,
     private val uiEventLogger: UiEventLogger,
     private val lowLightBehaviorShellCommand: LowLightBehaviorShellCommand,
     private val lowLightShellCommand: LowLightShellCommand,
+    batteryInteractorDeprecated: BatteryInteractorDeprecated,
     batteryInteractor: BatteryInteractor,
 ) : CoreStartable {
 
@@ -82,31 +90,41 @@ constructor(
     private val isScreenOn = not(displayStateInteractor.isDefaultDisplayOff).distinctUntilChanged()
 
     /** Whether device is plugged in */
-    private val isPluggedIn = batteryInteractor.isDevicePluggedIn.distinctUntilChanged()
+    private val isPluggedIn =
+        if (StatusBarUniversalBatteryDataSource.isEnabled) {
+                batteryInteractor.isPluggedIn
+            } else {
+                batteryInteractorDeprecated.isDevicePluggedIn
+            }
+            .distinctUntilChanged()
 
     /** Whether the device is currently in a low-light environment. */
     private val isLowLightFromSensor =
         if (Flags.lowLightDreamBehavior()) {
-            conflatedCallbackFlow {
-                    ambientLightModeMonitor.start { lowLightMode: Int -> trySend(lowLightMode) }
-                    awaitClose { ambientLightModeMonitor.stop() }
-                }
-                .filterNot { it == AmbientLightModeMonitor.AMBIENT_LIGHT_MODE_UNDECIDED }
-                .map { it == AmbientLightModeMonitor.AMBIENT_LIGHT_MODE_DARK }
-                .distinctUntilChanged()
-                .onEach { isLowLight ->
-                    uiEventLogger.log(
-                        if (isLowLight) LowLightDockEvent.AMBIENT_LIGHT_TO_DARK
-                        else LowLightDockEvent.AMBIENT_LIGHT_TO_LIGHT
-                    )
-                }
-                // AmbientLightModeMonitor only supports a single callback, so ensure this is
-                // re-used if there are multiple subscribers.
-                .stateIn(
-                    scope,
-                    started = SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
-                    initialValue = false,
-                )
+            ambientLightModeMonitorInteractor.currentMonitor.flatMapLatestConflated { monitor ->
+                monitor?.let {
+                    conflatedCallbackFlow {
+                            it.start { lowLightMode: Int -> trySend(lowLightMode) }
+                            awaitClose { it.stop() }
+                        }
+                        .filterNot { it == AmbientLightModeMonitor.AMBIENT_LIGHT_MODE_UNDECIDED }
+                        .map { it == AmbientLightModeMonitor.AMBIENT_LIGHT_MODE_DARK }
+                        .distinctUntilChanged()
+                        .onEach { isLowLight ->
+                            uiEventLogger.log(
+                                if (isLowLight) LowLightDockEvent.AMBIENT_LIGHT_TO_DARK
+                                else LowLightDockEvent.AMBIENT_LIGHT_TO_LIGHT
+                            )
+                        }
+                        // AmbientLightModeMonitor only supports a single callback, so ensure this
+                        // is re-used if there are multiple subscribers.
+                        .stateIn(
+                            scope,
+                            started = SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
+                            initialValue = false,
+                        )
+                } ?: MutableStateFlow(false)
+            }
         } else {
             MutableStateFlow(false)
         }
@@ -143,11 +161,14 @@ constructor(
      * Whether the device is idle (lockscreen showing or dreaming or asleep) and not in doze/AOD, as
      * we do not want to override doze/AOD with lowlight dream.
      */
+    @OptIn(FlowPreview::class)
     private val isDeviceIdleAndNotDozing: Flow<Boolean> =
         allOf(
             not(anyDoze),
             anyOf(
-                keyguardInteractor.isDreaming,
+                keyguardInteractor.isDreaming.debounce(
+                    DREAM_STATE_DEBOUNCE_DURATION_MS.milliseconds
+                ),
                 keyguardInteractor.isKeyguardShowing,
                 powerInteractor.isAsleep,
             ),
@@ -155,9 +176,12 @@ constructor(
 
     private fun shouldTrackLowLight(behavior: LowLightDisplayBehavior): Flow<Boolean> {
         return allOf(
-                anyOf(isScreenOn, flowOf(behavior.allowedInScreenState(ScreenState.OFF))),
                 dreamSettingsInteractor.dreamingEnabled,
                 isPluggedIn,
+                anyOf(
+                    allOf(isScreenOn, isDeviceIdleAndNotDozing),
+                    allOf(not(isScreenOn), flowOf(behavior.allowedInScreenState(ScreenState.OFF))),
+                ),
             )
             .flatMapLatestConflated {
                 // The second set of conditions are separated from the above allOf flow combination
@@ -169,19 +193,13 @@ constructor(
                 // Force lowlight only if idle and in either direct-boot
                 // mode or in a lowlight environment.
                 if (it) {
-                    allOf(
-                        anyOf(
-                            isDeviceIdleAndNotDozing,
-                            flowOf(behavior.allowedInScreenState(ScreenState.DOZE)),
-                        ),
-                        anyOf(
-                            isLowLight,
-                            if (lowLightSettingsInteractor.allowLowLightBehaviorWhenLocked) {
-                                not(userLockedInteractor.isUserUnlocked(UserHandle.CURRENT))
-                            } else {
-                                flowOf(false)
-                            },
-                        ),
+                    anyOf(
+                        isLowLight,
+                        if (lowLightSettingsInteractor.allowLowLightBehaviorWhenLocked) {
+                            not(userLockedInteractor.isUserUnlocked(UserHandle.CURRENT))
+                        } else {
+                            flowOf(false)
+                        },
                     )
                 } else {
                     flowOf(false)
@@ -213,5 +231,7 @@ constructor(
 
     companion object {
         private const val TAG = "LowLightBehaviorCoreStartable"
+
+        @VisibleForTesting const val DREAM_STATE_DEBOUNCE_DURATION_MS = 100
     }
 }

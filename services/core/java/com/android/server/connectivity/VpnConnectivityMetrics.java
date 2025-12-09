@@ -27,19 +27,27 @@ import static android.net.IpSecAlgorithm.AUTH_HMAC_SHA384;
 import static android.net.IpSecAlgorithm.AUTH_HMAC_SHA512;
 import static android.net.IpSecAlgorithm.CRYPT_AES_CBC;
 import static android.net.IpSecAlgorithm.CRYPT_AES_CTR;
+import static android.net.VpnManager.TYPE_VPN_OEM;
 
 import android.net.ConnectivityManager;
 import android.net.LinkAddress;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.VpnManager;
+import android.util.IndentingPrintWriter;
+import android.util.LocalLog;
 import android.util.Log;
 import android.util.SparseArray;
+import android.util.SparseIntArray;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.internal.net.VpnProfile;
+import com.android.internal.util.FrameworkStatsLog;
+
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.List;
@@ -50,10 +58,15 @@ import java.util.List;
  */
 public class VpnConnectivityMetrics {
     private static final String TAG = VpnConnectivityMetrics.class.getSimpleName();
-    public static final int VPN_TYPE_UNKNOWN = 0;
-    public static final int VPN_PROFILE_TYPE_UNKNOWN = 0;
-    private static final int UNKNOWN_UNDERLYING_NETWORK_TYPE = -1;
+    private static final int MAX_LOG_RECORDS = 100;
+    private final LocalLog mMetricLogs = new LocalLog(MAX_LOG_RECORDS);
     // Copied from corenetworking platform vpn enum
+    @VisibleForTesting
+    static final int VPN_TYPE_UNKNOWN = 0;
+    @VisibleForTesting
+    static final int VPN_PROFILE_TYPE_UNKNOWN = 0;
+    private static final int VPN_PROFILE_TYPE_IKEV2_FROM_IKE_TUN_CONN_PARAMS = 10;
+    private static final int UNKNOWN_UNDERLYING_NETWORK_TYPE = -1;
     @VisibleForTesting
     static final int IP_PROTOCOL_UNKNOWN = 0;
     @VisibleForTesting
@@ -63,9 +76,17 @@ public class VpnConnectivityMetrics {
     @VisibleForTesting
     static final int IP_PROTOCOL_IPv4v6 = 3;
     private static final SparseArray<String> sAlgorithms = new SparseArray<>();
+    /**
+     * A static mapping from {@link VpnProfile} types to the corresponding integer values
+     * defined in the {@code VpnProfileType} enum for metrics reporting. This allows for a
+     * direct and efficient lookup of the profile type integer based on the VpnProfile constant.
+     */
+    private static final SparseIntArray sVpnProfileTypeMap = new SparseIntArray();
     private final int mUserId;
     @NonNull
     private final ConnectivityManager mConnectivityManager;
+    @NonNull
+    private final Dependencies mDependencies;
     private int mVpnType = VPN_TYPE_UNKNOWN;
     private int mVpnProfileType = VPN_PROFILE_TYPE_UNKNOWN;
     private int mMtu = 0;
@@ -77,6 +98,14 @@ public class VpnConnectivityMetrics {
      */
     private int mAllowedAlgorithms = 0;
     /**
+     * The maximum value that {@code mAllowedAlgorithms} can take.
+     * It's calculated based on the number of algorithms defined in {@code sAlgorithms}.
+     * Each algorithm corresponds to a bit in the bitmask, so the maximum value is
+     * 2^numberOfAlgorithms - 1.
+     * This value should be updated if {@code sAlgorithms} is modified.
+     */
+    private static final int MAX_ALLOWED_ALGORITHMS_VALUE = (1 << 11) - 1;
+    /**
      * An array representing the transport types of the underlying networks for the VPN.
      * Each element in this array corresponds to a specific underlying network.
      * The value of each element is the primary transport type of the network
@@ -86,13 +115,14 @@ public class VpnConnectivityMetrics {
      * {@code UNKNOWN_UNDERLYING_NETWORK_TYPE}.
      */
     @NonNull
-    private int[] mUnderlyingNetworkTypes;
+    private int[] mUnderlyingNetworkTypes = new int[0];
     private int mVpnNetworkIpProtocol = IP_PROTOCOL_UNKNOWN;
     private int mServerIpProtocol = IP_PROTOCOL_UNKNOWN;
 
-    // Static initializer block to populate the sAlgorithms mapping. It associates integer keys
-    // (which also serve as bit positions for the mAllowedAlgorithms bitmask) with their
-    // respective algorithm string constants.
+    // Static initializer block to populate the sAlgorithms and sVpnProfileTypeMap mappings.
+    // For sAlgorithms, it associates integer keys (which also serve as bit positions for the
+    // mAllowedAlgorithms bitmask) with their respective algorithm string constants.
+    // For sVpnProfileTypeMap, it maps VpnProfile types to their corresponding enum values.
     static {
         sAlgorithms.put(0, AUTH_AES_CMAC);
         sAlgorithms.put(1, AUTH_AES_XCBC);
@@ -105,11 +135,55 @@ public class VpnConnectivityMetrics {
         sAlgorithms.put(8, AUTH_HMAC_SHA512);
         sAlgorithms.put(9, CRYPT_AES_CBC);
         sAlgorithms.put(10, CRYPT_AES_CTR);
+
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_PPTP, 1 /* VpnProfileType.TYPE_PPTP */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_L2TP_IPSEC_PSK,
+                2 /* VpnProfileType.TYPE_L2TP_IPSEC_PSK */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_L2TP_IPSEC_RSA,
+                3 /* VpnProfileType.TYPE_L2TP_IPSEC_RSA */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_IPSEC_XAUTH_PSK,
+                4 /* VpnProfileType.TYPE_TYPE_IPSEC_XAUTH_PSK */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_IPSEC_XAUTH_RSA,
+                5 /* VpnProfileType.TYPE_IPSEC_XAUTH_RSA */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_IPSEC_HYBRID_RSA,
+                6 /* VpnProfileType.TYPE_IPSEC_HYBRID_RSA */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_IKEV2_IPSEC_USER_PASS,
+                7 /* VpnProfileType.TYPE_IKEV2_IPSEC_USER_PASS */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_IKEV2_IPSEC_PSK,
+                8 /* VpnProfileType.TYPE_IKEV2_IPSEC_PSK */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_IKEV2_IPSEC_RSA,
+                9 /* VpnProfileType.TYPE_IKEV2_IPSEC_RSA */);
+        sVpnProfileTypeMap.put(VpnProfile.TYPE_IKEV2_FROM_IKE_TUN_CONN_PARAMS,
+                10 /* VpnProfileType.TYPE_IKEV2_FROM_IKE_TUN_CONN_PARAMS */);
+    }
+
+    /**
+     * Dependencies of VpnConnectivityMetrics, for injection in tests.
+     */
+    public static class Dependencies {
+
+        /**
+         * @see FrameworkStatsLog
+         */
+        public void statsWrite(int vpnType, int vpnNetworkIpProtocol, int serverIpProtocol,
+                int vpnProfileType, int allowedAlgorithms, int mtu, int[] underlyingNetworkType,
+                boolean connected, int userId) {
+            FrameworkStatsLog.write(FrameworkStatsLog.VPN_CONNECTION_REPORTED, vpnType,
+                    vpnNetworkIpProtocol, serverIpProtocol, vpnProfileType, allowedAlgorithms, mtu,
+                    underlyingNetworkType, connected, userId);
+        }
     }
 
     public VpnConnectivityMetrics(int userId, ConnectivityManager connectivityManager) {
+        this(userId, connectivityManager, new Dependencies());
+    }
+
+    @VisibleForTesting
+    VpnConnectivityMetrics(int userId, ConnectivityManager connectivityManager,
+            Dependencies dependencies) {
         mUserId = userId;
         mConnectivityManager = connectivityManager;
+        mDependencies = dependencies;
     }
 
     /**
@@ -136,8 +210,7 @@ public class VpnConnectivityMetrics {
      * @param vpnProfile The integer value representing the VPN profile.
      */
     public void setVpnProfileType(int vpnProfile) {
-        // There is a shift (+1) between VpnProfileType and VpnProfile.
-        mVpnProfileType = vpnProfile + 1;
+        mVpnProfileType = sVpnProfileTypeMap.get(vpnProfile, VPN_PROFILE_TYPE_UNKNOWN);
     }
 
     /**
@@ -190,51 +263,132 @@ public class VpnConnectivityMetrics {
      * for a specific network, a predefined {@code UNKNOWN_UNDERLYING_NETWORK_TYPE} is
      * used for that entry.
      *
+     * <p>
+     * Note: This method contains a synchronized call to ConnectivityManager to query the network
+     * capability, so this method should not be called from the Network Callback.
+     *
+     * <p>
+     * If the underlying network types have changed are different from current, a sequence of
+     * notifications is triggered: first, a disconnection notification is sent with the old value,
+     * then {@code mUnderlyingNetworkTypes} is updated with the new value, and finally, a connection
+     * notification is issued with the new value.
+     *
      * @param networks An array of {@link android.net.Network} objects representing the underlying
      *                 networks currently in use.
      */
-    public void setUnderlyingNetwork(@NonNull Network[] networks) {
-        if (networks.length != 0) {
-            int[] types = new int[networks.length];
-            for (int i = 0; i < networks.length; i++) {
-                final NetworkCapabilities capabilities =
-                        mConnectivityManager.getNetworkCapabilities(networks[i]);
-                if (capabilities != null) {
-                    // Get the primary transport type of the network.
-                    types[i] = capabilities.getTransportTypes()[0];
-                } else {
-                    types[i] = UNKNOWN_UNDERLYING_NETWORK_TYPE;
-                }
-            }
-            mUnderlyingNetworkTypes = Arrays.copyOf(types, types.length);
-        } else {
-            mUnderlyingNetworkTypes = new int[0];
+    public void updateUnderlyingNetworkTypes(@NonNull Network[] networks) {
+        // Note: If the underlying network is lost, an empty underlying network won't be set.
+        // Instead, only a countdown timer will be activated. After a timeout, the NetworkAgent
+        // disconnects, and the disconnection is then notified from there. Therefore, the recorded
+        // time may not be accurate because there may be a gap between the NetworkAgent disconnect
+        // and the loss of the underlying network.
+        if (networks.length == 0) {
+            return; // Return if no networks.
         }
+
+        int[] newTypes = new int[networks.length];
+        for (int i = 0; i < networks.length; i++) {
+            final NetworkCapabilities capabilities =
+                    mConnectivityManager.getNetworkCapabilities(networks[i]);
+            if (capabilities != null) {
+                // Get the primary transport type of the network.
+                newTypes[i] = capabilities.getTransportTypes()[0];
+            } else {
+                newTypes[i] = UNKNOWN_UNDERLYING_NETWORK_TYPE;
+            }
+        }
+        // Set the underlying network types directly if it's the default value, skipping the
+        // connection status notification. Those notifications will be sent only when the VPN
+        // connection is established and the underlying network types change.
+        if (mUnderlyingNetworkTypes.length == 0) {
+            mUnderlyingNetworkTypes = newTypes;
+            return;
+        }
+        // Return if no type change.
+        if (Arrays.equals(mUnderlyingNetworkTypes, newTypes)) {
+            return;
+        }
+        // Notify the ip protocol change and set the new ip protocol.
+        notifyVpnDisconnected();
+        mUnderlyingNetworkTypes = newTypes;
+        notifyVpnConnected();
     }
 
     /**
      * Sets the IP protocol for the vpn network based on a list of {@link LinkAddress} objects.
      *
+     * <p>
+     * If the vpn network ip protocol has changed is different from current, a sequence of
+     * notifications is triggered: first, a disconnection notification is sent with the old value,
+     * then {@code mUnderlyingNetworkTypes} is updated with the new value, and finally, a connection
+     * notification is issued with the new value.
+     *
      * @param addresses A list of {@link LinkAddress} objects representing the IP addresses
      *                  configured on the VPN network.
      */
-    public void setVpnNetworkIpProtocol(@NonNull List<LinkAddress> addresses) {
-        mVpnNetworkIpProtocol = checkIpProtocol(addresses);
+    public void updateVpnNetworkIpProtocol(@NonNull List<LinkAddress> addresses) {
+        final int newVpnNetworkIpProtocol = checkIpProtocol(addresses);
+        // Set the vpn network ip protocol directly if it's the default value, skipping the
+        // connection status notification. Those notifications will be sent only when the VPN
+        // connection is established and the vpn network ip protocol changes.
+        if (mVpnNetworkIpProtocol == IP_PROTOCOL_UNKNOWN) {
+            mVpnNetworkIpProtocol = newVpnNetworkIpProtocol;
+            return;
+        }
+        // Return if no ip protocol change.
+        if (mVpnNetworkIpProtocol == newVpnNetworkIpProtocol) {
+            return;
+        }
+        // Notify the ip protocol change and set the new ip protocol.
+        notifyVpnDisconnected();
+        mVpnNetworkIpProtocol = newVpnNetworkIpProtocol;
+        notifyVpnConnected();
     }
 
     /**
      * Sets the IP protocol for the server based on its {@link InetAddress}.
      *
+     * <p>
+     * If the server ip protocol has changed is different from current, a sequence of notifications
+     * is triggered: first, a disconnection notification is sent with the old value, then
+     * {@code mUnderlyingNetworkTypes} is updated with the new value, and finally, a connection
+     * notification is issued with the new value.
+     *
      * @param address The {@link InetAddress} of the server.
      */
-    public void setServerIpProtocol(@NonNull InetAddress address) {
+    public void updateServerIpProtocol(@NonNull InetAddress address) {
+        final int newServerIpProtocol = getIpProtocolVersion(address);
+        // Set the server ip protocol directly if it's the default value, skipping the connection
+        // status notification. Those notifications will be sent only when the VPN connection is
+        // established and the server ip protocol changes.
+        if (mServerIpProtocol == IP_PROTOCOL_UNKNOWN) {
+            mServerIpProtocol = newServerIpProtocol;
+            return;
+        }
+        // Return if no ip protocol change.
+        if (mServerIpProtocol == newServerIpProtocol) {
+            return;
+        }
+        // Notify the ip protocol change and set the new ip protocol.
+        notifyVpnDisconnected();
+        mServerIpProtocol = newServerIpProtocol;
+        notifyVpnConnected();
+    }
+
+    /**
+     * Determines the IP protocol version of a given {@link InetAddress}.
+     *
+     * @param address The {@link InetAddress} for which to determine the IP protocol version.
+     * @return An integer representing the IP protocol version:
+     * {@link #IP_PROTOCOL_IPv4} for IPv4 addresses,
+     * {@link #IP_PROTOCOL_IPv6} for IPv6 addresses,
+     * or {@link #IP_PROTOCOL_UNKNOWN} for any other address types.
+     */
+    private static int getIpProtocolVersion(@NonNull InetAddress address) {
         // Assume that if the address is not IPv4, it is IPv6. It does not consider other cases like
         // IPv4-mapped IPv6 addresses.
-        if (address instanceof Inet4Address) {
-            mServerIpProtocol = IP_PROTOCOL_IPv4;
-        } else {
-            mServerIpProtocol = IP_PROTOCOL_IPv6;
-        }
+        return (address instanceof Inet4Address) ? IP_PROTOCOL_IPv4 :
+                (address instanceof Inet6Address) ? IP_PROTOCOL_IPv6 : IP_PROTOCOL_UNKNOWN;
     }
 
     /**
@@ -250,6 +404,7 @@ public class VpnConnectivityMetrics {
         boolean hasIpv6 = false;
         int ipProtocol = IP_PROTOCOL_UNKNOWN;
         for (LinkAddress address : addresses) {
+            if (address == null) continue;
             if (address.isIpv4()) {
                 hasIpv4 = true;
             } else if (address.isIpv6()) {
@@ -264,5 +419,108 @@ public class VpnConnectivityMetrics {
             ipProtocol = IP_PROTOCOL_IPv6;
         }
         return ipProtocol;
+    }
+
+    /**
+     * Validates and corrects the internal VPN metrics to ensure the collected data fall within
+     * acceptable ranges.
+     * <p>
+     * This method checks the values of {@code mVpnType}, {@code mVpnNetworkIpProtocol},
+     * {@code mServerIpProtocol}, {@code mVpnProfileType}, and {@code mAllowedAlgorithms}.
+     * If any value is found to be outside its expected bounds, an error is logged, and the metric
+     * is reset to default state.
+     * </p>
+     */
+    private void validateAndCorrectMetrics() {
+        if (mVpnType < VPN_TYPE_UNKNOWN || mVpnType > TYPE_VPN_OEM) {
+            Log.e(TAG, "Invalid vpnType: " + mVpnType);
+            mVpnType = VPN_TYPE_UNKNOWN;
+        }
+        if (mVpnNetworkIpProtocol < IP_PROTOCOL_UNKNOWN
+                || mVpnNetworkIpProtocol > IP_PROTOCOL_IPv4v6) {
+            Log.e(TAG, "Invalid vpnNetworkIpProtocol: " + mVpnNetworkIpProtocol);
+            mVpnNetworkIpProtocol = IP_PROTOCOL_UNKNOWN;
+        }
+        if (mServerIpProtocol < IP_PROTOCOL_UNKNOWN || mServerIpProtocol > IP_PROTOCOL_IPv6) {
+            Log.e(TAG, "Invalid serverIpProtocol: " + mServerIpProtocol);
+            mServerIpProtocol = IP_PROTOCOL_UNKNOWN;
+        }
+        if (mVpnProfileType < VPN_PROFILE_TYPE_UNKNOWN
+                || mVpnProfileType > VPN_PROFILE_TYPE_IKEV2_FROM_IKE_TUN_CONN_PARAMS) {
+            Log.e(TAG, "Invalid vpnProfileType: " + mVpnProfileType);
+            mVpnProfileType = VPN_PROFILE_TYPE_UNKNOWN;
+        }
+        if (mAllowedAlgorithms < 0 || mAllowedAlgorithms > MAX_ALLOWED_ALGORITHMS_VALUE) {
+            Log.e(TAG, "Invalid allowedAlgorithms: " + mAllowedAlgorithms);
+            mAllowedAlgorithms = 0;
+        }
+    }
+
+    private void validateAndReportVpnConnectionEvent(boolean connected) {
+        validateAndCorrectMetrics();
+        mMetricLogs.log("Report VPN connection event: " + (connected ? "CONNECTED" : "DISCONNECTED")
+                + ", vpnType=" + mVpnType
+                + ", vpnProfileType=" + mVpnProfileType
+                + ", underlyingNetworkTypes=" + Arrays.toString(mUnderlyingNetworkTypes)
+                + ", vpnNetworkIpProtocol=" + mVpnNetworkIpProtocol
+                + ", serverIpProtocol=" + mServerIpProtocol
+                + ", allowedAlgorithms=" + mAllowedAlgorithms
+                + ", mtu=" + mMtu);
+        mDependencies.statsWrite(
+                mVpnType,
+                mVpnNetworkIpProtocol,
+                mServerIpProtocol,
+                mVpnProfileType,
+                mAllowedAlgorithms,
+                mMtu,
+                mUnderlyingNetworkTypes,
+                connected,
+                mUserId);
+    }
+
+    /**
+     * Notifies that a VPN connected event has occurred.
+     *
+     * This method gathers the current VPN state information from internal fields and reports it to
+     * the system's statistics logging service.
+     */
+    public void notifyVpnConnected() {
+        validateAndReportVpnConnectionEvent(true /* connected */);
+    }
+
+    /**
+     * Notifies that a VPN disconnected event has occurred.
+     *
+     * This method gathers the current VPN state information from internal fields and reports it to
+     * the system's statistics logging service.
+     */
+    public void notifyVpnDisconnected() {
+        validateAndReportVpnConnectionEvent(false /* connected */);
+    }
+
+    /**
+     * Resets all internal VPN metrics to their default states.
+     * <p>
+     * This method should be called to ensure a clean state.
+     * </p>
+     */
+    public void resetMetrics() {
+        mVpnType = VPN_TYPE_UNKNOWN;
+        mVpnNetworkIpProtocol = IP_PROTOCOL_UNKNOWN;
+        mServerIpProtocol = IP_PROTOCOL_UNKNOWN;
+        mVpnProfileType = VPN_PROFILE_TYPE_UNKNOWN;
+        mAllowedAlgorithms = 0;
+        mMtu = 0;
+        mUnderlyingNetworkTypes = new int[0];
+    }
+
+    /**
+     * Dumps the local log buffer.
+     */
+    public void dump(IndentingPrintWriter pw) {
+        pw.println("VpnConnectivityMetrics logs (most recent first):");
+        pw.increaseIndent();
+        mMetricLogs.reverseDump(pw);
+        pw.decreaseIndent();
     }
 }

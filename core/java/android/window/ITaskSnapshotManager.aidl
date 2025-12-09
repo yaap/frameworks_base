@@ -16,6 +16,8 @@
 
 package android.window;
 
+import android.window.ITaskSnapshotListener;
+
 /**
  * @hide
  */
@@ -24,13 +26,16 @@ interface ITaskSnapshotManager {
      * Fetches the snapshot for the task with the given id.
      *
      * @param taskId the id of the task to retrieve for
+     * @param latestCaptureTime the elapsed time of the latest taskSnapshot captured
      * @param retrieveResolution the resolution we want to load.
      *
      * @throws RemoteException
-     * @return a graphic buffer representing a screenshot of a task, or {@code null} if no
-     *         screenshot can be found.
+     * @return a graphic buffer representing a screenshot of a task, it returns {@code null} if no
+     *         screenshot can be found, but if latestCaptureTime is equals or greater than 0, then
+     *         the client should reuse the existing snapshot.
      */
-    android.window.TaskSnapshot getTaskSnapshot(int taskId, int retrieveResolution);
+    android.window.TaskSnapshot getTaskSnapshot(int taskId, long latestCaptureTime,
+            int retrieveResolution);
 
     /**
      * Requests for a new snapshot to be taken for the task with the given id, storing it in the
@@ -41,9 +46,14 @@ interface ITaskSnapshotManager {
      *                    If it is true, the snapshot can be either real content or app-theme mode
      *                    depending on the attributes of app. Otherwise, the snapshot will be taken
      *                    with real content.
+     * @param lowResolution Whether to get the new snapshot in low resolution.
      * @throws RemoteException
      * @return a graphic buffer representing a screenshot of a task, or {@code null} if no
      *         corresponding task can be found.
      */
-    android.window.TaskSnapshot takeTaskSnapshot(int taskId, boolean updateCache);
+    android.window.TaskSnapshot takeTaskSnapshot(int taskId, boolean updateCache,
+            boolean lowResolution);
+
+    void registerTaskSnapshotListener(in ITaskSnapshotListener listener);
+    void unregisterTaskSnapshotListener(in ITaskSnapshotListener listener);
 }

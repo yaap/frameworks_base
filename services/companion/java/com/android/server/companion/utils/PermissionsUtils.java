@@ -61,7 +61,9 @@ import static android.app.AppOpsManager.MODE_ALLOWED;
 import static android.companion.AssociationRequest.DEVICE_PROFILE_APP_STREAMING;
 import static android.companion.AssociationRequest.DEVICE_PROFILE_AUTOMOTIVE_PROJECTION;
 import static android.companion.AssociationRequest.DEVICE_PROFILE_COMPUTER;
+import static android.companion.AssociationRequest.DEVICE_PROFILE_FITNESS_TRACKER;
 import static android.companion.AssociationRequest.DEVICE_PROFILE_GLASSES;
+import static android.companion.AssociationRequest.DEVICE_PROFILE_MEDICAL;
 import static android.companion.AssociationRequest.DEVICE_PROFILE_NEARBY_DEVICE_STREAMING;
 import static android.companion.AssociationRequest.DEVICE_PROFILE_VIRTUAL_DEVICE;
 import static android.companion.AssociationRequest.DEVICE_PROFILE_WATCH;
@@ -81,6 +83,8 @@ import static android.companion.CompanionResources.PERMISSION_STORAGE;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.os.Binder.getCallingPid;
 import static android.os.Binder.getCallingUid;
+import static android.os.Process.ROOT_UID;
+import static android.os.Process.SHELL_UID;
 import static android.os.Process.SYSTEM_UID;
 import static android.os.UserHandle.getCallingUserId;
 
@@ -147,12 +151,15 @@ public final class PermissionsUtils {
     static {
         final Map<String, String> map = new ArrayMap<>();
         map.put(DEVICE_PROFILE_WATCH, Manifest.permission.REQUEST_COMPANION_PROFILE_WATCH);
+        map.put(DEVICE_PROFILE_FITNESS_TRACKER,
+                Manifest.permission.REQUEST_COMPANION_PROFILE_WATCH);
         map.put(DEVICE_PROFILE_APP_STREAMING,
                 Manifest.permission.REQUEST_COMPANION_PROFILE_APP_STREAMING);
         map.put(DEVICE_PROFILE_AUTOMOTIVE_PROJECTION,
                 Manifest.permission.REQUEST_COMPANION_PROFILE_AUTOMOTIVE_PROJECTION);
         map.put(DEVICE_PROFILE_COMPUTER, Manifest.permission.REQUEST_COMPANION_PROFILE_COMPUTER);
         map.put(DEVICE_PROFILE_GLASSES, Manifest.permission.REQUEST_COMPANION_PROFILE_GLASSES);
+        map.put(DEVICE_PROFILE_MEDICAL, Manifest.permission.REQUEST_COMPANION_PROFILE_MEDICAL);
         map.put(DEVICE_PROFILE_NEARBY_DEVICE_STREAMING,
                 Manifest.permission.REQUEST_COMPANION_PROFILE_NEARBY_DEVICE_STREAMING);
         map.put(DEVICE_PROFILE_VIRTUAL_DEVICE,
@@ -313,6 +320,16 @@ public final class PermissionsUtils {
             throw new SecurityException("Caller (uid=" + getCallingUid() + ") does not have "
                     + "permissions to request observing device presence base on the device id");
         }
+    }
+
+    /**
+     * Require the caller to be Shell or Root.
+     */
+    public static void enforceCallerShellOrRoot() {
+        final int callingUid = Binder.getCallingUid();
+        if (callingUid == SHELL_UID || callingUid == ROOT_UID) return;
+
+        throw new SecurityException("Caller is neither Shell nor Root");
     }
 
     private static boolean checkPackage(@UserIdInt int uid, @NonNull String packageName) {

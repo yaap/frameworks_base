@@ -35,7 +35,6 @@ import android.media.AudioManager;
 import android.media.AudioSystem;
 import android.media.IAudioService;
 import android.media.IVolumeController;
-import android.media.MediaRouter2Manager;
 import android.media.VolumePolicy;
 import android.net.Uri;
 import android.os.Handler;
@@ -127,13 +126,13 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
         STREAMS.put(AudioSystem.STREAM_SYSTEM_ENFORCED, R.string.stream_system_enforced);
         STREAMS.put(AudioSystem.STREAM_TTS, R.string.stream_tts);
         STREAMS.put(AudioSystem.STREAM_VOICE_CALL, R.string.stream_voice_call);
+        STREAMS.put(AudioSystem.STREAM_ASSISTANT, R.string.stream_assistant);
     }
 
     private final W mWorker;
     private final Context mContext;
     private final Looper mWorkerLooper;
     private final PackageManager mPackageManager;
-    private final MediaRouter2Manager mRouter2Manager;
     private final WakefulnessLifecycle mWakefulnessLifecycle;
     private final AudioManager mAudio;
     private final IAudioService mAudioService;
@@ -210,7 +209,6 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
         mWorkerLooper = theadFactory.buildLooperOnNewThread(
                 VolumeDialogControllerImpl.class.getSimpleName());
         mWorker = new W(mWorkerLooper);
-        mRouter2Manager = MediaRouter2Manager.getInstance(mContext);
         mMediaSessionsCallbacksW = new MediaSessionsCallbacks();
         mMediaSessions = createMediaSessions(mContext, mWorkerLooper, mMediaSessionsCallbacksW);
         mAudioSharingInteractor = audioSharingInteractor;

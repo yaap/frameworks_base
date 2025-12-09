@@ -28,14 +28,18 @@ import com.android.systemui.qs.pipeline.shared.TileSpec
 interface GridLayout {
 
     /**
-     * [listening] can be used to compose the grid but limit when tiles should be listening. It
-     * should be a function tracking a snapshot state.
+     * Displays a grid of tiles with an optional reveal animation.
+     *
+     * @param listening can be used to compose the grid but limit when tiles should be listening. It
+     *   should be a function tracking a snapshot state.
+     * @param enableRevealEffect If `true`, the tiles will animate using the reveal animation.
      */
     @Composable
     fun ContentScope.TileGrid(
         tiles: List<TileViewModel>,
         modifier: Modifier,
         listening: () -> Boolean,
+        enableRevealEffect: Boolean,
     )
 
     @Composable

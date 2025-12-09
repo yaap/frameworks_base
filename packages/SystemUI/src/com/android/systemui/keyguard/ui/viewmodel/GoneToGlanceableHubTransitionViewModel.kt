@@ -18,14 +18,12 @@ package com.android.systemui.keyguard.ui.viewmodel
 
 import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
-import com.android.systemui.keyguard.dagger.GlanceableHubBlurComponent
 import com.android.systemui.keyguard.domain.interactor.FromGoneTransitionInteractor.Companion.TO_GLANCEABLE_HUB_DURATION
 import com.android.systemui.keyguard.shared.model.Edge
 import com.android.systemui.keyguard.shared.model.KeyguardState.GLANCEABLE_HUB
 import com.android.systemui.keyguard.shared.model.KeyguardState.GONE
 import com.android.systemui.keyguard.ui.KeyguardTransitionAnimationFlow
 import com.android.systemui.keyguard.ui.transitions.DeviceEntryIconTransition
-import com.android.systemui.keyguard.ui.transitions.GlanceableHubTransition
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.flow.Flow
@@ -34,10 +32,7 @@ import kotlinx.coroutines.flow.emptyFlow
 @SysUISingleton
 class GoneToGlanceableHubTransitionViewModel
 @Inject
-constructor(
-    animationFlow: KeyguardTransitionAnimationFlow,
-    blurFactory: GlanceableHubBlurComponent.Factory,
-) : DeviceEntryIconTransition, GlanceableHubTransition {
+constructor(animationFlow: KeyguardTransitionAnimationFlow) : DeviceEntryIconTransition {
 
     private val transitionAnimation =
         animationFlow
@@ -51,9 +46,6 @@ constructor(
             onCancel = { 1f },
             onFinish = { 1f },
         )
-
-    override val windowBlurRadius: Flow<Float> =
-        blurFactory.create(transitionAnimation).getBlurProvider().enterBlurRadius
 
     val statusBarAlpha: Flow<Float> =
         if (!Flags.glanceableHubV2()) {

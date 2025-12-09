@@ -52,6 +52,7 @@ import android.content.pm.SharedLibraryInfo;
 import android.content.pm.SuspendDialogInfo;
 import android.content.pm.UserInfo;
 import android.content.pm.UserPackage;
+import android.content.pm.verify.developer.DeveloperVerificationStatus;
 import android.os.BaseBundle;
 import android.os.Build;
 import android.os.Message;
@@ -59,7 +60,6 @@ import android.os.PersistableBundle;
 import android.os.Process;
 import android.os.UserHandle;
 import android.platform.test.annotations.Presubmit;
-import android.platform.test.annotations.RequiresFlagsDisabled;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
@@ -84,6 +84,7 @@ import com.android.server.pm.pkg.ArchiveState;
 import com.android.server.pm.pkg.PackageUserState;
 import com.android.server.pm.pkg.PackageUserStateInternal;
 import com.android.server.pm.pkg.SuspendParams;
+import com.android.server.pm.verify.developer.DeveloperVerificationStatusInternal;
 import com.android.server.pm.verify.domain.DomainVerificationManagerInternal;
 import com.android.server.testutils.TestHandler;
 import com.android.server.utils.Watchable;
@@ -679,20 +680,6 @@ public class PackageManagerSettingsTests {
         assertThat(readPus3.getDistractionFlags(), is(distractionFlags3));
     }
 
-    @RequiresFlagsDisabled(android.sdk.Flags.FLAG_MAJOR_MINOR_VERSIONING_SCHEME)
-    @Test
-    public void testReadSettingsVersionCodeWithNoSdkVersionFull_zero() {
-        /* write out files and read */
-        writeNoSdkVersionFullPackageFile();
-        Settings settings = makeSettings();
-        assertThat(settings.readLPw(computer, createFakeUsers()), is(true));
-
-        assertThat(settings.getInternalVersion().sdkVersion,
-                is(Build.VERSION.SDK_INT));
-        assertThat(settings.getInternalVersion().sdkVersionFull, is(0));
-    }
-
-    @RequiresFlagsEnabled(android.sdk.Flags.FLAG_MAJOR_MINOR_VERSIONING_SCHEME)
     @Test
     public void testReadSettingsVersionCodeWithNoSdkVersionFull_fromSdkVersion() {
         /* write out files and read */
@@ -700,13 +687,12 @@ public class PackageManagerSettingsTests {
         Settings settings = makeSettings();
         assertThat(settings.readLPw(computer, createFakeUsers()), is(true));
 
-        assertThat(settings.getInternalVersion().sdkVersion,
-                is(Build.VERSION.SDK_INT));
+        final int expectedSdkInt = 36;
+        assertThat(settings.getInternalVersion().sdkVersion, is(expectedSdkInt));
         assertThat(settings.getInternalVersion().sdkVersionFull,
-                is(Build.parseFullVersion(String.valueOf(Build.VERSION.SDK_INT))));
+                is(Build.parseFullVersion(String.valueOf(expectedSdkInt))));
     }
 
-    @RequiresFlagsEnabled(android.sdk.Flags.FLAG_MAJOR_MINOR_VERSIONING_SCHEME)
     @Test
     public void testReadWriteSettingsVersionCodeWithSdkVersionFull() {
         final Settings settingsUnderTest = makeSettings();
@@ -724,18 +710,6 @@ public class PackageManagerSettingsTests {
         assertThat(readVersionInfo.sdkVersion, is(Build.VERSION.SDK_INT));
     }
 
-    @RequiresFlagsDisabled(android.sdk.Flags.FLAG_MAJOR_MINOR_VERSIONING_SCHEME)
-    @Test
-    public void testSettingsGetInternalVersionNoSdkVersionFull() {
-        final Settings settingsUnderTest = makeSettings();
-        settingsUnderTest.writeLPr(computer, /*sync=*/ true);
-        assertThat(settingsUnderTest.readLPw(computer, createFakeUsers()), is(true));
-        assertThat(settingsUnderTest.getInternalVersion().sdkVersionFull, is(0));
-        assertThat(settingsUnderTest.getInternalVersion().sdkVersion,
-                is(Build.VERSION.SDK_INT));
-    }
-
-    @RequiresFlagsEnabled(android.sdk.Flags.FLAG_MAJOR_MINOR_VERSIONING_SCHEME)
     @Test
     public void testSettingsGetInternalVersionWithSdkVersionFull() {
         final Settings settingsUnderTest = makeSettings();
@@ -2175,6 +2149,50 @@ public class PackageManagerSettingsTests {
         assertNull(settings.getPackageLPr(PACKAGE_NAME_1).getOldPaths());
     }
 
+    @Test
+    public void testDeveloperVerificationStatus_nothingChangedAfterReboot() {
+        Settings settings = makeSettings();
+        final PackageSetting ps1 = createPackageSetting(PACKAGE_NAME_1);
+        ps1.setAppId(Process.FIRST_APPLICATION_UID);
+        ps1.setPkg(PackageImpl.forTesting(PACKAGE_NAME_1).hideAsParsed()
+                .setUid(ps1.getAppId())
+                .hideAsFinal());
+        ps1.setDeveloperVerificationStatusInternal(new DeveloperVerificationStatusInternal(
+                DeveloperVerificationStatusInternal.STATUS_INCOMPLETE_UNKNOWN,
+                DeveloperVerificationStatus.APP_METADATA_VERIFICATION_STATUS_BAD,
+                /* isLiteVerification= */ true));
+        settings.mPackages.put(PACKAGE_NAME_1, ps1);
+        settings.writeLPr(computer, /*sync=*/ true);
+        // Simulate a reboot
+        settings.mPackages.clear();
+        assertThat(settings.readLPw(computer, createFakeUsers()), is(true));
+        DeveloperVerificationStatusInternal developerVerificationStatusInternal =
+                settings.getPackageLPr(PACKAGE_NAME_1).getDeveloperVerificationStatusInternal();
+        assertThat(developerVerificationStatusInternal, notNullValue());
+        assertThat(developerVerificationStatusInternal.getInternalStatus(),
+                is(DeveloperVerificationStatusInternal.STATUS_INCOMPLETE_UNKNOWN));
+        assertThat(developerVerificationStatusInternal.getAppMetadataVerificationStatus(),
+                is(DeveloperVerificationStatus.APP_METADATA_VERIFICATION_STATUS_BAD));
+        assertThat(developerVerificationStatusInternal.isLiteVerification(), is(true));
+    }
+
+    @Test
+    public void testDeveloperVerificationStatus_isNullBeforeAndAfterReboot() {
+        Settings settings = makeSettings();
+        final PackageSetting ps1 = createPackageSetting(PACKAGE_NAME_1);
+        ps1.setAppId(Process.FIRST_APPLICATION_UID);
+        ps1.setPkg(PackageImpl.forTesting(PACKAGE_NAME_1).hideAsParsed()
+                .setUid(ps1.getAppId())
+                .hideAsFinal());
+        ps1.setDeveloperVerificationStatusInternal(null);
+        settings.mPackages.put(PACKAGE_NAME_1, ps1);
+        settings.writeLPr(computer, /*sync=*/ true);
+        // Simulate a reboot
+        settings.mPackages.clear();
+        assertThat(settings.readLPw(computer, createFakeUsers()), is(true));
+        assertNull(settings.getPackageLPr(PACKAGE_NAME_1).getDeveloperVerificationStatusInternal());
+    }
+
     private void verifyUserState(PackageUserState userState,
             boolean notLaunched, boolean stopped, boolean installed) {
         assertThat(userState.getEnabledState(), is(0));
@@ -2537,7 +2555,7 @@ public class PackageManagerSettingsTests {
                 ("<?xml version='1.0' encoding='utf-8' standalone='yes' ?>"
                         + "<packages>"
                         + "<version sdkVersion=\"36\" databaseVersion=\"3\" buildFingerprint=\"123456:userdebug\" fingerprint=\"64bc7e5656eb8ec3821157973e6eee7449333661\" />"
-                        + "<version volumeUuid=\"primary_physical\" sdkVersion=\"36\" databaseVersion=\"3\" buildFingerprint=\"123456:userdebug\""
+                        + "<version volumeUuid=\"primary_physical\" sdkVersion=\"36\" databaseVersion=\"3\" buildFingerprint=\"123456:userdebug\" />"
                         + "<permission-trees>"
                         + "<item name=\"com.google.android.permtree\" package=\"com.google.android.permpackage\" />"
                         + "</permission-trees>"

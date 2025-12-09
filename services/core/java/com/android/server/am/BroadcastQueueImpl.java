@@ -44,6 +44,7 @@ import static com.android.server.am.BroadcastRecord.getReceiverPackageName;
 import static com.android.server.am.BroadcastRecord.getReceiverProcessName;
 import static com.android.server.am.BroadcastRecord.getReceiverUid;
 import static com.android.server.am.BroadcastRecord.isDeliveryStateTerminal;
+import static com.android.window.flags.Flags.balCheckBroadcastWhenDispatched;
 
 import android.annotation.CheckResult;
 import android.annotation.NonNull;
@@ -506,7 +507,7 @@ class BroadcastQueueImpl extends BroadcastQueue {
 
             final boolean processWarm = queue.isProcessWarm();
             if (processWarm) {
-                mService.mOomAdjuster.unfreezeTemporarily(queue.app,
+                mService.unfreezeTemporarily(queue.app,
                         CachedAppOptimizer.UNFREEZE_REASON_START_RECEIVER);
                 // The process could be killed as part of unfreezing. So, check again if it
                 // is still warm.
@@ -790,7 +791,7 @@ class BroadcastQueueImpl extends BroadcastQueue {
             }
             queue.enqueueOutgoingBroadcast(r);
             mHistory.onBroadcastFrozenLocked(r);
-            mService.mOomAdjuster.mCachedAppOptimizer.freezeAppAsyncImmediateLSP(r.callerApp);
+            mService.getCachedAppOptimizer().freezeAppAsyncImmediateLSP(r.callerApp);
             return;
         }
         if (DEBUG_BROADCAST || r.debugLog()) {
@@ -826,9 +827,7 @@ class BroadcastQueueImpl extends BroadcastQueue {
 
             // If this receiver is going to be skipped, skip it now itself and don't even enqueue
             // it.
-            final String skipReason = Flags.avoidNoteOpAtEnqueue()
-                    ? mSkipPolicy.shouldSkipAtEnqueueMessage(r, receiver)
-                    : mSkipPolicy.shouldSkipMessage(r, receiver);
+            final String skipReason = mSkipPolicy.shouldSkipAtEnqueueMessage(r, receiver);
             if (skipReason != null) {
                 setDeliveryState(null, null, r, i, receiver, BroadcastRecord.DELIVERY_SKIPPED,
                         "skipped by policy at enqueue: " + skipReason);
@@ -1151,7 +1150,9 @@ class BroadcastQueueImpl extends BroadcastQueue {
             queue.setTimeoutScheduled(false);
         }
 
-        if (r.mBackgroundStartPrivileges.allowsAny()) {
+        if (r.mBackgroundStartPrivileges.allowsAny()
+                && (r.realCallingUid != app.uid || !balCheckBroadcastWhenDispatched())) {
+            // allow the broadcast receiver potential privileges if it is not sent to itself
             app.addOrUpdateBackgroundStartPrivileges(r, r.mBackgroundStartPrivileges);
 
             final long timeout = r.isForeground() ? mFgConstants.ALLOW_BG_ACTIVITY_START_TIMEOUT
@@ -1167,7 +1168,7 @@ class BroadcastQueueImpl extends BroadcastQueue {
                     == PowerExemptionManager.TEMPORARY_ALLOW_LIST_TYPE_APP_FREEZING_DELAYED) {
                 // Only delay freezer, don't add to any temp allowlist
                 // TODO: Add a unit test
-                mService.mOomAdjuster.mCachedAppOptimizer.unfreezeTemporarily(app,
+                mService.getCachedAppOptimizer().unfreezeTemporarily(app,
                         CachedAppOptimizer.UNFREEZE_REASON_START_RECEIVER,
                         r.options.getTemporaryAppAllowlistDuration());
             } else {
@@ -1192,14 +1193,14 @@ class BroadcastQueueImpl extends BroadcastQueue {
                     mService.mPackageManagerInt.grantImplicitAccess(r.userId, r.intent,
                             UserHandle.getAppId(app.uid), r.callingUid, true);
                 }
-                queue.lastProcessState = app.mState.getCurProcState();
+                queue.lastProcessState = app.getCurProcState();
                 if (receiver instanceof BroadcastFilter) {
                     notifyScheduleRegisteredReceiver(app, r, (BroadcastFilter) receiver);
                     thread.scheduleRegisteredReceiver(
                             ((BroadcastFilter) receiver).receiverList.receiver,
                             receiverIntent, r.resultCode, r.resultData, r.resultExtras,
                             r.ordered, r.initialSticky, assumeDelivered, r.userId,
-                            app.mState.getReportedProcState(),
+                            app.getReportedProcState(),
                             r.shareIdentity ? r.callingUid : Process.INVALID_UID,
                             r.shareIdentity ? r.callerPackage : null);
                     // TODO: consider making registered receivers of unordered
@@ -1214,7 +1215,7 @@ class BroadcastQueueImpl extends BroadcastQueue {
                     thread.scheduleReceiver(receiverIntent, ((ResolveInfo) receiver).activityInfo,
                             null, r.resultCode, r.resultData, r.resultExtras, r.ordered,
                             assumeDelivered, r.userId,
-                            app.mState.getReportedProcState(),
+                            app.getReportedProcState(),
                             r.shareIdentity ? r.callingUid : Process.INVALID_UID,
                             r.shareIdentity ? r.callerPackage : null);
                 }
@@ -1252,7 +1253,7 @@ class BroadcastQueueImpl extends BroadcastQueue {
         final ProcessRecord app = r.resultToApp;
         final IApplicationThread thread = (app != null) ? app.getOnewayThread() : null;
         if (thread != null) {
-            mService.mOomAdjuster.unfreezeTemporarily(
+            mService.unfreezeTemporarily(
                     app, CachedAppOptimizer.UNFREEZE_REASON_FINISH_RECEIVER);
             if (r.shareIdentity && app.uid != r.callingUid) {
                 mService.mPackageManagerInt.grantImplicitAccess(r.userId, r.intent,
@@ -1264,7 +1265,7 @@ class BroadcastQueueImpl extends BroadcastQueue {
                         r.resultTo, r.intent,
                         r.resultCode, r.resultData, r.resultExtras, false, r.initialSticky,
                         assumeDelivered, r.userId,
-                        app.mState.getReportedProcState(),
+                        app.getReportedProcState(),
                         r.shareIdentity ? r.callingUid : Process.INVALID_UID,
                         r.shareIdentity ? r.callerPackage : null);
             } catch (RemoteException e) {
@@ -1312,7 +1313,9 @@ class BroadcastQueueImpl extends BroadcastQueue {
         BroadcastAnrTimer(@NonNull Handler handler) {
             super(Objects.requireNonNull(handler),
                     MSG_DELIVERY_TIMEOUT, "BROADCAST_TIMEOUT",
-                    new AnrTimer.Args().extend(true));
+                    new AnrTimer.Args()
+                            .extend(true)
+                            .longMethodTracing(Flags.enableLongMethodTracingOnAnrTimer()));
         }
 
         @Override
@@ -2093,13 +2096,14 @@ class BroadcastQueueImpl extends BroadcastQueue {
                 mService.updateLruProcessLocked(queue.app, false, null);
             }
 
-            mService.mOomAdjuster.unfreezeTemporarily(queue.app,
+            mService.unfreezeTemporarily(queue.app,
                     CachedAppOptimizer.UNFREEZE_REASON_START_RECEIVER);
 
             mService.mProcessStateController.noteBroadcastDeliveryStarted(queue.app,
                     queue.getPreferredSchedulingGroupLocked());
             if (queue.runningOomAdjusted) {
-                queue.app.mState.forceProcessStateUpTo(ActivityManager.PROCESS_STATE_RECEIVER);
+                mService.mProcessStateController.forceProcessStateUpTo(queue.app,
+                        ActivityManager.PROCESS_STATE_RECEIVER);
                 mService.enqueueOomAdjTargetLocked(queue.app);
             }
         }

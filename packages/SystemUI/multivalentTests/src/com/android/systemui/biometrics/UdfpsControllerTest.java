@@ -70,6 +70,7 @@ import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFaceAuthInt
 import com.android.systemui.dump.DumpManager;
 import com.android.systemui.keyguard.ScreenLifecycle;
 import com.android.systemui.keyguard.UserActivityNotifierKosmosKt;
+import com.android.systemui.keyguard.WakefulnessLifecycle;
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor;
 import com.android.systemui.kosmos.Kosmos;
 import com.android.systemui.log.SessionTracker;
@@ -92,6 +93,8 @@ import com.android.systemui.util.concurrency.FakeExecution;
 import com.android.systemui.util.concurrency.FakeExecutor;
 import com.android.systemui.util.time.FakeSystemClock;
 import com.android.systemui.util.time.SystemClock;
+
+import com.google.android.msdl.domain.MSDLPlayer;
 
 import dagger.Lazy;
 
@@ -190,6 +193,8 @@ public class UdfpsControllerTest extends SysuiTestCase {
     private UdfpsOverlayInteractor mUdfpsOverlayInteractor;
     @Mock
     private SelectedUserInteractor mSelectedUserInteractor;
+    @Mock
+    private Lazy<WakefulnessLifecycle> mWakefulnessLifecycle;
 
     // Capture listeners so that they can be used to send events
     @Captor
@@ -306,7 +311,9 @@ public class UdfpsControllerTest extends SysuiTestCase {
                 mUdfpsOverlayInteractor,
                 mPowerInteractor,
                 mock(CoroutineScope.class),
-                UserActivityNotifierKosmosKt.getUserActivityNotifier(mKosmos)
+                UserActivityNotifierKosmosKt.getUserActivityNotifier(mKosmos),
+                mWakefulnessLifecycle,
+                mock(MSDLPlayer.class)
         );
         verify(mFingerprintManager).setUdfpsOverlayController(mOverlayCaptor.capture());
         mOverlayController = mOverlayCaptor.getValue();

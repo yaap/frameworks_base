@@ -38,6 +38,8 @@ import com.android.systemui.statusbar.notification.OnboardingAffordanceManager
 import com.android.systemui.statusbar.notification.Summarization
 import com.android.systemui.statusbar.notification.collection.render.SectionHeaderController
 import com.android.systemui.statusbar.notification.dagger.SilentHeader
+import com.android.systemui.statusbar.notification.emptyshade.ui.shared.flag.ShowIconInEmptyShade
+import com.android.systemui.statusbar.notification.emptyshade.ui.view.EmptyShadeIconView
 import com.android.systemui.statusbar.notification.emptyshade.ui.view.EmptyShadeView
 import com.android.systemui.statusbar.notification.emptyshade.ui.viewbinder.EmptyShadeViewBinder
 import com.android.systemui.statusbar.notification.emptyshade.ui.viewmodel.EmptyShadeViewModel
@@ -47,9 +49,9 @@ import com.android.systemui.statusbar.notification.footer.ui.viewbinder.FooterVi
 import com.android.systemui.statusbar.notification.footer.ui.viewmodel.FooterViewModel
 import com.android.systemui.statusbar.notification.icon.ui.viewbinder.NotificationIconContainerShelfViewBinder
 import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi
+import com.android.systemui.statusbar.notification.row.StackScrollerDecorView
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi
 import com.android.systemui.statusbar.notification.shared.NotificationSummarizationOnboardingUi
-import com.android.systemui.statusbar.notification.shared.NotificationsLiveDataStoreRefactor
 import com.android.systemui.statusbar.notification.shelf.ui.viewbinder.NotificationShelfViewBinder
 import com.android.systemui.statusbar.notification.stack.DisplaySwitchNotificationsHiderTracker
 import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout
@@ -62,13 +64,11 @@ import com.android.systemui.statusbar.notification.stack.ui.viewmodel.Notificati
 import com.android.systemui.statusbar.notification.stack.ui.viewmodel.SummarizationOnboardingViewModel
 import com.android.systemui.statusbar.notification.ui.viewbinder.HeadsUpNotificationViewBinder
 import com.android.systemui.util.kotlin.awaitCancellationThenDispose
-import com.android.systemui.util.kotlin.getOrNull
 import com.android.systemui.util.time.SystemClock
 import com.android.systemui.util.ui.isAnimating
 import com.android.systemui.util.ui.stopAnimating
 import com.android.systemui.util.ui.value
 import com.android.systemui.utils.coroutines.flow.flatMapLatestConflated
-import java.util.Optional
 import javax.inject.Inject
 import javax.inject.Provider
 import kotlinx.coroutines.CoroutineDispatcher
@@ -90,7 +90,7 @@ constructor(
     @ShadeDisplayAware private val configuration: ConfigurationState,
     private val falsingManager: FalsingManager,
     private val hunBinder: HeadsUpNotificationViewBinder,
-    private val loggerOptional: Optional<NotificationStatsLogger>,
+    private val logger: NotificationStatsLogger,
     private val metricsLogger: MetricsLogger,
     private val nicBinder: NotificationIconContainerShelfViewBinder,
     // Using a provider to avoid a circular dependency.
@@ -123,6 +123,14 @@ constructor(
                 }
                 launch { bindShelf(shelf) }
                 bindHideList(viewController, viewModel, hiderTracker)
+
+                // Observe whether the QS overlay is visible in dual shade and notify the
+                // controller to update the value in AmbientState.
+                launch {
+                    viewModel.isQsOverlayVisible.collect { isQsOverlayVisible ->
+                        viewController.setApplyHunTranslation(isQsOverlayVisible)
+                    }
+                }
 
                 val hasNonClearableSilentNotifications: StateFlow<Boolean> =
                     viewModel.hasNonClearableSilentNotifications.stateIn(this)
@@ -247,23 +255,39 @@ constructor(
     ) {
         // The empty shade needs to be re-inflated every time the theme or the font size
         // changes.
-        configuration
-            .inflateLayout<EmptyShadeView>(
-                R.layout.status_bar_no_notifications,
-                parentView,
-                attachToRoot = false,
-            )
-            .flowOn(inflationDispatcher)
-            .collectLatest { emptyShadeView: EmptyShadeView ->
-                traceAsync("bind EmptyShadeView") {
-                    parentView.setEmptyShadeView(emptyShadeView)
-                    bindEmptyShade(emptyShadeView, emptyShadeViewModel)
+        if (ShowIconInEmptyShade.isEnabled) {
+            configuration
+                .inflateLayout<EmptyShadeIconView>(
+                    R.layout.empty_shade_view,
+                    parentView,
+                    attachToRoot = false,
+                )
+                .flowOn(inflationDispatcher)
+                .collectLatest { emptyShadeView: EmptyShadeIconView ->
+                    traceAsync("bind EmptyShadeIconView") {
+                        parentView.setEmptyShadeView(emptyShadeView)
+                        bindEmptyShade(emptyShadeView, emptyShadeViewModel)
+                    }
                 }
-            }
+        } else {
+            configuration
+                .inflateLayout<EmptyShadeView>(
+                    R.layout.status_bar_no_notifications,
+                    parentView,
+                    attachToRoot = false,
+                )
+                .flowOn(inflationDispatcher)
+                .collectLatest { emptyShadeView: EmptyShadeView ->
+                    traceAsync("bind EmptyShadeView") {
+                        parentView.setEmptyShadeView(emptyShadeView)
+                        bindEmptyShade(emptyShadeView, emptyShadeViewModel)
+                    }
+                }
+        }
     }
 
     private suspend fun bindEmptyShade(
-        emptyShadeView: EmptyShadeView,
+        emptyShadeView: StackScrollerDecorView,
         emptyShadeViewModel: EmptyShadeViewModel,
     ): Unit = coroutineScope {
         launch {
@@ -324,13 +348,7 @@ constructor(
     }
 
     private suspend fun bindLogger(view: NotificationStackScrollLayout) {
-        if (NotificationsLiveDataStoreRefactor.isEnabled) {
-            viewModel.logger.getOrNull()?.let { viewModel ->
-                loggerOptional.getOrNull()?.let { logger ->
-                    NotificationStatsLoggerBinder.bindLogger(view, logger, viewModel, systemClock)
-                }
-            }
-        }
+        NotificationStatsLoggerBinder.bindLogger(view, logger, viewModel.logger, systemClock)
     }
 
     private suspend fun bindBundleOnboarding(parentView: NotificationStackScrollLayout) {
@@ -351,7 +369,7 @@ constructor(
                 }
             }
             .collectLatest { onboardingView ->
-                bundleOnboardingMgr.view.value = onboardingView
+                bundleOnboardingMgr.setOnboardingAffordanceView(onboardingView)
                 onboardingView?.let {
                     bundleOnboardingBinder.get().bind(onboardingViewModel, onboardingView)
                 }
@@ -377,7 +395,7 @@ constructor(
                 }
             }
             .collectLatest { summariesView ->
-                summarizationOnboardingMgr.view.value = summariesView
+                summarizationOnboardingMgr.setOnboardingAffordanceView(summariesView)
                 summariesView?.let {
                     summarizationOnboardingBinder.get().bind(summarizationViewModel, summariesView)
                 }

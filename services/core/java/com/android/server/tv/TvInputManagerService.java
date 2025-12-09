@@ -608,10 +608,9 @@ public final class TvInputManagerService extends SystemService {
                 // user already started
                 return;
             }
-            UserInfo userInfo = mUserManager.getUserInfo(userId);
             UserInfo parentInfo = mUserManager.getProfileParent(userId);
             // User is guaranteed to be a profile here as we have checked before calling startUser
-            if (parentInfo != null && parentInfo.id == mCurrentUserId) {
+            if (parentInfo != null) {
                 int prevUserId = mCurrentUserId;
                 mCurrentUserId = userId;
                 // only the children of the current user can be started in background
@@ -1075,7 +1074,7 @@ public final class TvInputManagerService extends SystemService {
         if (serviceState != null) {
             serviceState.sessionTokens.remove(sessionToken);
         }
-        if (!serviceState.isHardware) {
+        if (!serviceState.isHardware || serviceState.reconnecting) {
             updateServiceConnectionLocked(sessionState.componentName, userId);
         } else {
             updateHardwareServiceConnectionDelayed(userId);
@@ -1978,7 +1977,6 @@ public final class TvInputManagerService extends SystemService {
                                 || !Objects.equals(sessionState.currentChannel, channelUri)) {
                             sessionState.isCurrent = true;
                             sessionState.currentChannel = channelUri;
-                            notifyCurrentChannelInfosUpdatedLocked(userState);
                             if (!sessionState.isRecordingSession) {
                                 String sessionActualInputId = getSessionActualInputId(sessionState);
                                 if (!TextUtils.equals(mOnScreenInputId, sessionActualInputId)) {
@@ -1990,6 +1988,7 @@ public final class TvInputManagerService extends SystemService {
                                 mOnScreenInputId = sessionActualInputId;
                                 mOnScreenSessionState = sessionState;
                             }
+                            notifyCurrentChannelInfosUpdatedLocked(userState);
                         }
                         if (TvContract.isChannelUriForPassthroughInput(channelUri)) {
                             // Do not log the watch history for passthrough inputs.
@@ -3297,7 +3296,7 @@ public final class TvInputManagerService extends SystemService {
                             : TunedInfo.APP_TYPE_NON_SYSTEM;
                 }
                 channelInfos.add(new TunedInfo(
-                        state.inputId,
+                        state.isRecordingSession ? state.inputId : mOnScreenInputId,
                         watchedProgramsAccess ? state.currentChannel : null,
                         state.isRecordingSession,
                         state.isVisible,
@@ -4082,7 +4081,6 @@ public final class TvInputManagerService extends SystemService {
                         UserState userState = getOrCreateUserStateLocked(mSessionState.userId);
                         mSessionState.isCurrent = true;
                         mSessionState.currentChannel = channelUri;
-                        notifyCurrentChannelInfosUpdatedLocked(userState);
                         if (!mSessionState.isRecordingSession) {
                             String sessionActualInputId = getSessionActualInputId(mSessionState);
                             if (!TextUtils.equals(mOnScreenInputId, sessionActualInputId)) {
@@ -4094,6 +4092,7 @@ public final class TvInputManagerService extends SystemService {
                             mOnScreenInputId = sessionActualInputId;
                             mOnScreenSessionState = mSessionState;
                         }
+                        notifyCurrentChannelInfosUpdatedLocked(userState);
                     }
                 } catch (RemoteException e) {
                     Slog.e(TAG, "error in onChannelRetuned", e);

@@ -17,7 +17,7 @@
 package com.android.systemui.ambientcue.data.repository
 
 import android.graphics.Rect
-import com.android.systemui.ambientcue.shared.model.ActionModel
+import com.android.systemui.plugins.cuebar.ActionModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,6 +50,12 @@ class FakeAmbientCueRepository : AmbientCueRepository {
     private val _recentsButtonPosition = MutableStateFlow<Rect?>(null)
     override val recentsButtonPosition: StateFlow<Rect?> = _recentsButtonPosition.asStateFlow()
 
+    private val _isAmbientCueEnabled = MutableStateFlow(false)
+    override val isAmbientCueEnabled: StateFlow<Boolean> = _isAmbientCueEnabled.asStateFlow()
+
+    private val _ambientCueTimeoutMs = MutableStateFlow(0)
+    override val ambientCueTimeoutMs: StateFlow<Int> = _ambientCueTimeoutMs.asStateFlow()
+
     fun setActions(actions: List<ActionModel>) {
         _actions.update { actions }
     }
@@ -76,5 +82,13 @@ class FakeAmbientCueRepository : AmbientCueRepository {
 
     fun setRecentsButtonPosition(recentsButtonPosition: Rect) {
         _recentsButtonPosition.update { recentsButtonPosition }
+    }
+
+    fun setAmbientCueEnabled(isEnabled: Boolean) {
+        _isAmbientCueEnabled.update { isEnabled }
+    }
+
+    fun setAmbientCueTimeoutMs(timeoutMs: Int) {
+        _ambientCueTimeoutMs.update { timeoutMs }
     }
 }

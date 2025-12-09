@@ -17,10 +17,12 @@
 package com.android.systemui.bouncer.ui.viewmodel
 
 import android.content.Context
+import android.security.Flags.secureLockDevice
 import android.util.PluralsMessageFormatter
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.systemui.authentication.domain.interactor.AuthenticationInteractor
 import com.android.systemui.authentication.shared.model.AuthenticationMethodModel
+import com.android.systemui.biometrics.shared.model.BiometricModalities
 import com.android.systemui.bouncer.domain.interactor.BouncerInteractor
 import com.android.systemui.bouncer.domain.interactor.SimBouncerInteractor
 import com.android.systemui.bouncer.shared.model.BouncerMessagePair
@@ -41,8 +43,10 @@ import com.android.systemui.deviceentry.shared.model.FingerprintLockoutMessage
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.res.R.string.kg_too_many_failed_attempts_countdown
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
+import com.android.systemui.securelockdevice.domain.interactor.SecureLockDeviceInteractor
 import com.android.systemui.user.ui.viewmodel.UserSwitcherViewModel
 import com.android.systemui.util.kotlin.Utils.Companion.sample
+import com.android.systemui.util.kotlin.combine
 import com.android.systemui.util.time.SystemClock
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -57,7 +61,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -76,6 +79,7 @@ constructor(
     private val faceAuthInteractor: DeviceEntryFaceAuthInteractor,
     private val deviceUnlockedInteractor: DeviceUnlockedInteractor,
     private val deviceEntryBiometricsAllowedInteractor: DeviceEntryBiometricsAllowedInteractor,
+    private val secureLockDeviceInteractor: SecureLockDeviceInteractor,
 ) : ExclusiveActivatable() {
     /**
      * A message shown when the user has attempted the wrong credential too many times and now must
@@ -140,12 +144,22 @@ constructor(
                         lockoutMessage,
                         deviceEntryBiometricsAllowedInteractor
                             .isFingerprintCurrentlyAllowedOnBouncer,
+                        deviceEntryBiometricsAllowedInteractor.isFaceCurrentlyAllowedOnBouncer,
+                        secureLockDeviceInteractor.enrolledStrongBiometricModalities,
                         resetToDefault,
-                    ) { deviceEntryRestrictedReason, lockoutMsg, isFpAllowedInBouncer, _ ->
+                    ) {
+                        deviceEntryRestrictedReason,
+                        lockoutMsg,
+                        isFpAllowedOnBouncer,
+                        isFaceAllowedOnBouncer,
+                        enrolledStrongBiometricModalities,
+                        _ ->
                         lockoutMsg
                             ?: deviceEntryRestrictedReason.toMessage(
                                 authMethod,
-                                isFpAllowedInBouncer,
+                                isFpAllowedOnBouncer,
+                                isFaceAllowedOnBouncer,
+                                enrolledStrongBiometricModalities,
                             )
                     }
                 } else {
@@ -183,13 +197,26 @@ constructor(
             .sample(
                 authenticationInteractor.authenticationMethod,
                 deviceEntryBiometricsAllowedInteractor.isFingerprintCurrentlyAllowedOnBouncer,
+                deviceEntryBiometricsAllowedInteractor.isFaceCurrentlyAllowedOnBouncer,
+                secureLockDeviceInteractor.isSecureLockDeviceEnabled,
             )
-            .collectLatest { (faceMessage, authMethod, fingerprintAllowedOnBouncer) ->
+            .collectLatest {
+                (
+                    faceMessage,
+                    authMethod,
+                    fingerprintAllowedOnBouncer,
+                    faceAllowedOnBouncer,
+                    isSecureLockDeviceEnabled) ->
                 val isFaceAuthStrong = faceAuthInteractor.isFaceAuthStrong()
-                val defaultPrimaryMessage =
-                    BouncerMessageStrings.defaultMessage(authMethod, fingerprintAllowedOnBouncer)
-                        .primaryMessage
-                        .toResString()
+                val defaultMessage =
+                    BouncerMessageStrings.defaultMessage(
+                        securityMode = authMethod,
+                        fpAuthIsAllowed = fingerprintAllowedOnBouncer,
+                        faceAuthIsAllowed = faceAllowedOnBouncer,
+                        secureLockDeviceEnabled = isSecureLockDeviceEnabled,
+                    )
+                val defaultPrimaryMessage = defaultMessage.primaryMessage.toResString()
+
                 message.value =
                     when (faceMessage) {
                         is FaceTimeoutMessage ->
@@ -200,7 +227,11 @@ constructor(
                             )
                         is FaceLockoutMessage ->
                             if (isFaceAuthStrong)
-                                BouncerMessageStrings.class3AuthLockedOut(authMethod).toMessage()
+                                BouncerMessageStrings.class3AuthLockedOut(
+                                        authMethod,
+                                        isSecureLockDeviceEnabled,
+                                    )
+                                    .toMessage()
                             else
                                 BouncerMessageStrings.faceLockedOut(
                                         authMethod,
@@ -213,14 +244,36 @@ constructor(
                                     fingerprintAllowedOnBouncer,
                                 )
                                 .toMessage()
-                        else ->
+                        else -> {
                             MessageViewModel(
                                 text = defaultPrimaryMessage,
                                 secondaryText = faceMessage.message,
                                 isUpdateAnimated = false,
                             )
+                        }
                     }
+
+                // Prevents secure lock device face lockout message from being cleared in
+                // defaultBouncerMessageInitializer by DeviceEntryRestrictionReason update until
+                // resetToDefault emits
+                if (
+                    secureLockDevice() &&
+                        isSecureLockDeviceEnabled &&
+                        faceMessage is FaceLockoutMessage
+                ) {
+                    lockoutMessage.value = message.value
+                }
                 delay(MESSAGE_DURATION)
+                // Prevents secure lock device face lockout message from being cleared in
+                // defaultBouncerMessageInitializer by DeviceEntryRestrictionReason update until
+                // resetToDefault emits
+                if (
+                    secureLockDevice() &&
+                        isSecureLockDeviceEnabled &&
+                        faceMessage is FaceLockoutMessage
+                ) {
+                    lockoutMessage.value = null
+                }
                 resetToDefault.emit(Unit)
             }
     }
@@ -232,16 +285,32 @@ constructor(
             .sample(
                 authenticationInteractor.authenticationMethod,
                 deviceEntryBiometricsAllowedInteractor.isFingerprintCurrentlyAllowedOnBouncer,
+                deviceEntryBiometricsAllowedInteractor.isFaceCurrentlyAllowedOnBouncer,
+                secureLockDeviceInteractor.isSecureLockDeviceEnabled,
             )
-            .collectLatest { (fingerprintMessage, authMethod, isFingerprintAllowed) ->
-                val defaultPrimaryMessage =
-                    BouncerMessageStrings.defaultMessage(authMethod, isFingerprintAllowed)
-                        .primaryMessage
-                        .toResString()
+            .collectLatest {
+                (
+                    fingerprintMessage,
+                    authMethod,
+                    fingerprintAllowedOnBouncer,
+                    faceAllowedOnBouncer,
+                    isSecureLockDeviceEnabled) ->
+                val defaultMessage =
+                    BouncerMessageStrings.defaultMessage(
+                        securityMode = authMethod,
+                        fpAuthIsAllowed = fingerprintAllowedOnBouncer,
+                        faceAuthIsAllowed = faceAllowedOnBouncer,
+                        secureLockDeviceEnabled = isSecureLockDeviceEnabled,
+                    )
+                val defaultPrimaryMessage = defaultMessage.primaryMessage.toResString()
                 message.value =
                     when (fingerprintMessage) {
                         is FingerprintLockoutMessage ->
-                            BouncerMessageStrings.class3AuthLockedOut(authMethod).toMessage()
+                            BouncerMessageStrings.class3AuthLockedOut(
+                                    authMethod,
+                                    isSecureLockDeviceEnabled,
+                                )
+                                .toMessage()
                         is FingerprintFailureMessage ->
                             BouncerMessageStrings.incorrectFingerprintInput(authMethod).toMessage()
                         else ->
@@ -251,7 +320,24 @@ constructor(
                                 isUpdateAnimated = false,
                             )
                     }
+                // Prevents secure lock device fingerprint lockout message from being cleared in
+                // defaultBouncerMessageInitializer by DeviceEntryRestrictionReason update until
+                // resetToDefault emits
+                if (
+                    secureLockDevice() &&
+                        isSecureLockDeviceEnabled &&
+                        fingerprintMessage is FingerprintLockoutMessage
+                ) {
+                    lockoutMessage.value = message.value
+                }
                 delay(MESSAGE_DURATION)
+                if (
+                    secureLockDevice() &&
+                        isSecureLockDeviceEnabled &&
+                        fingerprintMessage is FingerprintLockoutMessage
+                ) {
+                    lockoutMessage.value = null
+                }
                 resetToDefault.emit(Unit)
             }
     }
@@ -271,12 +357,15 @@ constructor(
                         authenticationInteractor.authenticationMethod,
                         deviceEntryBiometricsAllowedInteractor
                             .isFingerprintCurrentlyAllowedOnBouncer,
+                        secureLockDeviceInteractor.isSecureLockDeviceEnabled,
                     )
-                    .collectLatest { (_, authMethod, isFingerprintAllowed) ->
+                    .collectLatest {
+                        (_, authMethod, isFingerprintAllowed, isSecureLockDeviceEnabled) ->
                         message.emit(
                             BouncerMessageStrings.incorrectSecurityInput(
                                     authMethod,
                                     isFingerprintAllowed,
+                                    isSecureLockDeviceEnabled,
                                 )
                                 .toMessage()
                         )
@@ -290,8 +379,17 @@ constructor(
     private fun DeviceEntryRestrictionReason?.toMessage(
         authMethod: AuthenticationMethodModel,
         isFingerprintAllowedOnBouncer: Boolean,
+        isFaceAllowedOnBouncer: Boolean,
+        enrolledStrongBiometricModalities: BiometricModalities,
     ): MessageViewModel {
         return when (this) {
+            DeviceEntryRestrictionReason.SecureLockDevicePrimaryAuth ->
+                BouncerMessageStrings.authRequiredForSecureLockDevicePrimaryAuth(authMethod)
+            DeviceEntryRestrictionReason.SecureLockDeviceStrongBiometricOnlyAuth ->
+                BouncerMessageStrings.authRequiredForSecureLockDeviceStrongBiometricAuth(
+                    enrolledStrongBiometricModalities.hasFingerprint,
+                    enrolledStrongBiometricModalities.hasFace,
+                )
             DeviceEntryRestrictionReason.UserLockdown ->
                 BouncerMessageStrings.authRequiredAfterUserLockdown(authMethod)
             DeviceEntryRestrictionReason.DeviceNotUnlockedSinceReboot ->
@@ -326,8 +424,7 @@ constructor(
 
     private fun BouncerMessagePair.toMessage(): MessageViewModel {
         val primaryMsg = this.primaryMessage.toResString()
-        val secondaryMsg =
-            if (this.secondaryMessage == 0) "" else this.secondaryMessage.toResString()
+        val secondaryMsg = this.secondaryMessage.toResString()
         return MessageViewModel(primaryMsg, secondaryText = secondaryMsg, isUpdateAnimated = true)
     }
 
@@ -343,6 +440,7 @@ constructor(
                             BouncerMessageStrings.primaryAuthLockedOut(authMethod)
                         lockoutMessage.value =
                             if (remainingSeconds > 0) {
+
                                 MessageViewModel(
                                     text =
                                         kg_too_many_failed_attempts_countdown.toPluralString(
@@ -373,7 +471,7 @@ constructor(
     private fun Int.toPluralString(formatterArgs: Map<String, Any>): String =
         PluralsMessageFormatter.format(applicationContext.resources, formatterArgs, this)
 
-    private fun Int.toResString(): String = applicationContext.getString(this)
+    private fun Int.toResString(): String = if (this == 0) "" else applicationContext.getString(this)
 
     @AssistedFactory
     interface Factory {

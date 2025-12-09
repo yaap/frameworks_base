@@ -95,9 +95,8 @@ class BundleEntryAdapter(
         return 0
     }
 
-    override fun getIcons(): IconPack? {
-        // TODO(b/396446620): implement bundle icons
-        return IconPack.buildEmptyPack(null)
+    override fun getIcons(): IconPack {
+        return entry.icons
     }
 
     override fun isColorized(): Boolean {
@@ -253,9 +252,14 @@ class BundleEntryAdapter(
         return true
     }
 
-    override fun onBundleDisabled() {
+    override fun onBundleDisabledForEntry() {
         // do nothing. it should not be possible for a bundle to be contained within a bundle
-        Log.wtf(TAG, "onBundleDisabled() called")
+        Log.wtf(TAG, "onBundleDisabledForEntry() called")
+    }
+
+    override fun onBundleDisabledForApp() {
+        // do nothing. it should not be possible for a bundle to be contained within a bundle
+        Log.wtf(TAG, "onBundleDisabledForApp() called")
     }
 
     override fun getBundleType(): Int {

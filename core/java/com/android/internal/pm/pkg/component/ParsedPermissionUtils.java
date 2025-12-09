@@ -81,16 +81,16 @@ public class ParsedPermissionUtils {
                     R.styleable.AndroidManifestPermission_backgroundPermission)) {
                 final boolean isApkInApex = (flags & PARSE_APK_IN_APEX) != 0;
                 final boolean canUseBackgroundPermissionAttr =
-                    "android".equals(packageName) ||
-                        (Flags.replaceBodySensorPermissionEnabled() && isApkInApex);
+                        "android".equals(packageName) || isApkInApex;
                 if (canUseBackgroundPermissionAttr) {
                     permission.setBackgroundPermission(sa.getNonResourceString(
                         R.styleable.AndroidManifestPermission_backgroundPermission));
                 } else {
-                    String allowedPackages = "'android'"
-                        + (Flags.replaceBodySensorPermissionEnabled() ? " and APK_IN_APEX" : "");
-                    Slog.w(TAG, packageName + " defines a background permission. Only the "
-                        + allowedPackages + " packages can do that.");
+                    Slog.w(
+                            TAG,
+                            packageName
+                                    + " defines a background permission. Only the 'android' and"
+                                    + " APK_IN_APEX packages can do that.");
                 }
             }
 
@@ -147,6 +147,15 @@ public class ParsedPermissionUtils {
                                 R.styleable.AndroidManifestPermission_requiresPurpose,
                                 /* defValue= */ false);
                 permission.setPurposeRequired(requiresPurpose);
+                if (requiresPurpose) {
+                    final ParseResult<Integer> targetSdkVersionResult =
+                            parseRequiresPurposeTargetSdkVersion(sa, input);
+                    if (targetSdkVersionResult.isError()) {
+                        return input.error(targetSdkVersionResult);
+                    }
+                    permission.setRequiresPurposeTargetSdkVersion(
+                            targetSdkVersionResult.getResult());
+                }
             }
 
             // For now only platform runtime permissions can be restricted
@@ -182,6 +191,23 @@ public class ParsedPermissionUtils {
         }
 
         return input.success(result.getResult());
+    }
+
+    // Version code is only being used to validate attribute value.
+    @SuppressWarnings("AndroidFrameworkCompatChange")
+    private static ParseResult<Integer> parseRequiresPurposeTargetSdkVersion(
+            TypedArray array, ParseInput input) {
+        final int requiresPurposeTargetSdkVersion =
+                array.getInt(
+                        R.styleable.AndroidManifestPermission_requiresPurposeTargetSdkVersion,
+                        /* defValue= */ 0);
+        // Android C is the first platform version that supports purpose enforcement.
+        if (requiresPurposeTargetSdkVersion <= Build.VERSION_CODES.BAKLAVA) {
+            return input.error(
+                    "android:requiresPurposeTargetSdkVersion for <permission> must be defined with"
+                            + " value being at least 37!");
+        }
+        return input.success(requiresPurposeTargetSdkVersion);
     }
 
     @NonNull

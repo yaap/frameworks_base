@@ -45,7 +45,7 @@ import android.view.SurfaceControl;
 import android.view.ThreadedRenderer;
 import android.view.WindowInsets;
 import android.view.WindowManager;
-import android.window.ScreenCapture;
+import android.window.ScreenCaptureInternal;
 import android.window.SnapshotDrawerUtils;
 import android.window.TaskSnapshot;
 
@@ -56,6 +56,7 @@ import com.android.window.flags.Flags;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -235,8 +236,8 @@ abstract class AbsAppSnapshotController<TYPE extends WindowContainer<?>,
             return null;
         }
         Trace.traceBegin(Trace.TRACE_TAG_WINDOW_MANAGER, "createSnapshot");
-        final ScreenCapture.ScreenshotHardwareBuffer screenshotBuffer = createSnapshot(source,
-                scale, crop, builder);
+        final ScreenCaptureInternal.ScreenshotHardwareBuffer screenshotBuffer =
+                createSnapshot(source, scale, crop, builder);
         Trace.traceEnd(Trace.TRACE_TAG_WINDOW_MANAGER);
         if (screenshotBuffer == null) {
             // Failed to acquire image. Has been logged.
@@ -250,19 +251,42 @@ abstract class AbsAppSnapshotController<TYPE extends WindowContainer<?>,
     }
 
     private static TaskSnapshot validateSnapshot(@NonNull TaskSnapshot snapshot) {
-        final HardwareBuffer buffer = snapshot.getHardwareBuffer();
-        if (buffer.getWidth() == 0 || buffer.getHeight() == 0) {
-            buffer.close();
-            Slog.e(TAG, "Invalid snapshot dimensions " + buffer.getWidth() + "x"
-                    + buffer.getHeight());
-            return null;
+        if (Flags.reduceTaskSnapshotMemoryUsage()) {
+            if (!snapshot.isBufferValid()) {
+                return null;
+            }
+            final int width = snapshot.getHardwareBufferWidth();
+            final int height = snapshot.getHardwareBufferHeight();
+            if (width == 0 || height == 0) {
+                snapshot.closeBuffer();
+                Slog.e(TAG, "Invalid snapshot dimensions " + width + "x" + height);
+                return null;
+            }
+            if (snapshot.getDensityDpi() <= 0) {
+                snapshot.closeBuffer();
+                Slog.e(TAG, "Invalid snapshot density " + snapshot.getDensityDpi());
+                return null;
+            }
+        } else {
+            final HardwareBuffer buffer = snapshot.getHardwareBuffer();
+            if (buffer.getWidth() == 0 || buffer.getHeight() == 0) {
+                buffer.close();
+                Slog.e(TAG, "Invalid snapshot dimensions " + buffer.getWidth() + "x"
+                        + buffer.getHeight());
+                return null;
+            }
+            if (snapshot.getDensityDpi() <= 0) {
+                buffer.close();
+                Slog.e(TAG, "Invalid snapshot density " + snapshot.getDensityDpi());
+                return null;
+            }
         }
         return snapshot;
     }
 
     @Nullable
-    ScreenCapture.ScreenshotHardwareBuffer createSnapshot(@NonNull TYPE source,
-            float scaleFraction, Rect crop, TaskSnapshot.Builder builder) {
+    ScreenCaptureInternal.ScreenshotHardwareBuffer createSnapshot(
+            @NonNull TYPE source, float scaleFraction, Rect crop, TaskSnapshot.Builder builder) {
         if (source.getSurfaceControl() == null) {
             if (DEBUG_SCREENSHOT) {
                 Slog.w(TAG_WM, "Failed to take screenshot. No surface control for " + source);
@@ -285,20 +309,28 @@ abstract class AbsAppSnapshotController<TYPE extends WindowContainer<?>,
         if (navWindow != null) {
             excludeSurfaces.add(navWindow.getSurfaceControl());
         }
-        if (Flags.excludeNonMainWindowFromSnapshot()) {
-            source.forAllWindows(w -> {
-                if (w.mAnimatingExit && !w.mRemoved && w.mAttrs.type != TYPE_BASE_APPLICATION) {
-                    excludeSurfaces.add(w.getSurfaceControl());
-                }
-            }, true /* traverseTopToBottom */);
+        source.forAllWindows(w -> {
+            if (w.mAnimatingExit && !w.mRemoved && w.mAttrs.type != TYPE_BASE_APPLICATION) {
+                excludeSurfaces.add(w.getSurfaceControl());
+            }
+        }, true /* traverseTopToBottom */);
+
+        if (source instanceof Task) {
+            final SurfaceControl[] excludeLayers = ((Task) source).mExcludeLayersFromTaskSnapshot;
+            if (excludeLayers != null) {
+                Collections.addAll(excludeSurfaces, excludeLayers);
+            }
         }
         final SurfaceControl[] excludeLayers =
                 excludeSurfaces.toArray(new SurfaceControl[excludeSurfaces.size()]);
         builder.setHasImeSurface(!excludeIme && imeWindow != null && imeWindow.isVisible());
-        final ScreenCapture.ScreenshotHardwareBuffer screenshotBuffer =
-                ScreenCapture.captureLayersExcluding(
-                        source.getSurfaceControl(), crop, scaleFraction,
-                        builder.getPixelFormat(), excludeLayers);
+        final ScreenCaptureInternal.ScreenshotHardwareBuffer screenshotBuffer =
+                ScreenCaptureInternal.captureLayersExcluding(
+                        source.getSurfaceControl(),
+                        crop,
+                        scaleFraction,
+                        builder.getPixelFormat(),
+                        excludeLayers);
         final HardwareBuffer buffer = screenshotBuffer == null ? null
                 : screenshotBuffer.getHardwareBuffer();
         if (isInvalidHardwareBuffer(buffer)) {
@@ -308,8 +340,20 @@ abstract class AbsAppSnapshotController<TYPE extends WindowContainer<?>,
     }
 
     static boolean isInvalidHardwareBuffer(HardwareBuffer buffer) {
+        // TODO (b/428811458) Remove redundant check for buffer size.
         return buffer == null || buffer.isClosed() // This must be checked before getting size.
                 || buffer.getWidth() <= 1 || buffer.getHeight() <= 1;
+    }
+
+    static boolean isInvalidHardwareBuffer(TaskSnapshot snapshot) {
+        if (Flags.reduceTaskSnapshotMemoryUsage()) {
+            // TODO (b/428811458) Remove redundant check for buffer size.
+            return snapshot == null || !snapshot.isBufferValid()
+                    || snapshot.getHardwareBufferWidth() <= 1
+                    || snapshot.getHardwareBufferHeight() <= 1;
+        }
+        final HardwareBuffer buffer = snapshot != null ? snapshot.getHardwareBuffer() : null;
+        return isInvalidHardwareBuffer(buffer);
     }
 
     /**
@@ -380,6 +424,7 @@ abstract class AbsAppSnapshotController<TYPE extends WindowContainer<?>,
         }
         outCrop.offsetTo(0, 0);
         builder.setTaskSize(taskSize);
+        builder.setDensityDpi(taskConfig.densityDpi);
         return outCrop;
     }
 
@@ -482,6 +527,7 @@ abstract class AbsAppSnapshotController<TYPE extends WindowContainer<?>,
         builder.setWindowingMode(source.getWindowingMode());
         builder.setAppearance(attrs.insetsFlags.appearance);
         builder.setUiMode(topActivity.getConfiguration().uiMode);
+        builder.setDensityDpi(topActivity.getConfiguration().densityDpi);
 
         builder.setRotation(mainWindow.getWindowConfiguration().getRotation());
         builder.setOrientation(mainWindow.getConfiguration().orientation);

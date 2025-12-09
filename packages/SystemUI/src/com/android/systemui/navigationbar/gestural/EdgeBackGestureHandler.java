@@ -19,10 +19,12 @@ import static android.content.pm.ActivityInfo.CONFIG_FONT_SCALE;
 import static android.view.InputDevice.SOURCE_MOUSE;
 import static android.view.InputDevice.SOURCE_TOUCHPAD;
 import static android.view.MotionEvent.TOOL_TYPE_FINGER;
+import static android.view.MotionEvent.TOOL_TYPE_MOUSE;
 import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_EXCLUDE_FROM_SCREEN_MAGNIFICATION;
 
+import static com.android.systemui.Flags.blockMouseEdgeBackGesture;
 import static com.android.systemui.Flags.edgebackGestureHandlerGetRunningTasksBackground;
-import static com.android.systemui.Flags.predictiveBackDelayWmTransition;
+import static com.android.window.flags.Flags.predictiveBackDelayWmTransition;
 import static com.android.systemui.classifier.Classifier.BACK_GESTURE;
 import static com.android.systemui.navigationbar.gestural.Utilities.isTrackpadThreeFingerSwipe;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_TOUCHPAD_GESTURES_DISABLED;
@@ -33,6 +35,7 @@ import static java.util.stream.Collectors.joining;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.ActivityManager;
+import android.companion.virtualdevice.flags.Flags;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
@@ -100,10 +103,8 @@ import com.android.systemui.shared.system.QuickStepContract.SystemUiStateFlags;
 import com.android.systemui.shared.system.SysUiStatsLog;
 import com.android.systemui.shared.system.TaskStackChangeListener;
 import com.android.systemui.shared.system.TaskStackChangeListeners;
-import com.android.systemui.statusbar.NotificationShadeWindowController;
 import com.android.systemui.statusbar.phone.LightBarController;
 import com.android.systemui.topui.TopUiController;
-import com.android.systemui.topui.TopUiControllerRefactor;
 import com.android.systemui.util.concurrency.BackPanelUiThread;
 import com.android.systemui.util.concurrency.UiThreadContext;
 import com.android.systemui.util.kotlin.JavaAdapter;
@@ -147,7 +148,7 @@ public class EdgeBackGestureHandler {
     private static final int MAX_NUM_LOGGED_PREDICTIONS = 10;
     private static final int MAX_NUM_LOGGED_GESTURES = 10;
 
-    static final boolean DEBUG_MISSING_GESTURE = false;
+    public static final boolean DEBUG_MISSING_GESTURE = false;
     public static final String DEBUG_MISSING_GESTURE_TAG = "NoBackGesture";
 
     private ISystemGestureExclusionListener mGestureExclusionListener =
@@ -324,7 +325,6 @@ public class EdgeBackGestureHandler {
     private final DesktopState mDesktopState;
 
     private final GestureNavigationSettingsObserver mGestureNavigationSettingsObserver;
-    private final NotificationShadeWindowController mNotificationShadeWindowController;
     private final TopUiController mTopUiController;
 
     private final NavigationEdgeBackPlugin.BackCallback mBackCallback =
@@ -477,7 +477,6 @@ public class EdgeBackGestureHandler {
             FalsingManager falsingManager,
             Provider<BackGestureTfClassifierProvider> backGestureTfClassifierProviderProvider,
             Provider<LightBarController> lightBarControllerProvider,
-            NotificationShadeWindowController notificationShadeWindowController,
             TopUiController topUiController,
             GestureInteractor gestureInteractor,
             JavaAdapter javaAdapter,
@@ -544,14 +543,15 @@ public class EdgeBackGestureHandler {
             }
         }
         mLongPressTimeout = Math.min(MAX_LONG_PRESS_TIMEOUT,
-                ViewConfiguration.getLongPressTimeout());
+                Flags.viewconfigurationApis()
+                        ? ViewConfiguration.get(context).getLongPressTimeoutMillis()
+                        : ViewConfiguration.getLongPressTimeout());
 
         mGestureNavigationSettingsObserver = new GestureNavigationSettingsObserver(
                 mUiThreadContext.getHandler(), bgHandler, mContext,
                 this::onNavigationSettingsChanged);
 
         updateCurrentUserResources();
-        mNotificationShadeWindowController = notificationShadeWindowController;
         mTopUiController = topUiController;
     }
 
@@ -1241,6 +1241,9 @@ public class EdgeBackGestureHandler {
             } else {
                 mAllowGesture = isBackAllowedCommon && !mUsingThreeButtonNav && isWithinInsets
                         && isWithinTouchRegion(ev) && !isButtonPressFromTrackpad(ev);
+                if (blockMouseEdgeBackGesture()) {
+                    mAllowGesture = mAllowGesture && !isButtonPressFromMouse(ev);
+                }
             }
             if (mAllowGesture) {
                 if (DesktopExperienceFlags.ENABLE_MULTIDISPLAY_TRACKPAD_BACK_GESTURE.isTrue()) {
@@ -1272,7 +1275,9 @@ public class EdgeBackGestureHandler {
                     QuickStepContract.isBackGestureDisabled(mSysUiFlags,
                             mIsTrackpadThreeFingerSwipe), mDisabledForQuickstep,
                     mGestureBlockingActivityRunning.get(), mIsInPip, mDisplaySize,
-                    mEdgeWidthLeft, mLeftInset, mEdgeWidthRight, mRightInset, mExcludeRegion));
+                    mEdgeWidthLeft, mLeftInset, mEdgeWidthRight, mRightInset,
+                    DesktopExperienceFlags.ENABLE_MULTIDISPLAY_TRACKPAD_BACK_GESTURE.isTrue()
+                            ? displayBackGestureHandler.getExcludeRegion() : mExcludeRegion));
         } else if (mAllowGesture || mLogGesture) {
             boolean mLastFrameThresholdCrossed = mThresholdCrossed;
             if (!mThresholdCrossed) {
@@ -1388,6 +1393,11 @@ public class EdgeBackGestureHandler {
     private boolean isButtonPressFromTrackpad(MotionEvent ev) {
         return ev.getSource() == (SOURCE_MOUSE | SOURCE_TOUCHPAD)
                 && ev.getToolType(ev.getActionIndex()) == TOOL_TYPE_FINGER;
+    }
+
+    private boolean isButtonPressFromMouse(MotionEvent ev) {
+        return ev.getSource() == (SOURCE_MOUSE)
+                && ev.getToolType(ev.getActionIndex()) == TOOL_TYPE_MOUSE;
     }
 
     private void dispatchToBackAnimation(MotionEvent event) {
@@ -1539,13 +1549,8 @@ public class EdgeBackGestureHandler {
             backAnimation.setPilferPointerCallback(
                     () -> uiThreadExecutor.execute(() -> pilferPointers(mLastDownEventDisplayId)));
             backAnimation.setTopUiRequestCallback(
-                    (requestTopUi, tag) -> uiThreadExecutor.execute(() -> {
-                        if (TopUiControllerRefactor.isEnabled()) {
-                            mTopUiController.setRequestTopUi(requestTopUi, tag);
-                        } else {
-                            mNotificationShadeWindowController.setRequestTopUi(requestTopUi, tag);
-                        }
-                    }));
+                    (requestTopUi, tag) -> uiThreadExecutor.execute(
+                            () -> mTopUiController.setRequestTopUi(requestTopUi, tag)));
             updateBackAnimationThresholds();
             if (mLightBarControllerProvider.get() != null) {
                 mBackAnimation.setStatusBarCustomizer((appearance) ->

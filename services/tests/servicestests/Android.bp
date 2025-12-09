@@ -34,6 +34,7 @@ android_test {
         "test-apps/TopologyTestApp/src/**/*.java",
     ],
 
+    exclude_srcs: ["src/com/android/server/signalcollector/**/*.java"],
     static_libs: [
         "ActivityContext",
         "CtsAccessibilityCommon",
@@ -54,7 +55,6 @@ android_test {
         "cts-input-lib",
         "cts-wm-util",
         "desktop-test-lib",
-        "flag-junit",
         "flag-junit",
         "framework-protos",
         "frameworks-base-testutils",
@@ -97,6 +97,11 @@ android_test {
         "truth",
     ] + select(soong_config_variable("ANDROID", "release_crashrecovery_module"), {
         "true": ["service-crashrecovery-pre-jarjar"],
+        default: [],
+    }) + select(release_flag("RELEASE_ANOMALY_DETECTOR"), {
+        true: [
+            "signal-collector-service-test",
+        ],
         default: [],
     }),
 
@@ -205,6 +210,19 @@ android_ravenwood_test {
     ],
 }
 
+android_ravenwood_test {
+    name: "FrameworksServicesTestsRavenwood_ProcessStateController",
+    defaults: ["FrameworksServicesTestsRavenwood-defaults"],
+    team: "trendy_team_framework_bpm",
+    static_libs: [
+        "services.core.ravenwood",
+    ],
+    srcs: [
+        "src/com/android/server/am/psc/**/*.java",
+        "src/com/android/server/am/BoundServiceSessionTests.java",
+    ],
+}
+
 java_library {
     name: "servicestests-core-utils",
     srcs: [
@@ -240,6 +258,7 @@ java_library {
         "androidx.test.ext.truth",
         "androidx.test.rules",
         "frameworks-base-testutils",
+        "service-permission.stubs.system_server",
         "services.core",
         "services.devicepolicy",
     ],
@@ -1080,4 +1099,14 @@ test_module_config {
         "device-tests",
     ],
     include_filters: ["com.android.server.supervision"],
+}
+
+test_module_config {
+    name: "FrameworksServicesTests_incident",
+    base: "FrameworksServicesTests",
+    test_suites: [
+        "automotive-tests",
+        "device-tests",
+    ],
+    include_filters: ["com.android.server.incident"],
 }

@@ -60,13 +60,6 @@ flag {
 
 flag {
     namespace: "windowing_sdk"
-    name: "activity_embedding_support_for_connected_displays"
-    description: "Enables activity embedding support for connected displays, including enabling AE optimization for Settings."
-    bug: "369438353"
-}
-
-flag {
-    namespace: "windowing_sdk"
     name: "activity_embedding_delay_task_fragment_finish_for_activity_launch"
     description: "Fixes a race condition that we finish the TaskFragment too early when there is a pending activity launch."
     bug: "390452023"
@@ -76,35 +69,10 @@ flag {
 }
 
 flag {
-    namespace: "windowing_sdk"
-    name: "wlinfo_oncreate"
-    description: "Makes WindowLayoutInfo accessible without racing in the Activity#onCreate()"
-    bug: "337820752"
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "better_support_non_match_parent_activity"
-    description: "Relax the assumption of non-match parent activity"
-    bug: "356277166"
-}
-
-flag {
     namespace: "aaos_core_contrib"
-    name: "safe_region_letterboxing"
+    name: "safe_region_letterboxing_v1"
     description: "Enables letterboxing for a safe region"
-    bug: "380132497"
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "exclude_task_from_recents"
-    description: "Enables WCT to set whether the task should be excluded from the Recents list"
-    bug: "404726350"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
+    bug: "425949809"
 }
 
 flag {
@@ -116,53 +84,9 @@ flag {
 
 flag {
     namespace: "windowing_sdk"
-    name: "enable_window_context_override_type"
-    description: "Enable WindowContext to attach parent window and override window type"
-    bug: "398759994"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
     name: "enable_experimental_bubbles_controller"
     description: "Experiment to allow apps to request Bubbles actions in WM Shell"
     bug: "407149510"
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "force_show_system_bar_for_bubble"
-    description: "Ensure system bar are shown for Bubble"
-    bug: "329124127"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "reparent_to_default_with_display_removal"
-    description: "Enable WindowContext to reparent to the default display with display detached"
-    bug: "404532651"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "respect_leaf_task_bounds"
-    description: "Respect the override bounds of the leaf tasks that are organized by root tasks"
-    bug: "410745462"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -175,62 +99,88 @@ flag {
 
 flag {
     namespace: "windowing_sdk"
-    name: "fix_fullscreen_in_multi_window"
-    description: "Let leaf task inherits the windowing mode from the root task."
-    bug: "408087047"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "fix_layout_restored_task"
-    description: "Layout the restored-from-recent task to ensure the bounds are updated."
-    bug: "416441150"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "fix_moving_unfocused_task"
-    description: "Avoid moving the visible and unfocused multi-window mode Task to front"
-    bug: "399860102"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "fix_set_adjacent_task_fragments_with_params"
-    description: "Fix the params set through setAdjacentTaskFragments"
-    bug: "418159069"
-    is_fixed_read_only: true
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
-    name: "update_task_min_dimensions_with_root_activity"
-    description: "Update minWidth/Height when the root activity is changed."
-    bug: "416987720"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    namespace: "windowing_sdk"
     name: "fallback_to_focused_display"
     description: "Use the focused display as the fallback"
     bug: "406967985"
     is_fixed_read_only: true
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "task_fragment_companion_activity"
+    description: "Track the activity to be finished with tf in core"
+    bug: "433459536"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "support_gemini_on_multi_display"
+    description: "Launch Gemini on a multi-display environment"
+    bug: "400351723"
+    is_fixed_read_only: true
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fix_bubble_trampoline_animation"
+    description: "Fix the animation for Bubble Task Trampoline"
+    bug: "417848405"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "return_all_visible_activities_for_vis"
+    description: "Return all visible activities in multi-tasking feature to VIS"
+    bug: "434114340"
+    is_fixed_read_only: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "activity_embedding_abort_cross_uid_launch_in_finishing_task_fragment"
+    description: "Aborts cross-uid activity launch from a finishing TaskFragment to avoid race conditions"
+    bug: "427881773"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "refactor_match_parent_bounds"
+    description: "Consolidate fillsParentBounds with matchParentBounds."
+    bug: "409417223"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fix_bal_reparent_existing_task"
+    description: "Avoid reparent existing task when the background launch is not allowed."
+    bug: "434047695"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    namespace: "windowing_sdk"
+    name: "fix_rapid_top_resumed_switch"
+    description: "Prevent top-resumed-activity rapidly switched in multi-window mode."
+    bug: "417956804"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }

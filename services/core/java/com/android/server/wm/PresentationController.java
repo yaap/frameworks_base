@@ -16,8 +16,10 @@
 
 package com.android.server.wm;
 
+import static android.view.Display.TYPE_INTERNAL;
 import static android.view.WindowManager.LayoutParams.TYPE_PRESENTATION;
 import static android.view.WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION;
+import static android.window.DesktopExperienceFlags.ENABLE_PRESENTATION_DISALLOWED_ON_UNFOCUSED_HOST_TASK;
 import static android.window.DesktopExperienceFlags.ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_ERROR;
@@ -106,8 +108,16 @@ class PresentationController implements DisplayManager.DisplayListener {
             return false;
         }
 
+        if (!displayContent.getDisplay().isPublicPresentation()) {
+            // A normal presentation is allowed only on a display with the presentation flag.
+            return false;
+        }
+
+        // All the legacy static policies related to window types and presentation flags have
+        // been checked at this point. Below are newer dynamic policies that check actual existence
+        // of presentation windows and host tasks.
         if (!ENABLE_PRESENTATION_FOR_CONNECTED_DISPLAYS.isTrue()) {
-            return displayContent.getDisplay().isPublicPresentation();
+            return true;
         }
 
         boolean allDisplaysArePresenting = true;
@@ -131,23 +141,39 @@ class PresentationController implements DisplayManager.DisplayListener {
         }
 
         Task hostTask = null;
+        final Task globallyFocusedTask =
+                displayContent.mWmService.mRoot.getTopDisplayFocusedLeafTask();
         final Presentation presentation = getPresentation(win);
         if (presentation != null) {
             hostTask = presentation.mHostTask;
         } else if (win == null) {
-            final Task globallyFocusedTask =
-                    displayContent.mWmService.mRoot.getTopDisplayFocusedLeafTask();
             if (globallyFocusedTask != null && uid == globallyFocusedTask.effectiveUid) {
                 hostTask = globallyFocusedTask;
+            }
+
+            if (ENABLE_PRESENTATION_DISALLOWED_ON_UNFOCUSED_HOST_TASK.isTrue()
+                    && hostTask == null) {
+                final Task[] topVisibleTaskWithSameUid = new Task[1];
+                // Assume that the top visible task from the same app is the host task.
+                displayContent.mWmService.mRoot.forAllLeafTasks(task -> {
+                    if (task.effectiveUid == uid && task.isVisibleRequested()
+                            && task.isFocusableAndVisible()) {
+                        topVisibleTaskWithSameUid[0] = task;
+                        return true;
+                    }
+                    return false;
+                });
+                hostTask = topVisibleTaskWithSameUid[0];
             }
         }
         if (hostTask != null && displayId == hostTask.getDisplayId()) {
             // A presentation can't cover its own host task.
             return false;
         }
-        if (hostTask == null && !displayContent.getDisplay().isPublicPresentation()) {
+        final boolean isHostGloballyFocused = hostTask != null && hostTask == globallyFocusedTask;
+        if (!isHostGloballyFocused && displayContent.getDisplay().getType() == TYPE_INTERNAL) {
             // A globally focused host task on a different display is needed to show a
-            // presentation on a non-presenting display.
+            // presentation on an internal display.
             return false;
         }
 

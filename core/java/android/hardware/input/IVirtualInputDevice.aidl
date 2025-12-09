@@ -32,7 +32,6 @@ import android.hardware.input.VirtualTouchEvent;
  *
  * @hide
  */
- // TODO(b/419771135): Split IVirtualInputDevice into IVirtual[Mouse|Keyboard|etc]
 interface IVirtualInputDevice {
 
     /**
@@ -98,8 +97,14 @@ interface IVirtualInputDevice {
     boolean sendRotaryEncoderScrollEvent(in VirtualRotaryEncoderScrollEvent event);
 
     /**
-     * Returns the current cursor position of the mouse corresponding to this device, in x and y
-     * coordinates.
+     * Returns the current cursor position of the mouse corresponding to this device, in the
+     * physical display coordinates.
      */
-    PointF getCursorPosition();
+    PointF getCursorPositionInPhysicalDisplay();
+
+    /**
+     * Returns the current cursor position of the mouse corresponding to this device, in the
+     * logical display coordinates.
+     */
+    PointF getCursorPositionInLogicalDisplay();
 }

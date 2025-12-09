@@ -48,7 +48,6 @@ import platform.test.runner.parameterized.Parameters
 @SmallTest
 @RunWith(ParameterizedAndroidJunit4::class)
 @EnableSceneContainer
-@android.platform.test.annotations.EnabledOnRavenwood
 class DualShadeEducationalTooltipsViewModelTest(
     private val forOverlay: OverlayKey,
     private val tooltipText: String,
@@ -66,7 +65,10 @@ class DualShadeEducationalTooltipsViewModelTest(
         overrideResource(R.string.dual_shade_educational_tooltip_qs, QS_TOOLTIP)
 
         underTest =
-            kosmos.dualShadeEducationalTooltipsViewModelFactory.create(kosmos.applicationContext)
+            kosmos.dualShadeEducationalTooltipsViewModelFactory.create(
+                kosmos.applicationContext,
+                ignoreTestHarness = true,
+            )
         underTest.activateIn(kosmos.testScope)
         kosmos.runCurrent()
     }

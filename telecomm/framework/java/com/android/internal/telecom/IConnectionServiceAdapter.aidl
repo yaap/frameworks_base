@@ -37,7 +37,7 @@ import com.android.internal.telecom.RemoteServiceCallback;
  *
  * @see android.telecom.ConnectionServiceAdapter
  *
- * {@hide}
+ * @hide
  */
 oneway interface IConnectionServiceAdapter {
     void handleCreateConnectionComplete(
@@ -145,4 +145,8 @@ oneway interface IConnectionServiceAdapter {
 
     void queryLocation(String callId, long timeoutMillis, String provider,
             in ResultReceiver callback, in Session.Info sessionInfo);
+
+    void setAudioProcessing(String callId, in Session.Info sessionInfo, int useCase);
+
+    void setSimulatedRinging(String callId, in Session.Info sessionInfo);
 }

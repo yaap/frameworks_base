@@ -16,10 +16,7 @@
 
 package com.android.packageinstaller;
 
-import static android.content.pm.Flags.usePiaV2;
-
 import static com.android.packageinstaller.PackageUtil.getMaxTargetSdkVersionForUid;
-import static com.android.packageinstaller.PackageUtil.getReasonForDebug;
 
 import android.Manifest;
 import android.app.Activity;
@@ -39,7 +36,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
 import android.os.UserManager;
-import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.EventLog;
 import android.util.Log;
@@ -69,18 +65,17 @@ public class InstallStart extends Activity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        boolean testOverrideForPiaV2 = Settings.System.getInt(getContentResolver(),
-                "use_pia_v2", 0) == 1;
-        boolean usePiaV2aConfig = usePiaV2();
-
-        if (usePiaV2aConfig || testOverrideForPiaV2) {
-            Log.d(TAG, getReasonForDebug(usePiaV2aConfig, testOverrideForPiaV2));
-
+        if (PackageUtil.isVersionTwoEnabled(this)) {
             Intent piaV2 = new Intent(getIntent());
             piaV2.putExtra(InstallLaunch.EXTRA_CALLING_PKG_NAME, getLaunchedFromPackage());
             piaV2.putExtra(InstallLaunch.EXTRA_CALLING_PKG_UID, getLaunchedFromUid());
             piaV2.setClass(this, InstallLaunch.class);
-            piaV2.addFlags(Intent.FLAG_ACTIVITY_FORWARD_RESULT);
+            int flags = Intent.FLAG_ACTIVITY_FORWARD_RESULT;
+            if ((piaV2.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0) {
+                flags = flags | Intent.FLAG_GRANT_READ_URI_PERMISSION;
+            }
+
+            piaV2.setFlags(flags);
             startActivity(piaV2);
             finish();
             return;

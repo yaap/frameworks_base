@@ -83,7 +83,6 @@ import android.view.SurfaceControl;
 import android.view.SurfaceControl.Builder;
 import android.view.SurfaceControlViewHost;
 import android.view.WindowManager;
-import android.view.WindowManager.TransitionOldType;
 import android.window.IWindowContainerToken;
 import android.window.WindowContainerToken;
 
@@ -114,8 +113,7 @@ import java.util.function.Predicate;
  * changes are made to this class.
  */
 class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<E>
-        implements Comparable<WindowContainer>, Animatable,
-        InsetsControlTarget {
+        implements Comparable<WindowContainer>, Animatable {
 
     private static final String TAG = TAG_WITH_CLASS_NAME ? "WindowContainer" : TAG_WM;
 
@@ -239,17 +237,6 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
      * selected to suppress an animation, and remove this flag.
      */
     boolean mLaunchTaskBehind;
-
-    /**
-     * If we are running an animation, this determines the transition type.
-     */
-    @TransitionOldType int mTransit;
-
-    /**
-     * If we are running an animation, this determines the flags during this animation. Must be a
-     * bitwise combination of AppTransition.TRANSIT_FLAG_* constants.
-     */
-    int mTransitFlags;
 
     protected final Rect mTmpRect = new Rect();
     final Rect mTmpPrevBounds = new Rect();
@@ -541,7 +528,7 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
      *                         WindowContainer
      */
     void setSafeRegionBounds(@Nullable Rect safeRegionBounds) {
-        if (!Flags.safeRegionLetterboxing()) {
+        if (!Flags.safeRegionLetterboxingV1()) {
             Slog.i(TAG, "Feature safe region letterboxing is not available");
             return;
         }
@@ -1186,8 +1173,6 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
      * e.g. {@code isAnimating(PARENT)} returns {@code true} if either thiscontainer itself or one
      * of its parents is running an animation.
      *
-     * Note that TRANSITION propagates to parents and children as well.
-     *
      * @param flags The combination of bitmask flags to specify targets and condition for
      *              checking animating status.
      * @param typesToCheck The combination of bitmask {@link AnimationType} to compare when
@@ -1477,7 +1462,7 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
         if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_NOSENSOR) {
             // NOSENSOR means the display's "natural" orientation, so return that.
             if (mDisplayContent != null) {
-                return mDisplayContent.getNaturalConfigurationOrientation();
+                return mDisplayContent.getNaturalOrientation();
             }
         } else if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LOCKED) {
             // LOCKED means the activity's orientation remains unchanged, so return existing value.
@@ -1641,6 +1626,7 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
         return source;
     }
 
+    /** Returns true if unspecified orientation should be reported to parent. */
     boolean providesOrientation() {
         return fillsParent();
     }
@@ -1664,12 +1650,15 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
      * lifecycle. A container may fill its parent but have no content in it, so it would be
      * equivalent to not existing.
      *
-     * TODO(b/409417223): Consolidate with {@link #matchParentBounds}.
+     * TODO b/409417223 - remove this method and replace it with #matchParentBounds
      */
     boolean fillsParentBounds() {
-        final int windowingMode = getWindowingMode();
-        return windowingMode == WINDOWING_MODE_FULLSCREEN
-                || (windowingMode != WINDOWING_MODE_PINNED && matchParentBounds());
+        if (!com.android.window.flags.Flags.refactorMatchParentBounds()) {
+            final int windowingMode = getWindowingMode();
+            return windowingMode == WINDOWING_MODE_FULLSCREEN
+                    || (windowingMode != WINDOWING_MODE_PINNED && matchParentBounds());
+        }
+        return matchParentBounds();
     }
 
     /**
@@ -3064,8 +3053,6 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
      * e.g. {@code isAnimating(PARENT)} returns {@code true} if either this container itself or one
      * of its parents is running an animation.
      *
-     * Note that TRANSITION propagates to parents and children as well.
-     *
      * @param flags The combination of bitmask flags to specify targets and condition for
      *              checking animating status.
      * @param typesToCheck The combination of bitmask {@link AnimationType} to compare when
@@ -3131,32 +3118,6 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
         return mSurfaceControl.getHeight();
     }
 
-    static void enforceSurfaceVisible(@NonNull WindowContainer<?> wc) {
-        if (wc.mWmService.mFlags.mEnsureSurfaceVisibility) {
-            return;
-        }
-        if (wc.mSurfaceControl == null) {
-            return;
-        }
-        wc.getSyncTransaction().show(wc.mSurfaceControl);
-        final ActivityRecord ar = wc.asActivityRecord();
-        if (ar != null) {
-            ar.mLastSurfaceShowing = true;
-        }
-        // Force showing the parents because they may be hidden by previous transition.
-        for (WindowContainer<?> p = wc.getParent(); p != null && p != wc.mDisplayContent;
-                p = p.getParent()) {
-            if (p.mSurfaceControl != null) {
-                p.getSyncTransaction().show(p.mSurfaceControl);
-                final Task task = p.asTask();
-                if (task != null) {
-                    task.mLastSurfaceShowing = true;
-                }
-            }
-        }
-        wc.scheduleAnimation();
-    }
-
     @CallSuper
     void dump(PrintWriter pw, String prefix, boolean dumpAll) {
         if (mSurfaceAnimator.isAnimating()) {
@@ -3209,8 +3170,7 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
         // set first, since we don't want rotation included in this (for now).
         mLastSurfacePosition.set(mTmpPos.x, mTmpPos.y);
 
-        if (mTransitionController.isShellTransitionsEnabled()
-                && !mTransitionController.useShellTransitionsRotation()) {
+        if (!mTransitionController.useShellTransitionsRotation()) {
             if (deltaRotation != Surface.ROTATION_0) {
                 updateSurfaceRotation(t, deltaRotation, null /* positionLeash */);
                 mDisplayContent.setFixedTransformHint(getPendingTransaction(), mSurfaceControl,
@@ -3233,13 +3193,18 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
         // parent must be non-null otherwise deltaRotation would be 0.
         RotationUtils.rotateSurface(t, mSurfaceControl, deltaRotation);
         mTmpPos.set(mLastSurfacePosition.x, mLastSurfacePosition.y);
-        final Rect parentBounds = getParent().getBounds();
         final boolean flipped = (deltaRotation % 2) != 0;
+        final Rect parentBounds = getParentBoundsForSurfaceRotation(flipped);
         RotationUtils.rotatePoint(mTmpPos, deltaRotation,
                 flipped ? parentBounds.height() : parentBounds.width(),
                 flipped ? parentBounds.width() : parentBounds.height());
         t.setPosition(positionLeash != null ? positionLeash : mSurfaceControl,
                 mTmpPos.x, mTmpPos.y);
+    }
+
+    /** This is used to calculate the offset of rotated surface in the parent. */
+    Rect getParentBoundsForSurfaceRotation(boolean flipped) {
+        return getParent().getBounds();
     }
 
     @VisibleForTesting
@@ -3278,6 +3243,7 @@ class WindowContainer<E extends WindowContainer> extends ConfigurationContainer<
         }, true /* traverseTopToBottom */);
     }
 
+    // It is replaced by WindowState#getDimController().
     @Deprecated
     Dimmer getDimmer() {
         if (mParent == null) {

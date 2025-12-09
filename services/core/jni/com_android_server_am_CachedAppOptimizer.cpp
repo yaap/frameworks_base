@@ -33,6 +33,7 @@
 #include <meminfo/procmeminfo.h>
 #include <meminfo/sysmeminfo.h>
 #include <nativehelper/JNIHelp.h>
+#include <processgroup/processgroup.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/mman.h>
@@ -46,6 +47,7 @@
 #include <utils/Trace.h>
 
 #include <algorithm>
+#include <optional>
 
 using android::base::StringPrintf;
 using android::base::WriteStringToFile;
@@ -434,6 +436,28 @@ static void compactProcess(int pid, int compactionFlags) {
     compactProcess(pid, vmaToAdviseFunc);
 }
 
+static std::string profileFromCompactionFlags(int compactionFlags) {
+    const bool compactAnon = compactionFlags & COMPACT_ACTION_ANON_FLAG;
+    const bool compactFile = compactionFlags & COMPACT_ACTION_FILE_FLAG;
+
+    if (!compactAnon && !compactFile) return {};
+    std::string profile;
+    if (compactAnon && compactFile)
+        profile = "CompactFull";
+    else if (compactAnon)
+        profile = "CompactAnon";
+    else if (compactFile)
+        profile = "CompactFile";
+
+    return profile;
+}
+
+static void compactMemcg(int uid, int pid, int compactionFlags) {
+    if (std::string profile = profileFromCompactionFlags(compactionFlags); !profile.empty()) {
+        SetProcessProfiles(uid, pid, {profile});
+    }
+}
+
 // This performs per-process reclaim on all processes belonging to non-app UIDs.
 // For the most part, these are non-zygote processes like Treble HALs, but it
 // also includes zygote-derived processes that run in system UIDs, like bluetooth
@@ -470,7 +494,7 @@ static void com_android_server_am_CachedAppOptimizer_compactSystem(JNIEnv *, job
 
         int pid = atoi(current->d_name);
 
-        compactProcess(pid, COMPACT_ACTION_ANON_FLAG | COMPACT_ACTION_FILE_FLAG);
+        compactMemcg(status_info.st_uid, pid, COMPACT_ACTION_ANON_FLAG | COMPACT_ACTION_FILE_FLAG);
     }
     inSystemCompaction = false;
 }
@@ -506,9 +530,38 @@ static jlong com_android_server_am_CachedAppOptimizer_getMemoryFreedCompaction()
     return sysmeminfo.mem_compacted_kb("/sys/block/zram0/");
 }
 
-static void com_android_server_am_CachedAppOptimizer_compactProcess(JNIEnv*, jobject, jint pid,
-                                                                    jint compactionFlags) {
+static void com_android_server_am_CachedAppOptimizer_compactProcessWithMemcg(JNIEnv*, jobject,
+                                                                             jint uid, jint pid,
+                                                                             jint compactionFlags) {
+    compactMemcg(uid, pid, compactionFlags);
+}
+
+static void com_android_server_am_CachedAppOptimizer_compactNativeProcess(JNIEnv*, jobject,
+                                                                          jint pid,
+                                                                          jint compactionFlags) {
     compactProcess(pid, compactionFlags);
+}
+
+static jboolean com_android_server_am_CachedAppOptimizer_compactionFlagsValidForMemcg(
+        JNIEnv* env, jobject, jint compactionFlags) {
+    static std::array<std::optional<bool>, 3> valid;
+
+    if (compactionFlags >= valid.size() || compactionFlags < 0) {
+        jniThrowException(env, "java/lang/IllegalArgumentException", "Invalid compaction flags");
+        return false;
+    }
+
+    if (!valid[compactionFlags]) {
+        std::string profile = profileFromCompactionFlags(compactionFlags);
+        if (profile.empty()) {
+            valid[compactionFlags] = true; // NONE is a no-op
+        } else {
+            // Only call this once per flag combo, per boot, since it's not exactly cheap
+            valid[compactionFlags] = isProfileValidForProcess(profile, getuid(), getpid());
+        }
+    }
+
+    return *valid[compactionFlags];
 }
 
 static const JNINativeMethod sMethods[] = {
@@ -523,7 +576,14 @@ static const JNINativeMethod sMethods[] = {
         {"getMemoryFreedCompaction", "()J",
          (void*)com_android_server_am_CachedAppOptimizer_getMemoryFreedCompaction},
         {"compactSystem", "()V", (void*)com_android_server_am_CachedAppOptimizer_compactSystem},
-        {"compactProcess", "(II)V", (void*)com_android_server_am_CachedAppOptimizer_compactProcess},
+        {"compactProcess", "(II)V",
+         (void*)com_android_server_am_CachedAppOptimizer_compactNativeProcess},
+        {"performNativeMemcgCompaction", "(III)V",
+         (void*)com_android_server_am_CachedAppOptimizer_compactProcessWithMemcg},
+        {"compactNativeProcess", "(II)V",
+         (void*)com_android_server_am_CachedAppOptimizer_compactNativeProcess},
+        {"compactionFlagsValidForMemcg", "(I)Z",
+         (void*)com_android_server_am_CachedAppOptimizer_compactionFlagsValidForMemcg},
 };
 
 int register_android_server_am_CachedAppOptimizer(JNIEnv* env)

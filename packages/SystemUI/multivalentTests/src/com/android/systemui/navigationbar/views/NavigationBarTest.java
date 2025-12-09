@@ -76,7 +76,6 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowMetrics;
 import android.view.accessibility.AccessibilityManager;
-import android.view.inputmethod.Flags;
 import android.view.inputmethod.InputMethodManager;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -107,6 +106,7 @@ import com.android.systemui.navigationbar.views.buttons.NavBarButtonClickLogger;
 import com.android.systemui.navigationbar.views.buttons.NavbarOrientationTrackingLogger;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.recents.Recents;
+import com.android.systemui.rotation.RotationPolicyWrapper;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.settings.FakeDisplayTracker;
 import com.android.systemui.settings.UserContextProvider;
@@ -197,6 +197,8 @@ public class NavigationBarTest extends SysuiTestCase {
     private SysUiState mMockSysUiState;
     @Mock
     private Handler mHandler;
+    @Mock
+    private RotationPolicyWrapper mMockRotationPolicyWrapper;
 
     @Mock
     private Handler mBgHandler;
@@ -451,17 +453,9 @@ public class NavigationBarTest extends SysuiTestCase {
 
         verify(mUiEventLogger).log(NAVBAR_IME_SWITCHER_BUTTON_TAP);
         verify(mUiEventLogger, never()).log(NAVBAR_IME_SWITCHER_BUTTON_LONGPRESS);
-        if (Flags.imeSwitcherRevamp()) {
-            verify(mInputMethodManager)
-                    .onImeSwitchButtonClickFromSystem(mNavigationBar.mDisplayId);
-            verify(mInputMethodManager, never()).showInputMethodPickerFromSystem(
-                    anyBoolean() /* showAuxiliarySubtypes */, anyInt() /* displayId */);
-        } else {
-            verify(mInputMethodManager, never())
-                    .onImeSwitchButtonClickFromSystem(anyInt() /* displayId */);
-            verify(mInputMethodManager).showInputMethodPickerFromSystem(
-                    true /* showAuxiliarySubtypes */, mNavigationBar.mDisplayId);
-        }
+        verify(mInputMethodManager).onImeSwitchButtonClickFromSystem(mNavigationBar.mDisplayId);
+        verify(mInputMethodManager, never()).showInputMethodPickerFromSystem(
+                anyBoolean() /* showAuxiliarySubtypes */, anyInt() /* displayId */);
     }
 
     @Test
@@ -471,15 +465,9 @@ public class NavigationBarTest extends SysuiTestCase {
         mNavigationBar.onImeSwitcherLongClick(mImeSwitchButtonView);
 
         verify(mUiEventLogger, never()).log(NAVBAR_IME_SWITCHER_BUTTON_TAP);
-        if (Flags.imeSwitcherRevamp()) {
-            verify(mUiEventLogger).log(NAVBAR_IME_SWITCHER_BUTTON_LONGPRESS);
-            verify(mInputMethodManager).showInputMethodPickerFromSystem(
-                    true /* showAuxiliarySubtypes */, mNavigationBar.mDisplayId);
-        } else {
-            verify(mUiEventLogger, never()).log(NAVBAR_IME_SWITCHER_BUTTON_LONGPRESS);
-            verify(mInputMethodManager, never()).showInputMethodPickerFromSystem(
-                    anyBoolean() /* showAuxiliarySubtypes */, anyInt() /* displayId */);
-        }
+        verify(mUiEventLogger).log(NAVBAR_IME_SWITCHER_BUTTON_LONGPRESS);
+        verify(mInputMethodManager).showInputMethodPickerFromSystem(
+                true /* showAuxiliarySubtypes */, mNavigationBar.mDisplayId);
     }
 
     @Test
@@ -702,6 +690,7 @@ public class NavigationBarTest extends SysuiTestCase {
                 mock(PanelExpansionInteractor.class),
                 mock(NotificationRemoteInputManager.class),
                 mock(NotificationShadeDepthController.class),
+                mMockRotationPolicyWrapper,
                 mHandler,
                 mFakeExecutor,
                 mFakeExecutor,

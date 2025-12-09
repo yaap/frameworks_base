@@ -46,6 +46,7 @@ import android.database.ExecutorContentObserver;
 import android.net.Uri;
 import android.os.Looper;
 import android.os.Process;
+import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
@@ -75,10 +76,8 @@ import com.android.systemui.scene.shared.flag.SceneContainerFlag;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.shared.system.SysUiStatsLog;
 import com.android.systemui.statusbar.notification.collection.NotificationEntry;
-import com.android.systemui.statusbar.notification.collection.UseElapsedRealtimeForCreationTime;
 import com.android.systemui.statusbar.notification.collection.notifcollection.CommonNotifCollection;
 import com.android.systemui.statusbar.notification.collection.render.NotificationVisibilityProvider;
-import com.android.systemui.statusbar.notification.row.shared.LockscreenOtpRedaction;
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.WifiRepository;
 import com.android.systemui.statusbar.policy.DeviceProvisionedController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
@@ -201,7 +200,7 @@ public class NotificationLockscreenUserManagerImpl implements
                     // the user before calling into DPM
                     sendingUserId = mCurrentUserId;
                     @SuppressLint("MissingPermission")
-                    List<UserInfo> users = mUserManager.getUsers();
+                    List<UserInfo> users = mUserManager.getAliveUsers();
                     for (int i = users.size() - 1; i >= 0; i--) {
                         changed |= updateDpcSettings(users.get(i).id);
                     }
@@ -376,7 +375,7 @@ public class NotificationLockscreenUserManagerImpl implements
 
         // To avoid dependency injection cycle, finish constructing this object before using the
         // KeyguardInteractor. The CoroutineScope will only be null in tests.
-        if (LockscreenOtpRedaction.isEnabled() && coroutineScope != null) {
+        if (coroutineScope != null) {
             mMainExecutor.execute(() -> {
                 JavaAdapterKt.collectFlow(coroutineScope,
                     keyguardInteractor.get().isKeyguardDismissible(),
@@ -774,10 +773,6 @@ public class NotificationLockscreenUserManagerImpl implements
      * This version of the method logs a metric about the request.
      */
     private boolean shouldShowSensitiveContentRedactedView(NotificationEntry ent) {
-        if (!LockscreenOtpRedaction.isEnabled()) {
-            return false;
-        }
-
         if (ent.getRanking() == null || !ent.getRanking().hasSensitiveContent()) {
             return false;
         }
@@ -830,8 +825,7 @@ public class NotificationLockscreenUserManagerImpl implements
     // notification's "when" time, or the notification entry creation time
     private long getEarliestNotificationTime(NotificationEntry notif) {
         long notifWhenWallClock = notif.getSbn().getNotification().getWhen();
-        long creationTimeDelta = UseElapsedRealtimeForCreationTime.getCurrentTime()
-                - notif.getCreationTime();
+        long creationTimeDelta = SystemClock.elapsedRealtime() - notif.getCreationTime();
 
         long creationTimeWallClock = System.currentTimeMillis() - creationTimeDelta;
         return Math.min(notifWhenWallClock, creationTimeWallClock);

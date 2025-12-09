@@ -85,7 +85,7 @@ public class TimeoutRecord {
     public final AnrLatencyTracker mLatencyTracker;
 
     /** A handle to the timer that expired.  A value of null means "no timer". */
-    private AutoCloseable mExpiredTimer;
+    private Object mExpiredTimer;
 
     private static final String TAG = "TimeoutRecord";
 
@@ -209,30 +209,22 @@ public class TimeoutRecord {
     }
 
     /**
-     * Record the timer that expired. The argument is an opaque handle. If an expired timer had
-     * already been set, close it now.
+     * Record the timer that expired. The argument is an opaque handle.
      */
     @NonNull
-    public TimeoutRecord setExpiredTimer(@Nullable AutoCloseable handle) {
-        // Close the current value of mExpiredTimer, if it not null.
-        closeExpiredTimer();
+    public TimeoutRecord setExpiredTimer(@Nullable Object handle) {
         mExpiredTimer = handle;
         return this;
     }
 
-    /** Close the ExpiredTimer, if one is present. getExpiredTimer will return null after this. */
-    public void closeExpiredTimer() {
-        try {
-            if (mExpiredTimer != null) {
-                mExpiredTimer.close();
-                mExpiredTimer = null;
-            }
-        } catch (Exception e) {
-            // mExpiredTimer.close() should never, ever throw.  If it does, just rethrow as a
-            // RuntimeException.
-            throw new RuntimeException(e);
-        }
+    /**
+     * Return the expired timer.
+     */
+    @Nullable
+    public Object getExpiredTimer() {
+        return mExpiredTimer;
     }
+
 
     /**
      * Maps a {@link TimeoutRecord.TimeoutKind} to its corresponding

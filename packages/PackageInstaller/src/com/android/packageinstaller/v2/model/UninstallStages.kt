@@ -17,7 +17,10 @@ package com.android.packageinstaller.v2.model
 
 import android.app.Activity
 import android.app.Notification
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
 import android.graphics.drawable.Drawable
 import com.android.packageinstaller.R
 
@@ -36,25 +39,72 @@ sealed class UninstallStage(val stageCode: Int) {
 class UninstallReady : UninstallStage(STAGE_READY)
 
 data class UninstallUserActionRequired(
-    val title: String,
-    val message: String? = null,
-    val buttonText: String,
+    val titleResId: Int,
+    val messageResId: Int? = null,
+    val positiveButtonResId: Int,
     val appDataSize: Long = 0,
     val appSnippet: PackageUtil.AppSnippet? = null,
+    val isClonedApp: Boolean = false,
+    val isDifferentActivityName: Boolean = false,
+    val isOtherUser: Boolean = false,
+    val userName: String? = null,
+    val targetAppInfo: ApplicationInfo,
+    val targetActivityInfo: ActivityInfo? = null,
 ) : UninstallStage(STAGE_USER_ACTION_REQUIRED) {
 
     val appIcon: Drawable?
         get() = appSnippet?.icon
 
-    val appLabel: String?
-        get() = appSnippet?.let { appSnippet.label as String? }
+    fun getAppLabel(context: Context): String {
+        val appLabel = targetAppInfo.loadSafeLabel(context.packageManager) as String
+        return if (isClonedApp) {
+            context.getString(R.string.string_cloned_app_label, appLabel)
+        } else {
+            appLabel
+        }
+    }
+
+    fun getMessage(context: Context): String? {
+        return messageResId?.let {
+            if (isDifferentActivityName && targetActivityInfo != null) {
+                val activityLabel = targetActivityInfo.loadSafeLabel(context.packageManager)
+                val appLabel = targetAppInfo.loadSafeLabel(context.packageManager)
+                context.getString(it, activityLabel, appLabel)
+            } else if (isClonedApp) {
+                val appLabel = targetAppInfo.loadSafeLabel(context.packageManager)
+                context.getString(it, appLabel)
+            } else {
+                context.getString(it)
+            }
+        }
+    }
+
+    fun getTitle(context: Context): String {
+        return titleResId.let {
+            if (isOtherUser && userName != null) {
+                context.getString(it, userName)
+            } else {
+                context.getString(it)
+            }
+        }
+    }
 }
 
 data class UninstallSuccess(
+    val appInfo: ApplicationInfo,
     val resultIntent: Intent? = null,
     val activityResultCode: Int = 0,
-    val message: String? = null,
-) : UninstallStage(STAGE_SUCCESS)
+    val messageResId: Int? = null,
+    val isCloneApp: Boolean = false,
+) : UninstallStage(STAGE_SUCCESS) {
+
+    fun getMessage(context: Context): String? {
+        return messageResId?.let {
+            val appLabel = appInfo.loadSafeLabel(context.packageManager)
+            context.getString(it, appLabel)
+        }
+    }
+}
 
 data class UninstallFailed(
     val returnResult: Boolean,
@@ -84,11 +134,19 @@ data class UninstallFailed(
     }
 }
 
-data class UninstallAborted(val abortReason: Int) : UninstallStage(STAGE_ABORTED) {
-
+data class UninstallAborted(
+    val abortReason: Int,
+    val appSnippet: PackageUtil.AppSnippet? = null
+) : UninstallStage(STAGE_ABORTED) {
     var dialogTitleResource = 0
     var dialogTextResource = 0
     val activityResultCode = Activity.RESULT_FIRST_USER
+
+    val appIcon: Drawable?
+        get() = appSnippet?.icon
+
+    val appLabel: String?
+        get() = appSnippet?.let { appSnippet.label as String? }
 
     init {
         when (abortReason) {
@@ -97,24 +155,25 @@ data class UninstallAborted(val abortReason: Int) : UninstallStage(STAGE_ABORTED
                 dialogTextResource = R.string.message_uninstall_app_not_found
             }
 
+            ABORT_REASON_UNKNOWN -> {
+                dialogTitleResource = R.string.title_uninstall_failed
+                dialogTextResource = R.string.message_uninstall_failed
+            }
+
             ABORT_REASON_USER_NOT_ALLOWED -> {
                 dialogTitleResource = R.string.title_uninstall_user_not_allowed
                 dialogTextResource = R.string.message_uninstall_user_not_allowed
             }
 
-            ABORT_REASON_UNINSTALL_DONE -> {
+            else -> {
                 dialogTitleResource = 0
                 dialogTextResource = 0
-            }
-
-            else -> {
-                dialogTitleResource = R.string.title_uninstall_failed
-                dialogTextResource = R.string.message_uninstall_failed
             }
         }
     }
 
     companion object {
+        const val ABORT_REASON_UNKNOWN = -1
         const val ABORT_REASON_GENERIC_ERROR = 0
         const val ABORT_REASON_APP_UNAVAILABLE = 1
         const val ABORT_REASON_USER_NOT_ALLOWED = 2

@@ -3,6 +3,8 @@ package com.android.systemui.scene
 import android.view.View
 import com.android.compose.animation.scene.ObservableTransitionState
 import com.android.systemui.classifier.domain.interactor.falsingInteractor
+import com.android.systemui.desktop.domain.interactor.desktopInteractor
+import com.android.systemui.deviceentry.domain.interactor.deviceUnlockedInteractor
 import com.android.systemui.haptics.msdl.msdlPlayer
 import com.android.systemui.keyguard.domain.interactor.keyguardInteractor
 import com.android.systemui.keyguard.ui.viewmodel.aodBurnInViewModel
@@ -11,6 +13,7 @@ import com.android.systemui.keyguard.ui.viewmodel.lightRevealScrimViewModel
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.Kosmos.Fixture
 import com.android.systemui.power.domain.interactor.powerInteractor
+import com.android.systemui.qs.panels.ui.viewmodel.animateQsTilesViewModelFactory
 import com.android.systemui.scene.domain.interactor.onBootTransitionInteractor
 import com.android.systemui.scene.domain.interactor.sceneInteractor
 import com.android.systemui.scene.shared.logger.sceneLogger
@@ -25,6 +28,7 @@ import com.android.systemui.scene.ui.viewmodel.dualShadeEducationalTooltipsViewM
 import com.android.systemui.shade.domain.interactor.shadeInteractor
 import com.android.systemui.shade.domain.interactor.shadeModeInteractor
 import com.android.systemui.statusbar.domain.interactor.remoteInputInteractor
+import com.android.systemui.statusbar.notification.stack.domain.interactor.notificationContainerInteractor
 import com.android.systemui.wallpapers.ui.viewmodel.wallpaperViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.mockito.kotlin.mock
@@ -37,6 +41,7 @@ var Kosmos.sceneKeys by Fixture {
         Scenes.Gone,
         Scenes.Communal,
         Scenes.Dream,
+        Scenes.Occluded,
     )
 }
 
@@ -59,6 +64,7 @@ var Kosmos.sceneContainerConfig by Fixture {
         mapOf(
             Scenes.Gone to 0,
             Scenes.Lockscreen to 0,
+            Scenes.Occluded to 1,
             Scenes.Communal to 1,
             Scenes.Dream to 2,
             Scenes.Shade to 3,
@@ -94,6 +100,8 @@ val Kosmos.sceneContainerViewModelFactory by Fixture {
         ): SceneContainerViewModel =
             SceneContainerViewModel(
                 sceneInteractor = sceneInteractor,
+                desktopInteractor = desktopInteractor,
+                deviceUnlockedInteractor = deviceUnlockedInteractor,
                 falsingInteractor = falsingInteractor,
                 powerInteractor = powerInteractor,
                 shadeModeInteractor = shadeModeInteractor,
@@ -108,8 +116,10 @@ val Kosmos.sceneContainerViewModelFactory by Fixture {
                 burnIn = aodBurnInViewModel,
                 clock = keyguardClockViewModel,
                 onBootTransitionInteractor = onBootTransitionInteractor,
+                notificationContainerInteractor = notificationContainerInteractor,
                 dualShadeEducationalTooltipsViewModelFactory =
                     dualShadeEducationalTooltipsViewModelFactory,
+                animateQsTilesViewModelFactory = animateQsTilesViewModelFactory,
             )
     }
 }

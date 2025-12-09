@@ -29,12 +29,14 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.StringRes
+import com.android.systemui.Flags
 import com.android.systemui.mediaprojection.MediaProjectionCaptureTarget
 import com.android.systemui.res.R
 import com.android.systemui.screenrecord.RecordingServiceStrings
 import com.android.systemui.screenrecord.ScreenMediaRecorder
 import com.android.systemui.screenrecord.ScreenMediaRecorder.SavedRecording
 import com.android.systemui.screenrecord.ScreenRecordingAudioSource
+import com.android.systemui.screenrecord.domain.ScreenRecordingPreferenceUtil
 import com.android.systemui.screenrecord.notification.NotificationInteractor
 import com.android.systemui.screenrecord.notification.ScreenRecordingServiceNotificationInteractor
 import java.util.UUID
@@ -43,7 +45,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val TAG = "ScreenRecordingService"
-private const val CHANNEL_ID = "screen_record"
 
 open class ScreenRecordingService
 protected constructor(
@@ -78,23 +79,25 @@ protected constructor(
             },
         )
 
+    private val backgroundContext = Dispatchers.IO
     private val binder = BinderInterface()
     private val screenMediaRecorderListener: ScreenMediaRecorder.ScreenMediaRecorderListener =
         object : ScreenMediaRecorder.ScreenMediaRecorderListener {
             override fun onStarted() {
-                callback?.onRecordingStarted()
+                launchCallbackAction { onRecordingStarted() }
             }
 
             override fun onInfo(mr: MediaRecorder?, what: Int, extra: Int) {
-                callback?.onRecordingInterrupted(userId, StopReason.STOP_ERROR)
+                launchCallbackAction { onRecordingInterrupted(userId, StopReason.STOP_ERROR) }
             }
 
             override fun onStopped(userId: Int, @StopReason stopReason: Int) {
-                callback?.onRecordingInterrupted(userId, stopReason)
+                launchCallbackAction { onRecordingInterrupted(userId, stopReason) }
             }
         }
 
     private lateinit var notificationInteractor: NotificationInteractor
+    private lateinit var preferenceUtil: ScreenRecordingPreferenceUtil
 
     private var recordingContext: RecordingContext? = null
     private var callback: IScreenRecordingServiceCallback? = null
@@ -102,16 +105,19 @@ protected constructor(
     override fun onCreate() {
         super.onCreate()
         notificationInteractor = createNotificationInteractor()
+        preferenceUtil = ScreenRecordingPreferenceUtil(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
         when (action) {
             ACTION_STOP ->
-                callback?.onRecordingInterrupted(
-                    userId,
-                    intent.getIntExtra(EXTRA_STOP_REASON, StopReason.STOP_UNKNOWN),
-                )
+                launchCallbackAction {
+                    onRecordingInterrupted(
+                        userId,
+                        intent.getIntExtra(EXTRA_STOP_REASON, StopReason.STOP_UNKNOWN),
+                    )
+                }
         }
         return START_NOT_STICKY
     }
@@ -120,15 +126,23 @@ protected constructor(
 
     private fun RecordingContext.startRecording() {
         try {
-            Log.d(tag, "Starting screen recording $this")
-            setShouldShowTouches(shouldShowTaps)
+            Log.d(tag, "Starting screen recording user=$userId $this")
+            if (Flags.restoreShowTapsSetting()) {
+                preferenceUtil.updateShowTaps(shouldShowTaps)
+            } else {
+                setShouldShowTouches(shouldShowTaps)
+            }
             recorder.start()
             notificationInteractor.notifyRecording(
                 notificationId = notificationId,
                 audioSource = audioSource,
             )
         } catch (e: Exception) {
-            setShouldShowTouches(originalShouldShowTouches)
+            if (Flags.restoreShowTapsSetting()) {
+                preferenceUtil.restoreShowTapsSetting()
+            } else {
+                setShouldShowTouches(originalShouldShowTouches)
+            }
             Log.d(tag, "Error starting screen recording", e)
             notificationInteractor.notifyErrorStarting(notificationId)
             showToast(R.string.screenrecord_start_error)
@@ -143,7 +157,10 @@ protected constructor(
                 notificationId = notificationId,
                 audioSource = audioSource,
             )
-            val savedRecording: SavedRecording = withContext(Dispatchers.IO) { recorder.save() }
+            val savedRecording: SavedRecording =
+                withContext(backgroundContext) {
+                    recorder.save().apply { callback?.onRecordingSaved(uri, thumbnail) }
+                }
             onRecordingSaved(this, savedRecording)
         } catch (e: Exception) {
             notificationInteractor.notifyErrorSaving(notificationId)
@@ -159,7 +176,11 @@ protected constructor(
         try {
             Log.d(tag, "Stopping screen recording reason=$reason")
             recordingContext = null
-            setShouldShowTouches(originalShouldShowTouches)
+            if (Flags.restoreShowTapsSetting()) {
+                preferenceUtil.restoreShowTapsSetting()
+            } else {
+                setShouldShowTouches(originalShouldShowTouches)
+            }
             recorder.end(reason)
             coroutineScope.launch { saveRecording() }
         } catch (e: Exception) {
@@ -177,6 +198,10 @@ protected constructor(
 
     private fun getShouldShowTouches(): Boolean =
         Settings.System.getInt(contentResolver, Settings.System.SHOW_TOUCHES, 0) != 0
+
+    private fun launchCallbackAction(action: IScreenRecordingServiceCallback.() -> Unit) {
+        callback?.let { coroutineScope.launch(backgroundContext) { it.action() } }
+    }
 
     private inner class BinderInterface : IScreenRecordingService.Stub() {
 
@@ -231,6 +256,8 @@ protected constructor(
     )
 
     companion object {
+
+        const val CHANNEL_ID = "screen_record"
 
         const val ACTION_STOP =
             "com.android.systemui.screenrecord.ScreenRecordingService.ACTION_STOP"

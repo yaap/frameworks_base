@@ -27,7 +27,6 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.graphics.Region;
-import android.hardware.input.InputManager;
 import android.os.Build;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -66,7 +65,6 @@ import com.android.server.policy.WindowManagerPolicy;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
@@ -805,24 +803,26 @@ public class AccessibilityInputFilter extends InputFilter implements EventStream
         }
 
         if ((mEnabledFeatures & FLAG_FEATURE_MOUSE_KEYS) != 0) {
-            TimeSource systemClockTimeSource = new TimeSource() {
-                @Override
-                public long uptimeMillis() {
-                    return SystemClock.uptimeMillis();
-                }
-            };
-            mMouseKeysInterceptor = new MouseKeysInterceptor(mAms,
-                    Objects.requireNonNull(mContext.getSystemService(InputManager.class)),
-                    Looper.myLooper(),
-                    Display.DEFAULT_DISPLAY,
-                    systemClockTimeSource);
-            addFirstEventHandler(Display.DEFAULT_DISPLAY, mMouseKeysInterceptor);
+            if (mMouseKeysInterceptor == null) {
+                TimeSource systemClockTimeSource = new TimeSource() {
+                    @Override
+                    public long uptimeMillis() {
+                        return SystemClock.uptimeMillis();
+                    }
+                };
+                mMouseKeysInterceptor = new MouseKeysInterceptor(mAms,
+                        mContext,
+                        Looper.myLooper(),
+                        Display.DEFAULT_DISPLAY,
+                        systemClockTimeSource,
+                        mUserId);
+                addFirstEventHandler(Display.DEFAULT_DISPLAY, mMouseKeysInterceptor);
+            }
         }
 
-        if (Flags.enableMagnificationKeyboardControl()
-                && isAnyMagnificationEnabled(mEnabledFeatures)) {
+        if (isAnyMagnificationEnabled(mEnabledFeatures)) {
             mMagnificationKeyHandler = new MagnificationKeyHandler(
-                    mAms.getMagnificationController());
+                    mAms.getMagnificationController(), mAms);
             addFirstEventHandler(Display.DEFAULT_DISPLAY, mMagnificationKeyHandler);
         }
     }
@@ -930,16 +930,11 @@ public class AccessibilityInputFilter extends InputFilter implements EventStream
 
         final MagnificationGestureHandler handler = mMagnificationGestureHandler.get(displayId);
         if (handler != null) {
-            if (Flags.onlyResetMagnificationIfNeededWhenDestroyHandler()) {
-                // With the given enabledFeatures parameter if the magnification feature is still
-                // enabled, which means after the disabling there is a recreating coming, so the
-                // magnification reset is not needed.
-                handler.onDestroy(
-                        /* resetMagnification= */ !isAnyMagnificationEnabled(featuresToBeEnabled));
-            } else {
-                // The old behavior is always resetting the magnification when destroying handler
-                handler.onDestroy(/* resetMagnification= */ true);
-            }
+            // With the given enabledFeatures parameter if the magnification feature is still
+            // enabled, which means after the disabling there is a recreating coming, so the
+            // magnification reset is not needed.
+            handler.onDestroy(
+                    /* resetMagnification= */ !isAnyMagnificationEnabled(featuresToBeEnabled));
             mMagnificationGestureHandler.remove(displayId);
         }
 
@@ -1498,3 +1493,4 @@ public class AccessibilityInputFilter extends InputFilter implements EventStream
         }
     }
 }
+

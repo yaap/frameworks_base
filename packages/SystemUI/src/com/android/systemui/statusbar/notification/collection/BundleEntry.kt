@@ -15,6 +15,7 @@
  */
 package com.android.systemui.statusbar.notification.collection
 
+import com.android.systemui.statusbar.notification.icon.IconPack
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow
 import com.android.systemui.statusbar.notification.row.data.repository.BundleRepository
 import java.util.Collections
@@ -42,6 +43,8 @@ class BundleEntry(spec: BundleSpec) : PipelineEntry(spec.key) {
     val isSensitive: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
     var row: ExpandableNotificationRow? = null
+
+    var icons: IconPack = IconPack.buildEmptyPack(null)
 
     private val _children = ArrayList<ListEntry>()
 
@@ -73,6 +76,14 @@ class BundleEntry(spec: BundleSpec) : PipelineEntry(spec.key) {
 
     override fun wasAttachedInPreviousPass(): Boolean {
         return false
+    }
+
+    fun onDensityOrFontScaleChanged() {
+        row?.onDensityOrFontScaleChanged()
+    }
+
+    fun onUiModeChanged() {
+        row?.onUiModeChanged()
     }
 
     /**

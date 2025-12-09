@@ -50,10 +50,6 @@ constexpr bool skip_eglmanager_telemetry() {
 constexpr bool resample_gainmap_regions() {
     return false;
 }
-
-constexpr bool early_preload_gl_context() {
-    return false;
-}
 }  // namespace hwui_flags
 #endif // __linux__
 
@@ -293,9 +289,5 @@ bool Properties::resampleGainmapRegions() {
     return sResampleGainmapRegions;
 }
 
-bool Properties::earlyPreloadGlContext() {
-    return base::GetBoolProperty(PROPERTY_EARLY_PRELOAD_GL_CONTEXT,
-                                 hwui_flags::early_preload_gl_context());
-}
 }  // namespace uirenderer
 }  // namespace android

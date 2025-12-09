@@ -18,7 +18,10 @@ package com.android.systemui.statusbar.notification.row
 
 import android.content.Context
 import android.view.View
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.android.compose.theme.PlatformTheme
@@ -56,10 +59,26 @@ class BundleHeaderGutsContent(context: Context) : GutsContent {
 
         composeView.repeatWhenAttached {
             repeatOnLifecycle(Lifecycle.State.CREATED) {
+                // if we have an attached (visible) bundle, the BE setting and thus the switch must
+                // be 'enabled'
+                viewModel.switchState = true
                 composeView.setContent {
                     // TODO(b/399588047): Check if we can init PlatformTheme once instead of once
                     //  per ComposeView
-                    PlatformTheme { BundleHeaderGuts(viewModel) }
+                    PlatformTheme {
+                        BundleHeaderGuts(
+                            viewModel,
+                            modifier =
+                                Modifier.semantics(mergeDescendants = true) {
+                                    onLongClick(
+                                        action = {
+                                            viewModel.onAllyLongClicked()
+                                            true
+                                        }
+                                    )
+                                },
+                        )
+                    }
                 }
             }
         }

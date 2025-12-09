@@ -10,17 +10,18 @@ import android.platform.test.annotations.EnableFlags
 import android.platform.test.annotations.RequiresFlagsDisabled
 import android.platform.test.annotations.RequiresFlagsEnabled
 import android.platform.test.flag.junit.DeviceFlagsValueProvider
-import android.platform.test.flag.junit.FlagsParameterization
-import android.platform.test.flag.junit.FlagsParameterization.allCombinationsOf
 import android.service.quicksettings.Tile
 import android.testing.TestableLooper
 import android.testing.TestableLooper.RunWithLooper
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
+import com.android.dx.mockito.inline.extended.ExtendedMockito
 import com.android.internal.logging.MetricsLogger
 import com.android.settingslib.Utils
 import com.android.settingslib.bluetooth.BatteryLevelsInfo
 import com.android.settingslib.bluetooth.CachedBluetoothDevice
 import com.android.settingslib.flags.Flags.FLAG_REFACTOR_BATTERY_LEVEL_DISPLAY
+import com.android.settingslib.satellite.SatelliteDialogUtils
 import com.android.systemui.Flags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.bluetooth.ui.viewModel.BluetoothDetailsContentViewModel
@@ -35,9 +36,7 @@ import com.android.systemui.qs.QSHost
 import com.android.systemui.qs.QsEventLogger
 import com.android.systemui.qs.flags.QSComposeFragment
 import com.android.systemui.qs.flags.QsDetailedView
-import com.android.systemui.qs.flags.QsInCompose.isEnabled
 import com.android.systemui.qs.logging.QSLogger
-import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.tileimpl.QSTileImpl.DrawableIconWithRes
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.policy.BluetoothController
@@ -50,6 +49,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mock
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
@@ -58,17 +58,11 @@ import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
-import platform.test.runner.parameterized.ParameterizedAndroidJunit4
-import platform.test.runner.parameterized.Parameters
 
-@RunWith(ParameterizedAndroidJunit4::class)
+@RunWith(AndroidJUnit4::class)
 @RunWithLooper(setAsMainLooper = true)
 @SmallTest
-class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
-
-    init {
-        mSetFlagsRule.setFlagsParameterization(flags)
-    }
+class BluetoothTileTest : SysuiTestCase() {
 
     @get:Rule val checkFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule()
 
@@ -345,18 +339,20 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     @Test
     @EnableFlags(QSComposeFragment.FLAG_NAME)
     fun disableBluetooth_transientTurningOff() {
-        enableBluetooth()
-        tile.refreshState()
-        testableLooper.processAllMessages()
+        bypassingSatelliteDialog {
+            enableBluetooth()
+            tile.refreshState()
+            testableLooper.processAllMessages()
 
-        tile.handleSecondaryClick(null)
-        testableLooper.processAllMessages()
+            tile.handleSecondaryClick(null)
+            testableLooper.processAllMessages()
 
-        val state = tile.state
+            val state = tile.state
 
-        assertThat(state.state).isEqualTo(Tile.STATE_INACTIVE)
-        assertThat(state.isTransient).isTrue()
-        assertThat(state.icon).isEqualTo(createExpectedIcon(R.drawable.qs_bluetooth_icon_off))
+            assertThat(state.state).isEqualTo(Tile.STATE_INACTIVE)
+            assertThat(state.isTransient).isTrue()
+            assertThat(state.icon).isEqualTo(createExpectedIcon(R.drawable.qs_bluetooth_icon_off))
+        }
     }
 
     @Test
@@ -461,6 +457,30 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
         tile.handleUpdateState(state, /* arg= */ null)
     }
 
+    private inline fun bypassingSatelliteDialog(testBody: () -> Unit) {
+        val mockitoSession =
+            ExtendedMockito.mockitoSession()
+                .mockStatic(SatelliteDialogUtils::class.java)
+                .startMocking()
+
+        whenever(
+                SatelliteDialogUtils.mayStartSatelliteWarningDialog(
+                    eq(mContext),
+                    eq(tile),
+                    anyInt(),
+                    any(),
+                )
+            )
+            .thenAnswer { invocation ->
+                (invocation.arguments[3] as (Boolean) -> Unit).invoke(true)
+                mock<Job>()
+            }
+
+        testBody()
+
+        mockitoSession.finishMocking()
+    }
+
     private fun listenToDeviceBatteryLevelsInfo(
         state: QSTile.BooleanState,
         cachedDevice: CachedBluetoothDevice,
@@ -477,18 +497,6 @@ class BluetoothTileTest(flags: FlagsParameterization) : SysuiTestCase() {
     }
 
     private fun createExpectedIcon(resId: Int): QSTile.Icon {
-        return if (isEnabled) {
-            DrawableIconWithRes(mContext.getDrawable(resId), resId)
-        } else {
-            QSTileImpl.ResourceIcon.get(resId)
-        }
-    }
-
-    companion object {
-        @JvmStatic
-        @Parameters(name = "{0}")
-        fun getParams(): List<FlagsParameterization> {
-            return allCombinationsOf(QSComposeFragment.FLAG_NAME)
-        }
+        return DrawableIconWithRes(mContext.getDrawable(resId), resId)
     }
 }

@@ -76,7 +76,6 @@ import java.util.stream.Collectors;
  * is not reliable.
  */
 @SystemService(Context.SATELLITE_SERVICE)
-@FlaggedApi(Flags.FLAG_SATELLITE_STATE_CHANGE_LISTENER)
 @RequiresFeature(PackageManager.FEATURE_TELEPHONY_SATELLITE)
 public final class SatelliteManager {
     private static final String TAG = "SatelliteManager";
@@ -859,7 +858,6 @@ public final class SatelliteManager {
      * @see SatelliteStateChangeListener
      * @see TelephonyManager#hasCarrierPrivileges()
      */
-    @FlaggedApi(Flags.FLAG_SATELLITE_STATE_CHANGE_LISTENER)
     @RequiresPermission(anyOf = {android.Manifest.permission.READ_BASIC_PHONE_STATE,
             android.Manifest.permission.READ_PRIVILEGED_PHONE_STATE,
             android.Manifest.permission.READ_PHONE_STATE,
@@ -888,7 +886,6 @@ public final class SatelliteManager {
      * @see SatelliteStateChangeListener
      * @see TelephonyManager#hasCarrierPrivileges()
      */
-    @FlaggedApi(Flags.FLAG_SATELLITE_STATE_CHANGE_LISTENER)
     @RequiresPermission(anyOf = {android.Manifest.permission.READ_BASIC_PHONE_STATE,
             android.Manifest.permission.READ_PRIVILEGED_PHONE_STATE,
             android.Manifest.permission.READ_PHONE_STATE,
@@ -1898,7 +1895,6 @@ public final class SatelliteManager {
                                                 provisioned)));
                             }
 
-                            @FlaggedApi(Flags.FLAG_CARRIER_ROAMING_NB_IOT_NTN)
                             @Override
                             public void onSatelliteSubscriptionProvisionStateChanged(
                                     @NonNull List<SatelliteSubscriberProvisionStatus>
@@ -3124,8 +3120,12 @@ public final class SatelliteManager {
             } else {
                 throw new IllegalStateException("Telephony service is null.");
             }
+        } catch (IllegalStateException ex) {
+            loge("registerForNtnSignalStrengthChanged() IllegalStateException: " + ex);
+            throw ex;
         } catch (RemoteException ex) {
             loge("registerForNtnSignalStrengthChanged() RemoteException: " + ex);
+            // Treat other remote exceptions as fatal system errors.
             ex.rethrowAsRuntimeException();
         }
     }

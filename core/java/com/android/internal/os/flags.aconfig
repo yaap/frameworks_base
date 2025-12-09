@@ -44,13 +44,6 @@ flag {
 }
 
 flag {
-    name: "enable_media_and_location_preload"
-    namespace: "system_performance"
-    description: "Enables zygote preload of non-BCP media and location libraries."
-    bug: "241474956"
-}
-
-flag {
     name: "debug_store_enabled"
     namespace: "stability"
     description: "If the debug store is enabled."
@@ -66,4 +59,12 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "zygote_early_fifo_boost"
+    namespace: "watch_software_performance"
+    description: "Enables zygote boosting to fifo priority for top-app launches when fifo_ui is enabled"
+    bug: "397918406"
+    is_fixed_read_only: true
 }

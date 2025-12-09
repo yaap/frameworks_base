@@ -19,6 +19,7 @@ package com.android.settingslib.metadata
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import java.util.concurrent.CancellationException
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 
 /** A node in preference hierarchy that is associated with [PreferenceMetadata]. */
 open class PreferenceHierarchyNode internal constructor(val metadata: PreferenceMetadata) {
@@ -55,7 +57,7 @@ class PreferenceHierarchy : PreferenceHierarchyNode {
      * Each item is either [PreferenceHierarchyNode], [PreferenceHierarchy] or [Deferred] (async sub
      * hierarchy).
      */
-    private val children = mutableListOf<Any>()
+    @VisibleForTesting internal val children = mutableListOf<Any>()
 
     internal constructor(context: Context, group: PreferenceGroup) : super(group) {
         this.context = context
@@ -115,8 +117,6 @@ class PreferenceHierarchy : PreferenceHierarchyNode {
      * Adds a sub hierarchy with coroutine.
      *
      * Notes:
-     * - [PreferenceLifecycleProvider] is not supported for [PreferenceMetadata] added to the async
-     *   hierarchy.
      * - As it is async, coroutine could be finished anytime. Consider specify an order explicitly
      *   to achieve deterministic hierarchy.
      * - The sub hierarchy is flattened into current hierarchy.
@@ -172,7 +172,7 @@ class PreferenceHierarchy : PreferenceHierarchyNode {
     private fun findPreference(key: String): Pair<PreferenceHierarchy, Int>? {
         children.forEachIndexed { index, node ->
             if (node !is PreferenceHierarchyNode) return@forEachIndexed
-            if (node.metadata.key == key) return this to index
+            if (node.metadata.bindingKey == key) return this to index
             if (node is PreferenceHierarchy) {
                 val result = node.findPreference(key)
                 if (result != null) return result
@@ -189,7 +189,7 @@ class PreferenceHierarchy : PreferenceHierarchyNode {
     @JvmOverloads
     fun addGroup(group: PreferenceGroup, order: Int? = null): PreferenceHierarchy =
         PreferenceHierarchy(context, group).also {
-            this.order = order
+            it.order = order
             children.add(it)
         }
 
@@ -280,6 +280,17 @@ class PreferenceHierarchy : PreferenceHierarchyNode {
         }
     }
 
+    /** Await until any child is available to be processed immediately. */
+    suspend fun awaitAnyChild() {
+        if (children.isEmpty()) return
+        for (child in children) if (child !is Deferred<*>) return
+        select<Unit> {
+            for (child in children) {
+                if (child is Deferred<*>) child.onAwait { it }
+            }
+        }
+    }
+
     /**
      * Traversals preference hierarchy recursively.
      *
@@ -336,7 +347,7 @@ class PreferenceHierarchy : PreferenceHierarchyNode {
      * Note: sub async hierarchy will not be searched, use [findAsync] if needed.
      */
     fun find(key: String): PreferenceMetadata? {
-        if (metadata.key == key) return metadata
+        if (metadata.bindingKey == key) return metadata
         for (child in children) {
             if (child is Deferred<*>) continue
             if (child is PreferenceHierarchy) {
@@ -344,7 +355,7 @@ class PreferenceHierarchy : PreferenceHierarchyNode {
                 if (result != null) return result
             } else {
                 child as PreferenceHierarchyNode
-                if (child.metadata.key == key) return child.metadata
+                if (child.metadata.bindingKey == key) return child.metadata
             }
         }
         return null

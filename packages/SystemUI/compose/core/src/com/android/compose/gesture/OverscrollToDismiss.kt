@@ -17,6 +17,10 @@
 package com.android.compose.gesture
 
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerType
@@ -37,13 +41,14 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.android.mechanics.DistanceGestureContext
 import com.android.mechanics.MotionValue
-import com.android.mechanics.debug.findMotionValueDebugger
+import com.android.mechanics.debug.DebugMotionValueNode
 import com.android.mechanics.effects.MagneticDetach
 import com.android.mechanics.effects.MagneticDetach.Defaults.AttachDetachState
 import com.android.mechanics.spec.InputDirection
 import com.android.mechanics.spec.SemanticKey
-import com.android.mechanics.spec.builder.MotionBuilderContext
+import com.android.mechanics.spec.builder.ComposeMotionBuilderContext
 import com.android.mechanics.spec.builder.fixedSpatialValueSpec
+import com.android.mechanics.spec.builder.motionBuilderContext
 import com.android.mechanics.spec.builder.spatialMotionSpec
 import com.android.mechanics.spec.with
 import com.android.mechanics.spring.SpringParameters
@@ -52,27 +57,20 @@ import kotlin.math.sign
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/**
- * "Swipe to dismiss" effect that supports nested scrolling.
- *
- * TODO: Once b/413283893 is done, motionBuilderContext can be read internally via
- *   CompositionLocalConsumerModifierNode, instead of passing it.
- */
+/** "Swipe to dismiss" effect that supports nested scrolling. */
 fun Modifier.overscrollToDismiss(
-    motionBuilderContext: MotionBuilderContext,
     orientation: Orientation = Orientation.Horizontal,
     enabled: Boolean = true,
     onDismissed: () -> Unit,
-) = this.then(OverscrollToDismissElement(motionBuilderContext, orientation, enabled, onDismissed))
+) = this.then(OverscrollToDismissElement(orientation, enabled, onDismissed))
 
 private data class OverscrollToDismissElement(
-    val motionBuilderContext: MotionBuilderContext,
     val orientation: Orientation,
     val enabled: Boolean,
     val onDismissed: () -> Unit,
 ) : ModifierNodeElement<OverscrollToDismissNode>() {
     override fun create(): OverscrollToDismissNode {
-        return OverscrollToDismissNode(orientation, enabled, motionBuilderContext, onDismissed)
+        return OverscrollToDismissNode(orientation, enabled, onDismissed)
     }
 
     override fun update(node: OverscrollToDismissNode) {
@@ -89,7 +87,6 @@ private data class OverscrollToDismissElement(
 private class OverscrollToDismissNode(
     orientation: Orientation,
     enabled: Boolean,
-    var motionBuilderContext: MotionBuilderContext,
     var onDismissed: () -> Unit,
 ) :
     DelegatingNode(),
@@ -106,12 +103,17 @@ private class OverscrollToDismissNode(
     private val gestureContext =
         DistanceGestureContext(0f, InputDirection.Max, directionChangeSlop = 1f)
 
-    private val motionValue =
-        MotionValue(
-            gestureContext::dragOffset,
-            gestureContext,
-            motionBuilderContext.fixedSpatialValueSpec(0f),
-        )
+    private var dragState: DragState by mutableStateOf(DragState.Idle)
+
+    enum class DragState {
+        Idle,
+        Dragging,
+        Dismissed,
+    }
+
+    private lateinit var motionValue: MotionValue
+
+    private lateinit var motionBuilderContext: ComposeMotionBuilderContext
 
     private var delegateNode =
         delegate(NestedDraggableRootNode(this, orientation, null, enabled, true))
@@ -125,6 +127,29 @@ private class OverscrollToDismissNode(
     private var motionValueJob: Job? = null
 
     override fun onAttach() {
+        motionBuilderContext = motionBuilderContext()
+        val spec = derivedStateOf {
+            with(motionBuilderContext) {
+                when (dragState) {
+                    DragState.Idle -> fixedSpatialValueSpec(0f, SnapBackSpring)
+                    DragState.Dragging -> spatialMotionSpec { after(0f, MagneticDetach()) }
+                    DragState.Dismissed ->
+                        fixedSpatialValueSpec(
+                            contentBoxWidth.toFloat(),
+                            SnapBackSpring,
+                            listOf(isDismissedState with true),
+                        )
+                }
+            }
+        }
+
+        motionValue =
+            MotionValue(
+                input = { gestureContext.dragOffset },
+                gestureContext = gestureContext,
+                spec = spec::value,
+            )
+        delegate(DebugMotionValueNode(motionValue))
         onObservedReadsChanged()
         motionValueJob = coroutineScope.launch { keepRunningUntilDismissed() }
     }
@@ -161,7 +186,7 @@ private class OverscrollToDismissNode(
     ): NestedDraggable.Controller {
         overscrollSign = sign
         gestureContext.reset(dragOffset = motionValue.output, direction = InputDirection.Max)
-        motionValue.spec = motionBuilderContext.spatialMotionSpec { after(0f, MagneticDetach()) }
+        dragState = DragState.Dragging
 
         return this
     }
@@ -187,31 +212,17 @@ private class OverscrollToDismissNode(
                 currentState == MagneticDetach.State.Attached ||
                     (currentState == MagneticDetach.State.Detached && isFlingInOppositeDirection)
 
-            motionValue.spec =
-                if (settleAttached) {
-                    motionBuilderContext.fixedSpatialValueSpec(0f, SnapBackSpring)
-                } else {
-                    motionBuilderContext.fixedSpatialValueSpec(
-                        contentBoxWidth.toFloat(),
-                        SnapBackSpring,
-                        listOf(isDismissedState with true),
-                    )
-                }
+            dragState = if (settleAttached) DragState.Idle else DragState.Dismissed
         }
         return velocity
     }
 
     private suspend fun keepRunningUntilDismissed() {
-        val debuggerHandle = findMotionValueDebugger()?.register(motionValue)
-        try {
-            motionValue.keepRunningWhile {
-                val isDismissed = get(isDismissedState) ?: false
-                !(isDismissed && isStable)
-            }
-            onDismissed()
-        } finally {
-            debuggerHandle?.dispose()
+        motionValue.keepRunningWhile {
+            val isDismissed = get(isDismissedState) ?: false
+            !(isDismissed && isStable)
         }
+        onDismissed()
     }
 
     companion object {

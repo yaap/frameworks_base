@@ -391,7 +391,7 @@ class BundleCoordinatorTest : SysuiTestCase() {
 
     @EnableFlags(NotificationBundleUi.FLAG_NAME)
     @Test
-    fun appDataUpdater_twoNotifsWhileCollapsed_emptyAfterExpand() {
+    fun appDataUpdater_twoNotifsWhileExpanded_updatedWhenRemoved() = runTest {
         val bundle = BundleEntry(TEST_BUNDLE_SPEC)
         bundle.bundleRepository.state =
             MutableSceneTransitionLayoutState(BundleHeader.Scenes.Expanded, MotionScheme.standard())
@@ -408,10 +408,16 @@ class BundleCoordinatorTest : SysuiTestCase() {
         bundle.addChild(notif1)
         bundle.addChild(notif2)
 
-        bundle.bundleRepository.appDataList.value = listOf(AppData(pkg1, user1, time1))
+        coordinator.bundleAppDataUpdater.onBeforeRenderList(listOf(bundle))
+
+        assertThat(currentValue(bundle.bundleRepository.appDataList))
+            .containsExactly(AppData(pkg1, user1, time1), AppData(pkg2, user2, time2))
+
+        bundle.removeChild(notif1)
 
         coordinator.bundleAppDataUpdater.onBeforeRenderList(listOf(bundle))
-        assertThat(bundle.bundleRepository.appDataList.value).isEmpty()
+        assertThat(currentValue(bundle.bundleRepository.appDataList))
+            .containsExactly(AppData(pkg2, user2, time2))
     }
 
     @EnableFlags(NotificationBundleUi.FLAG_NAME)
@@ -498,7 +504,7 @@ class BundleCoordinatorTest : SysuiTestCase() {
         val bundle = BundleEntry(TEST_BUNDLE_SPEC)
         bundle.addChild(NotificationEntryBuilder().build())
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(1)
     }
 
@@ -510,7 +516,7 @@ class BundleCoordinatorTest : SysuiTestCase() {
         groupEntry.rawChildren.add(NotificationEntryBuilder().build())
         bundle.addChild(groupEntry)
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(2)
     }
 
@@ -527,7 +533,7 @@ class BundleCoordinatorTest : SysuiTestCase() {
         groupEntry2.rawChildren.add(NotificationEntryBuilder().build())
         bundle.addChild(groupEntry2)
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(3)
     }
 
@@ -540,7 +546,7 @@ class BundleCoordinatorTest : SysuiTestCase() {
         bundle.addChild(groupEntry1)
         bundle.addChild(NotificationEntryBuilder().build())
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(2)
     }
 
@@ -555,12 +561,12 @@ class BundleCoordinatorTest : SysuiTestCase() {
         groupEntry1.rawChildren.add(NotificationEntryBuilder().build())
         bundle.addChild(groupEntry1)
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(2)
 
         bundle.removeChild(directNotifChild)
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(1)
     }
 
@@ -572,11 +578,11 @@ class BundleCoordinatorTest : SysuiTestCase() {
         bundle.addChild(groupEntry1)
         bundle.addChild(NotificationEntryBuilder().build())
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(2)
 
         groupEntry1.rawChildren.clear()
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(1)
     }
 
@@ -588,12 +594,12 @@ class BundleCoordinatorTest : SysuiTestCase() {
         bundle.addChild(groupEntry1)
         bundle.addChild(NotificationEntryBuilder().build())
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(2)
 
         bundle.clearChildren()
 
-        coordinator.bundleCountUpdater.onBeforeRenderList(listOf(bundle))
+        coordinator.bundleCountUpdater.onBeforeFinalizeFilter(listOf(bundle))
         assertThat(bundle.bundleRepository.numberOfChildren).isEqualTo(0)
     }
 

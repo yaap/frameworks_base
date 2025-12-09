@@ -90,6 +90,7 @@ import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.qs.flags.QsWifiConfig;
 import com.android.systemui.res.R;
 import com.android.systemui.shade.ShadeDisplayAware;
+import com.android.systemui.shade.domain.interactor.ShadeDialogContextInteractor;
 import com.android.systemui.statusbar.connectivity.AccessPointController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.statusbar.policy.LocationController;
@@ -174,6 +175,7 @@ public class InternetDetailsContentController implements AccessPointController.A
     @VisibleForTesting
     final Map<Integer, TelephonyCallback>
             mSubIdTelephonyCallbackMap = new HashMap<>();
+    private final ShadeDialogContextInteractor mShadeDialogContextInteractor;
 
     private WifiManager mWifiManager;
     @Nullable
@@ -249,6 +251,9 @@ public class InternetDetailsContentController implements AccessPointController.A
                                 SATELLITE_CONNECTED;
                         default -> SATELLITE_STARTED;
                     };
+                    if (mCallback != null) {
+                        mCallback.onSatelliteModemStateChanged(state);
+                    }
                 }
             };
 
@@ -269,7 +274,11 @@ public class InternetDetailsContentController implements AccessPointController.A
                 }
             };
 
-    protected List<SubscriptionInfo> getSubscriptionInfo() {
+    protected List<SubscriptionInfo> getActiveSubscriptionInfoList() {
+        return mSubscriptionManager.getActiveSubscriptionInfoList();
+    }
+
+    protected List<SubscriptionInfo> getFilteredSubscriptionInfo() {
         return mKeyguardUpdateMonitor.getFilteredSubscriptionInfo();
     }
 
@@ -286,7 +295,9 @@ public class InternetDetailsContentController implements AccessPointController.A
             @Background Handler workerHandler, CarrierConfigTracker carrierConfigTracker,
             LocationController locationController,
             DialogTransitionAnimator dialogTransitionAnimator, WifiStateWorker wifiStateWorker,
-            FeatureFlags featureFlags) {
+            FeatureFlags featureFlags,
+            ShadeDialogContextInteractor shadeDialogContextInteractor
+        ) {
         if (DEBUG) {
             Log.d(TAG, "Init InternetDetailsContentController");
         }
@@ -321,6 +332,7 @@ public class InternetDetailsContentController implements AccessPointController.A
         mConnectedWifiInternetMonitor = new ConnectedWifiInternetMonitor();
         mWifiStateWorker = wifiStateWorker;
         mFeatureFlags = featureFlags;
+        mShadeDialogContextInteractor = shadeDialogContextInteractor;
     }
 
     void onStart(@NonNull InternetDialogCallback callback, boolean canConfigWifi) {
@@ -606,6 +618,10 @@ public class InternetDetailsContentController implements AccessPointController.A
         if (isCarrierNetworkActive) {
             level = getCarrierNetworkLevel();
             numLevels = WifiEntry.WIFI_LEVEL_MAX + 1;
+            if (mCarrierConfigTracker.getInflateSignalStrengthBool(subId)) {
+                level += 1;
+                numLevels += 1;
+            }
         } else if (mSubscriptionManager != null && shouldInflateSignalStrength(subId)) {
             level += 1;
             numLevels += 1;
@@ -651,7 +667,12 @@ public class InternetDetailsContentController implements AccessPointController.A
 
     private CharSequence getUniqueSubscriptionDisplayName(int subscriptionId, Context context) {
         final Map<Integer, CharSequence> displayNames = getUniqueSubscriptionDisplayNames(context);
-        return displayNames.getOrDefault(subscriptionId, "");
+        CharSequence displayName =  displayNames.getOrDefault(subscriptionId, "");
+        if (DEBUG) {
+            Log.d(TAG, "getUniqueSubscriptionDisplayName(), subscriptionId: " + subscriptionId
+                    + ", displayName:" + displayName);
+        }
+        return displayName;
     }
 
     private Map<Integer, CharSequence> getUniqueSubscriptionDisplayNames(Context context) {
@@ -668,7 +689,7 @@ public class InternetDetailsContentController implements AccessPointController.A
 
         // Map of SubscriptionId to DisplayName
         final Supplier<Stream<DisplayInfo>> originalInfos =
-                () -> getSubscriptionInfo().stream().filter(i -> {
+                () -> getActiveSubscriptionInfoList().stream().filter(i -> {
                     // Filter out null values.
                     return (i != null && i.getDisplayName() != null);
                 }).map(i -> new DisplayInfo(i, i.getDisplayName().toString().trim()));
@@ -738,8 +759,7 @@ public class InternetDetailsContentController implements AccessPointController.A
             return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         }
 
-        SubscriptionInfo subInfo = mSubscriptionManager.getActiveSubscriptionInfo(
-                SubscriptionManager.getActiveDataSubscriptionId());
+        SubscriptionInfo subInfo = mSubscriptionManager.getActiveSubscriptionInfo(activeDataSubId);
         if (subInfo != null && subInfo.getSubscriptionId() != mDefaultDataSubId
                 && !subInfo.isOpportunistic()) {
             int subId = subInfo.getSubscriptionId();
@@ -751,7 +771,40 @@ public class InternetDetailsContentController implements AccessPointController.A
             return subId;
         }
         return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    }
 
+    /**
+     * @return the subId of the visible ActiveDataSubId, otherwise
+     * return {@link SubscriptionManager#INVALID_SUBSCRIPTION_ID}.
+     */
+    int getActiveDataSubId() {
+        // TODO(b/440352380): refactor and reduce the times of API calls
+        int activeDataSubId = SubscriptionManager.getActiveDataSubscriptionId();
+        if (activeDataSubId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+            return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+        }
+        SubscriptionInfo defaultDataSubInfo = mSubscriptionManager.getActiveSubscriptionInfo(
+                mDefaultDataSubId);
+        // get the visible Active SubscriptionInfo List from
+        // KeyguardUpdateMonitor.getFilteredSubscriptionInfo() which is controlled by
+        // CarrierConfigManager.KEY_ALWAYS_SHOW_PRIMARY_SIGNAL_BAR_IN_OPPORTUNISTIC_NETWORK_BOOLEAN.
+        SubscriptionInfo subInfo = getFilteredSubscriptionInfo().stream()
+                .filter(it -> it.getSubscriptionId() == activeDataSubId)
+                .findFirst().orElse(defaultDataSubInfo);
+        if (subInfo != null) {
+            if (DEBUG) {
+                Log.d(TAG, "getActiveDataSubId(), subInfo:" + subInfo);
+            }
+            // register the listen
+            int subId = subInfo.getSubscriptionId();
+            if (mSubIdTelephonyManagerMap.get(subId) == null) {
+                TelephonyManager secondaryTm = mTelephonyManager.createForSubscriptionId(subId);
+                registerInternetTelephonyCallback(secondaryTm, subId);
+                mSubIdTelephonyManagerMap.put(subId, secondaryTm);
+            }
+            return subId;
+        }
+        return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
     }
 
     CharSequence getMobileNetworkTitle(int subId) {
@@ -759,8 +812,12 @@ public class InternetDetailsContentController implements AccessPointController.A
     }
 
     String getMobileNetworkSummary(int subId) {
-        String description = getNetworkTypeDescription(mContext, mConfig, subId);
-        return getMobileSummary(mContext, description, subId);
+        String networkTypeDescription = getNetworkTypeDescription(mContext, mConfig, subId);
+        if (DEBUG) {
+            Log.d(TAG,
+                    "getMobileNetworkSummary(), NetworkTypeDescription:" + networkTypeDescription);
+        }
+        return getMobileSummary(mContext, networkTypeDescription, subId);
     }
 
     /**
@@ -770,6 +827,10 @@ public class InternetDetailsContentController implements AccessPointController.A
             int subId) {
         TelephonyDisplayInfo telephonyDisplayInfo = mSubIdTelephonyDisplayInfoMap.getOrDefault(
                 subId, DEFAULT_TELEPHONY_DISPLAY_INFO);
+        if (DEBUG) {
+            Log.d(TAG, "getNetworkTypeDescription(), subId:" + subId
+                    + ",telephonyDisplayInfo:" + telephonyDisplayInfo);
+        }
         String iconKey = getIconKey(telephonyDisplayInfo);
 
         if (mapIconSets(config) == null || mapIconSets(config).get(iconKey) == null) {
@@ -798,16 +859,19 @@ public class InternetDetailsContentController implements AccessPointController.A
             return context.getString(R.string.mobile_data_off_summary);
         }
         String summary = networkTypeDescription;
-        boolean isForDds = subId == mDefaultDataSubId;
-        int activeSubId = getActiveAutoSwitchNonDdsSubId();
-        boolean isOnNonDds = activeSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+        int activeDataSubId = getActiveDataSubId();
+        boolean isForVisibleDds = subId == activeDataSubId;
+        int activeAutoSwitchNonDdsSubId = getActiveAutoSwitchNonDdsSubId();
+        boolean isOnNonDds =
+                activeAutoSwitchNonDdsSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         // Set network description for the carrier network when connecting to the carrier network
         // under the airplane mode ON.
         if (activeNetworkIsCellular() || isCarrierNetworkActive()) {
             summary = context.getString(
                     com.android.settingslib.R.string.preference_summary_default_combination,
                     context.getString(
-                            isForDds // if nonDds is active, explains Dds status as poor connection
+                            isForVisibleDds
+                                    // if nonDds is active, explains Dds status as poor connection
                                     ? (isOnNonDds ? R.string.mobile_data_poor_connection
                                     : R.string.mobile_data_connection_active)
                                     : R.string.mobile_data_temp_connection_active),
@@ -831,17 +895,6 @@ public class InternetDetailsContentController implements AccessPointController.A
 
     void startActivityForDialog(Intent intent) {
         mActivityStarter.startActivity(intent, false /* dismissShade */);
-    }
-
-    // Closes the dialog first, as the WEP dialog is in a different process and can have weird
-    // interactions otherwise.
-    void startActivityForDialogDismissDialogFirst(Intent intent, View view) {
-        ActivityTransitionAnimator.Controller controller =
-                mDialogTransitionAnimator.createActivityTransitionController(view);
-        if (mCallback != null) {
-            mCallback.dismissDialog();
-        }
-        mActivityStarter.startActivity(intent, false /* dismissShade */, controller);
     }
 
     void launchNetworkSetting(View view) {
@@ -1063,8 +1116,7 @@ public class InternetDetailsContentController implements AccessPointController.A
         mTelephonyManager.setDataEnabledForReason(TelephonyManager.DATA_ENABLED_REASON_USER,
                 enabled);
         if (disableOtherSubscriptions) {
-            final List<SubscriptionInfo> subInfoList =
-                    mSubscriptionManager.getActiveSubscriptionInfoList();
+            final List<SubscriptionInfo> subInfoList = getActiveSubscriptionInfoList();
             if (subInfoList != null) {
                 for (SubscriptionInfo subInfo : subInfoList) {
                     // We never disable mobile data for opportunistic subscriptions.
@@ -1515,11 +1567,13 @@ public class InternetDetailsContentController implements AccessPointController.A
     }
 
     void makeOverlayToast(int stringId) {
-        final Resources res = mContext.getResources();
+        final Context displaySpecificContext = mShadeDialogContextInteractor.getContext();
+        final Resources res = displaySpecificContext.getResources();
 
-        final SystemUIToast systemUIToast = mToastFactory.createToast(mContext, mContext,
-                res.getString(stringId), mContext.getPackageName(), UserHandle.myUserId(),
-                res.getConfiguration().orientation);
+        final SystemUIToast systemUIToast = mToastFactory.createToast(mContext,
+            displaySpecificContext,
+            res.getString(stringId), mContext.getPackageName(), UserHandle.myUserId(),
+            res.getConfiguration().orientation);
         if (systemUIToast == null) {
             return;
         }
@@ -1545,8 +1599,8 @@ public class InternetDetailsContentController implements AccessPointController.A
         if ((absGravity & Gravity.VERTICAL_GRAVITY_MASK) == Gravity.FILL_VERTICAL) {
             params.verticalWeight = TOAST_PARAMS_VERTICAL_WEIGHT;
         }
-
-        mWindowManager.addView(toastView, params);
+        WindowManager displayWm = displaySpecificContext.getSystemService(WindowManager.class);
+        displayWm.addView(toastView, params);
 
         Animator inAnimator = systemUIToast.getInAnimation();
         if (inAnimator != null) {

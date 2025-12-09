@@ -27,14 +27,15 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowManager
 import android.widget.FrameLayout
-import com.android.systemui.plugins.clocks.ClockController
-import com.android.systemui.plugins.clocks.ClockFaceController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFaceController
 import com.android.systemui.res.R
 import com.android.systemui.shade.shared.flag.ShadeWindowGoesAround
 import com.android.systemui.shared.clocks.ClockRegistry
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.DisposableHandle
 
 /** [Presentation] shown in connected displays while on keyguard. */
 @Deprecated("Use ConnectedDisplayConstraintLayoutKeyguardPresentation instead.")
@@ -56,6 +57,7 @@ constructor(
     private lateinit var rootView: FrameLayout
     private var clock: View? = null
     private lateinit var faceController: ClockFaceController
+    private var bindHandle: DisposableHandle? = null
 
     private val clockChangedListener =
         object : ClockRegistry.ClockChangeListener {
@@ -109,12 +111,14 @@ constructor(
 
     override fun onAttachedToWindow() {
         clockRegistry.registerClockChangeListener(clockChangedListener)
-        clockEventController.registerListeners(clock!!)
+        clockEventController.registerListeners()
+        bindHandle = clockEventController.bind(clock!!)
         faceController.animations.enter()
     }
 
     override fun onDetachedFromWindow() {
         clockEventController.unregisterListeners()
+        bindHandle?.dispose()
         clockRegistry.unregisterClockChangeListener(clockChangedListener)
 
         super.onDetachedFromWindow()

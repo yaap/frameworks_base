@@ -29,13 +29,13 @@ import com.android.systemui.cursorposition.data.model.CursorPosition
 import com.android.systemui.cursorposition.data.repository.MultiDisplayCursorPositionRepository
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.display.data.repository.DisplayWindowPropertiesRepository
-import com.android.systemui.inputdevice.data.repository.PointerDeviceRepository
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -50,24 +50,24 @@ interface ActionCornerRepository {
  * and uses the window metrics from [DisplayWindowPropertiesRepository] to determine if the cursor
  * is in any action corner.
  */
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 class ActionCornerRepositoryImpl
 @Inject
 constructor(
     cursorRepository: MultiDisplayCursorPositionRepository,
     private val displayWindowPropertiesRepository: DisplayWindowPropertiesRepository,
-    pointerDeviceRepository: PointerDeviceRepository,
     @Background private val backgroundScope: CoroutineScope,
 ) : ActionCornerRepository {
 
     override val actionCornerState: StateFlow<ActionCornerState> =
-        pointerDeviceRepository.isAnyPointerDeviceConnected
-            .flatMapLatest { isConnected ->
-                if (isConnected) {
-                    cursorRepository.cursorPositions.map(::mapToActionCornerState)
+        cursorRepository.cursorPositions
+            .map(::mapToActionCornerState)
+            .distinctUntilChanged()
+            .debounce { state ->
+                if (state is ActiveActionCorner) {
+                    DEBOUNCE_DELAY
                 } else {
-                    // When not connected, emit an InactiveActionCorner state and then complete this
-                    // inner flow.
-                    flowOf(InactiveActionCorner)
+                    0.milliseconds
                 }
             }
             .stateIn(backgroundScope, SharingStarted.WhileSubscribed(), InactiveActionCorner)
@@ -130,5 +130,6 @@ constructor(
 
     companion object {
         private const val ACTION_CORNER_DP = 8f
+        private val DEBOUNCE_DELAY = 50.milliseconds
     }
 }

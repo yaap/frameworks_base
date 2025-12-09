@@ -54,7 +54,6 @@ import static android.view.flags.Flags.sensitiveContentAppProtection;
 import static android.view.flags.Flags.toolkitFrameRateBySizeReadOnly;
 import static android.view.flags.Flags.toolkitMetricsForFrameRateDecision;
 import static android.view.flags.Flags.toolkitSetFrameRateReadOnly;
-import static android.view.flags.Flags.toolkitVelocityMapSysprop;
 import static android.view.flags.Flags.toolkitViewgroupSetRequestedFrameRateApi;
 import static android.view.flags.Flags.viewVelocityApi;
 import static android.view.inputmethod.Flags.FLAG_HOME_SCREEN_HANDWRITING_DELEGATOR;
@@ -64,8 +63,6 @@ import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFI
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS;
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__SINGLE_TAP;
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__UNKNOWN_CLASSIFICATION;
-import static com.android.window.flags.Flags.FLAG_DELEGATE_UNHANDLED_DRAGS;
-import static com.android.window.flags.Flags.FLAG_SUPPORTS_DRAG_ASSISTANT_TO_MULTIWINDOW;
 import static com.android.window.flags.Flags.reduceChangedExclusionRectsMsgs;
 
 import static java.lang.Math.max;
@@ -957,7 +954,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * Last ID that is given to Views that are no part of activities.
      *
-     * {@hide}
+     * @hide
      */
     public static final int LAST_APP_AUTOFILL_ID = Integer.MAX_VALUE / 2;
 
@@ -1001,7 +998,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * RelativeLayout.LayoutParams would lose margin information. This is fixed on N but target API
      * check is implemented for backwards compatibility.
      *
-     * {@hide}
+     * @hide
      */
     protected static boolean sPreserveMarginParamsInLayoutParamConversion;
 
@@ -1168,7 +1165,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * Mask for use with setFlags indicating bits used for visibility.
-     * {@hide}
+     * @hide
      */
     static final int VISIBILITY_MASK = 0x0000000C;
 
@@ -1582,7 +1579,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      */
     public static final int IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS = 0x8;
 
-    /** {@hide} */
+    /** @hide */
     @IntDef(flag = true, prefix = {"SCROLL_CAPTURE_HINT_"},
             value = {
                     SCROLL_CAPTURE_HINT_AUTO,
@@ -1634,21 +1631,21 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * This view is enabled. Interpretation varies by subclass.
      * Use with ENABLED_MASK when calling setFlags.
-     * {@hide}
+     * @hide
      */
     static final int ENABLED = 0x00000000;
 
     /**
      * This view is disabled. Interpretation varies by subclass.
      * Use with ENABLED_MASK when calling setFlags.
-     * {@hide}
+     * @hide
      */
     static final int DISABLED = 0x00000020;
 
     /**
      * Mask for use with setFlags indicating bits used for indicating whether
      * this view is enabled
-     * {@hide}
+     * @hide
      */
     static final int ENABLED_MASK = 0x00000020;
 
@@ -1656,46 +1653,46 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * This view won't draw. {@link #onDraw(android.graphics.Canvas)} won't be
      * called and further optimizations will be performed. It is okay to have
      * this flag set and a background. Use with DRAW_MASK when calling setFlags.
-     * {@hide}
+     * @hide
      */
     static final int WILL_NOT_DRAW = 0x00000080;
 
     /**
      * Mask for use with setFlags indicating bits used for indicating whether
      * this view is will draw
-     * {@hide}
+     * @hide
      */
     static final int DRAW_MASK = 0x00000080;
 
     /**
      * <p>This view doesn't show scrollbars.</p>
-     * {@hide}
+     * @hide
      */
     static final int SCROLLBARS_NONE = 0x00000000;
 
     /**
      * <p>This view shows horizontal scrollbars.</p>
-     * {@hide}
+     * @hide
      */
     static final int SCROLLBARS_HORIZONTAL = 0x00000100;
 
     /**
      * <p>This view shows vertical scrollbars.</p>
-     * {@hide}
+     * @hide
      */
     static final int SCROLLBARS_VERTICAL = 0x00000200;
 
     /**
      * <p>Mask for use with setFlags indicating bits used for indicating which
      * scrollbars are enabled.</p>
-     * {@hide}
+     * @hide
      */
     static final int SCROLLBARS_MASK = 0x00000300;
 
     /**
      * Indicates that the view should filter touches when its window is obscured.
      * Refer to the class comments for more information about this security feature.
-     * {@hide}
+     * @hide
      */
     static final int FILTER_TOUCHES_WHEN_OBSCURED = 0x00000400;
 
@@ -1712,64 +1709,64 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * <p>This view doesn't show fading edges.</p>
-     * {@hide}
+     * @hide
      */
     static final int FADING_EDGE_NONE = 0x00000000;
 
     /**
      * <p>This view shows horizontal fading edges.</p>
-     * {@hide}
+     * @hide
      */
     static final int FADING_EDGE_HORIZONTAL = 0x00001000;
 
     /**
      * <p>This view shows vertical fading edges.</p>
-     * {@hide}
+     * @hide
      */
     static final int FADING_EDGE_VERTICAL = 0x00002000;
 
     /**
      * <p>Mask for use with setFlags indicating bits used for indicating which
      * fading edges are enabled.</p>
-     * {@hide}
+     * @hide
      */
     static final int FADING_EDGE_MASK = 0x00003000;
 
     /**
      * <p>Indicates this view can be clicked. When clickable, a View reacts
      * to clicks by notifying the OnClickListener.<p>
-     * {@hide}
+     * @hide
      */
     static final int CLICKABLE = 0x00004000;
 
     /**
      * <p>Indicates this view is caching its drawing into a bitmap.</p>
-     * {@hide}
+     * @hide
      */
     static final int DRAWING_CACHE_ENABLED = 0x00008000;
 
     /**
      * <p>Indicates that no icicle should be saved for this view.<p>
-     * {@hide}
+     * @hide
      */
     static final int SAVE_DISABLED = 0x000010000;
 
     /**
      * <p>Mask for use with setFlags indicating bits used for the saveEnabled
      * property.</p>
-     * {@hide}
+     * @hide
      */
     static final int SAVE_DISABLED_MASK = 0x000010000;
 
     /**
      * <p>Indicates that no drawing cache should ever be created for this view.<p>
-     * {@hide}
+     * @hide
      */
     static final int WILL_NOT_CACHE_DRAWING = 0x000020000;
 
     /**
      * <p>Indicates this view can take / keep focus when int touch mode.</p>
-     * {@hide}
+     * @hide
      */
     static final int FOCUSABLE_IN_TOUCH_MODE = 0x00040000;
 
@@ -1846,7 +1843,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * <p>Mask for use with setFlags indicating bits used for the cache
      * quality property.</p>
-     * {@hide}
+     * @hide
      */
     static final int DRAWING_CACHE_QUALITY_MASK = 0x00180000;
 
@@ -1856,7 +1853,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * reacts to long clicks by notifying the OnLongClickListener or showing a
      * context menu.
      * </p>
-     * {@hide}
+     * @hide
      */
     static final int LONG_CLICKABLE = 0x00200000;
 
@@ -1874,7 +1871,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * context click (e.g. a primary stylus button press or right mouse click) by notifying the
      * OnContextClickListener.
      * </p>
-     * {@hide}
+     * @hide
      */
     static final int CONTEXT_CLICKABLE = 0x00800000;
 
@@ -1918,19 +1915,19 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * Mask to check if the scrollbar style is overlay or inset.
-     * {@hide}
+     * @hide
      */
     static final int SCROLLBARS_INSET_MASK = 0x01000000;
 
     /**
      * Mask to check if the scrollbar style is inside or outside.
-     * {@hide}
+     * @hide
      */
     static final int SCROLLBARS_OUTSIDE_MASK = 0x02000000;
 
     /**
      * Mask for scrollbar style.
-     * {@hide}
+     * @hide
      */
     static final int SCROLLBARS_STYLE_MASK = 0x03000000;
 
@@ -1958,13 +1955,13 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * <p>Indicates that the view hierarchy should stop saving state when
      * it reaches this view.  If state saving is initiated immediately at
      * the view, it will be allowed.
-     * {@hide}
+     * @hide
      */
     static final int PARENT_SAVE_DISABLED = 0x20000000;
 
     /**
      * <p>Mask for use with setFlags indicating bits used for PARENT_SAVE_DISABLED.</p>
-     * {@hide}
+     * @hide
      */
     static final int PARENT_SAVE_DISABLED_MASK = 0x20000000;
 
@@ -1972,7 +1969,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * <p>Indicates this view can display a tooltip on hover or long press.</p>
-     * {@hide}
+     * @hide
      */
     static final int TOOLTIP = 0x40000000;
 
@@ -2482,13 +2479,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     // initialization at Zygote.
     /** @hide */
     @VisibleForTesting
-    static final class NoPreloadHolder {
-        private static boolean sToolkitVelocityMapSyspropFlagValue = toolkitVelocityMapSysprop();
+    public static final class NoPreloadHolder {
         private static String sFrameRateSysProp =
                 ViewProperties.vrr_velocity_threshold().orElse("");
 
         static {
-            if (sToolkitVelocityMapSyspropFlagValue && !sFrameRateSysProp.isEmpty()) {
+            if (!sFrameRateSysProp.isEmpty()) {
                 sFrameRateMappings = parseFrameRateMapping(sFrameRateSysProp);
             }
         }
@@ -2499,7 +2495,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
          * @hide
          */
         @VisibleForTesting
-        static int[][] parseFrameRateMapping(String mappings) {
+        public static int[][] parseFrameRateMapping(String mappings) {
             if (mappings.isEmpty()) {
                 return null;
             }
@@ -2721,7 +2717,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * Width as measured during measure pass.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "measurement")
     @UnsupportedAppUsage
@@ -2729,7 +2725,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * Height as measured during measure pass.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "measurement")
     @UnsupportedAppUsage
@@ -2742,14 +2738,14 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * flag while retaining this information until it's needed (at getDisplayList() time and
      * in drawChild(), when we decide to draw a view's children's display lists into our own).
      *
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage
     boolean mRecreateDisplayList = false;
 
     /**
      * The view's identifier.
-     * {@hide}
+     * @hide
      *
      * @see #setId(int)
      * @see #getId()
@@ -2778,7 +2774,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * The view's tag.
-     * {@hide}
+     * @hide
      *
      * @see #setTag(Object)
      * @see #getTag()
@@ -2824,47 +2820,47 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      *  1                                PFLAG_INVALIDATED
      * |-------|-------|-------|-------|
      */
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_WANTS_FOCUS                 = 0x00000001;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_FOCUSED                     = 0x00000002;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_SELECTED                    = 0x00000004;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_IS_ROOT_NAMESPACE           = 0x00000008;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_HAS_BOUNDS                  = 0x00000010;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_DRAWN                       = 0x00000020;
     /**
      * When this flag is set, this view is running an animation on behalf of its
      * children and should therefore not cancel invalidate requests, even if they
      * lie outside of this view's bounds.
      *
-     * {@hide}
+     * @hide
      */
     static final int PFLAG_DRAW_ANIMATION              = 0x00000040;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_SKIP_DRAW                   = 0x00000080;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_REQUEST_TRANSPARENT_REGIONS = 0x00000200;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_DRAWABLE_STATE_DIRTY        = 0x00000400;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_MEASURED_DIMENSION_SET      = 0x00000800;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_FORCE_LAYOUT                = 0x00001000;
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_LAYOUT_REQUIRED             = 0x00002000;
 
     private static final int PFLAG_PRESSED             = 0x00004000;
 
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_DRAWING_CACHE_VALID         = 0x00008000;
     /**
      * Flag used to indicate that this view should be drawn once more (and only once
      * more) after its animation has completed.
-     * {@hide}
+     * @hide
      */
     static final int PFLAG_ANIMATION_STARTED           = 0x00010000;
 
@@ -2873,7 +2869,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * Indicates that the View returned true when onSetAlpha() was called and that
      * the alpha must be restored.
-     * {@hide}
+     * @hide
      */
     static final int PFLAG_ALPHA_SET                   = 0x00040000;
 
@@ -2960,7 +2956,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      */
     private static final int PFLAG_NOTIFY_AUTOFILL_MANAGER_ON_CLICK = 0x20000000;
 
-    /** {@hide} */
+    /** @hide */
     static final int PFLAG_ACTIVATED                   = 0x40000000;
 
     /**
@@ -4623,7 +4619,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
     /**
      * The parent this view is attached to.
-     * {@hide}
+     * @hide
      *
      * @see #getParent()
      */
@@ -4631,7 +4627,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     protected ViewParent mParent;
 
     /**
-     * {@hide}
+     * @hide
      *
      * Not available for general use. If you need help, hang up and then dial one of the following
      * public APIs:
@@ -4653,7 +4649,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     AttachInfo mAttachInfo;
 
     /**
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(flagMapping = {
         @ViewDebug.FlagToString(mask = PFLAG_FORCE_LAYOUT, equals = PFLAG_FORCE_LAYOUT,
@@ -4797,7 +4793,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * The field should not be used directly. Instead {@link #getLayoutParams()} and {@link
      * #setLayoutParams(ViewGroup.LayoutParams)} should be used. The setter guarantees internal
      * state correctness of the class.
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
     protected ViewGroup.LayoutParams mLayoutParams;
@@ -4807,7 +4803,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      *
      * Use {@link #setTransitionVisibility(int)} to change the visibility of this view without
      * triggering updates.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(formatToHexString = true)
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
@@ -4862,7 +4858,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The distance in pixels from the left edge of this view's parent
      * to the left edge of this view.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "layout")
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
@@ -4875,7 +4871,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The distance in pixels from the left edge of this view's parent
      * to the right edge of this view.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "layout")
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
@@ -4883,7 +4879,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The distance in pixels from the top edge of this view's parent
      * to the top edge of this view.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "layout")
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
@@ -4896,7 +4892,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The distance in pixels from the top edge of this view's parent
      * to the bottom edge of this view.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "layout")
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
@@ -4907,7 +4903,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * horizontally.
      * Please use {@link View#getScrollX()} and {@link View#setScrollX(int)} instead of
      * accessing these directly.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "scrolling")
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
@@ -4917,7 +4913,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * vertically.
      * Please use {@link View#getScrollY()} and {@link View#setScrollY(int)} instead of
      * accessing these directly.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "scrolling")
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
@@ -4926,7 +4922,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The final computed left padding in pixels that is used for drawing. This is the distance in
      * pixels between the left edge of this view and the left edge of its content.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "padding")
     @UnsupportedAppUsage
@@ -4934,7 +4930,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The final computed right padding in pixels that is used for drawing. This is the distance in
      * pixels between the right edge of this view and the right edge of its content.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "padding")
     @UnsupportedAppUsage
@@ -4942,7 +4938,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The final computed top padding in pixels that is used for drawing. This is the distance in
      * pixels between the top edge of this view and the top edge of its content.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "padding")
     @UnsupportedAppUsage
@@ -4950,7 +4946,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The final computed bottom padding in pixels that is used for drawing. This is the distance in
      * pixels between the bottom edge of this view and the bottom edge of its content.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(category = "padding")
     @UnsupportedAppUsage
@@ -5196,7 +5192,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         /**
          * Listener used to dispatch focus change events.
          * This field should be made private, so it is hidden from the SDK.
-         * {@hide}
+         * @hide
          */
         @UnsupportedAppUsage
         protected OnFocusChangeListener mOnFocusChangeListener;
@@ -5216,7 +5212,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         /**
          * Listener used to dispatch click events.
          * This field should be made private, so it is hidden from the SDK.
-         * {@hide}
+         * @hide
          */
         @UnsupportedAppUsage
         public OnClickListener mOnClickListener;
@@ -5224,7 +5220,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         /**
          * Listener used to dispatch long click events.
          * This field should be made private, so it is hidden from the SDK.
-         * {@hide}
+         * @hide
          */
         @UnsupportedAppUsage
         protected OnLongClickListener mOnLongClickListener;
@@ -5232,14 +5228,14 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         /**
          * Listener used to dispatch context click events. This field should be made private, so it
          * is hidden from the SDK.
-         * {@hide}
+         * @hide
          */
         protected OnContextClickListener mOnContextClickListener;
 
         /**
          * Listener used to build the context menu.
          * This field should be made private, so it is hidden from the SDK.
-         * {@hide}
+         * @hide
          */
         @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
         protected OnCreateContextMenuListener mOnCreateContextMenuListener;
@@ -5371,7 +5367,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     /**
      * The application environment this view lives in.
      * This field should be made private, so it is hidden from the SDK.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(deepExport = true)
     @UnsupportedAppUsage
@@ -5520,21 +5516,6 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     private ViewTreeObserver mFloatingTreeObserver;
 
     /**
-     * Cache the touch slop from the context that created the view.
-     */
-    private int mTouchSlop;
-
-    /**
-     * Cache the tap timeout from the context that created the view.
-     */
-    private int mTapTimeoutMillis;
-
-    /**
-     * Cache the ambiguous gesture multiplier from the context that created the view.
-     */
-    private float mAmbiguousGestureMultiplier;
-
-    /**
      * Object that handles automatic animation of view properties.
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P, trackingBug = 115609023)
@@ -5635,7 +5616,6 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * DRAG_FLAG_GLOBAL_SAME_APPLICATION takes precedence and the drag will only go to visible
      * windows from the same application.
      */
-    @FlaggedApi(FLAG_DELEGATE_UNHANDLED_DRAGS)
     public static final int DRAG_FLAG_GLOBAL_SAME_APPLICATION = 1 << 12;
 
     /**
@@ -5649,7 +5629,6 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * size or windowing mode. If the system does not launch the intent, it will be canceled via the
      * normal drag and drop flow.
      */
-    @FlaggedApi(FLAG_DELEGATE_UNHANDLED_DRAGS)
     public static final int DRAG_FLAG_START_INTENT_SENDER_ON_UNHANDLED_DRAG = 1 << 13;
 
     /**
@@ -5658,7 +5637,6 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * the current drag gesture. Only the current
      * {@link android.service.voice.VoiceInteractionService} may use this flag.
      */
-    @FlaggedApi(FLAG_SUPPORTS_DRAG_ASSISTANT_TO_MULTIWINDOW)
     public static final int DRAG_FLAG_HIDE_CALLING_TASK_ON_DRAG_START = 1 << 14;
 
     /**
@@ -5905,8 +5883,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     private float mFrameContentVelocity = -1;
 
     @Nullable
-
     private ViewTranslationResponse mViewTranslationResponse;
+
+    private final ViewConfiguration mViewConfiguration;
 
     /**
      * The size in DP that is considered small for VRR purposes, if square.
@@ -6010,11 +5989,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                 (PFLAG2_TEXT_ALIGNMENT_RESOLVED_DEFAULT) |
                 (IMPORTANT_FOR_ACCESSIBILITY_DEFAULT << PFLAG2_IMPORTANT_FOR_ACCESSIBILITY_SHIFT);
 
-        final ViewConfiguration configuration = ViewConfiguration.get(context);
-        mTouchSlop = configuration.getScaledTouchSlop();
-        mTapTimeoutMillis = Flags.viewconfigurationApis()
-                ? configuration.getTapTimeoutMillis() : ViewConfiguration.getTapTimeout();
-        mAmbiguousGestureMultiplier = configuration.getScaledAmbiguousGestureMultiplier();
+        mViewConfiguration = ViewConfiguration.get(context);
 
         setOverScrollMode(OVER_SCROLL_IF_CONTENT_SCROLLS);
         mUserPaddingStart = UNDEFINED_PADDING;
@@ -7018,6 +6993,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     View() {
         mResources = null;
         mRenderNode = RenderNode.create(getClass().getName(), new ViewAnimationHostBridge(this));
+        mViewConfiguration = new ViewConfiguration();
     }
 
     /**
@@ -7274,7 +7250,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         mScrollCache.fadingEdgeLength = a.getDimensionPixelSize(
                 R.styleable.View_fadingEdgeLength,
-                ViewConfiguration.get(mContext).getScaledFadingEdgeLength());
+            mViewConfiguration.getScaledFadingEdgeLength());
     }
 
     /**
@@ -7517,7 +7493,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         scrollabilityCache.scrollBarSize = a.getDimensionPixelSize(
                 com.android.internal.R.styleable.View_scrollbarSize,
-                ViewConfiguration.get(mContext).getScaledScrollBarSize());
+                mViewConfiguration.getScaledScrollBarSize());
 
         Drawable track = a.getDrawable(R.styleable.View_scrollbarTrackHorizontal);
         scrollabilityCache.scrollBar.setHorizontalTrackDrawable(track);
@@ -7676,7 +7652,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      */
     private void initScrollCache() {
         if (mScrollCache == null) {
-            mScrollCache = new ScrollabilityCache(ViewConfiguration.get(mContext), this);
+            mScrollCache = new ScrollabilityCache(mViewConfiguration, this);
         }
     }
 
@@ -13092,19 +13068,28 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
     }
 
-    private void deepCopyRectsObjectRecycling(@NonNull ArrayList<Rect> dest, List<Rect> src) {
-        dest.ensureCapacity(src.size());
-        for (int i = 0; i < src.size(); i++) {
-            if (i < dest.size()) {
-                // Replace if there is an old rect to refresh
-                dest.get(i).set(src.get(i));
+    private void deepCopyRectsObjectRecycling(
+            @NonNull ArrayList<Rect> dest, @NonNull List<Rect> src) {
+        final int srcN = src.size();
+        final int destN = dest.size();
+        dest.ensureCapacity(srcN);
+
+        // Copy over the existing elements in-place.
+        for (int i = 0; i < srcN && i < destN; i++) {
+            final Rect destVal = dest.get(i);
+            final Rect srcVal = src.get(i);
+            if (srcVal == null || destVal == null) {
+                dest.set(i, Rect.copyOrNull(srcVal));
             } else {
-                // Add a rect if the list enlarged
-                dest.add(Rect.copyOrNull(src.get(i)));
+                destVal.set(srcVal);
             }
         }
-        while (dest.size() > src.size()) {
-            // Remove elements if the list shrank
+        // Add new elements if the list needs to grow.
+        for (int i = destN; i < srcN; i++) {
+            dest.add(Rect.copyOrNull(src.get(i)));
+        }
+        // Remove elements if the list needs to shrink.
+        for (int i = destN; i > srcN; i--) {
             dest.removeLast();
         }
     }
@@ -13326,7 +13311,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     List<Rect> collectPreferKeepClearRects() {
         ListenerInfo info = mListenerInfo;
         boolean keepClearForFocus = isFocused()
-                && ViewConfiguration.get(mContext).isPreferKeepClearForFocusEnabled();
+                && mViewConfiguration.isPreferKeepClearForFocusEnabled();
         boolean keepBoundsClear = (info != null && info.mPreferKeepClear) || keepClearForFocus;
         boolean hasCustomKeepClearRects = info != null && info.mKeepClearRects != null;
 
@@ -13349,7 +13334,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     private void updatePreferKeepClearForFocus() {
-        if (ViewConfiguration.get(mContext).isPreferKeepClearForFocusEnabled()) {
+        if (mViewConfiguration.isPreferKeepClearForFocusEnabled()) {
             updatePositionUpdateListener();
             post(this::updateKeepClearRects);
         }
@@ -16868,15 +16853,13 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             // Window is obscured, drop this touch.
             return false;
         }
-        if (android.view.accessibility.Flags.preventA11yNontoolFromInjectingIntoSensitiveViews()) {
-            if (event.isInjectedFromAccessibilityService()
-                    // If the event came from an Accessibility Service that does *not* declare
-                    // itself as AccessibilityServiceInfo#isAccessibilityTool and this View is
-                    // declared sensitive then drop the event.
-                    // Only Accessibility Tools are allowed to interact with sensitive Views.
-                    && !event.isInjectedFromAccessibilityTool() && isAccessibilityDataSensitive()) {
-                return false;
-            }
+        if (event.isInjectedFromAccessibilityService()
+                // If the event came from an Accessibility Service that does *not* declare
+                // itself as AccessibilityServiceInfo#isAccessibilityTool and this View is
+                // declared sensitive then drop the event.
+                // Only Accessibility Tools are allowed to interact with sensitive Views.
+                && !event.isInjectedFromAccessibilityTool() && isAccessibilityDataSensitive()) {
+            return false;
         }
         return true;
     }
@@ -16971,8 +16954,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             // 2) Limits latency from the `ViewConfiguration` API, which may be slow due to feature
             //    flag querying.
             if ((mPrivateFlags4 & PFLAG4_ROTARY_HAPTICS_DETERMINED) == 0) {
-                if (ViewConfiguration.get(mContext)
-                        .isViewBasedRotaryEncoderHapticScrollFeedbackEnabled()) {
+                if (mViewConfiguration.isViewBasedRotaryEncoderHapticScrollFeedbackEnabled()) {
                     mPrivateFlags4 |= PFLAG4_ROTARY_HAPTICS_ENABLED;
                 }
                 mPrivateFlags4 |= PFLAG4_ROTARY_HAPTICS_DETERMINED;
@@ -17573,7 +17555,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                         setPressed(true, x, y);
                     }
                     checkForLongClick(
-                            ViewConfiguration.getLongPressTimeout(),
+                            getLongPressTimeoutMillis(),
                             x,
                             y,
                             // This is not a touch gesture -- do not classify it as one.
@@ -18381,7 +18363,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
                     if (!clickable) {
                         checkForLongClick(
-                                ViewConfiguration.getLongPressTimeout(),
+                                getLongPressTimeoutMillis(),
                                 x,
                                 y,
                                 TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS);
@@ -18404,12 +18386,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                         }
                         mPendingCheckForTap.x = event.getX();
                         mPendingCheckForTap.y = event.getY();
-                        postDelayed(mPendingCheckForTap, mTapTimeoutMillis);
+                        postDelayed(mPendingCheckForTap, getTapTimeoutMillis());
                     } else {
                         // Not inside a scrolling container, so show the feedback right away
                         setPressed(true, x, y);
                         checkForLongClick(
-                                ViewConfiguration.getLongPressTimeout(),
+                                getLongPressTimeoutMillis(),
                                 x,
                                 y,
                                 TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS);
@@ -18436,15 +18418,17 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     final int motionClassification = event.getClassification();
                     final boolean ambiguousGesture =
                             motionClassification == MotionEvent.CLASSIFICATION_AMBIGUOUS_GESTURE;
-                    int touchSlop = mTouchSlop;
+                    int touchSlop = mViewConfiguration.getScaledTouchSlop();
                     if (ambiguousGesture && hasPendingLongPressCallback()) {
+                        float ambiguousGestureMultiplier =
+                                mViewConfiguration.getScaledAmbiguousGestureMultiplier();
                         if (!pointInView(x, y, touchSlop)) {
                             // The default action here is to cancel long press. But instead, we
                             // just extend the timeout here, in case the classification
                             // stays ambiguous.
                             removeLongPressCallback();
-                            long delay = (long) (ViewConfiguration.getLongPressTimeout()
-                                    * mAmbiguousGestureMultiplier);
+                            long delay = (long) (getLongPressTimeoutMillis()
+                                    * ambiguousGestureMultiplier);
                             // Subtract the time already spent
                             delay -= event.getEventTime() - event.getDownTime();
                             checkForLongClick(
@@ -18453,7 +18437,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                                     y,
                                     TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS);
                         }
-                        touchSlop *= mAmbiguousGestureMultiplier;
+                        touchSlop *= ambiguousGestureMultiplier;
                     }
 
                     // Be lenient about moving outside of buttons
@@ -18522,6 +18506,13 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         return false;
     }
 
+    /** @hide */
+    protected int getLongPressTimeoutMillis() {
+        return Flags.viewconfigurationApis()
+                ? mViewConfiguration.getLongPressTimeoutMillis()
+                : ViewConfiguration.getLongPressTimeout();
+    }
+
     /**
      * Remove the longpress detection timer.
      */
@@ -18529,6 +18520,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         if (mPendingCheckForLongPress != null) {
             removeCallbacks(mPendingCheckForLongPress);
         }
+    }
+
+    private int getTapTimeoutMillis() {
+        return Flags.viewconfigurationApis()
+                ? mViewConfiguration.getTapTimeoutMillis()
+                : ViewConfiguration.getTapTimeout();
     }
 
     /**
@@ -18941,15 +18938,14 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     private HapticScrollFeedbackProvider getScrollFeedbackProvider() {
         if (mScrollFeedbackProvider == null) {
             mScrollFeedbackProvider = new HapticScrollFeedbackProvider(this,
-                    ViewConfiguration.get(mContext), /* isFromView= */ true);
+                    mViewConfiguration, /* isFromView= */ true);
         }
         return mScrollFeedbackProvider;
     }
 
     private void doRotaryProgressForScrollHaptics(MotionEvent rotaryEvent) {
         final float axisScrollValue = rotaryEvent.getAxisValue(MotionEvent.AXIS_SCROLL);
-        final float verticalScrollFactor =
-                ViewConfiguration.get(mContext).getScaledVerticalScrollFactor();
+        final float verticalScrollFactor = mViewConfiguration.getScaledVerticalScrollFactor();
         final int scrollAmount = -Math.round(axisScrollValue * verticalScrollFactor);
         getScrollFeedbackProvider().onScrollProgress(
                 rotaryEvent.getDeviceId(), InputDevice.SOURCE_ROTARY_ENCODER,
@@ -22141,7 +22137,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      */
     @InspectableProperty(name = "scrollbarSize")
     public int getScrollBarSize() {
-        return mScrollCache == null ? ViewConfiguration.get(mContext).getScaledScrollBarSize() :
+        return mScrollCache == null ? mViewConfiguration.getScaledScrollBarSize() :
                 mScrollCache.scrollBarSize;
     }
 
@@ -24428,8 +24424,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         final boolean use32BitCache = attachInfo != null && attachInfo.mUse32BitDrawingCache;
 
         final long projectedBitmapSize = width * height * (opaque && !use32BitCache ? 2 : 4);
-        final long drawingCacheSize =
-                ViewConfiguration.get(mContext).getScaledMaximumDrawingCacheSize();
+        final long drawingCacheSize = mViewConfiguration.getScaledMaximumDrawingCacheSize();
         if (width <= 0 || height <= 0 || projectedBitmapSize > drawingCacheSize) {
             if (width > 0 && height > 0) {
                 Log.w(VIEW_LOG_TAG, getClass().getSimpleName() + " not displayed because it is"
@@ -25539,6 +25534,17 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     /**
+     * @see RenderNode#setUsageHint(int)
+     *
+     * @hide
+     */
+    public void setUsageHint(@RenderNode.UsageHint int usageHint) {
+        if (mRenderNode != null) {
+            mRenderNode.setUsageHint(usageHint);
+        }
+    }
+
+    /**
      * Creates a new display list or updates the existing display list for the
      * specified Drawable.
      *
@@ -25920,7 +25926,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * @param bottom Bottom position, relative to parent
      * @return true if the new size and position are different than the
      *         previous ones
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P)
     protected boolean setFrame(int left, int top, int right, int bottom) {
@@ -28162,7 +28168,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     /**
-     * {@hide}
+     * @hide
      *
      * @param isRoot true if the view belongs to the root namespace, false
      *        otherwise
@@ -28178,7 +28184,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     /**
-     * {@hide}
+     * @hide
      *
      * @return true if the view belongs to the root namespace, false otherwise
      */
@@ -29579,20 +29585,16 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
 
         if (data != null) {
-            if (com.android.window.flags.Flags.delegateUnhandledDrags()) {
-                data.prepareToLeaveProcess(
-                        (flags & (DRAG_FLAG_GLOBAL_SAME_APPLICATION | DRAG_FLAG_GLOBAL)) != 0);
-                if ((flags & DRAG_FLAG_START_INTENT_SENDER_ON_UNHANDLED_DRAG) != 0) {
-                    if (!hasActivityPendingIntents(data)) {
-                        // Reset the flag if there is no launchable activity intent
-                        flags &= ~DRAG_FLAG_START_INTENT_SENDER_ON_UNHANDLED_DRAG;
-                        Log.w(VIEW_LOG_TAG, "startDragAndDrop called with "
-                                + "DRAG_FLAG_START_INTENT_ON_UNHANDLED_DRAG but the clip data "
-                                + "contains non-activity PendingIntents");
-                    }
+            data.prepareToLeaveProcess(
+                    (flags & (DRAG_FLAG_GLOBAL_SAME_APPLICATION | DRAG_FLAG_GLOBAL)) != 0);
+            if ((flags & DRAG_FLAG_START_INTENT_SENDER_ON_UNHANDLED_DRAG) != 0) {
+                if (!hasActivityPendingIntents(data)) {
+                    // Reset the flag if there is no launchable activity intent
+                    flags &= ~DRAG_FLAG_START_INTENT_SENDER_ON_UNHANDLED_DRAG;
+                    Log.w(VIEW_LOG_TAG, "startDragAndDrop called with "
+                            + "DRAG_FLAG_START_INTENT_ON_UNHANDLED_DRAG but the clip data "
+                            + "contains non-activity PendingIntents");
                 }
-            } else {
-                data.prepareToLeaveProcess((flags & DRAG_FLAG_GLOBAL) != 0);
             }
         }
 
@@ -30058,7 +30060,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * transparent.  On return, this region will be modified to have the
      * transparency information reduced by the corresponding parts of the
      * Drawable that are not transparent.
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
     public void applyDrawableToTransparentRegion(Drawable dr, Region region) {
@@ -31255,6 +31257,83 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     /**
+     * A "pointer capture mode" in which the pointer is not captured.
+     * <p>
+     * Passing this to {@link #requestPointerCapture(int)} is equivalent to calling
+     * {@link #releasePointerCapture()}.
+     *
+     * @see #requestPointerCapture(int)
+     */
+    @FlaggedApi(com.android.hardware.input.Flags.FLAG_POINTER_CAPTURE_MODES)
+    public static final int POINTER_CAPTURE_MODE_UNCAPTURED =
+            android.os.PointerCaptureMode.UNCAPTURED;
+
+    /**
+     * A pointer capture mode in which touchpads report absolute finger locations.
+     * <p>
+     * In this capture mode, no attempt is made to recognize gestures from touchpad input. Instead,
+     * the absolute location of each touch on the pad is reported directly to the View, in the same
+     * way that other touches on devices with {@link InputDevice#SOURCE_CLASS_POINTER} are reported.
+     * <p>
+     * Events will be delivered with the source {@link InputDevice#SOURCE_TOUCHPAD}. The absolute
+     * position of each touch will be available through {@link MotionEvent#getX(int)} and {@link
+     * MotionEvent#getY(int)}, and their relative movements through {@link
+     * MotionEvent#AXIS_RELATIVE_X} and {@link MotionEvent#AXIS_RELATIVE_Y}. If the touchpad
+     * supports them, touch dimension information may be available through the {@link
+     * MotionEvent#AXIS_PRESSURE}, {@link MotionEvent#AXIS_TOUCH_MAJOR}, {@link
+     * MotionEvent#AXIS_TOUCH_MINOR}, {@link MotionEvent#AXIS_TOOL_MAJOR}, and {@link
+     * MotionEvent#AXIS_TOOL_MINOR} axes.
+     * <p>
+     * Events from mice are always reported in the same way regardless of capture mode.
+     *
+     * @see #requestPointerCapture(int)
+     */
+    @FlaggedApi(com.android.hardware.input.Flags.FLAG_POINTER_CAPTURE_MODES)
+    public static final int POINTER_CAPTURE_MODE_ABSOLUTE = android.os.PointerCaptureMode.ABSOLUTE;
+
+    /**
+     * A pointer capture mode in which touchpad gestures are recognized and reported like mouse
+     * movements.
+     * <p>
+     * In this capture mode, the following gestures made on a captured touchpad will be recognized
+     * and reported:
+     * <ul>
+     *     <li>Pointer movement gestures (such as moving a single finger on the pad) will be
+     *     reported like mouse movements, with the {@link MotionEvent#ACTION_MOVE} action and their
+     *     relative position changes available through {@link MotionEvent#getX} and {@link
+     *     MotionEvent#getY}.
+     *     </li>
+     *
+     *     <li>Scrolling gestures (such as two-finger swipes) will be reported like scroll wheel
+     *     movements on a mouse, with the {@link MotionEvent#ACTION_SCROLL} action and the scroll
+     *     amounts available through the {@link MotionEvent#AXIS_VSCROLL} and {@link
+     *     MotionEvent#AXIS_HSCROLL} axes.
+     *     </li>
+     * </ul>
+     * <p>
+     * Motion values are proportional to the physical motion of the gesturing finger(s), and the
+     * physical movement in mm can be found using the resolution reported by {@link
+     * InputDevice.MotionRange#getResolution} for the relevant axis.
+     * <p>
+     * These events will be reported with {@link InputDevice#SOURCE_MOUSE_RELATIVE}.
+     * <p>
+     * Events from mice are always reported in the same way regardless of capture mode.
+     *
+     * @see #requestPointerCapture(int)
+     */
+    @FlaggedApi(com.android.hardware.input.Flags.FLAG_POINTER_CAPTURE_MODES)
+    public static final int POINTER_CAPTURE_MODE_RELATIVE = android.os.PointerCaptureMode.RELATIVE;
+
+    /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef(prefix = "POINTER_CAPTURE_MODE_", value = {
+            POINTER_CAPTURE_MODE_UNCAPTURED,
+            POINTER_CAPTURE_MODE_ABSOLUTE,
+            POINTER_CAPTURE_MODE_RELATIVE,
+    })
+    public @interface PointerCaptureMode {}
+
+    /**
      * Requests pointer capture mode.
      * <p>
      * When the window has pointer capture, the mouse pointer icon will disappear and will not
@@ -31294,13 +31373,69 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * @see #hasPointerCapture()
      * @see #onPointerCaptureChange(boolean)
      */
+    // TODO(b/403531245): when the flag launches, update this JavaDoc to say that calling this
+    //  method is equivalent to calling requestPointerCapture(int) with a particular mode, and
+    //  update the paragraph on what happens if the window already has pointer capture.
     public void requestPointerCapture() {
         final ViewRootImpl viewRootImpl = getViewRootImpl();
         if (viewRootImpl != null) {
-            viewRootImpl.requestPointerCapture(true);
+            viewRootImpl.requestPointerCapture(POINTER_CAPTURE_MODE_ABSOLUTE);
         }
     }
 
+    /**
+     * Requests pointer capture in the specified mode.
+     * <p>
+     * When the window has pointer capture, the mouse pointer icon will disappear and will not
+     * change its position. Enabling pointer capture will change the behavior of input devices in
+     * the following ways:
+     * <ul>
+     *     <li>Events from a mouse will be delivered with the source
+     *     {@link InputDevice#SOURCE_MOUSE_RELATIVE}, and relative position changes will be
+     *     available through {@link MotionEvent#getX} and {@link MotionEvent#getY}.</li>
+     *
+     *     <li>Events from a touchpad (also known as a trackpad) will be delivered according to the
+     *     chosen pointer capture mode. See {@link #POINTER_CAPTURE_MODE_RELATIVE} and {@link
+     *     #POINTER_CAPTURE_MODE_ABSOLUTE} for details.</li>
+     *
+     *     <li>Events from other types of devices, such as touchscreens, will not be affected.</li>
+     * </ul>
+     * <p>
+     * Pointer ballistics curves and the user's pointer speed settings will not be applied in this
+     * mode.
+     * <p>
+     * When pointer capture changes, connected mouse and touchpad devices may be reconfigured,
+     * and their properties (such as their sources or motion ranges) may change. Use an
+     * {@link android.hardware.input.InputManager.InputDeviceListener} to be notified when a device
+     * changes (which may happen after enabling or disabling pointer capture), and use
+     * {@link InputDevice#getDevice(int)} to get the updated {@link InputDevice}.
+     * <p>
+     * Events captured through pointer capture will be dispatched to
+     * {@link OnCapturedPointerListener#onCapturedPointer(View, MotionEvent)} if an
+     * {@link OnCapturedPointerListener} is set, and otherwise to
+     * {@link #onCapturedPointerEvent(MotionEvent)}.
+     * <p>
+     * If the window already has pointer capture in the same mode, this call does nothing.
+     * <p>
+     * The capture may be released through {@link #releasePointerCapture()}, or will be lost
+     * automatically when the window loses focus.
+     *
+     * @param mode The mode in which to capture the pointer, which determines how events from
+     *             touchpads are delivered.
+     *
+     * @see #POINTER_CAPTURE_MODE_RELATIVE
+     * @see #POINTER_CAPTURE_MODE_ABSOLUTE
+     * @see #releasePointerCapture()
+     * @see #hasPointerCapture()
+     * @see #onPointerCaptureChange(boolean)
+     */
+    @FlaggedApi(com.android.hardware.input.Flags.FLAG_POINTER_CAPTURE_MODES)
+    public void requestPointerCapture(@PointerCaptureMode int mode) {
+        final ViewRootImpl viewRootImpl = getViewRootImpl();
+        if (viewRootImpl != null) {
+            viewRootImpl.requestPointerCapture(mode);
+        }
+    }
 
     /**
      * Releases the pointer capture.
@@ -31313,7 +31448,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     public void releasePointerCapture() {
         final ViewRootImpl viewRootImpl = getViewRootImpl();
         if (viewRootImpl != null) {
-            viewRootImpl.requestPointerCapture(false);
+            viewRootImpl.requestPointerCapture(POINTER_CAPTURE_MODE_UNCAPTURED);
         }
     }
 
@@ -31772,8 +31907,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         public void run() {
             mPrivateFlags &= ~PFLAG_PREPRESSED;
             setPressed(true, x, y);
-            final long delay =
-                    (long) ViewConfiguration.getLongPressTimeout() - mTapTimeoutMillis;
+            final int delay = getLongPressTimeoutMillis() - getTapTimeoutMillis();
             checkForLongClick(delay, x, y, TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS);
         }
     }
@@ -31794,7 +31928,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         // To avoid negatively impacting View performance, the latency and displacement metrics
         // are omitted.
         FrameworkStatsLog.write(FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED, getClass().getName(),
-                classification);
+                classification, (int) 0 /* latency_millis */, (float) 0 /* displacement_px */,
+                (float) 0 /* velocity_px_millis */);
     }
 
     /**
@@ -33457,7 +33592,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         getListenerInfo().mScrollCaptureCallback = callback;
     }
 
-    /** {@hide} */
+    /** @hide */
     @Nullable
     public ScrollCaptureCallback createScrollCaptureCallbackInternal(@NonNull Rect localVisibleRect,
             @NonNull Point windowOffset) {
@@ -33575,14 +33710,14 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         found.put(key, output);
     }
 
-    /** {@hide} */
+    /** @hide */
     public void encode(@NonNull ViewHierarchyEncoder stream) {
         stream.beginObject(this);
         encodeProperties(stream);
         stream.endObject();
     }
 
-    /** {@hide} */
+    /** @hide */
     @CallSuper
     protected void encodeProperties(@NonNull ViewHierarchyEncoder stream) {
         Object resolveId = ViewDebug.resolveId(getContext(), mID);
@@ -33766,7 +33901,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                 mTooltipInfo = new TooltipInfo();
                 mTooltipInfo.mShowTooltipRunnable = this::showHoverTooltip;
                 mTooltipInfo.mHideTooltipRunnable = this::hideTooltip;
-                mTooltipInfo.mHoverSlop = ViewConfiguration.get(mContext).getScaledHoverSlop();
+                mTooltipInfo.mHoverSlop = mViewConfiguration.getScaledHoverSlop();
                 mTooltipInfo.clearAnchorPos();
             }
             mTooltipInfo.mTooltipText = tooltipText;
@@ -34590,8 +34725,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     private float convertVelocityToFrameRate(float velocityPps) {
-        if (NoPreloadHolder.sToolkitVelocityMapSyspropFlagValue && sFrameRateMappings != null
-                && sFrameRateMappings.length > 0) {
+        if (sFrameRateMappings != null && sFrameRateMappings.length > 0) {
             return getFrameRateByVelocity(sFrameRateMappings, (int) velocityPps);
         }
         // Internal testing has shown that this gives a premium experience:
@@ -34624,6 +34758,12 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     public void setFrameContentVelocity(float pixelsPerSecond) {
         if (mAttachInfo != null && mAttachInfo.mViewVelocityApi) {
             mFrameContentVelocity = Math.abs(pixelsPerSecond);
+
+            if (Trace.isTagEnabled(TRACE_TAG_VIEW)) {
+                Trace.instant(TRACE_TAG_VIEW,
+                        getClass().getSimpleName()
+                            + " - setFrameContentVelocity: " + mFrameContentVelocity);
+            }
 
             if (sToolkitMetricsForFrameRateDecisionFlagValue) {
                 Trace.setCounter("Set frame velocity", (long) mFrameContentVelocity);

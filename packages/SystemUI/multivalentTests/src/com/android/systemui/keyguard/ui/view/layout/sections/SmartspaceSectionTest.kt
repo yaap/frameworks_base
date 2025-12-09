@@ -33,7 +33,7 @@ import com.android.systemui.keyguard.domain.interactor.KeyguardSmartspaceInterac
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardClockViewModel
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardRootViewModel
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardSmartspaceViewModel
-import com.android.systemui.plugins.clocks.ClockViewIds
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockViewIds
 import com.android.systemui.res.R
 import com.android.systemui.shared.R as sharedR
 import com.android.systemui.statusbar.lockscreen.LockscreenSmartspaceController
@@ -72,7 +72,7 @@ class SmartspaceSectionTest : SysuiTestCase() {
     private val shouldDateWeatherBeBelowSmallClock = MutableStateFlow(true)
     private val shouldDateWeatherBeBelowLargeClock = MutableStateFlow(true)
     private val isWeatherVisibleFlow = MutableStateFlow(false)
-    private val isShadeLayoutWide = MutableStateFlow(false)
+    private val isFullWidthShade = MutableStateFlow(true)
     private val isLargeClockVisible = MutableStateFlow(true)
 
     @Before
@@ -106,7 +106,7 @@ class SmartspaceSectionTest : SysuiTestCase() {
         whenever(keyguardClockViewModel.clockShouldBeCentered).thenReturn(clockShouldBeCentered)
         whenever(keyguardSmartspaceViewModel.isSmartspaceEnabled).thenReturn(true)
         whenever(keyguardSmartspaceViewModel.isWeatherVisible).thenReturn(isWeatherVisibleFlow)
-        whenever(keyguardSmartspaceViewModel.isShadeLayoutWide).thenReturn(isShadeLayoutWide)
+        whenever(keyguardSmartspaceViewModel.isFullWidthShade).thenReturn(isFullWidthShade)
         constraintSet = ConstraintSet()
     }
 
@@ -154,7 +154,7 @@ class SmartspaceSectionTest : SysuiTestCase() {
     @Test
     @DisableFlags(com.android.systemui.shared.Flags.FLAG_CLOCK_REACTIVE_SMARTSPACE_LAYOUT)
     fun testConstraintsWhenShadeLayoutIsWide() {
-        isShadeLayoutWide.value = true
+        isFullWidthShade.value = false
 
         underTest.addViews(constraintLayout)
         underTest.applyConstraints(constraintSet)

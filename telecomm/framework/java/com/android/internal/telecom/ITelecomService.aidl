@@ -31,7 +31,7 @@ import com.android.internal.telecom.ICallEventCallback;
 /**
  * Interface used to interact with Telecom. Mostly this is used by TelephonyManager for passing
  * commands that were previously handled by ITelephony.
- * {@hide}
+ * @hide
  */
 interface ITelecomService {
     /**
@@ -204,6 +204,11 @@ interface ITelecomService {
      * @see TelecomServiceImpl#isInManagedCall
      */
     boolean isInManagedCall(String callingPackage, String callingFeatureId);
+
+    /**
+     * @see TelecomServiceImpl#isInExternalCall
+     */
+    boolean isInExternalCall(String callingPackage, String callingFeatureId);
 
     /**
      * @see TelecomServiceImpl#isRinging

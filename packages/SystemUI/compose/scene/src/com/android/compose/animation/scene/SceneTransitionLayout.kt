@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -141,6 +140,7 @@ interface SceneTransitionLayoutScope<out CS : ContentScope> {
         alignment: Alignment = Alignment.Center,
         isModal: Boolean = true,
         effectFactory: OverscrollFactory? = null,
+        alwaysCompose: Boolean = false,
         content: @Composable CS.() -> Unit,
     )
 }
@@ -161,28 +161,10 @@ interface ElementStateScope {
     fun ElementKey.targetSize(content: ContentKey): IntSize?
 
     /**
-     * Return the *last known size* of [this] element in the given [content], i.e. the size of the
-     * element, or `null` if the element is not composed and measured in that content (yet).
-     *
-     * Note: Usually updated **after** the measurement pass and after processing children. However,
-     * if the target size is known **in advance** (like during transitions involving transformations
-     * or shared elements), the update happens **before** measurement pass. This earlier update
-     * allows children to potentially use this predetermined size during their own measurement.
-     */
-    fun ElementKey.lastSize(content: ContentKey): IntSize?
-
-    /**
      * Return the *target* offset of [this] element in the given [content], i.e. the size of the
      * element when idle, or `null` if the element is not composed and placed in that content (yet).
      */
     fun ElementKey.targetOffset(content: ContentKey): Offset?
-
-    /**
-     * Return the *target* layout coordinates of [this] element in the given [content], i.e. the
-     * LayoutCoordinates of the element when idle, or `null` if the element is not composed and
-     * placed in that content (yet).
-     */
-    fun ElementKey.targetCoordinates(content: ContentKey): LayoutCoordinates?
 
     /**
      * Return the *target* size of [this] content, i.e. the size of the content when idle, or `null`
@@ -197,7 +179,18 @@ interface BaseContentScope : ElementStateScope {
     /** The key of this content. */
     val contentKey: ContentKey
 
-    /** The state of the [SceneTransitionLayout] in which this content is contained. */
+    /**
+     * The state of the [SceneTransitionLayout] in which this content is contained.
+     *
+     * Important: Inside a [ContentScope.NestedSceneTransitionLayout], this will *not* be the state
+     * passed to [ContentScope.NestedSceneTransitionLayout] but a new one that delegates to it
+     * instead, so that checks on the current state also consider the ancestor STL states.
+     *
+     * @see SceneTransitionLayoutState.isIdle
+     * @see SceneTransitionLayoutState.isTransitioning
+     * @see SceneTransitionLayoutState.isTransitioningBetween
+     * @see SceneTransitionLayoutState.isTransitioningFromOrTo
+     */
     val layoutState: SceneTransitionLayoutState
 
     /** The [LookaheadScope] used by the [SceneTransitionLayout]. */
@@ -311,6 +304,15 @@ interface BaseContentScope : ElementStateScope {
     fun Modifier.disableSwipesWhenScrolling(
         bounds: NestedScrollableBound = NestedScrollableBound.Any
     ): Modifier
+
+    /**
+     * Return the alpha of [this] element in this content, given the current transition state and
+     * transition transformations (e.g. fade).
+     *
+     * Important: This should *not* be read during composition and should instead be read during
+     * layout, drawing or in a LaunchedEffect.
+     */
+    fun ElementKey.currentAlpha(): Float?
 }
 
 @Stable
@@ -378,6 +380,25 @@ interface ContentScope : BaseContentScope {
         modifier: Modifier,
         builder: SceneTransitionLayoutScope<ContentScope>.() -> Unit,
     )
+
+    /**
+     * Whether this content can be considered "visible", i.e. it is either:
+     * - the [current scene][SceneTransitionLayoutState.currentScene]
+     * - one of the [current overlays][SceneTransitionLayoutState.currentOverlays]
+     * - in a transition to become the current scene or one of the current overlays
+     *
+     * Note that this does not actually do any visibility check, a content will be considered
+     * visible even if its alpha is 0, or if it is translated outside the device bounds, or if it is
+     * fully obscured by another content, etc.
+     *
+     * This function takes the ancestor contents from ancestor STLs into account, so that this
+     * returns false if this content OR any ancestor content is not "visible".
+     *
+     * This is meant to be used only by contents that leverage the `alwaysCompose` flag to remain
+     * composed even when not "visible". When `alwaysCompose` is false, you should rely on
+     * composition only as a signal for "visibility".
+     */
+    fun isAlwaysComposedContentVisible(): Boolean
 }
 
 internal interface InternalContentScope : ContentScope {
@@ -781,15 +802,15 @@ internal fun SceneTransitionLayoutForTesting(
                 swipeSourceDetector = swipeSourceDetector,
                 swipeDetector = swipeDetector,
                 transitionInterceptionThreshold = transitionInterceptionThreshold,
+                decayAnimationSpec = decayAnimationSpec,
                 builder = builder,
                 animationScope = animationScope,
+                directionChangeSlop = directionChangeSlop,
                 elements = sharedElementMap,
                 ancestors = ancestors,
-                lookaheadScope = lookaheadScope,
-                directionChangeSlop = directionChangeSlop,
-                defaultEffectFactory = defaultEffectFactory,
-                decayAnimationSpec = decayAnimationSpec,
                 implicitTestTags = implicitTestTags,
+                lookaheadScope = lookaheadScope,
+                defaultEffectFactory = defaultEffectFactory,
             )
             .also { onLayoutImpl?.invoke(it) }
     }

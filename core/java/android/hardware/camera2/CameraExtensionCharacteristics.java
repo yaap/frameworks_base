@@ -465,7 +465,7 @@ public final class CameraExtensionCharacteristics {
             // Check if user enabled fallback impl
             ContentResolver resolver = ctx.getContentResolver();
             int userEnabled = Settings.Secure.getInt(resolver,
-                    Settings.Secure.CAMERA_EXTENSIONS_FALLBACK, 1);
+                    Settings.Secure.CAMERA_EXTENSIONS_FALLBACK, 0);
 
             boolean vendorImpl = true;
             if (ret && (mConnectionManager.getProxy(extension) != null) && (userEnabled == 1)) {
@@ -1104,7 +1104,7 @@ public final class CameraExtensionCharacteristics {
                     return getSupportedSizes(
                             extenders.second.getSupportedPostviewResolutions(sz), format);
                 }  else if (format == ImageFormat.JPEG_R || format == ImageFormat.YCBCR_P010 ||
-                        (Flags.depthJpegExtensions() && (format == ImageFormat.DEPTH_JPEG))) {
+                        format == ImageFormat.DEPTH_JPEG) {
                     // DepthJpeg/Jpeg_R/UltraHDR + YCBCR_P010 is currently not supported in the
                     // basic extension case
                     return new ArrayList<>();
@@ -1271,7 +1271,7 @@ public final class CameraExtensionCharacteristics {
                             return generateSupportedSizes(null, format, streamMap);
                         }
                     } else if (format == ImageFormat.JPEG_R || format == ImageFormat.YCBCR_P010 ||
-                            (Flags.depthJpegExtensions() && (format == ImageFormat.DEPTH_JPEG))) {
+                            format == ImageFormat.DEPTH_JPEG) {
                         // DepthJpeg/Jpeg_R/UltraHDR + YCBCR_P010 is currently not supported in the
                         // basic extension case
                         return new ArrayList<>();
@@ -1363,7 +1363,7 @@ public final class CameraExtensionCharacteristics {
                     return  null;
                 }
                 if (format == ImageFormat.JPEG_R || format == ImageFormat.YCBCR_P010 ||
-                        (Flags.depthJpegExtensions() && (format == ImageFormat.DEPTH_JPEG))) {
+                        format == ImageFormat.DEPTH_JPEG) {
                     // DepthJpeg/JpegR/UltraHDR + YCBCR_P010 is not supported for basic extensions
                     return null;
                 }

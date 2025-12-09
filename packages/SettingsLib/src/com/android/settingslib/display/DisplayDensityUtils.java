@@ -122,6 +122,7 @@ public class DisplayDensityUtils {
     private final float[] mFloatValues;
 
     private final int mDefaultDensity;
+    private final int mInitialDensity;
     private final int mCurrentIndex;
 
     public DisplayDensityUtils(@NonNull Context context) {
@@ -150,6 +151,7 @@ public class DisplayDensityUtils {
             mValues = null;
             mFloatValues = null;
             mDefaultDensity = 0;
+            mInitialDensity = 0;
             mCurrentIndex = -1;
             return;
         }
@@ -181,6 +183,7 @@ public class DisplayDensityUtils {
             mValues = null;
             mFloatValues = null;
             mDefaultDensity = 0;
+            mInitialDensity = 0;
             mCurrentIndex = -1;
             return;
         }
@@ -193,9 +196,11 @@ public class DisplayDensityUtils {
             mValues = null;
             mFloatValues = null;
             mDefaultDensity = 0;
+            mInitialDensity = 0;
             mCurrentIndex = -1;
             return;
         }
+        mInitialDensity = defaultDensity;
 
         final Resources res = context.getResources();
 
@@ -336,6 +341,10 @@ public class DisplayDensityUtils {
 
     public int getDefaultDensity() {
         return mDefaultDensity;
+    }
+
+    public int getInitialDensity() {
+        return mInitialDensity;
     }
 
     /**

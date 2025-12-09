@@ -610,6 +610,8 @@ public final class MotionEvent extends InputEvent implements Parcelable {
             FLAG_IS_GENERATED_GESTURE,
             FLAG_CANCELED,
             FLAG_NO_FOCUS_CHANGE,
+            FLAG_SUPPORTS_ORIENTATION,
+            FLAG_SUPPORTS_DIRECTIONAL_ORIENTATION,
             FLAG_IS_ACCESSIBILITY_EVENT,
             FLAG_TAINTED,
             FLAG_TARGET_ACCESSIBILITY_FOCUS,
@@ -2526,6 +2528,29 @@ public final class MotionEvent extends InputEvent implements Parcelable {
         return getActionMasked() == ACTION_HOVER_ENTER
                 || getActionMasked() == ACTION_HOVER_EXIT
                 || getActionMasked() == ACTION_HOVER_MOVE;
+    }
+
+    /**
+     * Returns {@code true} if this motion event is a synthesized touchpad gesture.
+     *
+     * <p>Before using this method, consider whether you truly need to apply special treatment to
+     * all synthesized touchpad gestures (including ones which may be added in future), or whether a
+     * check for a specific classification (e.g. {@link #CLASSIFICATION_TWO_FINGER_SWIPE}) would
+     * suffice instead.
+     *
+     * @see #CLASSIFICATION_TWO_FINGER_SWIPE
+     * @see #CLASSIFICATION_PINCH
+     * @see #CLASSIFICATION_MULTI_FINGER_SWIPE
+     *
+     * @hide
+     */
+    public boolean isSynthesizedTouchpadGesture() {
+        int classification = getClassification();
+        return isFromSource(InputDevice.SOURCE_MOUSE) && getToolType(0)
+                == MotionEvent.TOOL_TYPE_FINGER && (
+                classification == MotionEvent.CLASSIFICATION_TWO_FINGER_SWIPE
+                        || classification == MotionEvent.CLASSIFICATION_PINCH
+                        || classification == MotionEvent.CLASSIFICATION_MULTI_FINGER_SWIPE);
     }
 
     /**

@@ -18,11 +18,14 @@ package com.android.settingslib.supervision
 
 import android.app.role.RoleManager
 import android.app.supervision.SupervisionManager
+import android.app.supervision.flags.Flags
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
+import android.platform.test.annotations.EnableFlags
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
@@ -63,44 +66,72 @@ class SupervisionIntentProviderTest {
     }
 
     @Test
-    fun getSettingsIntent_nullSupervisionPackage() {
-        mockSupervisionManager.stub { on { activeSupervisionAppPackage } doReturn null }
-
-        val intent = SupervisionIntentProvider.getSettingsIntent(context)
-
-        assertThat(intent).isNull()
-    }
-
-    @Test
-    fun getSettingsIntent_unresolvedIntent() {
-        mockSupervisionManager.stub {
-            on { activeSupervisionAppPackage } doReturn SUPERVISION_APP_PACKAGE
-        }
-        mockPackageManager.stub {
-            on { queryIntentActivitiesAsUser(any<Intent>(), any<Int>(), any<Int>()) } doReturn
-                emptyList<ResolveInfo>()
-        }
-
-        val intent = SupervisionIntentProvider.getSettingsIntent(context)
-
-        assertThat(intent).isNull()
-    }
-
-    @Test
-    fun getSettingsIntent_resolvedIntent() {
-        mockSupervisionManager.stub {
-            on { activeSupervisionAppPackage } doReturn SUPERVISION_APP_PACKAGE
-        }
+    @EnableFlags(Flags.FLAG_ENABLE_SUPERVISION_SETTINGS_SCREEN)
+    fun getSettingsIntent_supervisionDisabled_returnsNull() {
         mockPackageManager.stub {
             on { queryIntentActivitiesAsUser(any<Intent>(), any<Int>(), any<Int>()) } doReturn
                 listOf(ResolveInfo())
         }
+        mockSupervisionManager.stub { on { isSupervisionEnabled() } doReturn false }
+
+        val intent = SupervisionIntentProvider.getSettingsIntent(context)
+
+        assertThat(intent).isNull()
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_SUPERVISION_SETTINGS_SCREEN)
+    fun getSettingsIntent_unresolvedIntent() {
+        mockPackageManager.stub {
+            on { queryIntentActivitiesAsUser(any<Intent>(), any<Int>(), any<Int>()) } doReturn
+                emptyList<ResolveInfo>()
+        }
+        mockSupervisionManager.stub { on { isSupervisionEnabled() } doReturn true }
+
+        val intent = SupervisionIntentProvider.getSettingsIntent(context)
+
+        assertThat(intent).isNull()
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_SUPERVISION_SETTINGS_SCREEN)
+    fun getSettingsIntent_resolvedIntent_defaultSettingsPackage() {
+        mockPackageManager.stub {
+            on { queryIntentActivitiesAsUser(any<Intent>(), any<Int>(), any<Int>()) } doReturn
+                listOf(ResolveInfo())
+        }
+        mockSupervisionManager.stub { on { isSupervisionEnabled() } doReturn true }
 
         val intent = SupervisionIntentProvider.getSettingsIntent(context)
 
         assertThat(intent).isNotNull()
-        assertThat(intent?.action).isEqualTo("android.settings.SHOW_PARENTAL_CONTROLS")
-        assertThat(intent?.`package`).isEqualTo(SUPERVISION_APP_PACKAGE)
+        assertThat(intent?.action).isEqualTo("android.settings.SUPERVISION_SETTINGS")
+        assertThat(intent?.`package`).isEqualTo("com.android.settings")
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_SUPERVISION_SETTINGS_SCREEN)
+    fun getSettingsIntent_resolvedIntent_getSettingsPackageFromPackageManager() {
+        val expectedSettingsPackage = "com.android.expected_settings"
+        val resolveInfo =
+            ResolveInfo().apply {
+                this.activityInfo =
+                    ActivityInfo().apply {
+                        packageName = expectedSettingsPackage
+                    }
+            }
+        mockPackageManager.stub {
+            on { queryIntentActivitiesAsUser(any<Intent>(), any<Int>(), any<Int>()) } doReturn
+                listOf(ResolveInfo())
+            on { queryIntentActivities(any<Intent>(), any<Int>()) } doReturn listOf(resolveInfo)
+        }
+        mockSupervisionManager.stub { on { isSupervisionEnabled() } doReturn true }
+
+        val intent = SupervisionIntentProvider.getSettingsIntent(context)
+
+        assertThat(intent).isNotNull()
+        assertThat(intent?.action).isEqualTo("android.settings.SUPERVISION_SETTINGS")
+        assertThat(intent?.`package`).isEqualTo(expectedSettingsPackage)
     }
 
     @Test

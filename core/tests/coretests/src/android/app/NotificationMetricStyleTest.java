@@ -17,27 +17,10 @@
 package android.app;
 
 import static android.app.Notification.EXTRA_METRICS;
-import static android.app.Notification.Metric.MEANING_CELESTIAL;
-import static android.app.Notification.Metric.MEANING_CELESTIAL_TIDE;
-import static android.app.Notification.Metric.MEANING_CHRONOMETER;
-import static android.app.Notification.Metric.MEANING_CHRONOMETER_STOPWATCH;
-import static android.app.Notification.Metric.MEANING_CHRONOMETER_TIMER;
-import static android.app.Notification.Metric.MEANING_EVENT_DATE;
-import static android.app.Notification.Metric.MEANING_EVENT_TIME;
-import static android.app.Notification.Metric.MEANING_HEALTH;
-import static android.app.Notification.Metric.MEANING_HEALTH_ACTIVE_TIME;
-import static android.app.Notification.Metric.MEANING_HEALTH_CALORIES;
-import static android.app.Notification.Metric.MEANING_HEALTH_READINESS;
-import static android.app.Notification.Metric.MEANING_TRAVEL;
-import static android.app.Notification.Metric.MEANING_TRAVEL_TERMINAL;
-import static android.app.Notification.Metric.MEANING_UNKNOWN;
-import static android.app.Notification.Metric.MEANING_WEATHER_TEMPERATURE_OUTDOOR;
+import static android.view.View.GONE;
+import static android.view.View.VISIBLE;
 
 import static com.google.common.truth.Truth.assertThat;
-
-import static java.time.temporal.ChronoUnit.HOURS;
-import static java.time.temporal.ChronoUnit.MINUTES;
-import static java.time.temporal.ChronoUnit.SECONDS;
 
 import android.app.Notification.Metric;
 import android.app.Notification.Metric.FixedDate;
@@ -51,13 +34,22 @@ import android.app.Notification.MetricStyle;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.os.Bundle;
+import android.os.SystemClock;
+import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.provider.Settings;
+import android.view.View;
+import android.widget.Chronometer;
+import android.widget.FrameLayout;
+import android.widget.RemoteViews;
+import android.widget.TextView;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+
+import com.android.internal.R;
 
 import com.google.common.truth.Expect;
 
@@ -100,6 +92,8 @@ public class NotificationMetricStyleTest {
     // December 18, 2025 -> more than 4 months away
     private static final LocalDate FAR_AWAY = LocalDate.of(2025, 12, 18);
 
+    private static final long ELAPSED_REALTIME = 300_000;
+
     private static final String NNBSP = "\u202f";
 
     private Context mContext;
@@ -121,6 +115,7 @@ public class NotificationMetricStyleTest {
         Settings.System.putString(mContext.getContentResolver(), Settings.System.TIME_12_24, "12");
 
         Notification.sSystemClock = () -> NOW;
+        Notification.sElapsedRealtimeClock = () -> ELAPSED_REALTIME;
     }
 
     @After
@@ -134,16 +129,17 @@ public class NotificationMetricStyleTest {
         Settings.System.putString(mContext.getContentResolver(), Settings.System.TIME_12_24,
                 mPrevious24HourSetting);
         Notification.sSystemClock = InstantSource.system();
+        Notification.sElapsedRealtimeClock = () -> SystemClock.elapsedRealtime();
     }
 
     @Test
     public void addExtras_writesExtras() {
         MetricStyle style = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(4, "birds"), "4", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(5, "rings"), "5", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(6, "geese"), "6", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(7, "swans"), "7", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(8, "maids"), "8", MEANING_UNKNOWN));
+                .addMetric(new Metric(new FixedInt(4, "birds"), "4"))
+                .addMetric(new Metric(new FixedInt(5, "rings"), "5"))
+                .addMetric(new Metric(new FixedInt(6, "geese"), "6"))
+                .addMetric(new Metric(new FixedInt(7, "swans"), "7"))
+                .addMetric(new Metric(new FixedInt(8, "maids"), "8"));
 
         Bundle bundle = new Bundle();
         style.addExtras(bundle);
@@ -162,31 +158,37 @@ public class NotificationMetricStyleTest {
                 .addMetric(new Metric(
                         TimeDifference.forTimer(Instant.ofEpochMilli(1),
                                 TimeDifference.FORMAT_ADAPTIVE),
-                        "Time:", MEANING_CHRONOMETER_TIMER))
+                        "Time:"))
+                .addMetric(new Metric(
+                        TimeDifference.forTimer(123456L,
+                                TimeDifference.FORMAT_ADAPTIVE),
+                        "Time:"))
                 .addMetric(new Metric(
                         TimeDifference.forPausedStopwatch(Duration.ofHours(4),
                                 TimeDifference.FORMAT_CHRONOMETER),
-                        "Stopwatch:", MEANING_CHRONOMETER_STOPWATCH))
+                        "Stopwatch:"))
                 .addMetric(new Metric(
                         new FixedDate(LocalDate.of(2025, 6, 2), FixedDate.FORMAT_SHORT_DATE),
-                        "Event date:", MEANING_EVENT_DATE))
+                        "Event date:"))
                 .addMetric(new Metric(
                         new FixedTime(LocalTime.of(10, 30)),
-                        "Event time:", MEANING_EVENT_TIME))
+                        "Event time:"))
                 .addMetric(new Metric(
-                        new FixedInt(12, "drummers"), "Label", MEANING_UNKNOWN))
+                        new FixedInt(12, "drummers"), "Label"))
                 .addMetric(new Metric(
-                        new FixedInt(42), "Answer", MEANING_CELESTIAL))
+                        new FixedInt(42), "Answer"))
                 .addMetric(new Metric(
-                        new FixedFloat(0.75f), "Readiness", MEANING_HEALTH_READINESS))
+                        new FixedFloat(0.75f), "Readiness"))
                 .addMetric(new Metric(
                         new FixedFloat(273f, "°K"),
-                        "Temp", MEANING_WEATHER_TEMPERATURE_OUTDOOR))
+                        "Temp"))
                 .addMetric(new Metric(
                         new FixedFloat(12.345f, null, 0, 3),
-                        "Active time", MEANING_HEALTH_ACTIVE_TIME))
+                        "Active time"))
                 .addMetric(new Metric(
-                        new FixedString("This is the last"), "Last", MEANING_UNKNOWN));
+                        new FixedString("A LOT", "things"), "With unit"))
+                .addMetric(new Metric(
+                        new FixedString("This is the last"), "Last"));
 
         original.addExtras(bundle);
         MetricStyle recovered = new MetricStyle();
@@ -198,12 +200,12 @@ public class NotificationMetricStyleTest {
     @Test
     public void areNotificationsVisiblyDifferent_sameMetrics_false() {
         MetricStyle style1 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1), "Cal", MEANING_HEALTH_CALORIES))
-                .addMetric(new Metric(new FixedInt(2), "Cal", MEANING_HEALTH_CALORIES));
+                .addMetric(new Metric(new FixedInt(1), "Cal"))
+                .addMetric(new Metric(new FixedInt(2), "Cal"));
 
         MetricStyle style2 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1), "Cal", MEANING_HEALTH_CALORIES))
-                .addMetric(new Metric(new FixedInt(2), "Cal", MEANING_HEALTH_CALORIES));
+                .addMetric(new Metric(new FixedInt(1), "Cal"))
+                .addMetric(new Metric(new FixedInt(2), "Cal"));
 
         assertThat(style1.areNotificationsVisiblyDifferent(style2)).isFalse();
         assertThat(style2.areNotificationsVisiblyDifferent(style1)).isFalse();
@@ -212,12 +214,12 @@ public class NotificationMetricStyleTest {
     @Test
     public void areNotificationsVisiblyDifferent_differentMetrics_true() {
         MetricStyle style1 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1, "thingies"), "a", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(2, "widgets"), "b", MEANING_UNKNOWN));
+                .addMetric(new Metric(new FixedInt(1, "thingies"), "a"))
+                .addMetric(new Metric(new FixedInt(2, "widgets"), "b"));
 
         MetricStyle style2 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1, "gizmos"), "c", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(2, "doodads"), "d", MEANING_UNKNOWN));
+                .addMetric(new Metric(new FixedInt(1, "gizmos"), "c"))
+                .addMetric(new Metric(new FixedInt(2, "doodads"), "d"));
 
         assertThat(style1.areNotificationsVisiblyDifferent(style2)).isTrue();
         assertThat(style2.areNotificationsVisiblyDifferent(style1)).isTrue();
@@ -226,13 +228,13 @@ public class NotificationMetricStyleTest {
     @Test
     public void areNotificationsVisiblyDifferent_differentMetricCounts_true() {
         MetricStyle style1 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1, "gizmos"), "a", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(2, "doodads"), "b", MEANING_UNKNOWN));
+                .addMetric(new Metric(new FixedInt(1, "gizmos"), "a"))
+                .addMetric(new Metric(new FixedInt(2, "doodads"), "b"));
 
         MetricStyle style2 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1, "gizmos"), "a", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(2, "doodads"), "b", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(3, "whatsits"), "c", MEANING_UNKNOWN));
+                .addMetric(new Metric(new FixedInt(1, "gizmos"), "a"))
+                .addMetric(new Metric(new FixedInt(2, "doodads"), "b"))
+                .addMetric(new Metric(new FixedInt(3, "whatsits"), "c"));
 
         assertThat(style1.areNotificationsVisiblyDifferent(style2)).isTrue();
         assertThat(style2.areNotificationsVisiblyDifferent(style1)).isTrue();
@@ -241,151 +243,20 @@ public class NotificationMetricStyleTest {
     @Test
     public void areNotificationsVisiblyDifferent_firstThreeEqual_false() {
         MetricStyle style1 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1), "a", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(2), "b", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(3), "c", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedString("Ignored thing"), "d", MEANING_UNKNOWN));
+                .addMetric(new Metric(new FixedInt(1), "a"))
+                .addMetric(new Metric(new FixedInt(2), "b"))
+                .addMetric(new Metric(new FixedInt(3), "c"))
+                .addMetric(new Metric(new FixedString("Ignored thing"), "d"));
 
         MetricStyle style2 = new MetricStyle()
-                .addMetric(new Metric(new FixedInt(1), "a", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(2), "b", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedInt(3), "c", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedString("Also ignored"), "d", MEANING_UNKNOWN))
-                .addMetric(new Metric(new FixedString("And this too"), "e", MEANING_UNKNOWN));
+                .addMetric(new Metric(new FixedInt(1), "a"))
+                .addMetric(new Metric(new FixedInt(2), "b"))
+                .addMetric(new Metric(new FixedInt(3), "c"))
+                .addMetric(new Metric(new FixedString("Also ignored"), "d"))
+                .addMetric(new Metric(new FixedString("And this too"), "e"));
 
         assertThat(style1.areNotificationsVisiblyDifferent(style2)).isFalse();
         assertThat(style2.areNotificationsVisiblyDifferent(style1)).isFalse();
-    }
-
-    @Test
-    public void getMeaningCategory_concreteMeaning_returnsCategory() {
-        assertThat(Metric.getMeaningCategory(MEANING_CHRONOMETER_TIMER)).isEqualTo(
-                MEANING_CHRONOMETER);
-        assertThat(Metric.getMeaningCategory(MEANING_CELESTIAL_TIDE)).isEqualTo(MEANING_CELESTIAL);
-        assertThat(Metric.getMeaningCategory(MEANING_HEALTH_ACTIVE_TIME)).isEqualTo(MEANING_HEALTH);
-        assertThat(Metric.getMeaningCategory(MEANING_TRAVEL_TERMINAL)).isEqualTo(MEANING_TRAVEL);
-    }
-
-    @Test
-    public void getMeaningCategory_categoryMeaning_returnsCategory() {
-        assertThat(Metric.getMeaningCategory(MEANING_UNKNOWN)).isEqualTo(MEANING_UNKNOWN);
-        assertThat(Metric.getMeaningCategory(MEANING_CHRONOMETER)).isEqualTo(MEANING_CHRONOMETER);
-        assertThat(Metric.getMeaningCategory(MEANING_CELESTIAL)).isEqualTo(MEANING_CELESTIAL);
-        assertThat(Metric.getMeaningCategory(MEANING_HEALTH)).isEqualTo(MEANING_HEALTH);
-        assertThat(Metric.getMeaningCategory(MEANING_TRAVEL)).isEqualTo(MEANING_TRAVEL);
-    }
-
-    @Test
-    public void getMeaningCategory_invalidCategory_returnsUnknown() {
-        assertThat(Metric.getMeaningCategory(0xaaaa0001)).isEqualTo(MEANING_UNKNOWN);
-    }
-
-    @Test
-    public void valueToString_timeDifferenceRunning() {
-        TimeDifference runningTimer = TimeDifference.forTimer(
-                NOW.plusSeconds(90), // Rings in 90 seconds
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(runningTimer.toValueString(mContext)).isEqualTo(new ValueString("1:30"));
-
-        TimeDifference overrunSeconds = TimeDifference.forTimer(
-                NOW.minusSeconds(10), // Rang 10 seconds ago
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(overrunSeconds.toValueString(mContext)).isEqualTo(new ValueString("−0:10"));
-
-        TimeDifference overrunMinutes = TimeDifference.forTimer(
-                NOW.minus(2, MINUTES).minus(10, SECONDS), // Rang 2 minutes 10 seconds ago
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(overrunMinutes.toValueString(mContext)).isEqualTo(new ValueString("−2:10"));
-
-        TimeDifference overrunHours = TimeDifference.forTimer(
-                NOW.minus(3, HOURS).minus(2, MINUTES).minus(10, SECONDS), // Are you asleep?
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(overrunHours.toValueString(mContext)).isEqualTo(new ValueString("−3:02:10"));
-
-        TimeDifference runningStopwatch = TimeDifference.forStopwatch(
-                NOW.minusSeconds(120), // Started 2 minutes ago
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(runningStopwatch.toValueString(mContext)).isEqualTo(new ValueString("2:00"));
-
-        TimeDifference longRunningStopwatch = TimeDifference.forStopwatch(
-                NOW.minus(500, HOURS).minus(40, MINUTES), // Started looooong ago
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(longRunningStopwatch.toValueString(mContext)).isEqualTo(
-                new ValueString("500:40:00"));
-    }
-
-    @Test
-    public void valueToString_timeDifferencePaused() {
-        TimeDifference pausedTimer = TimeDifference.forPausedTimer(
-                Duration.ofHours(2).plusMinutes(5),
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(pausedTimer.toValueString(mContext)).isEqualTo(
-                new ValueString("2:05:00"));
-
-        TimeDifference pausedStopWatch = TimeDifference.forPausedStopwatch(
-                Duration.ofMinutes(12),
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(pausedStopWatch.toValueString(mContext)).isEqualTo(
-                new ValueString("12:00"));
-    }
-
-    @Test
-    public void valueToString_timeDifferenceAdaptive() {
-        TimeDifference diffHms = TimeDifference.forPausedTimer(
-                Duration.ofHours(2).plusMinutes(30).plusSeconds(58),
-                TimeDifference.FORMAT_ADAPTIVE);
-        expect.that(diffHms.toValueString(mContext)).isEqualTo(new ValueString("2h 30m 58s"));
-
-        TimeDifference diffH = TimeDifference.forPausedTimer(
-                Duration.ofHours(2), TimeDifference.FORMAT_ADAPTIVE);
-        expect.that(diffH.toValueString(mContext)).isEqualTo(new ValueString("2h"));
-
-        TimeDifference diffHm = TimeDifference.forPausedTimer(
-                Duration.ofHours(2).plusMinutes(30), TimeDifference.FORMAT_ADAPTIVE);
-        expect.that(diffHm.toValueString(mContext)).isEqualTo(new ValueString("2h 30m"));
-
-        TimeDifference diffHs = TimeDifference.forPausedTimer(
-                Duration.ofHours(2).plusSeconds(10), TimeDifference.FORMAT_ADAPTIVE);
-        expect.that(diffHs.toValueString(mContext)).isEqualTo(new ValueString("2h 10s"));
-
-        TimeDifference diffMs = TimeDifference.forPausedTimer(
-                Duration.ofMinutes(30).plusSeconds(58), TimeDifference.FORMAT_ADAPTIVE);
-        expect.that(diffMs.toValueString(mContext)).isEqualTo(new ValueString("30m 58s"));
-
-        TimeDifference diffZero = TimeDifference.forPausedTimer(
-                Duration.ofSeconds(0), TimeDifference.FORMAT_ADAPTIVE);
-        expect.that(diffZero.toValueString(mContext)).isEqualTo(new ValueString("0s"));
-
-        TimeDifference diffNegative = TimeDifference.forPausedTimer(
-                Duration.ZERO.minusHours(2).minusMinutes(30).minusSeconds(58),
-                TimeDifference.FORMAT_ADAPTIVE);
-        expect.that(diffNegative.toValueString(mContext)).isEqualTo(new ValueString("−2h 30m 58s"));
-    }
-
-    @Test
-    public void valueToString_timeDifferenceChronometer() {
-        TimeDifference formatAutoAboveHour = TimeDifference.forPausedTimer(
-                Duration.ofHours(2).plusMinutes(30),
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(formatAutoAboveHour.toValueString(mContext)).isEqualTo(
-                new ValueString("2:30:00"));
-
-        TimeDifference formatAutoBelowHour = TimeDifference.forPausedTimer(
-                Duration.ofMinutes(8),
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(formatAutoBelowHour.toValueString(mContext)).isEqualTo(
-                new ValueString("8:00"));
-
-        TimeDifference formatChrono = TimeDifference.forPausedTimer(
-                Duration.ofHours(2).plusMinutes(30),
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(formatChrono.toValueString(mContext)).isEqualTo(new ValueString("2:30:00"));
-
-        TimeDifference pausedNegative = TimeDifference.forPausedTimer(
-                Duration.ZERO.minusHours(2).minusMinutes(30).minusSeconds(10),
-                TimeDifference.FORMAT_CHRONOMETER);
-        expect.that(pausedNegative.toValueString(mContext)).isEqualTo(
-                new ValueString("−2:30:10"));
     }
 
     @Test
@@ -543,7 +414,7 @@ public class NotificationMetricStyleTest {
     public void valueToString_fixedFloat() {
         FixedFloat defaultDigits = new FixedFloat(1612.3456789f);
         assertThat(defaultDigits.toValueString(mContext)).isEqualTo(
-                new ValueString("1,612.346", null));
+                new ValueString("1,612.35", null));
 
         FixedFloat minDigits = new FixedFloat(42, "km", 2, 4);
         assertThat(minDigits.toValueString(mContext)).isEqualTo(new ValueString("42.00", "km"));
@@ -554,8 +425,193 @@ public class NotificationMetricStyleTest {
 
     @Test
     public void valueToString_fixedString() {
-        FixedString str = new FixedString("Boring");
-        assertThat(str.toValueString(mContext)).isEqualTo(new ValueString("Boring", null));
+        FixedString withUnit = new FixedString("120/80", "mmHg");
+        assertThat(withUnit.toValueString(mContext)).isEqualTo(new ValueString("120/80", "mmHg"));
+
+        FixedString noUnit = new FixedString("Boring");
+        assertThat(noUnit.toValueString(mContext)).isEqualTo(new ValueString("Boring", null));
+    }
+
+    @Test
+    @DisableFlags(Flags.FLAG_METRIC_STYLE_UNIT_IN_LABEL)
+    public void makeContentView_displaysLabelButNoUnit() {
+        Notification.Builder n = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle()
+                        .addMetric(new Metric(new FixedInt(42), "Answer"))
+                        .addMetric(new Metric(new FixedInt(273, "°K"), "Temp")));
+
+        RemoteViews remoteViews = n.getStyle().makeContentView();
+        FrameLayout container = new FrameLayout(mContext);
+        container.addView(remoteViews.apply(mContext, container));
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_0)).getText().toString())
+                .isEqualTo("Answer:");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_0)).getText().toString())
+                .isEqualTo("42");
+        assertThat((View) container.findViewById(R.id.metric_unit_0)).isNull();
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_1)).getText().toString())
+                .isEqualTo("Temp:");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_1)).getText().toString())
+                .isEqualTo("273");
+        assertThat((View) container.findViewById(R.id.metric_unit_1)).isNull();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_METRIC_STYLE_UNIT_IN_LABEL)
+    public void makeContentView_displaysLabelButNoUnit_evenWithUnitInLabelFlag() {
+        Notification.Builder n = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle()
+                        .addMetric(new Metric(new FixedInt(42), "Answer"))
+                        .addMetric(new Metric(new FixedInt(273, "°K"), "Temp")));
+
+        RemoteViews remoteViews = n.getStyle().makeContentView();
+        FrameLayout container = new FrameLayout(mContext);
+        container.addView(remoteViews.apply(mContext, container));
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_0)).getText().toString())
+                .isEqualTo("Answer:");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_0)).getText().toString())
+                .isEqualTo("42");
+        assertThat((View) container.findViewById(R.id.metric_unit_0)).isNull();
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_1)).getText().toString())
+                .isEqualTo("Temp:");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_1)).getText().toString())
+                .isEqualTo("273");
+        assertThat((View) container.findViewById(R.id.metric_unit_1)).isNull();
+    }
+
+    @Test
+    @DisableFlags(Flags.FLAG_METRIC_STYLE_UNIT_IN_LABEL)
+    public void makeExpandedContentView_displaysLabelAndUnit() {
+        Notification.Builder n = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle()
+                        .addMetric(new Metric(new FixedInt(42), "Answer"))
+                        .addMetric(new Metric(new FixedInt(273, "°K"), "Temp")));
+
+        RemoteViews remoteViews = n.getStyle().makeExpandedContentView();
+        FrameLayout container = new FrameLayout(mContext);
+        container.addView(remoteViews.apply(mContext, container));
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_0)).getText().toString())
+                .isEqualTo("Answer");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_0)).getText().toString())
+                .isEqualTo("42");
+        assertThat(container.findViewById(R.id.metric_unit_0).getVisibility()).isEqualTo(GONE);
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_1)).getText().toString())
+                .isEqualTo("Temp");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_1)).getText().toString())
+                .isEqualTo("273");
+        assertThat(container.findViewById(R.id.metric_unit_1).getVisibility()).isEqualTo(VISIBLE);
+        assertThat(((TextView) container.findViewById(R.id.metric_unit_1)).getText().toString())
+                .isEqualTo("°K");
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_METRIC_STYLE_UNIT_IN_LABEL)
+    public void makeExpandedContentView_concatenatesLabelAndUnit() {
+        Notification.Builder n = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle()
+                        .addMetric(new Metric(new FixedInt(42), "Answer"))
+                        .addMetric(new Metric(new FixedInt(273, "°K"), "Temp")));
+
+        RemoteViews remoteViews = n.getStyle().makeExpandedContentView();
+        FrameLayout container = new FrameLayout(mContext);
+        container.addView(remoteViews.apply(mContext, container));
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_0)).getText().toString())
+                .isEqualTo("Answer");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_0)).getText().toString())
+                .isEqualTo("42");
+        assertThat(container.findViewById(R.id.metric_unit_0).getVisibility()).isEqualTo(GONE);
+
+        assertThat(((TextView) container.findViewById(R.id.metric_label_1)).getText().toString())
+                .isEqualTo("Temp (°K)");
+        assertThat(((TextView) container.findViewById(R.id.metric_value_1)).getText().toString())
+                .isEqualTo("273");
+        assertThat(container.findViewById(R.id.metric_unit_1).getVisibility()).isEqualTo(GONE);
+    }
+
+    @Test
+    public void makeContentView_pausedTimer_showsDuration() {
+        Notification.Builder n = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle()
+                        .addMetric(new Metric(
+                                TimeDifference.forPausedTimer(Duration.ofMinutes(8),
+                                        TimeDifference.FORMAT_CHRONOMETER),
+                                "Paused timer")));
+
+        RemoteViews remoteViews = n.getStyle().makeExpandedContentView();
+        FrameLayout container = new FrameLayout(mContext);
+        container.addView(remoteViews.apply(mContext, container));
+        Chronometer chronometer = container.findViewById(R.id.metric_chronometer_0);
+
+        assertThat(chronometer.getText()).isEqualTo("08:00");
+        assertThat(chronometer.isCountDown()).isTrue();
+    }
+
+    @Test
+    public void makeContentView_pausedOverrunTimer_showsNegativeDuration() {
+        Notification.Builder n = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle()
+                        .addMetric(new Metric(
+                                TimeDifference.forPausedTimer(Duration.ofSeconds(-5),
+                                        TimeDifference.FORMAT_CHRONOMETER),
+                                "Paused overrun timer")));
+
+        RemoteViews remoteViews = n.getStyle().makeExpandedContentView();
+        FrameLayout container = new FrameLayout(mContext);
+        container.addView(remoteViews.apply(mContext, container));
+        Chronometer chronometer = container.findViewById(R.id.metric_chronometer_0);
+
+        assertThat(chronometer.getText()).isEqualTo("−00:05");
+        assertThat(chronometer.isCountDown()).isTrue();
+    }
+
+    @Test
+    public void makeContentView_pausedStopwatch_showsDuration() {
+        Notification.Builder n = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle()
+                        .addMetric(new Metric(
+                                TimeDifference.forPausedStopwatch(Duration.ofSeconds(10),
+                                        TimeDifference.FORMAT_CHRONOMETER),
+                                "Paused stopwatch")));
+
+        RemoteViews remoteViews = n.getStyle().makeExpandedContentView();
+        FrameLayout container = new FrameLayout(mContext);
+        container.addView(remoteViews.apply(mContext, container));
+        Chronometer chronometer = container.findViewById(R.id.metric_chronometer_0);
+
+        assertThat(chronometer.getText()).isEqualTo("00:10");
+        assertThat(chronometer.isCountDown()).isFalse();
+    }
+
+    @Test
+    public void makeContentViews_emptyMetrics_noException() {
+        FrameLayout container = new FrameLayout(mContext);
+        Notification.Builder noMetrics = new Notification.Builder(mContext, "channel")
+                .setStyle(new MetricStyle());
+
+        RemoteViews basic = noMetrics.getStyle().makeContentView();
+        RemoteViews expanded = noMetrics.getStyle().makeExpandedContentView();
+        RemoteViews headsUp = noMetrics.getStyle().makeHeadsUpContentView();
+        RemoteViews compactHeadsUp = noMetrics.getStyle().makeCompactHeadsUpContentView();
+
+        if (basic != null) {
+            container.addView(basic.apply(mContext, container));
+        }
+        if (expanded != null) {
+            container.addView(expanded.apply(mContext, container));
+        }
+        if (headsUp != null) {
+            container.addView(headsUp.apply(mContext, container));
+        }
+        if (compactHeadsUp != null) {
+            container.addView(compactHeadsUp.apply(mContext, container));
+        }
+        // No crashes.
     }
 
     private void withLocale(Locale locale, Runnable r) {

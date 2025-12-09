@@ -21,6 +21,7 @@ import static android.Manifest.permission.TEST_BIOMETRIC;
 import static android.Manifest.permission.USE_BIOMETRIC;
 import static android.Manifest.permission.USE_BIOMETRIC_INTERNAL;
 import static android.Manifest.permission.WRITE_DEVICE_CONFIG;
+import static android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME;
 import static android.hardware.biometrics.Flags.FLAG_ADD_FALLBACK;
 
 import static com.android.internal.util.FrameworkStatsLog.AUTH_DEPRECATED_APIUSED__DEPRECATED_API__API_BIOMETRIC_MANAGER_CAN_AUTHENTICATE;
@@ -31,11 +32,13 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
+import android.annotation.RestrictedForEnvironment;
 import android.annotation.SystemApi;
 import android.annotation.SystemService;
 import android.annotation.TestApi;
 import android.app.KeyguardManager;
 import android.content.Context;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.UserHandle;
@@ -56,6 +59,8 @@ import java.util.Map;
 /**
  * A class that contains biometric utilities. For authentication, see {@link BiometricPrompt}.
  */
+@RestrictedForEnvironment(
+        environments = ENVIRONMENT_SDK_RUNTIME, from = Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @SystemService(Context.BIOMETRIC_SERVICE)
 public class BiometricManager {
 
@@ -178,51 +183,49 @@ public class BiometricManager {
     }
 
     /**
-     * An {@link IntDef} representing the icons for biometric prompt fallbacks
+     * An {@link IntDef} representing the different icon types that can be used in the biometric
+     * prompt fallback options
+     * @hide
+     */
+    @IntDef(prefix = { "ICON_TYPE_" }, value = {
+            ICON_TYPE_PASSWORD,
+            ICON_TYPE_QR_CODE,
+            ICON_TYPE_ACCOUNT,
+            ICON_TYPE_GENERIC,
+            ICON_TYPE_SETTING
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface IconType {}
+
+    /**
+     * An icon representing a password.
      */
     @FlaggedApi(FLAG_ADD_FALLBACK)
-    public interface IconType {
-        /**
-         * @hide
-         */
-        @IntDef({PASSWORD,
-                QR_CODE,
-                ACCOUNT,
-                GENERIC,
-                SETTING})
-        @Retention(RetentionPolicy.SOURCE)
-        @interface Types {}
+    public static final int ICON_TYPE_PASSWORD = 0;
 
-        /**
-         * Password icon
-         */
-        @FlaggedApi(FLAG_ADD_FALLBACK)
-        int PASSWORD = 0;
+    /**
+     * An icon representing a QR code.
+     */
+    @FlaggedApi(FLAG_ADD_FALLBACK)
+    public static final int ICON_TYPE_QR_CODE = 1;
 
-        /**
-         * QR code icon
-         */
-        @FlaggedApi(FLAG_ADD_FALLBACK)
-        int QR_CODE = 1;
+    /**
+     * An icon representing a user account.
+     */
+    @FlaggedApi(FLAG_ADD_FALLBACK)
+    public static final int ICON_TYPE_ACCOUNT = 2;
 
-        /**
-         * Account icon
-         */
-        @FlaggedApi(FLAG_ADD_FALLBACK)
-        int ACCOUNT = 2;
+    /**
+     * A generic icon.
+     */
+    @FlaggedApi(FLAG_ADD_FALLBACK)
+    public static final int ICON_TYPE_GENERIC = 3;
 
-        /**
-         * Generic icon
-         */
-        @FlaggedApi(FLAG_ADD_FALLBACK)
-        int GENERIC = 3;
-
-        /**
-         * Gear icon
-         */
-        @FlaggedApi(FLAG_ADD_FALLBACK)
-        int SETTING = 4;
-    }
+    /**
+     * An icon representing settings (a gear).
+     */
+    @FlaggedApi(FLAG_ADD_FALLBACK)
+    public static final int ICON_TYPE_SETTING = 4;
 
     /**
      * Types of authenticators, defined at a level of granularity supported by
@@ -687,7 +690,8 @@ public class BiometricManager {
             getEnrollmentStatus() {
         try {
             final List<BiometricEnrollmentStatusInternal> statusInternalList =
-                    mService.getEnrollmentStatusList(mContext.getOpPackageName());
+                    mService.getEnrollmentStatusList(mContext.getUserId(),
+                            mContext.getOpPackageName());
             return convertBiometricEnrollmentStatusInternalToMap(statusInternalList);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -765,6 +769,42 @@ public class BiometricManager {
             }
         } else {
             Slog.w(TAG, "unregisterAuthenticationStateListener(): Service not connected");
+        }
+    }
+
+    /**
+     * Registers listener for changes to Identity Check state.
+     * @param listener Listener for changes to Identity Check state
+     * @hide
+     */
+    @RequiresPermission(USE_BIOMETRIC_INTERNAL)
+    public void registerIdentityCheckStateListener(IIdentityCheckStateListener listener) {
+        if (mService != null) {
+            try {
+                mService.registerIdentityCheckStateListener(listener);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        } else {
+            Slog.w(TAG, "registerIdentityCheckStateListener(): Service not connected");
+        }
+    }
+
+    /**
+     * Unregisters listener for changes to Identity Check state.
+     * @param listener Listener for changes to Identity Check state
+     * @hide
+     */
+    @RequiresPermission(USE_BIOMETRIC_INTERNAL)
+    public void unregisterIdentityCheckStateListener(IIdentityCheckStateListener listener) {
+        if (mService != null) {
+            try {
+                mService.unregisterIdentityCheckStateListener(listener);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        } else {
+            Slog.w(TAG, "unregisterIdentityCheckStateListener(): Service not connected");
         }
     }
 

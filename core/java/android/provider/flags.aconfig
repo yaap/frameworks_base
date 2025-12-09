@@ -78,3 +78,21 @@ flag {
     description: "This flag will enable documents trash APIs"
     bug: "409260986"
 }
+
+# OWNER=rambowang TARGET=25Q4
+flag {
+    name: "expose_system_update_settings"
+    is_exported: true
+    namespace: "android_settings"
+    description: "Feature flag to expose SYSTEM_UPDATE_SETTINGS as a public API"
+    bug: "417458670"
+}
+
+# OWNER = liefuliu
+flag {
+    name: "new_account_attributes_api_enabled"
+    is_exported: true
+    namespace: "contacts"
+    description: "Enable the new Account Attributes APIs for contacts"
+    bug: "330326187"
+}

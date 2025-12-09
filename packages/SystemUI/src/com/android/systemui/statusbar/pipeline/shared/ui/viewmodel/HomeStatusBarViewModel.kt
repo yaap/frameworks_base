@@ -24,13 +24,15 @@ import android.view.View
 import androidx.compose.runtime.getValue
 import com.android.app.tracing.FlowTracing.traceEach
 import com.android.app.tracing.TrackGroupUtils.trackGroup
-import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.systemui.dagger.qualifiers.Background
+import com.android.systemui.desktop.domain.interactor.DesktopInteractor
 import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent.DisplayAware
 import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent.DisplayId
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
+import com.android.systemui.keyguard.domain.interactor.KeyguardOcclusionInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
 import com.android.systemui.keyguard.shared.model.Edge
+import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.keyguard.shared.model.KeyguardState.DREAMING
 import com.android.systemui.keyguard.shared.model.KeyguardState.GONE
 import com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN
@@ -42,7 +44,6 @@ import com.android.systemui.lifecycle.Hydrator
 import com.android.systemui.log.table.TableLogBufferFactory
 import com.android.systemui.log.table.logDiffsForTable
 import com.android.systemui.plugins.DarkIconDispatcher
-import com.android.systemui.scene.domain.interactor.SceneContainerOcclusionInteractor
 import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.scene.shared.model.Overlays
@@ -63,13 +64,13 @@ import com.android.systemui.statusbar.featurepods.popups.StatusBarPopupChips
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipModel
 import com.android.systemui.statusbar.featurepods.popups.ui.viewmodel.StatusBarPopupChipsViewModel
 import com.android.systemui.statusbar.headsup.shared.StatusBarNoHunBehavior
+import com.android.systemui.statusbar.layout.ui.viewmodel.AppHandlesViewModel
 import com.android.systemui.statusbar.layout.ui.viewmodel.StatusBarBoundsViewModel
 import com.android.systemui.statusbar.layout.ui.viewmodel.StatusBarContentInsetsViewModelStore
 import com.android.systemui.statusbar.notification.domain.interactor.ActiveNotificationsInteractor
 import com.android.systemui.statusbar.notification.domain.interactor.HeadsUpNotificationInteractor
 import com.android.systemui.statusbar.notification.headsup.PinnedStatus
 import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi
-import com.android.systemui.statusbar.notification.shared.NotificationsLiveDataStoreRefactor
 import com.android.systemui.statusbar.phone.domain.interactor.DarkIconInteractor
 import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark
 import com.android.systemui.statusbar.phone.domain.interactor.LightsOutInteractor
@@ -95,12 +96,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * A view model that manages the visibility of the [CollapsedStatusBarFragment] based on the device
@@ -125,6 +127,12 @@ interface HomeStatusBarViewModel : Activatable {
      * Factory to create the view model for storing bounds of child views in/around the status bar.
      */
     val statusBarBoundsViewModelFactory: StatusBarBoundsViewModel.Factory
+
+    /**
+     * Factory to create the view model for storing bounds of app handles overlapping with the
+     * status bar.
+     */
+    val appHandlesViewModelFactory: AppHandlesViewModel.Factory
 
     /**
      * True if the device is currently transitioning from lockscreen to occluded and false
@@ -152,6 +160,18 @@ interface HomeStatusBarViewModel : Activatable {
 
     /** Invoked each time a chip's on-screen bounds have changed. */
     fun onChipBoundsChanged(key: String, bounds: RectF)
+
+    /** Notifies that the system icons container was clicked. */
+    fun onQuickSettingsChipClicked()
+
+    /** Notifies that the notification icons container was clicked. */
+    fun onNotificationIconChipClicked()
+
+    /** Whether the QS Chip should be highlighted. */
+    val isQuickSettingsChipHighlighted: Boolean
+
+    /** Whether the Notifications chip should be highlighted. */
+    val isNotificationsChipHighlighted: Boolean
 
     /**
      * The multiple ongoing activity chips that should be shown on the left-hand side of the status
@@ -215,6 +235,9 @@ interface HomeStatusBarViewModel : Activatable {
     /** [IsAreaDark] applicable for this status bar's display and content area */
     val areaDark: IsAreaDark
 
+    /** True if the desktop status bar is enabled. */
+    val useDesktopStatusBar: Boolean
+
     /** Interface for the assisted factory, to allow for providing a fake in tests */
     interface HomeStatusBarViewModelFactory {
         fun create(): HomeStatusBarViewModel
@@ -229,21 +252,23 @@ constructor(
     override val unifiedBatteryViewModel: BatteryViewModel.BasedOnUserSetting.Factory,
     override val systemStatusIconsViewModelFactory: SystemStatusIconsViewModel.Factory,
     override val statusBarBoundsViewModelFactory: StatusBarBoundsViewModel.Factory,
+    override val appHandlesViewModelFactory: AppHandlesViewModel.Factory,
     tableLoggerFactory: TableLogBufferFactory,
-    homeStatusBarInteractor: HomeStatusBarInteractor,
+    @DisplayAware homeStatusBarInteractor: HomeStatusBarInteractor,
     homeStatusBarIconBlockListInteractor: HomeStatusBarIconBlockListInteractor,
     lightsOutInteractor: LightsOutInteractor,
     notificationsInteractor: ActiveNotificationsInteractor,
+    desktopInteractor: DesktopInteractor,
     darkIconInteractor: DarkIconInteractor,
     headsUpNotificationInteractor: HeadsUpNotificationInteractor,
     keyguardTransitionInteractor: KeyguardTransitionInteractor,
     keyguardInteractor: KeyguardInteractor,
     override val operatorNameViewModel: StatusBarOperatorNameViewModel,
-    sceneInteractor: SceneInteractor,
-    sceneContainerOcclusionInteractor: SceneContainerOcclusionInteractor,
-    shadeInteractor: ShadeInteractor,
+    private val sceneInteractor: SceneInteractor,
+    occlusionInteractor: KeyguardOcclusionInteractor,
+    private val shadeInteractor: ShadeInteractor,
     shareToAppChipViewModel: ShareToAppChipViewModel,
-    private val ongoingActivityChipsViewModel: OngoingActivityChipsViewModel,
+    @DisplayAware private val ongoingActivityChipsViewModel: OngoingActivityChipsViewModel,
     statusBarPopupChipsViewModelFactory: StatusBarPopupChipsViewModel.Factory,
     animations: SystemStatusEventAnimationInteractor,
     statusBarContentInsetsViewModelStore: StatusBarContentInsetsViewModelStore,
@@ -260,14 +285,18 @@ constructor(
     private val statusBarPopupChips by lazy { statusBarPopupChipsViewModelFactory.create() }
 
     override val isTransitioningFromLockscreenToOccluded: StateFlow<Boolean> =
-        keyguardTransitionInteractor
-            .isInTransition(Edge.create(from = LOCKSCREEN, to = OCCLUDED))
-            .distinctUntilChanged()
-            .logDiffsForTable(
-                tableLogBuffer = tableLogger,
-                columnName = COL_LOCK_TO_OCCLUDED,
-                initialValue = false,
-            )
+        if (SceneContainerFlag.isEnabled) {
+                flowOf(false)
+            } else {
+                keyguardTransitionInteractor
+                    .isInTransition(Edge.create(from = LOCKSCREEN, to = OCCLUDED))
+                    .distinctUntilChanged()
+                    .logDiffsForTable(
+                        tableLogBuffer = tableLogger,
+                        columnName = COL_LOCK_TO_OCCLUDED,
+                        initialValue = false,
+                    )
+            }
             .stateIn(bgDisplayScope, SharingStarted.WhileSubscribed(), initialValue = false)
 
     override val transitionFromLockscreenToDreamStartedEvent: Flow<Unit> =
@@ -350,18 +379,19 @@ constructor(
     private val isHomeStatusBarAllowedByScene: Flow<Boolean> =
         combine(
                 sceneInteractor.currentScene,
-                isShadeVisibleOnThisDisplay,
-                sceneContainerOcclusionInteractor.invisibleDueToOcclusion,
-            ) { currentScene, isShadeVisible, isOccluded ->
-
-                // All scenes have their own status bars, so we should only show the home status bar
-                // if we're not in a scene. There are two exceptions:
-                // 1) The shade (notifications or quick settings) is shown, because it has its own
-                // status-bar-like header.
-                // 2) If the scene is occluded, then the occluding app needs to show the status bar.
-                // (Fullscreen apps actually won't show the status bar but that's handled with the
-                // rest of our fullscreen app logic, which lives elsewhere.)
-                (currentScene == Scenes.Gone && !isShadeVisible) || isOccluded
+                isShadeVisibleOnAnyDisplay,
+                occlusionInteractor.isKeyguardOccluded,
+                isShadeWindowOnThisDisplay,
+            ) { currentScene, isShadeVisibleOnAnyDisplay, isOccluded, isShadeWindowOnThisDisplay ->
+                if (isOccluded) {
+                    true
+                } else if (isShadeWindowOnThisDisplay) {
+                    currentScene == Scenes.Gone && !isShadeVisibleOnAnyDisplay
+                } else {
+                    // When the shade is visible on another display,
+                    // allow the home status bar on the current display.
+                    currentScene == Scenes.Gone || isShadeVisibleOnAnyDisplay
+                }
             }
             .distinctUntilChanged()
             .logDiffsForTable(
@@ -371,17 +401,13 @@ constructor(
             )
 
     override val areNotificationsLightsOut: Flow<Boolean> =
-        if (NotificationsLiveDataStoreRefactor.isUnexpectedlyInLegacyMode()) {
-                emptyFlow()
-            } else {
-                combine(
-                        notificationsInteractor.areAnyNotificationsPresent,
-                        lightsOutInteractor.isLowProfile(thisDisplayId) ?: flowOf(false),
-                    ) { hasNotifications, isLowProfile ->
-                        hasNotifications && isLowProfile
-                    }
-                    .distinctUntilChanged()
+        combine(
+                notificationsInteractor.areAnyNotificationsPresent,
+                lightsOutInteractor.isLowProfile(thisDisplayId) ?: flowOf(false),
+            ) { hasNotifications, isLowProfile ->
+                hasNotifications && isLowProfile
             }
+            .distinctUntilChanged()
             .logDiffsForTable(
                 tableLogBuffer = tableLogger,
                 columnName = COL_NOTIF_LIGHTS_OUT,
@@ -412,12 +438,42 @@ constructor(
             source = darkIconInteractor.isAreaDark(thisDisplayId),
         )
 
+    private val currentKeyguardState: Flow<KeyguardState> =
+        keyguardTransitionInteractor.currentKeyguardState.onEach {
+            tableLogger.logChange(
+                columnName = COL_KEYGUARD_STATE,
+                value = it.name,
+                isInitial = false,
+            )
+        }
+
+    override val useDesktopStatusBar: Boolean by
+        hydrator.hydratedStateOf(
+            traceName = "useDesktopStatusBar",
+            initialValue = false,
+            source = desktopInteractor.useDesktopStatusBar,
+        )
+
+    override val isQuickSettingsChipHighlighted: Boolean by
+        hydrator.hydratedStateOf(
+            traceName = "isQsChipHighlighted",
+            initialValue = false,
+            source = shadeInteractor.isQsExpanded,
+        )
+
+    override val isNotificationsChipHighlighted: Boolean by
+        hydrator.hydratedStateOf(
+            traceName = "isNotificationsChipHighlighted",
+            initialValue = false,
+            source = shadeInteractor.isNotificationsExpanded,
+        )
+
     /**
      * True if the current SysUI state can show the home status bar (aka this status bar), and false
      * if we shouldn't be showing any part of the home status bar.
      */
     private val isHomeScreenStatusBarAllowedLegacy: Flow<Boolean> =
-        combine(keyguardTransitionInteractor.currentKeyguardState, isShadeVisibleOnThisDisplay) {
+        combine(currentKeyguardState, isShadeVisibleOnThisDisplay) {
                 currentKeyguardState,
                 isShadeVisibleOnThisDisplay ->
                 (currentKeyguardState == GONE || currentKeyguardState == OCCLUDED) &&
@@ -450,7 +506,13 @@ constructor(
                 keyguardInteractor.isSecureCameraActive,
                 headsUpNotificationInteractor.statusBarHeadsUpStatus,
                 isTransitioningFromGoneToDream,
-            ) { isHomeStatusBarAllowed, isSecureCameraActive, headsUpState, isGoneToDream ->
+                keyguardInteractor.isKeyguardVisible,
+            ) {
+                isHomeStatusBarAllowed,
+                isSecureCameraActive,
+                headsUpState,
+                isGoneToDream,
+                isKeyguardVisible ->
                 val showForHeadsUp =
                     if (StatusBarNoHunBehavior.isEnabled) {
                         false
@@ -470,7 +532,12 @@ constructor(
                 // momentarily visible because the dream animation has finished, but SysUI has not
                 // been informed that the dream is full-screen. See b/273314977.
                 showForHeadsUp ||
-                    (isHomeStatusBarAllowed && !isSecureCameraActive && !isGoneToDream)
+                    (isHomeStatusBarAllowed &&
+                        !isSecureCameraActive &&
+                        !isGoneToDream &&
+                        // In legacy code, check if keyguard is visible to cover canceled
+                        // transitions. In Flexi, the scene state is enough to cover this case.
+                        if (!SceneContainerFlag.isEnabled) !isKeyguardVisible else true)
             }
             .distinctUntilChanged()
             .logDiffsForTable(
@@ -556,6 +623,24 @@ constructor(
 
     override fun onChipBoundsChanged(key: String, bounds: RectF) {
         ongoingActivityChipsViewModel.onChipBoundsChanged(key, bounds)
+    }
+
+    override fun onQuickSettingsChipClicked() {
+        if (SceneContainerFlag.isUnexpectedlyInLegacyMode()) {
+            return
+        }
+        shadeInteractor.toggleQuickSettingsShade(
+            loggingReason = "HomeStatusBarViewModel.onQuickSettingsChipClicked"
+        )
+    }
+
+    override fun onNotificationIconChipClicked() {
+        if (SceneContainerFlag.isUnexpectedlyInLegacyMode()) {
+            return
+        }
+        shadeInteractor.toggleNotificationsShade(
+            loggingReason = "HomeStatusBarViewModel.onNotificationIconChipClicked"
+        )
     }
 
     private val hasOngoingActivityChips =
@@ -686,6 +771,7 @@ constructor(
         private const val COL_ALLOWED_LEGACY = "allowedLegacy"
         private const val COL_ALLOWED_BY_SCENE = "allowedByScene"
         private const val COL_SHADE_EXPANDED_ENOUGH = "shadeExpandedEnough"
+        private const val COL_KEYGUARD_STATE = "keyguardState"
         private const val COL_NOTIF_LIGHTS_OUT = "notifLightsOut"
         private const val COL_SHOW_OPERATOR_NAME = "showOperatorName"
         private const val COL_VISIBLE = "visible"

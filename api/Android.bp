@@ -112,6 +112,11 @@ combined_apis {
         default: [
             "framework-ondeviceintelligence-platform",
         ],
+    }) + select(release_flag("RELEASE_CONSCRYPT_NSC"), {
+        true: [
+            "framework-conscrypt-nsc",
+        ],
+        default: [],
     }) + select(release_flag("RELEASE_RANGING_STACK"), {
         true: [
             "framework-ranging",
@@ -120,6 +125,13 @@ combined_apis {
     }) + select(release_flag("RELEASE_TELEPHONY_MODULE"), {
         true: [
             "framework-telephony",
+        ],
+        default: [
+            "framework-platformtelephony",
+        ],
+    }) + select(release_flag("RELEASE_ANOMALY_DETECTOR"), {
+        true: [
+            "framework-anomaly-detector",
         ],
         default: [],
     }),
@@ -139,6 +151,11 @@ combined_apis {
     }) + select(soong_config_variable("ANDROID", "release_crashrecovery_module"), {
         "true": [
             "service-crashrecovery",
+        ],
+        default: [],
+    }) + select(release_flag("RELEASE_ANOMALY_DETECTOR"), {
+        true: [
+            "service-anomaly-detector",
         ],
         default: [],
     }),
@@ -377,7 +394,7 @@ stubs_defaults {
     arg_files: [":frameworks-base-core-AndroidManifest.xml"],
     aidl: {
         include_dirs: [
-            "frameworks/av/aidl",
+            "frameworks/av/media/aidl",
             "frameworks/base/media/aidl",
             "frameworks/base/telephony/java",
             "frameworks/native/libs/permission/aidl",
@@ -495,6 +512,9 @@ java_defaults {
         "//frameworks/base/nfc",
         "//frameworks/base/packages/CrashRecovery/framework",
         "//packages/modules/NeuralNetworks:__subpackages__",
+        // TODO(b/429127828): Clean this up along with RELEASE_TELEPHONY_MODULE
+        "//packages/modules/Telephony/framework:__subpackages__",
+        "//packages/modules/Virtualization:__subpackages__",
     ],
     plugins: ["error_prone_android_framework"],
     errorprone: {

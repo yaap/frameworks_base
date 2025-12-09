@@ -44,6 +44,7 @@ import android.hardware.biometrics.IAuthService;
 import android.hardware.biometrics.IBiometricEnabledOnKeyguardCallback;
 import android.hardware.biometrics.IBiometricService;
 import android.hardware.biometrics.IBiometricServiceReceiver;
+import android.hardware.biometrics.IIdentityCheckStateListener;
 import android.hardware.biometrics.IInvalidationCallback;
 import android.hardware.biometrics.ITestSession;
 import android.hardware.biometrics.ITestSessionCallback;
@@ -81,6 +82,7 @@ import com.android.server.companion.virtual.VirtualDeviceManagerInternal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * System service that provides an interface for authenticating with biometrics and
@@ -267,7 +269,8 @@ public class AuthService extends SystemService {
             try {
                 // Get the result from BiometricService, since it is the source of truth for all
                 // biometric sensors.
-                return mInjector.getBiometricService().getSensorProperties(opPackageName);
+                return mInjector.getBiometricService().getSensorProperties(opPackageName)
+                        .stream().filter(p -> p != null).collect(Collectors.toList());
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }
@@ -435,12 +438,20 @@ public class AuthService extends SystemService {
         }
 
         @Override
-        public List<BiometricEnrollmentStatusInternal> getEnrollmentStatusList(String opPackageName)
-                throws RemoteException {
+        public List<BiometricEnrollmentStatusInternal> getEnrollmentStatusList(int userId,
+                String opPackageName) throws RemoteException {
             checkBiometricAdvancedPermission();
+
+            // Only allow internal clients to call getEnrollmentStatusList with a different
+            // userId.
+            final int callingUserId = UserHandle.getCallingUserId();
+
+            if (userId != callingUserId) {
+                checkInternalPermission();
+            }
+
             final long identity = Binder.clearCallingIdentity();
             try {
-                final int userId = UserHandle.myUserId();
                 final List<BiometricEnrollmentStatusInternal> enrollmentStatusList =
                         new ArrayList<>();
                 final IFingerprintService fingerprintService = mInjector.getFingerprintService();
@@ -450,7 +461,10 @@ public class AuthService extends SystemService {
                     if (!fpProps.isEmpty()) {
                         int fpCount = fingerprintService.getEnrolledFingerprints(userId,
                                 opPackageName, getContext().getAttributionTag()).size();
-                        BiometricEnrollmentStatus status = new BiometricEnrollmentStatus(fpCount);
+                        int strength = Utils.propertyStrengthToAuthenticatorStrength(
+                                fpProps.getFirst().sensorStrength);
+                        BiometricEnrollmentStatus status = new BiometricEnrollmentStatus(strength,
+                                fpCount);
                         enrollmentStatusList.add(
                                 new BiometricEnrollmentStatusInternal(
                                         BiometricManager.TYPE_FINGERPRINT, status));
@@ -466,9 +480,13 @@ public class AuthService extends SystemService {
                     final List<FaceSensorPropertiesInternal> faceProps =
                             faceService.getSensorPropertiesInternal(opPackageName);
                     if (!faceProps.isEmpty()) {
-                        int faceCount = faceService.getEnrolledFaces(faceProps.getFirst().sensorId,
-                                userId, opPackageName).size();
-                        BiometricEnrollmentStatus status = new BiometricEnrollmentStatus(faceCount);
+                        FaceSensorPropertiesInternal faceProp = faceProps.getFirst();
+                        int faceCount = faceService.getEnrolledFaces(faceProp.sensorId, userId,
+                                opPackageName).size();
+                        int strength = Utils.propertyStrengthToAuthenticatorStrength(
+                                faceProp.sensorStrength);
+                        BiometricEnrollmentStatus status = new BiometricEnrollmentStatus(strength,
+                                faceCount);
                         enrollmentStatusList.add(
                                 new BiometricEnrollmentStatusInternal(
                                         BiometricManager.TYPE_FACE, status));
@@ -523,6 +541,20 @@ public class AuthService extends SystemService {
             if (faceService != null) {
                 faceService.unregisterAuthenticationStateListener(listener);
             }
+        }
+
+        @Override
+        public void registerIdentityCheckStateListener(IIdentityCheckStateListener listener)
+                throws RemoteException {
+            checkInternalPermission();
+            mBiometricService.registerIdentityCheckStateListener(listener);
+        }
+
+        @Override
+        public void unregisterIdentityCheckStateListener(IIdentityCheckStateListener listener)
+                throws RemoteException {
+            checkInternalPermission();
+            mBiometricService.unregisterIdentityCheckStateListener(listener);
         }
 
         @Override

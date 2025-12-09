@@ -132,11 +132,17 @@ public class ProtectedPackages {
      * can modify its data or package state.
      */
     private synchronized boolean isProtectedPackage(@UserIdInt int userId, String packageName) {
-        return packageName != null
-                && (packageName.equals(mDeviceProvisioningPackage)
-                        || isOwnerProtectedPackage(userId, packageName)
-                        || (Flags.protectSupervisionPackages()
-                                && isSupervisionPackage(userId, packageName)));
+        if (packageName == null) {
+            return false;
+        }
+        if (packageName.equals(mDeviceProvisioningPackage)
+                || isOwnerProtectedPackage(userId, packageName)) {
+            return true;
+        }
+        if (Flags.protectSupervisionPackages() && isSupervisionPackage(userId, packageName)) {
+            return true;
+        }
+        return false;
     }
 
     /**

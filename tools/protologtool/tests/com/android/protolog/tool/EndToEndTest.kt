@@ -48,7 +48,7 @@ class EndToEndTest {
                         }
                     }
                 """.trimIndent()),
-                logGroup = LogGroup("GROUP", true, false, "TAG_GROUP"),
+                logGroup = LogGroup("GROUP", true, false, "TAG_GROUP", 1),
                 commandOptions = CommandOptions(arrayOf("transform-protolog-calls",
                         "--protolog-class", "com.android.internal.protolog.ProtoLog",
                         "--loggroups-class", "com.android.internal.protolog.ProtoLogGroup",
@@ -59,11 +59,11 @@ class EndToEndTest {
         )
         val outSrcJar = assertLoadSrcJar(output, "out.srcjar")
         Truth.assertThat(outSrcJar["frameworks/base/org/example/Example.java"])
-                .containsMatch(Pattern.compile("\\{ String protoLogParam0 = " +
-                        "String\\.valueOf\\(argString\\); long protoLogParam1 = argInt; " +
-                        "com\\.android\\.internal\\.protolog.ProtoLogImpl_.*\\.d\\(" +
-                        "GROUP, -6872339441335321086L, 4, protoLogParam0, protoLogParam1" +
-                        "\\); \\}"))
+                .contains("String protoLogParam0 = String.valueOf(argString);"
+                        + "  long protoLogParam1 = argInt;"
+                        + "  com.android.internal.protolog.ProtoLogImpl_454675969.d("
+                        + "GROUP, -6872339441335321086L, 4, protoLogParam0, protoLogParam1);"
+                        + " }");
     }
 
     @Test
@@ -82,7 +82,7 @@ class EndToEndTest {
                         }
                     }
                 """.trimIndent()),
-                logGroup = LogGroup("GROUP", true, false, "TAG_GROUP"),
+                logGroup = LogGroup("GROUP", true, false, "TAG_GROUP", 1),
                 commandOptions = CommandOptions(arrayOf("generate-viewer-config",
                         "--protolog-class", "com.android.internal.protolog.ProtoLog",
                         "--loggroups-class", "com.android.internal.protolog.ProtoLogGroup",
@@ -123,7 +123,7 @@ class EndToEndTest {
                 """.trimIndent())
         val output = run(
             srcs = srcs,
-            logGroup = LogGroup("GROUP", true, false, "TAG_GROUP"),
+            logGroup = LogGroup("GROUP", true, false, "TAG_GROUP", 1),
             commandOptions = CommandOptions(arrayOf("transform-protolog-calls",
                 "--protolog-class", "com.android.internal.protolog.ProtoLog",
                 "--loggroups-class", "com.android.internal.protolog.ProtoLogGroup",

@@ -392,11 +392,10 @@ public final class WindowManagerGlobal {
         if (display == null) {
             throw new IllegalArgumentException("display must not be null");
         }
-        if (!(params instanceof WindowManager.LayoutParams)) {
+        if (!(params instanceof WindowManager.LayoutParams wparams)) {
             throw new IllegalArgumentException("Params must be WindowManager.LayoutParams");
         }
 
-        final WindowManager.LayoutParams wparams = (WindowManager.LayoutParams) params;
         final Context context = view.getContext();
         if (parentWindow != null) {
             parentWindow.adjustLayoutParamsForSubWindow(wparams);
@@ -507,11 +506,9 @@ public final class WindowManagerGlobal {
         if (view == null) {
             throw new IllegalArgumentException("view must not be null");
         }
-        if (!(params instanceof WindowManager.LayoutParams)) {
+        if (!(params instanceof WindowManager.LayoutParams wparams)) {
             throw new IllegalArgumentException("Params must be WindowManager.LayoutParams");
         }
-
-        final WindowManager.LayoutParams wparams = (WindowManager.LayoutParams)params;
 
         view.setLayoutParams(wparams);
 
@@ -901,19 +898,18 @@ public final class WindowManagerGlobal {
     private static InputChannel createInputChannel(@NonNull IBinder clientToken,
             @NonNull InputTransferToken hostToken, @NonNull SurfaceControl surfaceControl,
             @Nullable InputTransferToken inputTransferToken) {
-        InputChannel inputChannel = new InputChannel();
         try {
             // TODO (b/329860681): Use INVALID_DISPLAY for now because the displayId will be
             // selected in  SurfaceFlinger. This should be cleaned up so grantInputChannel doesn't
             // take in a displayId at all
-            WindowManagerGlobal.getWindowSession().grantInputChannel(INVALID_DISPLAY,
+            return WindowManagerGlobal.getWindowSession().grantInputChannel(INVALID_DISPLAY,
                     surfaceControl, clientToken, hostToken, 0, 0, TYPE_APPLICATION, 0, null,
-                    inputTransferToken, surfaceControl.getName(), inputChannel);
+                    inputTransferToken, surfaceControl.getName());
         } catch (RemoteException e) {
             Log.e(TAG, "Failed to create input channel", e);
             e.rethrowAsRuntimeException();
+            return null;
         }
-        return inputChannel;
     }
 
     private static void removeInputChannel(IBinder clientToken) {
@@ -1116,14 +1112,14 @@ public final class WindowManagerGlobal {
     }
 
     /**
-     * Checks whether {@link WindowContext#getWindowTypeOverride()} can be applied when
+     * Checks whether {@link WindowContext#getFallbackWindowType()} can be applied when
      * {@link WindowManager#addView} or {@link WindowManager#updateViewLayout}.
      *
-     * @param windowTypeToOverride the window type to override
+     * @param fallbackWindowType the fallback window type
      * @param view the view that applies the window type
      */
-    public boolean canApplyWindowTypeOverride(
-            @WindowManager.LayoutParams.WindowType int windowTypeToOverride,
+    public boolean canApplyFallbackWindowType(
+            @WindowManager.LayoutParams.WindowType int fallbackWindowType,
             @NonNull View view) {
         synchronized (mLock) {
             final int index = findViewLocked(view, false /* required */);
@@ -1134,7 +1130,7 @@ public final class WindowManagerGlobal {
             final WindowManager.LayoutParams params = mParams.get(index);
             // If the view has been attached, we should make sure the override type matches the
             // existing one. The window type can't be changed after the view was added.
-            return windowTypeToOverride == params.type;
+            return fallbackWindowType == params.type;
         }
     }
 }

@@ -54,6 +54,7 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.spy;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.times;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
+import static com.android.server.display.feature.flags.Flags.FLAG_ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT;
 import static com.android.server.wm.ActivityStarter.canEmbedActivity;
 import static com.android.server.wm.TaskFragment.EMBEDDING_ALLOWED;
 import static com.android.server.wm.TaskFragment.EMBEDDING_DISALLOWED_MIN_DIMENSION_VIOLATION;
@@ -70,6 +71,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -98,6 +100,7 @@ import android.os.RemoteException;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.annotations.RequiresFlagsDisabled;
+import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.provider.DeviceConfig;
 import android.service.voice.IVoiceInteractionSession;
 import android.util.Pair;
@@ -115,6 +118,7 @@ import com.android.server.pm.pkg.AndroidPackage;
 import com.android.server.wm.BackgroundActivityStartController.BalVerdict;
 import com.android.server.wm.LaunchParamsController.LaunchParamsModifier;
 import com.android.server.wm.utils.MockTracker;
+import com.android.window.flags.Flags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -649,6 +653,36 @@ public class ActivityStarterTests extends WindowTestsBase {
         assertEquals(1, activity.compareTo(translucentActivity));
     }
 
+    @Test
+    public void testReportStartedNoDisplayActivity() {
+        final ActivityRecord activity = new ActivityBuilder(mAtm).setCreateTask(true)
+                .setVisible(false).build();
+        final Task task = activity.getTask();
+        task.inRecents = true;
+        final ActivityRecord[] outActivity = new ActivityRecord[1];
+        final ActivityStarter starter = prepareStarter(FLAG_ACTIVITY_NEW_TASK)
+                .setInTask(task).setReason("testReportStartedNoDisplayActivity")
+                .setOutActivity(outActivity);
+        starter.mRequest.activityInfo.applicationInfo.packageName = mContext.getPackageName();
+        starter.mRequest.activityInfo.theme = android.R.style.Theme_NoDisplay;
+        starter.execute();
+        final ActivityRecord startedActivity = outActivity[0];
+
+        assertNotNull(startedActivity);
+        assertEquals(task, startedActivity.getTask());
+        assertNotEquals("Report started no-display activity instead of the existing one",
+                activity, startedActivity);
+        assertTrue(startedActivity.isNoDisplay());
+
+        startedActivity.setProcess(activity.app);
+        startedActivity.setState(ActivityRecord.State.RESUMED, "test");
+        startedActivity.makeFinishingLocked();
+        // MetricsLogger will redirect to monitor next activity.
+        startedActivity.setVisibility(false);
+
+        assertNotNull(mSupervisor.getActivityMetricsLogger().notifyWindowsDrawn(activity));
+    }
+
     /**
      * Tests activity is cleaned up properly in a task mode violation.
      */
@@ -988,8 +1022,6 @@ public class ActivityStarterTests extends WindowTestsBase {
      * This test ensures that activity launch on an insecure secondary display is disallowed if the
      * activity opted out from showing on remote devices.
      */
-    @EnableFlags(android.companion.virtualdevice.flags.Flags
-            .FLAG_ENFORCE_REMOTE_DEVICE_OPT_OUT_ON_ALL_VIRTUAL_DISPLAYS)
     @Test
     public void testStartOptedOutActivityOnInsecureVirtualDisplay() {
         final ActivityStarter starter = prepareStarter(FLAG_ACTIVITY_NEW_TASK,
@@ -1033,8 +1065,6 @@ public class ActivityStarterTests extends WindowTestsBase {
      * This test ensures that activity launch on a secure secondary display is allowed event if the
      * activity opted out from showing on remote devices.
      */
-    @EnableFlags(android.companion.virtualdevice.flags.Flags
-            .FLAG_ENFORCE_REMOTE_DEVICE_OPT_OUT_ON_ALL_VIRTUAL_DISPLAYS)
     @Test
     public void testStartOptedOutActivityOnSecureVirtualDisplay() {
         final ActivityStarter starter = prepareStarter(FLAG_ACTIVITY_NEW_TASK,
@@ -1072,6 +1102,36 @@ public class ActivityStarterTests extends WindowTestsBase {
 
         // Ensure secondary display only creates one stack.
         verify(secondaryTaskContainer, times(1)).createRootTask(anyInt(), anyInt(), anyBoolean());
+    }
+
+    /**
+     * This test ensures that activity launch on a secondary display that cannot host tasks is
+     * disallowed, and a SecurityException should be thrown.
+     */
+    @Test
+    @RequiresFlagsEnabled({
+            FLAG_ENABLE_DISPLAY_CONTENT_MODE_MANAGEMENT,
+            Flags.FLAG_ENABLE_MIRROR_DISPLAY_NO_ACTIVITY
+    })
+    public void testStartActivityOnDisplayCannotHostTasks() {
+        final ActivityStarter starter = prepareStarter(0);
+
+        // Create a display that cannot host tasks.
+        final TestDisplayContent secondaryDisplay =
+                new TestDisplayContent.Builder(mAtm, 1000, 1500)
+                        .setCanHostTasks(false).build();
+
+        final ActivityRecord activity = new ActivityBuilder(mAtm).setCreateTask(true).build();
+
+        final ActivityOptions options = ActivityOptions.makeBasic()
+                .setLaunchDisplayId(secondaryDisplay.mDisplayId);
+
+        assertThrows(SecurityException.class,
+                () -> starter.setReason("testStartActivityOnDisplayCannotHostTasks")
+                        .setIntent(activity.intent)
+                        .setActivityOptions(options.toBundle(), Binder.getCallingPid(),
+                                Binder.getCallingUid())
+                        .execute());
     }
 
     @Test
@@ -1259,10 +1319,32 @@ public class ActivityStarterTests extends WindowTestsBase {
                 .setUserId(10)
                 .build();
 
-        final int result = starter.recycleTask(task, null, null, null,
-                BalVerdict.ALLOW_PRIVILEGED);
+        final int result = starter.recycleTask(task, null, null, null);
         assertThat(result == START_SUCCESS).isTrue();
         assertThat(starter.mAddingToTask).isTrue();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_FIX_BAL_REPARENT_EXISTING_TASK)
+    public void testRecycleTaskWhenBalBlocks() {
+        final ActivityStarter starter = prepareStarter(0 /* flags */);
+        starter.mStartActivity = new ActivityBuilder(mAtm).build();
+        starter.mBalVerdict = BalVerdict.BLOCK;
+        final Task task = new TaskBuilder(mAtm.mTaskSupervisor)
+                .setParentTask(createTask(mDisplayContent, WINDOWING_MODE_FULLSCREEN,
+                        ACTIVITY_TYPE_STANDARD))
+                .setCreateActivity(true)
+                .build();
+        final Task rootTask = task.getRootTask();
+        final ActivityRecord topActivity = task.getTopMostActivity();
+
+        spyOn(starter);
+        final Task launchRootTask = new TaskBuilder(mAtm.mTaskSupervisor).build();
+        doReturn(launchRootTask).when(starter).getOrCreateRootTask(eq(starter.mStartActivity),
+                anyInt(), eq(task), any());
+
+        starter.recycleTask(task, topActivity, task, null);
+        assertThat(rootTask == task.getRootTask()).isTrue();
     }
 
     @Test

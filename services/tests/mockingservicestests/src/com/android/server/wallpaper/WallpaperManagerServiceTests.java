@@ -68,11 +68,15 @@ import android.content.res.Resources;
 import android.graphics.Color;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.DisplayManager.DisplayListener;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.SystemProperties;
+import android.os.TestLooperManager;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
@@ -507,8 +511,6 @@ public class WallpaperManagerServiceTests {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_REMOVE_NEXT_WALLPAPER_COMPONENT,
-            Flags.FLAG_LIVE_WALLPAPER_CONTENT_HANDLING})
     public void testSaveLoadSettings_withoutWallpaperDescription()
             throws IOException, XmlPullParserException {
         WallpaperData expectedData = mService.getCurrentWallpaperData(FLAG_SYSTEM, 0);
@@ -548,8 +550,6 @@ public class WallpaperManagerServiceTests {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_REMOVE_NEXT_WALLPAPER_COMPONENT,
-            Flags.FLAG_LIVE_WALLPAPER_CONTENT_HANDLING})
     public void testSaveLoadSettings_withWallpaperDescription()
             throws IOException, XmlPullParserException {
         WallpaperData expectedData = mService.getCurrentWallpaperData(FLAG_SYSTEM, 0);
@@ -578,34 +578,6 @@ public class WallpaperManagerServiceTests {
 
         assertThat(actualData.getComponent()).isEqualTo(expectedData.getComponent());
         assertThat(actualData.getDescription()).isEqualTo(expectedData.getDescription());
-    }
-
-    @Test
-    @DisableFlags({Flags.FLAG_REMOVE_NEXT_WALLPAPER_COMPONENT,
-            Flags.FLAG_LIVE_WALLPAPER_CONTENT_HANDLING})
-    public void testSaveLoadSettings_legacyNextComponent()
-            throws IOException, XmlPullParserException {
-        WallpaperData systemWallpaperData = mService.getCurrentWallpaperData(FLAG_SYSTEM, 0);
-        systemWallpaperData.setComponent(sDefaultWallpaperComponent);
-        ByteArrayOutputStream ostream = new ByteArrayOutputStream();
-        TypedXmlSerializer serializer = Xml.newBinarySerializer();
-        serializer.setOutput(ostream, StandardCharsets.UTF_8.name());
-        mService.mWallpaperDataParser.saveSettingsToSerializer(serializer, systemWallpaperData,
-                null);
-        ostream.close();
-
-        WallpaperData shouldMatchSystem = new WallpaperData(0, FLAG_SYSTEM);
-        ByteArrayInputStream istream = new ByteArrayInputStream(ostream.toByteArray());
-        TypedXmlPullParser parser = Xml.newBinaryPullParser();
-        parser.setInput(istream, StandardCharsets.UTF_8.name());
-        mService.mWallpaperDataParser.loadSettingsFromSerializer(parser,
-                shouldMatchSystem, /* userId= */0, /* loadSystem= */ true, /* loadLock= */
-                false, /* keepDimensionHints= */ true,
-                new WallpaperDisplayHelper.DisplayData(0));
-
-        assertThat(shouldMatchSystem.nextWallpaperComponent).isEqualTo(
-                systemWallpaperData.getComponent());
-        assertThat(shouldMatchSystem.primaryColors).isEqualTo(systemWallpaperData.primaryColors);
     }
 
     @Test
@@ -1187,11 +1159,13 @@ public class WallpaperManagerServiceTests {
         assertThat(mService.mLastLockWallpaper).isNull();
     }
 
-    // Test setWallpaperComponent on multiple displays.
-    // GIVEN 3 displays, 0, 2, 3, the new wallpaper is only compatible for display 0 and 3 but not
-    // 2.
+    // Test setWallpaperComponent on multiple displays:
+    // GIVEN TEST_WALLPAPER_COMPONENT, a live wallpaper for lock screen that supports all displays
+    // GIVEN a static wallpaper for the home screen.
+    // GIVEN 3 displays, 0, 2, 3, the static wallpaper is only compatible for display 0 and 3 but
+    // not 2.
     // WHEN two different wallpapers set for system and lock via setWallpaperComponent.
-    // THEN there are two connections in mLastWallpaper, two connection in mLastLockWallpaper and
+    // THEN there are two connections in mLastWallpaper, three connection in mLastLockWallpaper and
     // one connection in mFallbackWallpaper.
     @Test
     @EnableFlags(Flags.FLAG_ENABLE_CONNECTED_DISPLAYS_WALLPAPER)
@@ -1231,6 +1205,55 @@ public class WallpaperManagerServiceTests {
                 .isTrue();
         assertThat(mService.mLastLockWallpaper.connection.containsDisplay(incompatibleDisplayId))
                 .isTrue();
+        assertThat(mService.mFallbackWallpaper.connection.containsDisplay(DEFAULT_DISPLAY))
+                .isFalse();
+        assertThat(mService.mFallbackWallpaper.connection.containsDisplay(compatibleDisplayId))
+                .isFalse();
+        assertThat(mService.mFallbackWallpaper.connection.containsDisplay(incompatibleDisplayId))
+                .isTrue();
+    }
+
+    // Test setWallpaperComponent on multiple displays: from static system + lock to static system.
+    // GIVEN 3 displays, 0, 2, 3, the static wallpaper is only compatible for display 0 and 3 but
+    // not 2.
+    // WHEN two static wallpapers set for system and lock via setWallpaperComponent.
+    // THEN there are two connections in mLastWallpaper, two connection in mLastLockWallpaper and
+    // one connection in mFallbackWallpaper.
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_CONNECTED_DISPLAYS_WALLPAPER)
+    public void setWallpaperComponent_staticSystemAndLockToSystemWallpapers_multiDisplays_shouldHaveExpectedConnections() {
+        Resources resources = sContext.getResources();
+        spyOn(resources);
+        doReturn(true).when(resources).getBoolean(
+                R.bool.config_isLiveWallpaperSupportedInDesktopExperience);
+        final int incompatibleDisplayId = 2;
+        final int compatibleDisplayId = 3;
+        setUpDisplays(Map.of(
+                DEFAULT_DISPLAY, true,
+                incompatibleDisplayId, false,
+                compatibleDisplayId, true));
+        final int testUserId = USER_SYSTEM;
+        mService.switchUser(testUserId, null);
+        mService.setWallpaperComponent(sImageWallpaperComponentName, sContext.getOpPackageName(),
+                FLAG_SYSTEM | FLAG_LOCK, testUserId);
+        mService.setWallpaperComponent(sImageWallpaperComponentName, sContext.getOpPackageName(),
+                FLAG_SYSTEM, testUserId);
+
+        verifyLastWallpaperData(testUserId, sImageWallpaperComponentName);
+        verifyLastLockWallpaperData(testUserId, sImageWallpaperComponentName);
+        verifyCurrentSystemData(testUserId);
+
+        assertThat(mService.mLastWallpaper.connection.containsDisplay(DEFAULT_DISPLAY)).isTrue();
+        assertThat(mService.mLastWallpaper.connection.containsDisplay(compatibleDisplayId))
+                .isTrue();
+        assertThat(mService.mLastWallpaper.connection.containsDisplay(incompatibleDisplayId))
+                .isFalse();
+        assertThat(mService.mLastLockWallpaper.connection.containsDisplay(DEFAULT_DISPLAY))
+                .isTrue();
+        assertThat(mService.mLastLockWallpaper.connection.containsDisplay(compatibleDisplayId))
+                .isTrue();
+        assertThat(mService.mLastLockWallpaper.connection.containsDisplay(incompatibleDisplayId))
+                .isFalse();
         assertThat(mService.mFallbackWallpaper.connection.containsDisplay(DEFAULT_DISPLAY))
                 .isFalse();
         assertThat(mService.mFallbackWallpaper.connection.containsDisplay(compatibleDisplayId))
@@ -1347,6 +1370,45 @@ public class WallpaperManagerServiceTests {
         // flag for wallpaper is disabled.
         assertThat(mService.isWallpaperCompatibleForDisplay(displayId,
                 mService.mLastWallpaper.connection)).isTrue();
+    }
+
+    @Test
+    public void testOnColorsChangedListener() {
+        final int testUserId = USER_SYSTEM;
+        final WallpaperColors expectedColors = new WallpaperColors(Color.valueOf(Color.RED),
+                Color.valueOf(Color.GREEN), Color.valueOf(Color.BLUE));
+
+        mService.switchUser(testUserId, null);
+        WallpaperManagerInternal internal = LocalServices.getService(
+                WallpaperManagerInternal.class);
+
+        if (Looper.myLooper() == null) {
+            Looper.prepare();
+        }
+        Looper looper = Looper.myLooper();
+        TestLooperManager testLooperManager = new TestLooperManager(looper);
+
+        final WallpaperColors[] capturedColors = new WallpaperColors[1];
+        final int[] capturedWhich = new int[1];
+        final int[] capturedUserId = new int[1];
+
+        internal.addOnColorsChangedListener((colors, which, displayId, userId, fromForeground) -> {
+            capturedColors[0] = colors;
+            capturedWhich[0] = which;
+            capturedUserId[0] = userId;
+        }, new Handler(looper));
+
+        mService.mLastWallpaper.primaryColors = expectedColors;
+        mService.notifyWallpaperColorsChanged(mService.mLastWallpaper);
+
+        Message message = testLooperManager.next();
+        assertNotNull(message);
+        testLooperManager.execute(message);
+
+        assertEquals(expectedColors, capturedColors[0]);
+        assertEquals(mService.mLastWallpaper.mWhich, capturedWhich[0]);
+        assertEquals(mService.mLastWallpaper.userId, capturedUserId[0]);
+        testLooperManager.release();
     }
 
     // Verify that after continue switch user from userId 0 to lastUserId, the wallpaper data for

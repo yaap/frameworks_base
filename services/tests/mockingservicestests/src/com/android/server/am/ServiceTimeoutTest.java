@@ -105,9 +105,9 @@ public final class ServiceTimeoutTest {
         final ActivityManagerService realAms = new ActivityManagerService(
                 new TestInjector(mContext), mServiceThreadRule.getThread());
         realAms.mActivityTaskManager = new ActivityTaskManagerService(mContext);
-        realAms.mActivityTaskManager.initialize(null, null, mContext.getMainLooper());
+        realAms.mActivityTaskManager.initialize(null, null, realAms.mProcessStateController,
+                mContext.getMainLooper());
         realAms.mAtmInternal = spy(realAms.mActivityTaskManager.getAtmInternal());
-        realAms.mOomAdjuster.mCachedAppOptimizer = spy(realAms.mOomAdjuster.mCachedAppOptimizer);
         realAms.mPackageManagerInt = mPackageManagerInt;
         realAms.mUsageStatsService = mUsageStatsManagerInt;
         realAms.mProcessesReady = true;
@@ -147,7 +147,7 @@ public final class ServiceTimeoutTest {
         final long now = SystemClock.uptimeMillis();
         final ServiceRecord sr = spy(ServiceRecord.newEmptyInstanceForTest(mAms));
         doNothing().when(sr).dump(any(), anyString());
-        sr.startRequested = true;
+        sr.setStartRequested(true);
         sr.executingStart = now;
 
         app.mServices.startExecutingService(sr);

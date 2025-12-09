@@ -23,8 +23,10 @@ import com.android.systemui.clock.domain.interactor.ClockInteractor
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
 import com.android.systemui.util.time.DateFormatUtil
+import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -32,26 +34,60 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.mapLatest
+
+/** AM/PM styling for the clock UI */
+enum class AmPmStyle {
+    Shown,
+    Gone,
+}
 
 /** Models UI state for the clock. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ClockViewModel
 @AssistedInject
-constructor(clockInteractor: ClockInteractor, private val dateFormatUtil: DateFormatUtil) :
-    ExclusiveActivatable() {
+constructor(
+    clockInteractor: ClockInteractor,
+    private val dateFormatUtil: DateFormatUtil,
+    @Assisted private val amPmStyle: AmPmStyle,
+) : ExclusiveActivatable() {
     private val hydrator = Hydrator("ClockViewModel.hydrator")
+
+    // For content description, we use `DateTimePatternGenerator` to generate the best time format
+    // for all the locales. For clock time, since we want to utilize removing AM/PM marker for
+    // `AmPmStyle.Gone`, we will just use `SimpleDateFormat` instead.
     private lateinit var dateTimePatternGenerator: DateTimePatternGenerator
 
-    private val formatString: Flow<String> =
-        clockInteractor.onTimezoneOrLocaleChanged.mapLatest { getFormatString() }
+    private val contentDescriptionFormat: Flow<DateFormat> =
+        combine(clockInteractor.onTimezoneOrLocaleChanged, clockInteractor.showSeconds) {
+            _,
+            showSeconds ->
+            getSimpleDateFormat(getContentDescriptionFormatString(showSeconds))
+        }
 
-    private val clockFormat: Flow<SimpleDateFormat> =
-        formatString.mapLatest { format -> SimpleDateFormat(format) }
+    private val _contentDescriptionText: Flow<String> =
+        combine(contentDescriptionFormat, clockInteractor.currentTime) {
+            contentDescriptionFormat,
+            time ->
+            contentDescriptionFormat.format(time)
+        }
+
+    val contentDescriptionText: String by
+        hydrator.hydratedStateOf(
+            traceName = "clockContentDescriptionText",
+            initialValue = clockInteractor.currentTime.value.toString(),
+            source = _contentDescriptionText,
+        )
+
+    private val clockTextFormat: Flow<SimpleDateFormat> =
+        combine(clockInteractor.onTimezoneOrLocaleChanged, clockInteractor.showSeconds) {
+            _,
+            showSeconds ->
+            getSimpleDateFormat(getClockTextFormatString(showSeconds))
+        }
 
     private val _clockText: Flow<String> =
-        combine(clockFormat, clockInteractor.currentTime) { clockFormat, time ->
-            clockFormat.format(time)
+        combine(clockTextFormat, clockInteractor.currentTime) { clockTextFormat, time ->
+            clockTextFormat.format(time)
         }
 
     val clockText: String by
@@ -59,6 +95,30 @@ constructor(clockInteractor: ClockInteractor, private val dateFormatUtil: DateFo
             traceName = "clockText",
             initialValue = clockInteractor.currentTime.value.toString(),
             source = _clockText,
+        )
+
+    val longerDateText: String by
+        hydrator.hydratedStateOf(
+            traceName = "longerDateText",
+            initialValue = "",
+            source =
+                combine(clockInteractor.longerDateFormat, clockInteractor.currentTime) {
+                    format,
+                    time ->
+                    format.format(time)
+                },
+        )
+
+    val shorterDateText: String by
+        hydrator.hydratedStateOf(
+            traceName = "shorterDateText",
+            initialValue = "",
+            source =
+                combine(clockInteractor.shorterDateFormat, clockInteractor.currentTime) {
+                    format,
+                    time ->
+                    format.format(time)
+                },
         )
 
     override suspend fun onActivated(): Nothing {
@@ -71,16 +131,42 @@ constructor(clockInteractor: ClockInteractor, private val dateFormatUtil: DateFo
 
     @AssistedFactory
     interface Factory {
-        fun create(): ClockViewModel
+        fun create(amPmStyle: AmPmStyle): ClockViewModel
     }
 
-    private fun getFormatString(): String {
+    private fun getContentDescriptionFormatString(showSeconds: Boolean): String {
         dateTimePatternGenerator = DateTimePatternGenerator.getInstance(Locale.getDefault())
 
-        // TODO(b/390204943): use different value depending on if the system want to show seconds.
-        val formatSkeleton = if (dateFormatUtil.is24HourFormat) "Hm" else "hm"
+        var formatSkeleton = if (dateFormatUtil.is24HourFormat) "Hm" else "hm"
+        if (showSeconds) {
+            formatSkeleton += "s"
+        }
 
-        // TODO(b/390204943): handle ContentDescriptionFormat and AM/PM style
         return dateTimePatternGenerator.getBestPattern(formatSkeleton)
+    }
+
+    private fun getClockTextFormatString(showSeconds: Boolean): String {
+        var formatString =
+            if (dateFormatUtil.is24HourFormat) {
+                "H:mm"
+            } else {
+                "h:mm"
+            }
+
+        if (showSeconds) {
+            formatString += ":ss"
+        }
+
+        if (amPmStyle == AmPmStyle.Shown && !dateFormatUtil.is24HourFormat) {
+            // Note that we always put the AM/PM marker at the end of the string, and this could be
+            // wrong for certain languages.
+            formatString += "\u202Fa"
+        }
+
+        return formatString
+    }
+
+    private fun getSimpleDateFormat(formatString: String): SimpleDateFormat {
+        return SimpleDateFormat(formatString, Locale.getDefault())
     }
 }

@@ -18,13 +18,6 @@ flag {
 }
 
 flag {
-    name: "add_battery_usage_stats_slice_atom"
-    namespace: "backstage_power"
-    description: "Adds battery_usage_stats_slice atom"
-    bug: "324602949"
-}
-
-flag {
     name: "disable_composite_battery_usage_stats_atoms"
     namespace: "backstage_power"
     description: "Disable deprecated BatteryUsageStatsAtom pulled atom"
@@ -63,4 +56,21 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+     namespace: "backstage_power"
+     name: "configure_power_stats_log_frequency"
+     description: "Add a configurable value for power stats logging frequency"
+     bug: "166689029"
+}
+
+flag {
+     namespace: "backstage_power"
+     name: "concurrent_queue_for_pending_removed_uids"
+     description: "Added ConcurrentLinkedQueue to address locking issue for pending remove uids queue"
+     bug: "420852486"
+     metadata {
+         purpose: PURPOSE_BUGFIX
+     }
 }

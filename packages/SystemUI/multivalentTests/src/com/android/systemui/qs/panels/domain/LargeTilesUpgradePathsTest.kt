@@ -34,6 +34,7 @@ import com.android.systemui.qs.panels.data.repository.defaultLargeTilesRepositor
 import com.android.systemui.qs.panels.domain.interactor.qsPreferencesInteractor
 import com.android.systemui.qs.pipeline.data.repository.DefaultTilesQSHostRepository
 import com.android.systemui.qs.pipeline.data.repository.defaultTilesRepository
+import com.android.systemui.qs.pipeline.data.repository.hsuTilesRepository
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.pipeline.shared.TilesUpgradePath
 import com.android.systemui.settings.userFileManager
@@ -45,13 +46,14 @@ import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class LargeTilesUpgradePathsTest : SysuiTestCase() {
 
     private val kosmos =
-        testKosmos().apply { defaultTilesRepository = DefaultTilesQSHostRepository(mainResources) }
+        testKosmos().apply {
+            defaultTilesRepository = DefaultTilesQSHostRepository(mainResources, hsuTilesRepository)
+        }
 
-    private val defaultTiles = kosmos.defaultTilesRepository.defaultTiles.toSet()
+    private val defaultTiles = kosmos.defaultTilesRepository.getDefaultTiles(false).toSet()
 
     private val underTest = kosmos.qsPreferencesInteractor
 

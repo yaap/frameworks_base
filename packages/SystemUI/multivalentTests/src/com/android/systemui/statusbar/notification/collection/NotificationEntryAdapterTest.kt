@@ -590,10 +590,9 @@ class NotificationEntryAdapterTest : SysuiTestCase() {
         val entry = NotificationEntryBuilder().setNotification(notification).build()
         underTest = factory.create(entry) as NotificationEntryAdapter
 
-        underTest.onBundleDisabled()
-        assertThat(underTest.isMarkedForUserTriggeredMovement).isTrue()
+        underTest.onBundleDisabledForEntry()
         verify(kosmos.mockVisualStabilityCoordinator)
-            .temporarilyAllowSectionChanges(eq(entry), anyLong())
+            .temporarilyAllowFreeMovement(eq(entry), anyLong())
     }
 
     @Test
@@ -628,10 +627,10 @@ class NotificationEntryAdapterTest : SysuiTestCase() {
         whenever(summaryRow.attachedChildren).thenReturn(listOf(childRow))
 
         underTest = factory.create(summaryEntry) as NotificationEntryAdapter
-        underTest.onBundleDisabled()
+        underTest.onBundleDisabledForEntry()
         verify(kosmos.mockVisualStabilityCoordinator)
-            .temporarilyAllowSectionChanges(eq(summaryEntry), anyLong())
+            .temporarilyAllowFreeMovement(eq(summaryEntry), anyLong())
         verify(kosmos.mockVisualStabilityCoordinator)
-            .temporarilyAllowSectionChanges(eq(childEntry), anyLong())
+            .temporarilyAllowFreeMovement(eq(childEntry), anyLong())
     }
 }

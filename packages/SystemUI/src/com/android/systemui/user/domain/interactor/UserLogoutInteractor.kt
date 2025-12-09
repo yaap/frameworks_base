@@ -45,6 +45,14 @@ constructor(
             )
             .stateIn(applicationScope, SharingStarted.Eagerly, false)
 
+    val isLogoutToSystemUserEnabled: StateFlow<Boolean> = userRepository.isUserManagerLogoutEnabled
+
+    suspend fun logOutToSystemUser() {
+        if (isLogoutToSystemUserEnabled.value) {
+            userRepository.logOutWithUserManager()
+        }
+    }
+
     fun logOut() {
         applicationScope.launch {
             if (userRepository.isPolicyManagerLogoutEnabled.value) {

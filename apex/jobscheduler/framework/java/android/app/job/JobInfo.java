@@ -464,38 +464,6 @@ public class JobInfo implements Parcelable {
     /** @hide */
     public static final int MAX_TRACE_TAG_LENGTH = Trace.MAX_SECTION_NAME_LEN;
 
-    /** @hide */
-    @IntDef(prefix = {"CATEGORY_"}, value = {
-            CATEGORY_UNKNOWN,
-            CATEGORY_BACKUP,
-    })
-    @Retention(RetentionPolicy.SOURCE)
-    public @interface Category {
-    }
-
-    /**
-     * Category: Default or unspecified job category.
-     */
-    @FlaggedApi(Flags.FLAG_JOB_CATEGORY_APIS)
-    public static final int CATEGORY_UNKNOWN = 0;
-
-    /**
-     * Category: The job is used for backing up user-generated data.
-     * <p>
-     * This is a hint to the system. Jobs marked with this use case
-     * <i>may</i> receive additional quota or be subject to different
-     * scheduling heuristics, but this is not guaranteed.
-     * <p>
-     * Since backup operations are inherently network dependent, jobs of this
-     * category must have network constraint set using
-     * {@link Builder#setRequiredNetworkType(int)}. If it is not set,
-     * {@link Builder#build()} will throw an {@link IllegalArgumentException}.
-     */
-    // TODO: b/419047126 - Expand the javadoc to be more specific about the backup use case and
-    // in what conditions this category will be respected.
-    @FlaggedApi(Flags.FLAG_JOB_CATEGORY_APIS)
-    public static final int CATEGORY_BACKUP = 1;
-
     @UnsupportedAppUsage
     private final int jobId;
     private final PersistableBundle extras;
@@ -850,13 +818,9 @@ public class JobInfo implements Parcelable {
      *
      * @deprecated Use {@link #isExpedited()} instead.
      */
-    @FlaggedApi(Flags.FLAG_IGNORE_IMPORTANT_WHILE_FOREGROUND)
     @Deprecated
     public boolean isImportantWhileForeground() {
-        if (Flags.ignoreImportantWhileForeground()) {
-            return false;
-        }
-        return (flags & FLAG_IMPORTANT_WHILE_FOREGROUND) != 0;
+        return false;
     }
 
     /**
@@ -1370,6 +1334,8 @@ public class JobInfo implements Parcelable {
             // job.
             mBackoffPolicy = job.getBackoffPolicy();
             mPriority = job.getPriority();
+            mDebugTags.addAll(job.getDebugTags());
+            mTraceTag = job.getTraceTag();
         }
 
         /**
@@ -1401,8 +1367,9 @@ public class JobInfo implements Parcelable {
 
         /** @hide */
         @NonNull
-        public void addDebugTags(@NonNull Set<String> tags) {
+        public Builder addDebugTags(@NonNull Set<String> tags) {
             mDebugTags.addAll(tags);
+            return this;
         }
 
         /**
@@ -2182,28 +2149,8 @@ public class JobInfo implements Parcelable {
          */
         @Deprecated
         public Builder setImportantWhileForeground(boolean importantWhileForeground) {
-            if (Flags.ignoreImportantWhileForeground()) {
-                Log.w(TAG, "Requested important-while-foreground flag for job" + mJobId
-                        + " is ignored and takes no effect");
-                return this;
-            }
-
-            if (importantWhileForeground) {
-                mFlags |= FLAG_IMPORTANT_WHILE_FOREGROUND;
-                if (mPriority == PRIORITY_DEFAULT) {
-                    // The default priority for important-while-foreground is HIGH, but only change
-                    // this if .setPriority() hasn't been called yet.
-                    mPriority = PRIORITY_HIGH;
-                }
-            } else {
-                if (mPriority == PRIORITY_HIGH
-                        && (mFlags & FLAG_IMPORTANT_WHILE_FOREGROUND) != 0) {
-                    // Reset the priority for the job, but only change this if .setPriority()
-                    // hasn't been called yet.
-                    mPriority = PRIORITY_DEFAULT;
-                }
-                mFlags &= (~FLAG_IMPORTANT_WHILE_FOREGROUND);
-            }
+            Log.w(TAG, "Requested important-while-foreground flag for job" + mJobId
+                    + " is ignored and takes no effect");
             return this;
         }
 
@@ -2263,40 +2210,6 @@ public class JobInfo implements Parcelable {
         public Builder setTraceTag(@Nullable String traceTag) {
             mTraceTag = validateTraceTag(traceTag);
             return this;
-        }
-
-        /**
-         * Sets the category for this job.
-         * <p>
-         * The category provides a hint to the system about the purpose
-         * of the job, which <i>may</i> influence scheduling and quota allocation.
-         *
-         * <p>
-         * Each category can have specific requirements. For instance, jobs of category
-         * {@link JobInfo#CATEGORY_BACKUP} must have network constraint set. If
-         * these requirements are not met, {@link Builder#build()} will throw an
-         * {@link IllegalArgumentException}.
-         *
-         * @param category The category for this job, e.g., {@link #CATEGORY_BACKUP}.
-         * @return This Builder object to allow method chaining.
-         */
-        @FlaggedApi(Flags.FLAG_JOB_CATEGORY_APIS)
-        @NonNull
-        public Builder setCategory(@Category int category) {
-            // TODO: b/419047126 - Store the category
-            return this;
-        }
-
-        /**
-         * Gets the category of this job, which was previously defined using
-         * {@link #setCategory(int)}.
-         *
-         * @return The category of this job.
-         */
-        @FlaggedApi(Flags.FLAG_JOB_CATEGORY_APIS)
-        @Category
-        public int getCategory() {
-            return JobInfo.CATEGORY_UNKNOWN;
         }
 
         /**

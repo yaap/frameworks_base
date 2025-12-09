@@ -50,6 +50,7 @@ import android.util.SparseArray;
 
 import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -122,6 +123,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
     @GuardedBy("this")
     private List<MediaRoute2Info> mSelectedRoutes = Collections.emptyList();
 
+    @GuardedBy("this")
+    private List<MediaRoute2Info> mDeselectableRoutes = Collections.emptyList();
+
+    @GuardedBy("this")
+    private List<MediaRoute2Info> mSelectableRoutes = Collections.emptyList();
+
+    @GuardedBy("this")
+    private @RoutingSessionInfo.ReleaseType int mSessionReleaseType =
+            RoutingSessionInfo.RELEASE_UNSUPPORTED;
+
     // A singleton AudioManagerRouteController.
     private static AudioManagerRouteController mInstance;
 
@@ -130,9 +141,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
     // Whether this is a TV device.
     private final boolean mIsTv;
-
-    // Max number of devices allow for a BLE broadcast session.
-    private final int mBroadcastingMaxSinks;
 
     // Get the singleton AudioManagerRouteController. Create a new one if it's not available yet.
     public static AudioManagerRouteController getInstance(
@@ -171,24 +179,36 @@ import java.util.concurrent.CopyOnWriteArrayList;
             @NonNull Looper looper,
             @NonNull AudioProductStrategy strategyForMedia,
             @NonNull BluetoothAdapter btAdapter) {
+        this(
+                context,
+                audioManager,
+                looper,
+                strategyForMedia,
+                new BluetoothDeviceRoutesManager(context, looper, btAdapter));
+    }
+
+    @RequiresPermission(
+            anyOf = {
+                Manifest.permission.MODIFY_AUDIO_ROUTING,
+                Manifest.permission.QUERY_AUDIO_STATE
+            })
+    @VisibleForTesting
+    /* package */ AudioManagerRouteController(
+            @NonNull Context context,
+            @NonNull AudioManager audioManager,
+            @NonNull Looper looper,
+            @NonNull AudioProductStrategy strategyForMedia,
+            @NonNull BluetoothDeviceRoutesManager bluetoothDeviceRoutesManager) {
         mContext = Objects.requireNonNull(context);
         mAudioManager = Objects.requireNonNull(audioManager);
         mHandler = new Handler(Objects.requireNonNull(looper));
         mStrategyForMedia = Objects.requireNonNull(strategyForMedia);
         mIsTv = mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
-        mBroadcastingMaxSinks =
-                mContext.getResources().getInteger(R.integer.config_audio_sharing_maximum_sinks);
 
         mBuiltInSpeakerSuitabilityStatus =
                 DeviceRouteController.getBuiltInSpeakerSuitabilityStatus(mContext);
 
-        mBluetoothRouteController =
-                new BluetoothDeviceRoutesManager(
-                        mContext,
-                        mHandler,
-                        looper,
-                        btAdapter,
-                        this::rebuildAvailableRoutesAndNotify);
+        mBluetoothRouteController = Objects.requireNonNull(bluetoothDeviceRoutesManager);
         // Just build routes but don't notify. The caller may not expect the listener to be invoked
         // before this constructor has finished executing.
         rebuildAvailableRoutes();
@@ -220,7 +240,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
         mBluetoothRouteController.start(
                 com.android.media.flags.Flags.enableUseOfSingletonAudioManagerRouteController()
                         ? UserHandle.SYSTEM
-                        : mUser);
+                        : mUser,
+                this::rebuildAvailableRoutesAndNotify);
         mAudioManager.registerAudioDeviceCallback(mAudioDeviceCallback, mHandler);
         mAudioManager.addOnDevicesForAttributesChangedListener(
                 AudioRoutingUtils.ATTRIBUTES_MEDIA,
@@ -248,14 +269,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
     }
 
     @Override
-    public @RoutingSessionInfo.ReleaseType int getSessionReleaseType() {
-        // TODO(b/385672684): impl get session release type
-        return RoutingSessionInfo.RELEASE_UNSUPPORTED;
+    public synchronized @RoutingSessionInfo.ReleaseType int getSessionReleaseType() {
+        return mSessionReleaseType;
     }
 
     @Override
     public void releaseRoutingSession() {
-        // TODO(b/385672684): impl release system session
+        if (currentOutputIsBLEBroadcast()) {
+            mBluetoothRouteController.stopBroadcast();
+        }
     }
 
     @Override
@@ -271,28 +293,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
     @Override
     @NonNull
     public synchronized List<MediaRoute2Info> getSelectableRoutes() {
-        if (currentOutputIsBLEBroadcast()) {
-            return Collections.emptyList();
-        } else {
-            return getAvailableRoutes().stream()
-                    .filter(
-                            route ->
-                                    !maxBroadcastDeviceReached()
-                                            && !getSelectedRoutes().contains(route)
-                                            && isRouteSelectable(route))
-                    .toList();
-        }
+        return mSelectableRoutes;
     }
 
     @Override
     @NonNull
     public synchronized List<MediaRoute2Info> getDeselectableRoutes() {
-        if (currentOutputIsBLEBroadcast()) {
-            // When broadcasting, all selected routes are deselectable.
-            return getSelectedRoutes();
-        } else {
-            return Collections.emptyList();
-        }
+        return mDeselectableRoutes;
     }
 
     @Override
@@ -316,11 +323,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
             return;
         }
 
-        if (com.android.media.flags.Flags.enableOutputSwitcherPersonalAudioSharing()) {
-            // We need to stop broadcast when we transfer to another route
-            stopBroadcastIfCurrentlySelected(requestId);
-        }
-
         MediaRoute2InfoHolder mediaRoute2InfoHolder;
         synchronized (this) {
             mediaRoute2InfoHolder = mRouteIdToAvailableDeviceRoutes.get(routeId);
@@ -329,6 +331,21 @@ import java.util.concurrent.CopyOnWriteArrayList;
             Slog.w(TAG, "transferTo: Ignoring transfer request to unknown route id : " + routeId);
             return;
         }
+
+        // We need to stop broadcast when we transfer to another route
+        boolean currentOutputIsBLEBroadcast =
+                com.android.media.flags.Flags.enableOutputSwitcherPersonalAudioSharing()
+                        && currentOutputIsBLEBroadcast();
+        if (currentOutputIsBLEBroadcast) {
+            boolean isBtRoute =
+                    mBluetoothRouteController.isBtRoute(mediaRoute2InfoHolder.mMediaRoute2Info);
+            stopBroadcastForTransfer(isBtRoute ? routeId : null);
+            if (isBtRoute) {
+                Slog.d(TAG, "transferTo: Skip transfer action for BT route in broadcast");
+                return;
+            }
+        }
+
         Runnable transferAction = getTransferActionForRoute(mediaRoute2InfoHolder);
         Runnable guardedTransferAction =
                 () -> {
@@ -369,7 +386,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
     }
 
     @Override
-    public synchronized void deselectRoute(long requestId, @NonNull String routeId) {
+    public void deselectRoute(long requestId, @NonNull String routeId) {
         if (!currentOutputIsBLEBroadcast()) {
             // Unexpected result.
             Slog.e(TAG, "Unable to deselect route: " + routeId + " ,requestId: " + requestId);
@@ -380,15 +397,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
         mHandler.post(() -> mBluetoothRouteController.removeRouteFromBroadcast(routeId));
     }
 
-    private void stopBroadcastIfCurrentlySelected(long requestId) {
-        if (!currentOutputIsBLEBroadcast()) {
-            // Unexpected result.
-            Slog.e(TAG, "Unable to stop broadcast, requestId: " + requestId);
-            notifyRequestFailed(requestId, MediaRoute2ProviderService.REASON_INVALID_COMMAND);
-            return;
-        }
-
-        mHandler.post(mBluetoothRouteController::stopBroadcast);
+    private void stopBroadcastForTransfer(@Nullable String routeId) {
+        mHandler.post(() -> mBluetoothRouteController.stopBroadcast(routeId));
     }
 
     @RequiresPermission(
@@ -404,6 +414,31 @@ import java.util.concurrent.CopyOnWriteArrayList;
         return true;
     }
 
+    @Override
+    public void setVolume(long requestId, @NonNull String routeId, int volume) {
+        mHandler.post(() -> setVolumeOnHandler(requestId, routeId, volume));
+    }
+
+    private void setVolumeOnHandler(long requestId, @NonNull String routeId, int volume) {
+        if (currentOutputIsBLEBroadcast()) {
+            if (mBluetoothRouteController.isMediaOnlyRouteInBroadcast(routeId)) {
+                // Media only device (device can only listen to broadcast source) volume
+                // is controlled by volume control profile.
+                boolean result = mBluetoothRouteController.setRouteVolume(routeId, volume);
+                if (!result) {
+                    notifyRequestFailed(
+                            requestId, MediaRoute2ProviderService.REASON_ROUTE_NOT_AVAILABLE);
+                }
+            } else {
+                // Primary device (device can listen to call and broadcast source)
+                // volume is bundled and controlled by music stream.
+                mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0);
+            }
+        } else {
+            mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0);
+        }
+    }
+
     private Runnable getTransferActionForRoute(MediaRoute2InfoHolder mediaRoute2InfoHolder) {
         if (mediaRoute2InfoHolder.mCorrespondsToInactiveBluetoothRoute) {
             String deviceAddress = mediaRoute2InfoHolder.mMediaRoute2Info.getAddress();
@@ -415,9 +450,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
             };
 
         } else {
-            String deviceAddress =
-                    com.android.media.flags.Flags.enableDeviceAddressAsIdentifierInMediaRouter2()
-                            ? mediaRoute2InfoHolder.mMediaRoute2Info.getAddress() : "";
+            String deviceAddress = "";
+
+            if (com.android.media.flags.Flags.enableDeviceAddressAsIdentifierInMediaRouter2()) {
+                deviceAddress = mediaRoute2InfoHolder.mMediaRoute2Info.getAddress();
+                if (deviceAddress == null) {
+                    deviceAddress = "";
+                }
+            }
 
             AudioDeviceAttributes deviceAttributes =
                     new AudioDeviceAttributes(
@@ -486,6 +526,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
             selectedDeviceAttributesAddr = selectedDeviceAttributes.getAddress();
         }
 
+        boolean isLEAudioBroadcastSupported =
+                com.android.media.flags.Flags.enableOutputSwitcherPersonalAudioSharing()
+                        && mBluetoothRouteController.isLEAudioBroadcastSupported();
+
+        List<MediaRoute2Info> bluetoothRoutesInBroadcast = Collections.emptyList();
+        if (com.android.media.flags.Flags.enableOutputSwitcherPersonalAudioSharing()
+                && selectedDeviceAttributesType == AudioDeviceInfo.TYPE_BLE_BROADCAST) {
+            bluetoothRoutesInBroadcast = mBluetoothRouteController.getBroadcastingDeviceRoutes();
+        }
+
         updateAvailableRoutes(
                 selectedDeviceAttributesType,
                 selectedDeviceAttributesAddr,
@@ -494,7 +544,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
                         .getAvailableBluetoothRoutes(),
                 /* musicVolume= */ mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC),
                 /* musicMaxVolume= */ mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
-                /* isVolumeFixed= */ mAudioManager.isVolumeFixed());
+                /* isVolumeFixed= */ mAudioManager.isVolumeFixed(),
+                /* isLEAudioBroadcastSupported= */ isLEAudioBroadcastSupported,
+                /* bluetoothRoutesInBroadcast= */ bluetoothRoutesInBroadcast);
     }
 
     /**
@@ -526,23 +578,24 @@ import java.util.concurrent.CopyOnWriteArrayList;
             List<MediaRoute2Info> availableBluetoothRoutes,
             int musicVolume,
             int musicMaxVolume,
-            boolean isVolumeFixed) {
+            boolean isVolumeFixed,
+            boolean isLEAudioBroadcastSupported,
+            List<MediaRoute2Info> bluetoothRoutesInBroadcast) {
         mRouteIdToAvailableDeviceRoutes.clear();
         MediaRoute2InfoHolder newSelectedRouteHolder = null;
         List<MediaRoute2InfoHolder> newSelectedRouteInfoHoldersInBroadcast = new ArrayList<>();
 
-        if (com.android.media.flags.Flags.enableOutputSwitcherPersonalAudioSharing()) {
-            // When broadcasting, certain audioDeviceInfos from AudioManager are not reliable.
-            if (selectedDeviceAttributesType == AudioDeviceInfo.TYPE_BLE_BROADCAST) {
-                for (MediaRoute2Info mediaRoute2Info :
-                        mBluetoothRouteController.getBroadcastingDeviceRoutes()) {
-                    // Need to reconstruct MediaRoute2Info from BluetoothDeviceRoutesController
-                    MediaRoute2InfoHolder newHolder =
-                            MediaRoute2InfoHolder.createForAudioManagerRoute(
-                                    mediaRoute2Info, AudioDeviceInfo.TYPE_BLE_HEADSET);
-                    mRouteIdToAvailableDeviceRoutes.put(mediaRoute2Info.getId(), newHolder);
-                    newSelectedRouteInfoHoldersInBroadcast.add(newHolder);
-                }
+        boolean currentOutputIsBLEBroadcast =
+                selectedDeviceAttributesType == AudioDeviceInfo.TYPE_BLE_BROADCAST;
+        // When broadcasting, certain audioDeviceInfos from AudioManager are not reliable.
+        if (currentOutputIsBLEBroadcast) {
+            for (MediaRoute2Info mediaRoute2Info : bluetoothRoutesInBroadcast) {
+                // Need to reconstruct MediaRoute2Info from BluetoothDeviceRoutesController
+                MediaRoute2InfoHolder newHolder =
+                        MediaRoute2InfoHolder.createForAudioManagerRoute(
+                                mediaRoute2Info, AudioDeviceInfo.TYPE_BLE_HEADSET);
+                mRouteIdToAvailableDeviceRoutes.put(mediaRoute2Info.getId(), newHolder);
+                newSelectedRouteInfoHoldersInBroadcast.add(newHolder);
             }
         }
 
@@ -606,9 +659,21 @@ import java.util.concurrent.CopyOnWriteArrayList;
             List<MediaRoute2Info> newSelectedRoutes = new ArrayList<>();
             for (MediaRoute2InfoHolder newSelectedRouteInfoHolderInBroadcast :
                     newSelectedRouteInfoHoldersInBroadcast) {
-                MediaRoute2InfoHolder selectedRouteHolderWithUpdatedVolumeInfo =
-                        newSelectedRouteInfoHolderInBroadcast.copyWithVolumeInfo(
-                                musicVolume, musicMaxVolume, isVolumeFixed);
+                MediaRoute2Info routeInfo = newSelectedRouteInfoHolderInBroadcast.mMediaRoute2Info;
+                MediaRoute2InfoHolder selectedRouteHolderWithUpdatedVolumeInfo;
+                if (routeInfo.getVolume() != BluetoothProfileMonitor.INVALID_VOLUME
+                        && routeInfo.getVolumeMax()
+                                == BluetoothProfileMonitor.MAXIMUM_DEVICE_VOLUME) {
+                    selectedRouteHolderWithUpdatedVolumeInfo =
+                            newSelectedRouteInfoHolderInBroadcast.copyWithVolumeInfo(
+                                    routeInfo.getVolume(), routeInfo.getVolumeMax(), isVolumeFixed);
+                } else {
+                    // Volume is not available from BT volume control profile, use music stream
+                    // volume by default.
+                    selectedRouteHolderWithUpdatedVolumeInfo =
+                            newSelectedRouteInfoHolderInBroadcast.copyWithVolumeInfo(
+                                    musicVolume, musicMaxVolume, isVolumeFixed);
+                }
                 mRouteIdToAvailableDeviceRoutes.put(
                         newSelectedRouteInfoHolderInBroadcast.mMediaRoute2Info.getId(),
                         selectedRouteHolderWithUpdatedVolumeInfo);
@@ -634,6 +699,38 @@ import java.util.concurrent.CopyOnWriteArrayList;
                 .map(MediaRoute2InfoHolder::createForInactiveBluetoothRoute)
                 .forEach(
                         it -> mRouteIdToAvailableDeviceRoutes.put(it.mMediaRoute2Info.getId(), it));
+
+        if (com.android.media.flags.Flags.enableOutputSwitcherPersonalAudioSharing()) {
+            if (!isLEAudioBroadcastSupported) {
+                mDeselectableRoutes = Collections.emptyList();
+                mSelectableRoutes = Collections.emptyList();
+            } else {
+                mDeselectableRoutes =
+                        currentOutputIsBLEBroadcast ? mSelectedRoutes : Collections.emptyList();
+
+                if (currentOutputIsBLEBroadcast
+                        || mSelectedRoutes.get(0).getType()
+                                != MediaRoute2Info.TYPE_BLE_HEADSET) {
+                    mSelectableRoutes = Collections.emptyList();
+                } else {
+                    mSelectableRoutes =
+                            mRouteIdToAvailableDeviceRoutes.values().stream()
+                                    .filter(
+                                            holder ->
+                                                    !mSelectedRoutes.contains(
+                                                                    holder.mMediaRoute2Info)
+                                                            && holder.mMediaRoute2Info.getType()
+                                                                    == MediaRoute2Info
+                                                                            .TYPE_BLE_HEADSET)
+                                    .map(holder -> holder.mMediaRoute2Info)
+                                    .toList();
+                }
+            }
+            mSessionReleaseType =
+                    currentOutputIsBLEBroadcast
+                            ? RoutingSessionInfo.RELEASE_TYPE_SHARING
+                            : RoutingSessionInfo.RELEASE_UNSUPPORTED;
+        }
     }
 
     private MediaRoute2InfoHolder createPlaceholderBuiltinSpeakerRoute() {
@@ -745,27 +842,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
         List<AudioDeviceAttributes> devicesForMedia =
                 mAudioManager.getDevicesForAttributes(MEDIA_USAGE_AUDIO_ATTRIBUTES);
         return !devicesForMedia.isEmpty()
-                && devicesForMedia.getFirst().getType() == AudioDeviceInfo.TYPE_BLE_BROADCAST;
-    }
-
-    /**
-     * @return true if maximum number of broadcast devices reached
-     */
-    private boolean maxBroadcastDeviceReached() {
-        return getSelectedRoutes().size() >= mBroadcastingMaxSinks;
-    }
-
-    /**
-     * Checks if a given route should be displayed as selectable route. This function checks: 1) if
-     * max devices for broadcast reached 2) the selected route(s) is a broadcast supported route 3)
-     * the target route is a broadcast supported route.
-     *
-     * @param targetRoute the route for checking
-     * @return true if the target route should be displayed as a selectable route
-     */
-    private synchronized boolean isRouteSelectable(MediaRoute2Info targetRoute) {
-        return getSelectedRoutes().getFirst().getType() == MediaRoute2Info.TYPE_BLE_HEADSET
-                && targetRoute.getType() == MediaRoute2Info.TYPE_BLE_HEADSET;
+                && devicesForMedia.get(0).getType() == AudioDeviceInfo.TYPE_BLE_BROADCAST;
     }
 
     /**

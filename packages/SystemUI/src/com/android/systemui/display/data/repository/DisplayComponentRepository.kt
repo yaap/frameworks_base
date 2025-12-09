@@ -16,6 +16,8 @@
 
 package com.android.systemui.display.data.repository
 
+import android.util.Log
+import com.android.app.displaylib.PerDisplayInstanceProviderWithSetup
 import com.android.app.displaylib.PerDisplayInstanceProviderWithTeardown
 import com.android.app.displaylib.PerDisplayInstanceRepositoryImpl
 import com.android.app.displaylib.PerDisplayRepository
@@ -23,6 +25,8 @@ import com.android.app.tracing.ListenersTracing.forEachTraced
 import com.android.app.tracing.traceSection
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent
+import com.android.systemui.display.flags.DisplayComponentRepositoryFlag.isEagerInitializationEnabled
+import com.android.systemui.display.shared.DisplayNotFoundException
 import dagger.Module
 import dagger.Provides
 import javax.inject.Inject
@@ -32,28 +36,50 @@ import kotlinx.coroutines.cancel
 class DisplayComponentInstanceProvider
 @Inject
 constructor(private val componentFactory: SystemUIDisplaySubcomponent.Factory) :
-    PerDisplayInstanceProviderWithTeardown<SystemUIDisplaySubcomponent> {
+    PerDisplayInstanceProviderWithTeardown<SystemUIDisplaySubcomponent>,
+    PerDisplayInstanceProviderWithSetup<SystemUIDisplaySubcomponent> {
+
     override fun createInstance(displayId: Int): SystemUIDisplaySubcomponent? =
-        runCatching {
-                componentFactory.create(displayId).also { subComponent ->
-                    subComponent.lifecycleListeners.forEachTraced(
-                        "Notifying listeners of a display component creation"
-                    ) {
-                        it.start()
-                    }
-                }
-            }
-            .getOrNull()
+        try {
+            componentFactory.create(displayId)
+        } catch (e: Exception) {
+            Log.e(
+                TAG,
+                "DisplayComponentInstanceProvider cannot create instance for display $displayId",
+                e,
+            )
+            null
+        }
 
     override fun destroyInstance(instance: SystemUIDisplaySubcomponent) {
         traceSection("Destroying a display component instance") {
             instance.displayCoroutineScope.cancel("Cancelling scope associated to the display.")
         }
-        instance.lifecycleListeners.forEachTraced(
-            "Notifying listeners of a display component destruction"
-        ) {
-            it.stop()
+        try {
+            instance.lifecycleListeners.forEachTraced(
+                "Notifying listeners of a display component destruction"
+            ) {
+                it.stop()
+            }
+        } catch (exception: DisplayNotFoundException) {
+            Log.e(TAG, "Display no longer exists. Can't destroyInstance", exception)
         }
+    }
+
+    override fun setupInstance(instance: SystemUIDisplaySubcomponent) {
+        try {
+            instance.lifecycleListeners.forEachTraced(
+                "Notifying listeners of a display component creation"
+            ) {
+                it.start()
+            }
+        } catch (exception: DisplayNotFoundException) {
+            Log.e(TAG, "Display no longer exists. Can't setupInstance", exception)
+        }
+    }
+
+    companion object {
+        private const val TAG = "DisplayComponentInstanceProvider"
     }
 }
 
@@ -68,6 +94,7 @@ object DisplayComponentRepository {
         return repositoryFactory.create(
             debugName = "DisplayComponentInstanceProvider",
             instanceProvider,
+            createInstanceEagerly = isEagerInitializationEnabled(),
         )
     }
 }

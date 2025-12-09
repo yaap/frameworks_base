@@ -43,7 +43,6 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController.Appearance;
 import android.view.animation.Interpolator;
 import android.view.animation.PathInterpolator;
-import android.view.inputmethod.Flags;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 
@@ -524,7 +523,7 @@ final class NavigationBarController implements Window.DecorCallback,
     private int getImeCaptionBarHeight(boolean imeDrawsImeNavBar) {
         return imeDrawsImeNavBar
                 ? mService.getResources().getDimensionPixelSize(
-                        com.android.internal.R.dimen.navigation_bar_frame_height)
+                        com.android.internal.R.dimen.input_method_navigation_bar_height)
                 : 0;
     }
 
@@ -548,9 +547,6 @@ final class NavigationBarController implements Window.DecorCallback,
      */
     private void checkCustomImeSwitcherButtonRequestedVisible(boolean buttonVisible,
             boolean shouldDrawImeNavBar, boolean imeNavBarNotVisible) {
-        if (!Flags.imeSwitcherRevampApi()) {
-            return;
-        }
         // The system nav bar will be hidden when the IME is shown and the config is set.
         final boolean navBarNotVisible = shouldDrawImeNavBar ? imeNavBarNotVisible
                 : mService.getResources().getBoolean(

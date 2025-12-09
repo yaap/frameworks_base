@@ -17,10 +17,12 @@
 package com.android.systemui.keyboard.shortcut
 
 import android.app.role.mockRoleManager
+import android.content.Context
 import android.content.applicationContext
 import android.content.res.mainResources
 import android.hardware.input.fakeInputManager
 import android.os.fakeExecutorHandler
+import android.view.Display
 import android.view.windowManager
 import com.android.systemui.broadcast.broadcastDispatcher
 import com.android.systemui.concurrency.fakeExecutor
@@ -29,6 +31,7 @@ import com.android.systemui.keyboard.shortcut.data.repository.AppsShortcutCatego
 import com.android.systemui.keyboard.shortcut.data.repository.CustomInputGesturesRepository
 import com.android.systemui.keyboard.shortcut.data.repository.CustomShortcutCategoriesRepository
 import com.android.systemui.keyboard.shortcut.data.repository.DefaultShortcutCategoriesRepository
+import com.android.systemui.keyboard.shortcut.data.repository.FakeShortcutCategoriesRepository
 import com.android.systemui.keyboard.shortcut.data.repository.InputGestureDataAdapter
 import com.android.systemui.keyboard.shortcut.data.repository.InputGestureMaps
 import com.android.systemui.keyboard.shortcut.data.repository.ShortcutCategoriesRepository
@@ -65,7 +68,9 @@ import com.android.systemui.model.sysUiState
 import com.android.systemui.plugins.activityStarter
 import com.android.systemui.settings.displayTracker
 import com.android.systemui.settings.userTracker
+import com.android.systemui.shade.data.repository.fakeFocusedDisplayRepository
 import com.android.systemui.statusbar.phone.systemUIDialogFactory
+import com.android.wm.shell.shared.desktopmode.FakeDesktopState
 
 var Kosmos.shortcutHelperAppCategoriesShortcutsSource: KeyboardShortcutGroupsSource by
     Kosmos.Fixture { AppCategoriesShortcutsSource(windowManager, testDispatcher) }
@@ -74,10 +79,16 @@ var Kosmos.shortcutHelperSystemShortcutsSource: KeyboardShortcutGroupsSource by
     Kosmos.Fixture { SystemShortcutsSource(mainResources, fakeInputManager.inputManager) }
 
 var Kosmos.shortcutHelperMultiTaskingShortcutsSource: KeyboardShortcutGroupsSource by
-    Kosmos.Fixture { MultitaskingShortcutsSource(mainResources, applicationContext) }
+    Kosmos.Fixture { MultitaskingShortcutsSource(mainResources, applicationContext, desktopState) }
 
 val Kosmos.shortcutHelperStateRepository by
-    Kosmos.Fixture { ShortcutHelperStateRepository(fakeInputManager.inputManager, testDispatcher) }
+    Kosmos.Fixture {
+        ShortcutHelperStateRepository(
+            fakeInputManager.inputManager,
+            testDispatcher,
+            fakeFocusedDisplayRepository,
+        )
+    }
 
 var Kosmos.shortcutHelperInputShortcutsSource: KeyboardShortcutGroupsSource by
     Kosmos.Fixture {
@@ -103,7 +114,7 @@ val Kosmos.shortcutCategoriesUtils by
         )
     }
 
-val Kosmos.defaultShortcutCategoriesRepository by
+var Kosmos.defaultShortcutCategoriesRepository: ShortcutCategoriesRepository by
     Kosmos.Fixture {
         DefaultShortcutCategoriesRepository(
             applicationCoroutineScope,
@@ -146,7 +157,7 @@ val Kosmos.appLaunchDataRepository by
         )
     }
 
-val Kosmos.customShortcutCategoriesRepository by
+var Kosmos.customShortcutCategoriesRepository: ShortcutCategoriesRepository by
     Kosmos.Fixture {
         CustomShortcutCategoriesRepository(
             shortcutHelperInputDeviceRepository,
@@ -208,7 +219,7 @@ val Kosmos.shortcutHelperCategoriesInteractor by
         ShortcutHelperCategoriesInteractor(
             context = applicationContext,
             defaultShortcutCategoriesRepository,
-            customCategoriesRepositoryLazy = { customShortcutCategoriesRepository },
+            customCategoriesRepository = customShortcutCategoriesRepository,
             appsShortcutCategoryRepositoryLazy = { appsShortcutCategoryRepository },
             customizationModeInteractor = shortcutHelperCustomizationModeInteractor,
         )
@@ -235,16 +246,18 @@ val Kosmos.shortcutHelperViewModel by
             shortcutHelperStateInteractor,
             shortcutHelperCategoriesInteractor,
             shortcutHelperCustomizationModeInteractor,
+            displayId = Display.DEFAULT_DISPLAY,
         )
     }
 
 val Kosmos.shortcutCustomizationDialogStarterFactory by
     Kosmos.Fixture {
         object : ShortcutCustomizationDialogStarter.Factory {
-            override fun create(): ShortcutCustomizationDialogStarter {
+            override fun create(displayContext: Context): ShortcutCustomizationDialogStarter {
                 return ShortcutCustomizationDialogStarter(
                     shortcutCustomizationViewModelFactory,
                     systemUIDialogFactory,
+                    displayContext,
                     mainResources,
                 )
             }
@@ -254,7 +267,7 @@ val Kosmos.shortcutCustomizationDialogStarterFactory by
 val Kosmos.shortcutCustomizationInteractor by
     Kosmos.Fixture {
         ShortcutCustomizationInteractor(
-            customShortcutCategoriesRepository,
+            customShortcutCategoriesRepository as CustomShortcutCategoriesRepository,
             shortcutHelperCustomizationModeRepository,
         )
     }
@@ -273,6 +286,8 @@ val Kosmos.shortcutCustomizationViewModelFactory by
 
 val Kosmos.fakeLauncherApps by Kosmos.Fixture { FakeLauncherApps() }
 
+val Kosmos.desktopState by Kosmos.Fixture { FakeDesktopState() }
+
 val Kosmos.userVisibleAppsRepository by
     Kosmos.Fixture {
         UserVisibleAppsRepository(
@@ -282,3 +297,9 @@ val Kosmos.userVisibleAppsRepository by
             fakeLauncherApps.launcherApps,
         )
     }
+
+val Kosmos.fakeDefaultShortcutCategoriesRepository by
+    Kosmos.Fixture { FakeShortcutCategoriesRepository(shortcutHelperStateRepository) }
+
+val Kosmos.fakeCustomShortcutCategoriesRepository by
+    Kosmos.Fixture { FakeShortcutCategoriesRepository(shortcutHelperStateRepository) }

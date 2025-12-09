@@ -26,6 +26,8 @@ import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
 import static android.app.WindowConfiguration.inMultiWindowMode;
 import static android.os.Process.myUid;
 
+import static com.android.window.flags.Flags.predictiveBackStopKeycodeBackForwarding;
+
 import static java.lang.Character.MIN_VALUE;
 
 import android.Manifest;
@@ -118,7 +120,6 @@ import android.util.AttributeSet;
 import android.util.Dumpable;
 import android.util.EventLog;
 import android.util.Log;
-import android.util.Pair;
 import android.util.PrintWriterPrinter;
 import android.util.Slog;
 import android.util.SparseArray;
@@ -167,6 +168,8 @@ import android.view.translation.UiTranslationSpec;
 import android.widget.AdapterView;
 import android.widget.Toast;
 import android.widget.Toolbar;
+import android.window.BackEvent;
+import android.window.ObserverOnBackAnimationCallback;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 import android.window.SplashScreen;
@@ -776,6 +779,7 @@ public class Activity extends ContextThemeWrapper
         ContentCaptureManager.ContentCaptureClient {
     private static final String TAG = "Activity";
     private static final boolean DEBUG_LIFECYCLE = false;
+    private static final long SLOW_OP_DURATION_MS = 500;
 
     /** Standard activity result: operation canceled. */
     public static final int RESULT_CANCELED    = 0;
@@ -822,6 +826,7 @@ public class Activity extends ContextThemeWrapper
     private static final int LOG_AM_ON_TOP_RESUMED_GAINED_CALLED = 30064;
     private static final int LOG_AM_ON_TOP_RESUMED_LOST_CALLED = 30065;
     private OnBackInvokedCallback mDefaultBackCallback;
+    private ObserverOnBackAnimationCallback mObserverBackCallback;
 
     /**
      * After {@link Build.VERSION_CODES#TIRAMISU},
@@ -1660,10 +1665,22 @@ public class Activity extends ContextThemeWrapper
         Object[] callbacks = collectActivityLifecycleCallbacks();
         if (callbacks != null) {
             for (int i = 0; i < callbacks.length; i++) {
+                final long startTime = SystemClock.uptimeMillis();
                 ((Application.ActivityLifecycleCallbacks) callbacks[i]).onActivityPostResumed(this);
+                final long duration = SystemClock.uptimeMillis() - startTime;
+                if (duration > SLOW_OP_DURATION_MS) {
+                    Log.w(TAG, "Slow operation dispatchActivityPostResumed"
+                            + ", duration=" + duration + ", callback=" + callbacks[i]);
+                }
             }
         }
+        final long startTime = SystemClock.uptimeMillis();
         getApplication().dispatchActivityPostResumed(this);
+        final long duration = SystemClock.uptimeMillis() - startTime;
+        if (duration > SLOW_OP_DURATION_MS) {
+            Log.w(TAG, "Slow operation Application#dispatchActivityPostResumed"
+                    + ", duration=" + duration);
+        }
     }
 
     private void dispatchActivityPrePaused() {
@@ -1910,6 +1927,27 @@ public class Activity extends ContextThemeWrapper
             // Add onBackPressed as default back behavior.
             mDefaultBackCallback = this::onBackInvoked;
             getOnBackInvokedDispatcher().registerSystemOnBackInvokedCallback(mDefaultBackCallback);
+        }
+        if (predictiveBackStopKeycodeBackForwarding()) {
+            mObserverBackCallback = new ObserverOnBackAnimationCallback() {
+                    @Override
+                    public void onBackStarted(@NonNull BackEvent backEvent) {
+                        onUserInteraction();
+                    }
+
+                    @Override
+                    public void onBackInvoked() {
+                        onUserInteraction();
+                    }
+
+                    @Override
+                    public void onBackCancelled() {}
+                };
+            // Register a ObserverOnBackAnimationCallback with PRIORITY_SYSTEM_NAVIGATION_OBSERVER
+            // to get notified on every back navigation so that onUserInteraction can be called.
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_SYSTEM_NAVIGATION_OBSERVER,
+                    mObserverBackCallback);
         }
     }
 
@@ -2345,7 +2383,7 @@ public class Activity extends ContextThemeWrapper
      * <p>All IDs will be bigger than {@link View#LAST_APP_AUTOFILL_ID}. All IDs returned
      * will be unique.
      *
-     * {@hide}
+     * @hide
      */
     @Override
     public int getNextAutofillId() {
@@ -2997,6 +3035,10 @@ public class Activity extends ContextThemeWrapper
         if (mDefaultBackCallback != null) {
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(mDefaultBackCallback);
             mDefaultBackCallback = null;
+        }
+        if (mObserverBackCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(mObserverBackCallback);
+            mObserverBackCallback = null;
         }
 
         if (mCallbacksController != null) {
@@ -6920,46 +6962,56 @@ public class Activity extends ContextThemeWrapper
     }
 
     /**
-     * Customizes the animation for the activity transition with this activity. This can be called
-     * at any time while the activity still alive.
+     * Customizes the animation for activity transitions.
      *
-     * <p> This is a more robust method of overriding the transition animation at runtime without
-     * relying on {@link #overridePendingTransition(int, int)} which doesn't work for predictive
-     * back. However, the animation set from {@link #overridePendingTransition(int, int)} still
-     * has higher priority when the system is looking for the next transition animation.</p>
-     * <p> The animations resources set by this method will be chosen if and only if the activity is
-     * on top of the task while activity transitions are being played.
-     * For example, if we want to customize the opening transition when launching Activity B which
-     * gets started from Activity A, we should call this method inside B's onCreate with
-     * {@code overrideType = OVERRIDE_TRANSITION_OPEN} because the Activity B will on top of the
-     * task. And if we want to customize the closing transition when finishing Activity B and back
-     * to Activity A, since B is still is above A, we should call this method in Activity B with
-     * {@code overrideType = OVERRIDE_TRANSITION_CLOSE}. </p>
+     * <p>This method provides a robust way to override transition animations at runtime and can be
+     * called at any point in the activity's lifecycle. It is particularly useful for handling
+     * predictive back animations, for which {@link #overridePendingTransition(int, int)} is not
+     * suitable.</p>
      *
-     * <p> If an Activity has called this method, and it also set another activity animation
-     * by {@link Window#setWindowAnimations(int)}, the system will choose the animation set from
-     * this method.</p>
+     * <p>The specified animations will be applied only when this activity is at the top of the
+     * task stack during the transition. For example, to customize the opening animation for an
+     * Activity B started from Activity A, call this method in B's {@code onCreate} with
+     * {@code overrideType = OVERRIDE_TRANSITION_OPEN}. To customize the closing animation when
+     * returning from B to A, call this method in B with
+     * {@code overrideType = OVERRIDE_TRANSITION_CLOSE}.</p>
      *
-     * <p> Note that {@link Window#setWindowAnimations},
-     * {@link #overridePendingTransition(int, int)} and this method will be ignored if the Activity
-     * is started with {@link ActivityOptions#makeSceneTransitionAnimation(Activity, Pair[])}. Also
-     * note that this method can only be used to customize cross-activity transitions but not
-     * cross-task transitions which are fully non-customizable as of Android 11.</p>
+     * <p><b>Animation Precedence:</b></p>
+     * <ul>
+     * <li>Animations set by {@link #overridePendingTransition(int, int)} have the highest
+     * priority.</li>
+     * <li>Animations set by this method have higher priority than those defined by
+     * {@link Window#setWindowAnimations(int)}.</li>
+     * </ul>
      *
-     * @param overrideType {@code OVERRIDE_TRANSITION_OPEN} This animation will be used when
-     *                     starting/entering an activity. {@code OVERRIDE_TRANSITION_CLOSE} This
-     *                     animation will be used when finishing/closing an activity.
-     * @param enterAnim A resource ID of the animation resource to use for the incoming activity.
-     *                  Use 0 for no animation.
-     * @param exitAnim A resource ID of the animation resource to use for the outgoing activity.
-     *                 Use 0 for no animation.
+     * <p><b>Predictive Back Animation:</b></p>
+     * <p>When predictive back is enabled (see {@code enableOnBackInvokedCallback} in the manifest),
+     * the system may control the preview phase of the back animation. The custom transition defined
+     * by {@code enterAnim} and {@code exitAnim} is then applied only after the back gesture is
+     * committed.</p>
+     *
+     * <p><b>Limitations:</b></p>
+     * <ul>
+     * <li>This method, along with {@link #overridePendingTransition(int, int)} and
+     * {@link Window#setWindowAnimations(int)}, is ignored if the activity is started with
+     * {@link ActivityOptions#makeSceneTransitionAnimation(Activity, android.util.Pair[])}.</li>
+     * <li>As of Android 11, this method cannot be used to customize cross-task transitions.</li>
+     * </ul>
+     *
+     * @param overrideType The type of transition to override. Must be either
+     * {@code OVERRIDE_TRANSITION_OPEN} for entering transitions or
+     * {@code OVERRIDE_TRANSITION_CLOSE} for exiting transitions.
+     * @param enterAnim    The resource ID of the animation for the incoming activity. Use 0 for no
+     * animation.
+     * @param exitAnim     The resource ID of the animation for the outgoing activity. Use 0 for no
+     * animation.
      *
      * @see #overrideActivityTransition(int, int, int, int)
      * @see #clearOverrideActivityTransition(int)
-     * @see OnBackInvokedCallback
+     * @see android.window.OnBackInvokedCallback
      * @see #overridePendingTransition(int, int)
      * @see Window#setWindowAnimations(int)
-     * @see ActivityOptions#makeSceneTransitionAnimation(Activity, Pair[])
+     * @see ActivityOptions#makeSceneTransitionAnimation(Activity, android.util.Pair[])
      */
     public void overrideActivityTransition(@OverrideTransition int overrideType,
             @AnimRes int enterAnim, @AnimRes int exitAnim) {
@@ -6967,48 +7019,58 @@ public class Activity extends ContextThemeWrapper
     }
 
     /**
-     * Customizes the animation for the activity transition with this activity. This can be called
-     * at any time while the activity still alive.
+     * Customizes the animation and background color for activity transitions.
      *
-     * <p> This is a more robust method of overriding the transition animation at runtime without
-     * relying on {@link #overridePendingTransition(int, int)} which doesn't work for predictive
-     * back. However, the animation set from {@link #overridePendingTransition(int, int)} still
-     * has higher priority when the system is looking for the next transition animation.</p>
-     * <p> The animations resources set by this method will be chosen if and only if the activity is
-     * on top of the task while activity transitions are being played.
-     * For example, if we want to customize the opening transition when launching Activity B which
-     * gets started from Activity A, we should call this method inside B's onCreate with
-     * {@code overrideType = OVERRIDE_TRANSITION_OPEN} because the Activity B will on top of the
-     * task. And if we want to customize the closing transition when finishing Activity B and back
-     * to Activity A, since B is still is above A, we should call this method in Activity B with
-     * {@code overrideType = OVERRIDE_TRANSITION_CLOSE}. </p>
+     * <p>This method provides a robust way to override transition animations at runtime and can be
+     * called at any point in the activity's lifecycle. It is particularly useful for handling
+     * predictive back animations, for which {@link #overridePendingTransition(int, int)} is not
+     * suitable.</p>
      *
-     * <p> If an Activity has called this method, and it also set another activity animation
-     * by {@link Window#setWindowAnimations(int)}, the system will choose the animation set from
-     * this method.</p>
+     * <p>The specified animations will be applied only when this activity is at the top of the
+     * task stack during the transition. For example, to customize the opening animation for an
+     * Activity B started from Activity A, call this method in B's {@code onCreate} with
+     * {@code overrideType = OVERRIDE_TRANSITION_OPEN}. To customize the closing animation when
+     * returning from B to A, call this method in B with
+     * {@code overrideType = OVERRIDE_TRANSITION_CLOSE}.</p>
      *
-     * <p> Note that {@link Window#setWindowAnimations},
-     * {@link #overridePendingTransition(int, int)} and this method will be ignored if the Activity
-     * is started with {@link ActivityOptions#makeSceneTransitionAnimation(Activity, Pair[])}. Also
-     * note that this method can only be used to customize cross-activity transitions but not
-     * cross-task transitions which are fully non-customizable as of Android 11.</p>
+     * <p><b>Animation Precedence:</b></p>
+     * <ul>
+     * <li>Animations set by {@link #overridePendingTransition(int, int)} have the highest
+     * priority.</li>
+     * <li>Animations set by this method have higher priority than those defined by
+     * {@link Window#setWindowAnimations(int)}.</li>
+     * </ul>
      *
-     * @param overrideType {@code OVERRIDE_TRANSITION_OPEN} This animation will be used when
-     *                     starting/entering an activity. {@code OVERRIDE_TRANSITION_CLOSE} This
-     *                     animation will be used when finishing/closing an activity.
-     * @param enterAnim A resource ID of the animation resource to use for the incoming activity.
-     *                  Use 0 for no animation.
-     * @param exitAnim A resource ID of the animation resource to use for the outgoing activity.
-     *                 Use 0 for no animation.
-     * @param backgroundColor The background color to use for the background during the animation
-     *                        if the animation requires a background. Set to
-     *                        {@link Color#TRANSPARENT} to not override the default color.
+     * <p><b>Predictive Back Animation:</b></p>
+     * <p>When predictive back is enabled (see {@code enableOnBackInvokedCallback} in the manifest),
+     * the system may control the preview phase of the back animation. The custom transition defined
+     * by {@code enterAnim} and {@code exitAnim} is then applied only after the back gesture is
+     * committed.</p>
+     *
+     * <p><b>Limitations:</b></p>
+     * <ul>
+     * <li>This method, along with {@link #overridePendingTransition(int, int)} and
+     * {@link Window#setWindowAnimations(int)}, is ignored if the activity is started with
+     * {@link ActivityOptions#makeSceneTransitionAnimation(Activity, android.util.Pair[])}.</li>
+     * <li>As of Android 11, this method cannot be used to customize cross-task transitions.</li>
+     * </ul>
+     *
+     * @param overrideType    The type of transition to override. Must be either
+     * {@code OVERRIDE_TRANSITION_OPEN} for entering transitions or
+     * {@code OVERRIDE_TRANSITION_CLOSE} for exiting transitions.
+     * @param enterAnim     The resource ID of the animation for the incoming activity. Use 0 for no
+     * animation.
+     * @param exitAnim      The resource ID of the animation for the outgoing activity. Use 0 for no
+     * animation.
+     * @param backgroundColor The background color to display during the animation. Set to
+     * {@link Color#TRANSPARENT} to use the default background color.
+     *
      * @see #overrideActivityTransition(int, int, int)
      * @see #clearOverrideActivityTransition(int)
-     * @see OnBackInvokedCallback
+     * @see android.window.OnBackInvokedCallback
      * @see #overridePendingTransition(int, int)
      * @see Window#setWindowAnimations(int)
-     * @see ActivityOptions#makeSceneTransitionAnimation(Activity, Pair[])
+     * @see ActivityOptions#makeSceneTransitionAnimation(Activity, android.util.Pair[])
      */
     public void overrideActivityTransition(@OverrideTransition int overrideType,
             @AnimRes int enterAnim, @AnimRes int exitAnim, @ColorInt int backgroundColor) {
@@ -9402,7 +9464,7 @@ public class Activity extends ContextThemeWrapper
         final long startTime = SystemClock.uptimeMillis();
         // mResumed is set by the instrumentation
         mInstrumentation.callActivityOnResume(this);
-        final long duration = SystemClock.uptimeMillis() - startTime;
+        long duration = SystemClock.uptimeMillis() - startTime;
         EventLogTags.writeWmOnResumeCalled(mIdent, getComponentName().getClassName(), reason,
                 duration);
         if (!mCalled) {
@@ -9428,13 +9490,30 @@ public class Activity extends ContextThemeWrapper
         mFragments.dispatchResume();
         mFragments.execPendingActions();
 
+        duration = SystemClock.uptimeMillis() - startTime;
+        if (duration > SLOW_OP_DURATION_MS) {
+            Log.w(TAG, "Slow operation Fragment dispatchResume since onResume"
+                    + ", duration=" + duration);
+        }
+
         onPostResume();
         if (!mCalled) {
             throw new SuperNotCalledException(
                 "Activity " + mComponent.toShortString() +
                 " did not call through to super.onPostResume()");
         }
+        duration = SystemClock.uptimeMillis() - startTime;
+        if (duration > SLOW_OP_DURATION_MS) {
+            Log.w(TAG, "Slow operation onPostResume since onResume, duration=" + duration);
+        }
+
         dispatchActivityPostResumed();
+
+        duration = SystemClock.uptimeMillis() - startTime;
+        if (duration > SLOW_OP_DURATION_MS) {
+            Log.w(TAG, "Slow operation dispatchActivityPostResumed since onResume"
+                    + ", duration=" + duration);
+        }
         Trace.traceEnd(Trace.TRACE_TAG_WINDOW_MANAGER);
     }
 

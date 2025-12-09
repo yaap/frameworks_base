@@ -59,6 +59,7 @@ import static android.internal.perfetto.protos.Windowmanagerservice.TaskProto.RO
 import static android.internal.perfetto.protos.Windowmanagerservice.TaskProto.SURFACE_HEIGHT;
 import static android.internal.perfetto.protos.Windowmanagerservice.TaskProto.SURFACE_WIDTH;
 import static android.internal.perfetto.protos.Windowmanagerservice.TaskProto.TASK_FRAGMENT;
+import static android.internal.perfetto.protos.Windowmanagerservice.TaskProto.TASK_NAME;
 import static android.internal.perfetto.protos.Windowmanagerservice.WindowContainerChildProto.TASK;
 import static android.os.Trace.TRACE_TAG_WINDOW_MANAGER;
 import static android.provider.Settings.Secure.USER_SETUP_COMPLETE;
@@ -106,8 +107,6 @@ import static com.android.server.wm.LockTaskController.LOCK_TASK_AUTH_DONT_LOCK;
 import static com.android.server.wm.LockTaskController.LOCK_TASK_AUTH_LAUNCHABLE;
 import static com.android.server.wm.LockTaskController.LOCK_TASK_AUTH_LAUNCHABLE_PRIV;
 import static com.android.server.wm.LockTaskController.LOCK_TASK_AUTH_PINNABLE;
-import static com.android.server.wm.WindowContainer.AnimationFlags.CHILDREN;
-import static com.android.server.wm.WindowContainer.AnimationFlags.PARENTS;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_ROOT_TASK;
 import static com.android.server.wm.WindowManagerDebugConfig.DEBUG_TASK_MOVEMENT;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
@@ -532,6 +531,13 @@ class Task extends TaskFragment {
     private boolean mForceNonResizeOverride;
 
     /**
+     * Whether the child tasks can have override bounds.
+     */
+    private boolean mDisallowOverrideBoundsForChildren;
+
+    SurfaceControl[] mExcludeLayersFromTaskSnapshot;
+
+    /**
      * If the window is allowed to be repositioned by {@link
      * android.app.ActivityManager.AppTask#moveTaskTo}.
      */
@@ -640,8 +646,6 @@ class Task extends TaskFragment {
      */
     ActivityRecord mChildPipActivity;
 
-    boolean mLastSurfaceShowing;
-
     boolean mAlignActivityLocaleWithTask = false;
 
     /** @see #isForceExcludedFromRecents() */
@@ -696,9 +700,6 @@ class Task extends TaskFragment {
         mResizeMode = resizeMode;
         if (info != null) {
             setIntent(_intent, info);
-            if (!Flags.updateTaskMinDimensionsWithRootActivity()) {
-                setMinDimensions(info);
-            }
         } else {
             intent = _intent;
             mMinWidth = minWidth;
@@ -729,9 +730,6 @@ class Task extends TaskFragment {
         voiceSession = _voiceSession;
         voiceInteractor = _voiceInteractor;
         setIntent(activity, intent, info);
-        if (!Flags.updateTaskMinDimensionsWithRootActivity()) {
-            setMinDimensions(info);
-        }
         // Before we began to reuse a root task as the leaf task, we used to
         // create a leaf task in this case. Therefore now we won't send out the task created
         // notification when we decide to reuse it here, so we send out the notification below.
@@ -1065,10 +1063,8 @@ class Task extends TaskFragment {
             mResizeMode = info.resizeMode;
             shouldUpdateTaskDescription = true;
         }
-        if (Flags.updateTaskMinDimensionsWithRootActivity()) {
-            if (setMinDimensions(info)) {
-                shouldUpdateTaskDescription = true;
-            }
+        if (setMinDimensions(info)) {
+            shouldUpdateTaskDescription = true;
         }
         if (shouldUpdateTaskDescription) {
             updateTaskDescription();
@@ -1101,14 +1097,12 @@ class Task extends TaskFragment {
         }
         mMinWidth = minWidth;
         mMinHeight = minHeight;
-        if (Flags.updateTaskMinDimensionsWithRootActivity()) {
-            // Only update for pure TaskFragment.
-            forAllTaskFragments(tf -> {
-                if (tf.asTask() == null) {
-                    tf.setMinDimensions(minWidth, minHeight);
-                }
-            });
-        }
+        // Only update for pure TaskFragment.
+        forAllTaskFragments(tf -> {
+            if (tf.asTask() == null) {
+                tf.setMinDimensions(minWidth, minHeight);
+            }
+        });
         return true;
     }
 
@@ -1238,7 +1232,23 @@ class Task extends TaskFragment {
             setInitialBoundsIfNeeded();
         }
 
+        // Clear the override bounds if any ancestor requested to.
+        if (!isOverrideBoundsAllowed()) {
+            setBounds(null);
+        }
+
         mRootWindowContainer.updateUIDsPresentOnDisplay();
+    }
+
+    boolean isOverrideBoundsAllowed() {
+        Task parentTask = getParent() != null ? getParent().asTask() : null;
+        while (parentTask != null) {
+            if (parentTask.mDisallowOverrideBoundsForChildren) {
+                return false;
+            }
+            parentTask = parentTask.getParent().asTask();
+        }
+        return true;
     }
 
     @Override
@@ -1426,6 +1436,16 @@ class Task extends TaskFragment {
         return (topTask != this && topTask != null) ? topTask.getBaseIntent() : null;
     }
 
+    /** Returns the user id associated with the current task. */
+    int getUserId() {
+        if (!isLeafTask()) return mCurrentUser;
+        if (DesktopExperienceFlags.ENABLE_APPLY_DESK_ACTIVATION_ON_USER_SWITCH.isTrue()
+                && showForAllUsers()) {
+            return mCurrentUser;
+        }
+        return mUserId;
+    }
+
     /**
      * Returns the package name which stands for this task. It is empty string if no activities
      * have been added to this task.
@@ -1519,10 +1539,6 @@ class Task extends TaskFragment {
         if (mTaskOrganizer != null && mCreatedByOrganizer && child.asTask() != null) {
             getDisplayArea().addRootTaskReferenceIfNeeded((Task) child);
         }
-
-        // Make sure the list of display UID allowlists is updated
-        // now that this record is in a new task.
-        mRootWindowContainer.updateUIDsPresentOnDisplay();
 
         // Only pass minimum dimensions for pure TaskFragment. Task's minimum dimensions must be
         // passed from Task constructor.
@@ -1913,13 +1929,26 @@ class Task extends TaskFragment {
                 -1 /* don't check PID */, -1 /* don't check UID */, this);
     }
 
+    /**
+     * Update task's force resize overrides if the system full-screen override cache has
+     * been invalidated due to activity restart.
+     */
+    void updateForceResizeOverridesIfNeeded(@NonNull ActivityRecord r) {
+        final AppCompatAspectRatioOverrides aspectRatioOverrides =
+                r.mAppCompatController.getAspectRatioOverrides();
+        if (aspectRatioOverrides.hasSystemFullscreenOverrideCache()) {
+            updateForceResizeOverrides(r);
+        }
+    }
+
     private void updateForceResizeOverrides(@NonNull ActivityRecord r) {
         final AppCompatResizeOverrides resizeOverrides = r.mAppCompatController
                 .getResizeOverrides();
+        // Pass task's displayContent as activity's displayContent is not attached yet.
         mForceResizeOverride = resizeOverrides.shouldOverrideForceResizeApp()
                 || r.isUniversalResizeable()
                 || r.mAppCompatController.getAspectRatioOverrides()
-                    .hasFullscreenOverride();
+                    .hasFullscreenOverride(mDisplayContent);
         mForceNonResizeOverride = resizeOverrides.shouldOverrideForceNonResizeApp();
     }
 
@@ -2000,7 +2029,7 @@ class Task extends TaskFragment {
 
     private static boolean setTaskDescriptionFromActivityAboveRoot(
             ActivityRecord r, ActivityRecord root, TaskDescription td) {
-        if (!r.isTaskOverlay() && r.taskDescription != null) {
+        if (!r.isTaskOverlay() && !r.isNoDisplay() && r.taskDescription != null) {
             final TaskDescription atd = r.taskDescription;
             if (td.getLabel() == null) {
                 td.setLabel(atd.getLabel());
@@ -2075,7 +2104,10 @@ class Task extends TaskFragment {
         nextPersistTaskBounds &=
                 (getRequestedOverrideConfiguration().windowConfiguration.getBounds() == null
                 || getRequestedOverrideConfiguration().windowConfiguration.getBounds().isEmpty());
-        if (!prevPersistTaskBounds && nextPersistTaskBounds
+
+        final boolean disableRestoreNonFullscreenBounds =
+                Flags.disableRestoreNonFullscreenBoundsOnConfigurationChange();
+        if (!disableRestoreNonFullscreenBounds && !prevPersistTaskBounds && nextPersistTaskBounds
                 && mLastNonFullscreenBounds != null && !mLastNonFullscreenBounds.isEmpty()) {
             // Bypass onRequestedOverrideConfigurationChanged here to avoid infinite loop.
             getRequestedOverrideConfiguration().windowConfiguration
@@ -2386,14 +2418,19 @@ class Task extends TaskFragment {
     }
 
     void updateSurfaceSize(SurfaceControl.Transaction transaction) {
-        if (mSurfaceControl == null || isOrganized()) {
+        final boolean inSync = mSyncState != SYNC_STATE_NONE;
+        if (mSurfaceControl == null
+                // Organized tasks are controlled by shell, so only manipulate those surfaces
+                // during syncs
+                || (isOrganized() && (!Flags.updateTaskCropInSync() || !inSync))) {
             return;
         }
 
         // Apply crop to root tasks only and clear the crops of the descendant tasks.
         int width = 0;
         int height = 0;
-        if (isRootTask() && !mTransitionController.mIsWaitingForDisplayEnabled) {
+        if ((isRootTask() || (Flags.updateTaskCropInSync() && !fillsParentBounds()))
+                && !mTransitionController.mIsWaitingForDisplayEnabled) {
             final Rect taskBounds = getBounds();
             width = taskBounds.width();
             height = taskBounds.height();
@@ -2455,10 +2492,7 @@ class Task extends TaskFragment {
      * persist task bounds if needed.
      */
     void setInitialBoundsIfNeeded() {
-        if (!com.android.window.flags.Flags.respectLeafTaskBounds()) {
-            updateOverrideConfigurationFromLaunchBounds();
-        } else if (persistTaskBounds(getWindowConfiguration())
-                && getRequestedOverrideBounds().isEmpty()) {
+        if (persistTaskBounds(getWindowConfiguration()) && getRequestedOverrideBounds().isEmpty()) {
             // Sets the Task bounds to the non-fullscreen bounds persisted last time if the Task
             // has no override bounds set.
             setBounds(mLastNonFullscreenBounds);
@@ -2830,6 +2864,7 @@ class Task extends TaskFragment {
 
         EventLogTags.writeWmTaskRemoved(mTaskId, getRootTaskId(), getDisplayId(), reason);
         clearPinnedTaskIfNeed();
+        clearExcludeLayersFromTaskSnapshot();
         if (mChildPipActivity != null) {
             mChildPipActivity.clearLastParentBeforePip();
         }
@@ -2841,6 +2876,8 @@ class Task extends TaskFragment {
 
         super.removeImmediately();
         mDisplayContent = null;
+        // Reset in case the Task may be reused by apps.
+        setHasBeenVisible(false);
         mRemoving = false;
     }
 
@@ -2872,6 +2909,11 @@ class Task extends TaskFragment {
     public int setBounds(Rect bounds) {
         if (isRootTask()) {
             return setBounds(getRequestedOverrideBounds(), bounds);
+        }
+
+        if (!isOverrideBoundsAllowed() && bounds != null && !bounds.isEmpty()) {
+            Slog.w(TAG, "Not allowed to set override bounds " + bounds + " for " + this);
+            return BOUNDS_CHANGE_NONE;
         }
 
         final int boundsChange = super.setBounds(bounds);
@@ -3156,12 +3198,23 @@ class Task extends TaskFragment {
     }
 
     void onSnapshotChanged(TaskSnapshot snapshot) {
-        mAtmService.getTaskChangeNotificationController().notifyTaskSnapshotChanged(
-                mTaskId, snapshot);
+        if (Flags.reduceTaskSnapshotMemoryUsage()) {
+            // No local listener.
+            mWmService.mSnapshotController.notifySnapshotChanged(mTaskId, snapshot);
+        } else {
+            mAtmService.getTaskChangeNotificationController().notifyTaskSnapshotChanged(
+                    mTaskId, snapshot);
+        }
     }
 
     void onSnapshotInvalidated() {
-        mAtmService.getTaskChangeNotificationController().notifyTaskSnapshotInvalidated(mTaskId);
+        if (Flags.reduceTaskSnapshotMemoryUsage()) {
+            // No local listener.
+            mWmService.mSnapshotController.notifySnapshotInvalidate(mTaskId);
+        } else {
+            mAtmService.getTaskChangeNotificationController()
+                    .notifyTaskSnapshotInvalidated(mTaskId);
+        }
     }
 
 
@@ -3287,6 +3340,7 @@ class Task extends TaskFragment {
         return "Task=" + mTaskId + (mName != null ? "(" + mName + ")" : "");
     }
 
+    // It is replaced by WindowState#getDimController().
     @Deprecated
     @Override
     Dimmer getDimmer() {
@@ -3301,9 +3355,7 @@ class Task extends TaskFragment {
         // Once at the root task level, we want to check {@link #isTranslucent(ActivityRecord)}.
         // If true, we want to get the Dimmer from the level above since we don't want to animate
         // the dim with the Task.
-        if (!isRootTask() || isTranslucentAndVisible()
-                || (Flags.getDimmerOnClosing() ? isTranslucentForTransition()
-                                                : isTranslucent(null))) {
+        if (!isRootTask() || isTranslucentAndVisible() || isTranslucentForTransition()) {
             return super.getDimmer();
         }
 
@@ -3315,61 +3367,6 @@ class Task extends TaskFragment {
         // bounds match the area the app lives in.
         // If translucent, we will move the dim to the display area
         return inMultiWindowMode() || !isTranslucentAndVisible();
-    }
-
-    @Override
-    void prepareSurfaces() {
-        mDimmer.resetDimStates();
-        super.prepareSurfaces();
-
-        Rect dimBounds = null;
-        if (!Flags.useTasksDimOnly()) {
-            dimBounds = mDimmer.getDimBounds();
-            if (dimBounds != null) {
-                getDimBounds(dimBounds);
-
-                // Bounds need to be relative, as the dim layer is a child.
-                if (inFreeformWindowingMode()) {
-                    getBounds(mTmpRect);
-                    dimBounds.offset(-mTmpRect.left, -mTmpRect.top);
-                } else {
-                    dimBounds.offsetTo(0, 0);
-                }
-            }
-        }
-
-        final SurfaceControl.Transaction t = getSyncTransaction();
-
-        if (mDimmer.hasDimState() && mDimmer.updateDims(t)) {
-            scheduleAnimation();
-        }
-
-        if (mWmService.mFlags.mEnsureSurfaceVisibility) {
-            return;
-        }
-
-        // Let organizer manage task visibility for shell transition. So don't change it's
-        // visibility during collecting.
-        if (mTransitionController.isCollecting() && mCreatedByOrganizer) {
-            return;
-        }
-
-        // We intend to let organizer manage task visibility but it doesn't
-        // have enough information until we finish shell transitions.
-        // In the mean time we do an easy fix here.
-        final boolean visible = isVisible();
-        final boolean show = visible || isAnimating(PARENTS | CHILDREN,
-                SurfaceAnimator.ANIMATION_TYPE_ALL);
-        if (mSurfaceControl != null) {
-            if (show != mLastSurfaceShowing) {
-                t.setVisibility(mSurfaceControl, show);
-            }
-        }
-        // Only show the overlay if the task has other visible children
-        if (mOverlayHost != null) {
-            mOverlayHost.setVisibility(t, visible);
-        }
-        mLastSurfaceShowing = show;
     }
 
     @Override
@@ -3400,7 +3397,7 @@ class Task extends TaskFragment {
         info.addLaunchCookie(mLaunchCookie);
         final ActivityRecord top = mTaskSupervisor.mTaskInfoHelper.fillAndReturnTop(this, info);
 
-        info.userId = isLeafTask() ? mUserId : mCurrentUser;
+        info.userId = getUserId();
         info.taskId = mTaskId;
         info.effectiveUid = effectiveUid;
         info.displayId = getDisplayId();
@@ -3486,9 +3483,6 @@ class Task extends TaskFragment {
     @Nullable
     private static Rect calculateTopActivityMainWindowFrameForTaskInfo(
             @Nullable ActivityRecord top) {
-        if (!Flags.betterSupportNonMatchParentActivity()) {
-            return null;
-        }
         if (top == null) {
             return null;
         }
@@ -4556,7 +4550,9 @@ class Task extends TaskFragment {
      */
     void setMainWindowSizeChangeTransaction(SurfaceControl.Transaction t) {
         setMainWindowSizeChangeTransaction(t, this);
-        forAllWindows(WindowState::requestRedrawForSync, true);
+        if (!mWmService.mAlwaysSeqId) {
+            forAllWindows(WindowState::requestRedrawForSync, true);
+        }
     }
 
     private void setMainWindowSizeChangeTransaction(SurfaceControl.Transaction t, Task origin) {
@@ -4624,7 +4620,8 @@ class Task extends TaskFragment {
     }
 
     /**
-     * Returns whether this task is forcibly excluded from the Recents list.
+     * Returns whether this task or any of its parent task is forcibly excluded from the Recents
+     * list.
      *
      * <p>This flag is used by {@link RecentTasks#isVisibleRecentTask} to determine
      * if the task should be presented to the user through SystemUI. If this method
@@ -4634,7 +4631,18 @@ class Task extends TaskFragment {
      * @return {@code true} if the task is excluded, {@code false} otherwise.
      */
     boolean isForceExcludedFromRecents() {
-        return mForceExcludedFromRecents;
+        if (mForceExcludedFromRecents) {
+            return true;
+        }
+
+        WindowContainer parent = getParent();
+        while (parent != null && parent.asTask() != null) {
+            if (parent.asTask().isForceExcludedFromRecents()) {
+                return true;
+            }
+            parent = parent.getParent();
+        }
+        return false;
     }
 
     /**
@@ -4647,10 +4655,6 @@ class Task extends TaskFragment {
      * @param excluded {@code true} to exclude the task, {@code false} otherwise.
      */
     void setForceExcludedFromRecents(boolean excluded) {
-        if (!Flags.excludeTaskFromRecents()) {
-            Slog.w(TAG, "Flag " + Flags.FLAG_EXCLUDE_TASK_FROM_RECENTS + " is not enabled");
-            return;
-        }
         mForceExcludedFromRecents = excluded;
     }
 
@@ -4669,9 +4673,12 @@ class Task extends TaskFragment {
             return true;
         }
         // Check if PIP is disabled on any parent Task.
-        final WindowContainer parent = getParent();
-        if (parent != null && parent.asTask() != null) {
-            return parent.asTask().isDisablePip();
+        WindowContainer parent = getParent();
+        while (parent != null && parent.asTask() != null) {
+            if (parent.asTask().isDisablePip()) {
+                return true;
+            }
+            parent = parent.getParent();
         }
         return false;
     }
@@ -4702,7 +4709,9 @@ class Task extends TaskFragment {
                 .equals(mMultiWindowRestoreParent)) {
             // Restore previous parent if parent has changed.
             final Task parent = fromWindowContainerToken(mMultiWindowRestoreParent);
-            reparent(parent, MAX_VALUE);
+            if (parent != null && parent.isAttached()) {
+                reparent(parent, MAX_VALUE);
+            }
         }
 
         // mMultiWindowRestoreWindowingMode is INVALID for non-root tasks
@@ -4860,13 +4869,9 @@ class Task extends TaskFragment {
                     // rotation change) after leaving this scope, the visibility operation will be
                     // put in sync transaction, then it is not synced with reparent.
                     if (lastParentBeforePip.mSyncState == SYNC_STATE_NONE) {
-                        if (mWmService.mFlags.mEnsureSurfaceVisibility) {
-                            if (lastParentBeforePip.isVisible()) {
-                                lastParentBeforePip.getPendingTransaction().show(
-                                        lastParentBeforePip.mSurfaceControl);
-                            }
-                        } else {
-                            lastParentBeforePip.prepareSurfaces();
+                        if (lastParentBeforePip.isVisible()) {
+                            lastParentBeforePip.getPendingTransaction().show(
+                                    lastParentBeforePip.mSurfaceControl);
                         }
                         // If the moveToFront is a part of finishing transition, then make sure
                         // the z-order of tasks are up-to-date.
@@ -4893,8 +4898,12 @@ class Task extends TaskFragment {
                     if (!isPip2ExperimentEnabled) {
                         final ActivityRecord ar = mAtmService.mLastResumedActivity;
                         if (ar != null && ar.getTask() != null) {
-                            mAtmService.takeTaskSnapshot(ar.getTask().mTaskId,
-                                    true /* updateCache */);
+                            if (com.android.window.flags.Flags.reduceTaskSnapshotMemoryUsage()) {
+                                mWmService.mTaskSnapshotController.recordSnapshot(ar.getTask());
+                            } else {
+                                mAtmService.takeTaskSnapshot(ar.getTask().mTaskId,
+                                        true /* updateCache */);
+                            }
                         }
                     }
                 }
@@ -5245,29 +5254,60 @@ class Task extends TaskFragment {
                     someActivityResumed = resumeTopActivityInnerLocked(prev, options, deferPause);
                 }
             } else {
-                int idx = mChildren.size() - 1;
-                while (idx >= 0) {
-                    final Task child = (Task) getChildAt(idx--);
-                    if (!child.isTopActivityFocusable()) {
-                        continue;
-                    }
-                    if (child.getVisibility(null /* starting */)
-                            != TASK_FRAGMENT_VISIBILITY_VISIBLE) {
-                        if (child.topRunningActivity() == null) {
-                            // Skip the task if no running activity and continue resuming next task.
+                if (DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue()) {
+                    // Find visible tasks top-to-bottom.
+                    final List<Task> tasksToResumeTopToBottom = new ArrayList<>();
+                    for (int i = mChildren.size() - 1; i >= 0; i--) {
+                        final Task child = (Task) getChildAt(i);
+                        if (!child.isTopActivityFocusable()) {
                             continue;
                         }
-                        // Otherwise, assuming everything behind this task should also be invisible.
-                        break;
+                        if (child.getVisibility(null /* starting */)
+                                != TASK_FRAGMENT_VISIBILITY_VISIBLE) {
+                            if (child.topRunningActivity() == null) {
+                                // Skip the task if no running activity and continue resuming next
+                                // task.
+                                continue;
+                            }
+                            // Otherwise, assuming everything behind this task should also be
+                            // invisible.
+                            break;
+                        }
+                        tasksToResumeTopToBottom.add(child);
                     }
+                    // Resume them bottom-to-top, so Z order is preserved.
+                    for (int i = tasksToResumeTopToBottom.size() - 1; i >= 0; i--) {
+                        final Task child = tasksToResumeTopToBottom.get(i);
+                        someActivityResumed |= child.resumeTopActivityUncheckedLocked(prev,
+                                options, deferPause);
+                    }
+                } else {
+                    int idx = mChildren.size() - 1;
+                    while (idx >= 0) {
+                        final Task child = (Task) getChildAt(idx--);
+                        if (!child.isTopActivityFocusable()) {
+                            continue;
+                        }
+                        if (child.getVisibility(null /* starting */)
+                                != TASK_FRAGMENT_VISIBILITY_VISIBLE) {
+                            if (child.topRunningActivity() == null) {
+                                // Skip the task if no running activity and continue resuming next
+                                // task.
+                                continue;
+                            }
+                            // Otherwise, assuming everything behind this task should also be
+                            // invisible.
+                            break;
+                        }
 
-                    someActivityResumed |= child.resumeTopActivityUncheckedLocked(prev, options,
-                            deferPause);
-                    // Doing so in order to prevent IndexOOB since hierarchy might changes while
-                    // resuming activities, for example dismissing split-screen while starting
-                    // non-resizeable activity.
-                    if (idx >= mChildren.size()) {
-                        idx = mChildren.size() - 1;
+                        someActivityResumed |= child.resumeTopActivityUncheckedLocked(prev, options,
+                                deferPause);
+                        // Doing so in order to prevent IndexOOB since hierarchy might changes while
+                        // resuming activities, for example dismissing split-screen while starting
+                        // non-resizeable activity.
+                        if (idx >= mChildren.size()) {
+                            idx = mChildren.size() - 1;
+                        }
                     }
                 }
             }
@@ -5310,7 +5350,7 @@ class Task extends TaskFragment {
             return false;
         }
 
-        if (!mTaskSupervisor.readyToResume()) {
+        if (!mTaskSupervisor.readyToResume() || mRemoving) {
             return false;
         }
 
@@ -5385,8 +5425,7 @@ class Task extends TaskFragment {
         }
 
         // Slot the activity into the history root task and proceed
-        ProtoLog.i(WM_DEBUG_ADD_REMOVE, "Adding activity %s to task %s callers: %s", r,
-                activityTask, new RuntimeException("here"));
+        ProtoLog.i(WM_DEBUG_ADD_REMOVE, "Adding activity %s to task %s", r, activityTask);
 
         if (isActivityTypeHomeOrRecents() && getActivityBelow(r) == null) {
             // If this is the first activity, don't do any fancy animations,
@@ -5982,7 +6021,7 @@ class Task extends TaskFragment {
 
     private void moveTaskToBackInner(@NonNull Task task, @Nullable Transition transition) {
         final Transition.ReadyCondition movedToBack =
-                new Transition.ReadyCondition("moved-to-back", task);
+                new Transition.ReadyCondition("moved-to-back", task, true /* newTrackerOnly */);
         if (transition != null) {
             // Preventing from update surface position for WindowState if configuration changed,
             // because the position is depends on WindowFrame, so update the position before
@@ -6062,6 +6101,9 @@ class Task extends TaskFragment {
         }
         if (mDisablePip) {
             pw.println(prefix + "  mDisablePip=true");
+        }
+        if (mDisallowOverrideBoundsForChildren) {
+            pw.println(prefix + "  mDisallowOverrideBoundsForChildren=true");
         }
         if (mLastNonFullscreenBounds != null) {
             pw.print(prefix); pw.print("  mLastNonFullscreenBounds=");
@@ -6196,7 +6238,7 @@ class Task extends TaskFragment {
         // cases, we can just request that the root task is put at top here.
         // Don't bother moving task to top if this task is force hidden and invisible to user.
         if (!isForceHidden()) {
-            getDisplayArea().positionChildAt(POSITION_TOP, this, false /* includingParents */);
+            getParent().positionChildAt(POSITION_TOP, this, false /* includingParents */);
         }
     }
 
@@ -6284,6 +6326,12 @@ class Task extends TaskFragment {
     void onChildPositionChanged(WindowContainer child) {
         if (!mChildren.contains(child)) {
             dispatchTaskInfoChangedIfNeeded(false /* force */);
+            if (DesktopExperienceFlags.ENABLE_MULTIPLE_DESKTOPS_BACKEND.isTrue()
+                    && mCreatedByOrganizer && mChildren.isEmpty() && getDisplayArea() != null
+                    && getDisplayArea().mPreferredTopFocusableRootTask == this) {
+                // An empty task cannot be focusable.
+                getDisplayArea().clearPreferredTopFocusableRootTask();
+            }
             return;
         }
         if (child.asTask() != null) {
@@ -6463,6 +6511,31 @@ class Task extends TaskFragment {
         return mSelfMovable;
     }
 
+    /**
+     * Sets whether the child tasks can have override bounds.
+     *
+     * @param disallowOverrideBoundsForChildren whether to disallow the override bounds
+     * @return a bitmask representing the types of bounds changes made to the child tasks.
+     */
+    int setDisallowOverrideBoundsForChildren(boolean disallowOverrideBoundsForChildren) {
+        if (!mCreatedByOrganizer) {
+            Slog.w(TAG, "Can only disable child bounds override on tasks created by organizer");
+            return BOUNDS_CHANGE_NONE;
+        }
+        mDisallowOverrideBoundsForChildren = disallowOverrideBoundsForChildren;
+
+        final int[] boundsChange = new int[1];
+        if (disallowOverrideBoundsForChildren) {
+            forAllTasks(task -> {
+                if (task == this) {
+                    return;
+                }
+                boundsChange[0] |= task.setBounds(null);
+            });
+        }
+        return boundsChange[0];
+    }
+
     @Override
     public void dumpDebug(ProtoOutputStream proto, long fieldId,
             @WindowTracingLogLevel int logLevel) {
@@ -6486,6 +6559,9 @@ class Task extends TaskFragment {
         }
         proto.write(RESIZE_MODE, mResizeMode);
         proto.write(FILLS_PARENT, matchParentBounds());
+        if (mName != null) {
+            proto.write(TASK_NAME, mName);
+        }
         getRawBounds().dumpDebug(proto, BOUNDS);
 
         if (mLastNonFullscreenBounds != null) {
@@ -6884,7 +6960,9 @@ class Task extends TaskFragment {
             // Set activity type before adding the root task to TaskDisplayArea, so home task can
             // be cached, see TaskDisplayArea#addRootTaskReferenceIfNeeded().
             if (mActivityType != ACTIVITY_TYPE_UNDEFINED) {
-                task.setActivityType(mActivityType);
+                // Set directly because onParentChanged will propagate it.
+                task.getRequestedOverrideConfiguration().windowConfiguration.setActivityType(
+                        mActivityType);
             }
 
             if (mParent != null) {
@@ -6987,6 +7065,26 @@ class Task extends TaskFragment {
             return false;
         }
         return !DevicePolicyCache.getInstance().isScreenCaptureAllowed(mUserId);
+    }
+
+    void setExcludeLayersFromTaskSnapshot(SurfaceControl[] layers) throws RemoteException {
+        clearExcludeLayersFromTaskSnapshot();
+        for (SurfaceControl layer : layers) {
+            if (!layer.isValid()) {
+                throw new RemoteException("Invalid exclude layer from snapshot");
+            }
+        }
+        mExcludeLayersFromTaskSnapshot = layers;
+    }
+
+    void clearExcludeLayersFromTaskSnapshot() {
+        if (mExcludeLayersFromTaskSnapshot == null) {
+            return;
+        }
+        for (SurfaceControl layer : mExcludeLayersFromTaskSnapshot) {
+            layer.release();
+        }
+        mExcludeLayersFromTaskSnapshot = null;
     }
 
     /**

@@ -103,12 +103,11 @@ internal class Element(val key: ElementKey) {
          * we are idle on this content.
          */
         var targetSize by mutableStateOf(SizeUnspecified)
-        var targetCoordinates: LayoutCoordinates? by mutableStateOf(null)
         var targetOffset by mutableStateOf(Offset.Unspecified)
 
         /** The last state this element had in this content. */
         var lastOffset = Offset.Unspecified
-        var lastSize by mutableStateOf(SizeUnspecified)
+        var lastSize = SizeUnspecified
         var lastScale = Scale.Unspecified
         var lastAlpha = AlphaUnspecified
 
@@ -376,7 +375,6 @@ internal class ElementNode(
                 // this content when idle.
                 coordinates?.let { coords ->
                     with(layoutImpl.lookaheadScope) {
-                        stateInContent.targetCoordinates = lookaheadScopeCoordinates
                         stateInContent.targetOffset =
                             lookaheadScopeCoordinates.localLookaheadPositionOf(coords)
                     }
@@ -415,6 +413,7 @@ internal class ElementNode(
 
         val placeable =
             measure(layoutImpl, element, transition, stateInContent, measurable, constraints)
+        stateInContent.lastSize = placeable.size()
         return layout(placeable.width, placeable.height) { place(elementState, placeable) }
     }
 
@@ -691,7 +690,7 @@ internal class ElementNode(
 }
 
 /** The [TransitionState] that we should consider for [element]. */
-private fun elementState(
+internal fun elementState(
     layoutImpl: SceneTransitionLayoutImpl,
     element: Element,
     transitionStates: List<List<TransitionState>>,
@@ -1126,7 +1125,7 @@ private fun isElementOpaque(
  * [isElementOpaque] is checked during placement and we don't want to read the transition progress
  * in that phase.
  */
-private fun elementAlpha(
+internal fun elementAlpha(
     layoutImpl: SceneTransitionLayoutImpl,
     element: Element,
     transition: TransitionState.Transition?,
@@ -1218,7 +1217,6 @@ private fun measure(
     maybePlaceable?.let { placeable ->
         stateInContent.sizeBeforeInterruption = Element.SizeUnspecified
         stateInContent.sizeInterruptionDelta = IntSize.Zero
-        stateInContent.lastSize = placeable.size()
         return placeable
     }
 
@@ -1241,9 +1239,6 @@ private fun measure(
                 )
             },
         )
-
-    stateInContent.lastSize = interruptedSize
-
     return measurable.measure(
         Constraints.fixed(
             interruptedSize.width.coerceAtLeast(0),
@@ -1547,9 +1542,10 @@ private fun getTransformationContentKey(
                 transition.toContent
             } else {
                 throw IllegalStateException(
-                    "Ancestor transition is active but no transformation " +
-                        "spec was found. The ancestor transition should have only been selected " +
-                        "when a transformation for that element and content was defined."
+                    "Ancestor transition $transition is active but no transformation for element " +
+                        "${element.key} spec was found. The ancestor transition should have only " +
+                        "been selected when a transformation for that element and content was " +
+                        "defined."
                 )
             }
         }

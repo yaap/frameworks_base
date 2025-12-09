@@ -29,10 +29,11 @@ import android.view.WindowManager;
 
 import androidx.annotation.VisibleForTesting;
 
-import com.android.internal.R;
 
 /**
- * A visual indicator that displays a point at the scroll cursor location.
+ * A custom view that displays a circular visual indicator at the scroll cursor's location.
+ * This indicator is shown when the autoclick scroll panel is active, providing a visual cue
+ * for the point around which scrolling will occur.
  */
 public class AutoclickScrollPointIndicator extends View {
     // 16dp diameter (8dp radius).
@@ -121,7 +122,7 @@ public class AutoclickScrollPointIndicator extends View {
      */
     public WindowManager.LayoutParams getLayoutParams() {
         final WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
-        layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        layoutParams.type = WindowManager.LayoutParams.TYPE_NAVIGATION_BAR_PANEL;
         layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;

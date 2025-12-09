@@ -18,7 +18,7 @@ package com.android.systemui.doze;
 
 import static android.app.StatusBarManager.SESSION_KEYGUARD;
 
-import static com.android.systemui.Flags.udfpsScreenOffUnlockFlicker;
+import static com.android.systemui.Flags.newDozingKeyguardStates;
 import static com.android.systemui.doze.DozeMachine.State.DOZE_SUSPEND_TRIGGERS;
 import static com.android.systemui.doze.DozeMachine.State.FINISH;
 import static com.android.systemui.doze.DozeMachine.State.UNINITIALIZED;
@@ -48,7 +48,6 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.logging.InstanceId;
 import com.android.internal.logging.UiEvent;
 import com.android.internal.logging.UiEventLogger;
-import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.systemui.biometrics.AuthController;
 import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.dock.DockManager;
@@ -129,7 +128,6 @@ public class DozeTriggers implements DozeMachine.Part {
     private boolean mWantTouchScreenSensors;
     private boolean mWantSensors;
     private boolean mInAod;
-    private final KeyguardUpdateMonitor mKeyguardUpdateMonitor;
 
     private final UserTracker.Callback mUserChangedCallback =
             new UserTracker.Callback() {
@@ -224,8 +222,7 @@ public class DozeTriggers implements DozeMachine.Part {
             KeyguardStateController keyguardStateController,
             DevicePostureController devicePostureController,
             UserTracker userTracker,
-            SelectedUserInteractor selectedUserInteractor,
-            KeyguardUpdateMonitor keyguardUpdateMonitor) {
+            SelectedUserInteractor selectedUserInteractor) {
         mContext = context;
         mDozeHost = dozeHost;
         mConfig = config;
@@ -247,7 +244,6 @@ public class DozeTriggers implements DozeMachine.Part {
         mKeyguardStateController = keyguardStateController;
         mUserTracker = userTracker;
         mSelectedUserInteractor = selectedUserInteractor;
-        mKeyguardUpdateMonitor = keyguardUpdateMonitor;
         mVibrator = (Vibrator) mContext.getSystemService(Context.VIBRATOR_SERVICE);
         mTapDelay = mContext.getResources().getInteger(
                 com.android.internal.R.integer.config_singleTapDelay);
@@ -390,9 +386,7 @@ public class DozeTriggers implements DozeMachine.Part {
                         mDozeLog.d("udfpsLongPress - Not sending aodInterrupt. "
                                 + "Unsupported doze state.");
                     }
-                    if (shouldRequestUdfpsLongPressPulseImmediately()) {
-                        requestPulse(DozeLog.REASON_SENSOR_UDFPS_LONG_PRESS, true, null);
-                    }
+                    requestPulse(DozeLog.REASON_SENSOR_UDFPS_LONG_PRESS, true, null);
                 } else {
                     mDozeHost.extendPulse(pulseReason);
                 }
@@ -406,18 +400,6 @@ public class DozeTriggers implements DozeMachine.Part {
                     timeSinceNotification < mDozeParameters.getPickupVibrationThreshold();
             mDozeLog.tracePickupWakeUp(withinVibrationThreshold);
         }
-    }
-
-    private boolean shouldRequestUdfpsLongPressPulseImmediately() {
-        final boolean flagEnabled = udfpsScreenOffUnlockFlicker();
-        final boolean fpLockout = mKeyguardUpdateMonitor.isFingerprintLockedOut();
-        final boolean fpAllowed = mKeyguardUpdateMonitor.isUnlockingWithFingerprintAllowed();
-        final boolean collecting = mDozeHost.isCollectingUsUdfpsScreenOffPulseEvents();
-        final boolean screenOffUdfpsEnabled = mConfig.screenOffUdfpsEnabled(mContext.getUserId());
-        final boolean immediate = !flagEnabled || fpLockout || !fpAllowed || !collecting;
-        mDozeLog.traceShouldRequestUdfpsLongPressPulseImmediately(immediate, flagEnabled, fpLockout,
-                fpAllowed, collecting, screenOffUdfpsEnabled);
-        return immediate;
     }
 
     private boolean shouldDropPickupEvent() {
@@ -511,7 +493,9 @@ public class DozeTriggers implements DozeMachine.Part {
         final boolean aod = (state == DozeMachine.State.DOZE_AOD);
 
         if (state == DozeMachine.State.DOZE_PULSING
-                || state == DozeMachine.State.DOZE_PULSING_BRIGHT) {
+                || state == DozeMachine.State.DOZE_PULSING_BRIGHT
+                || state == State.DOZE_PULSING_WITHOUT_UI
+                || state == State.DOZE_PULSING_AUTH_UI) {
             mDozeLog.traceSetIgnoreTouchWhilePulsing(near);
             mDozeHost.onIgnoreTouchWhilePulsing(near);
         }
@@ -598,6 +582,8 @@ public class DozeTriggers implements DozeMachine.Part {
                 mWantProxSensor = true;
                 break;
             case DOZE_PULSING:
+            case DOZE_PULSING_WITHOUT_UI:
+            case DOZE_PULSING_AUTH_UI:
             case DOZE_PULSING_BRIGHT:
                 mWantProxSensor = true;
                 mWantTouchScreenSensors = false;
@@ -670,7 +656,11 @@ public class DozeTriggers implements DozeMachine.Part {
 
         // When already pulsing we're allowed to show the wallpaper directly without
         // requesting a new pulse.
-        if (dozeState == DozeMachine.State.DOZE_PULSING
+        final boolean selectiveUiPulsing = dozeState == State.DOZE_PULSING_WITHOUT_UI
+                || dozeState == State.DOZE_PULSING_AUTH_UI;
+        final boolean alreadyPulsing = dozeState == DozeMachine.State.DOZE_PULSING
+                || selectiveUiPulsing;
+        if (alreadyPulsing
                 && reason == DozeLog.PULSE_REASON_SENSOR_WAKE_REACH) {
             mMachine.requestState(DozeMachine.State.DOZE_PULSING_BRIGHT);
             return;
@@ -679,6 +669,42 @@ public class DozeTriggers implements DozeMachine.Part {
         // When already in pulsing, we can show the new Notification without requesting a new pulse.
         if (dozeState == State.DOZE_PULSING && reason == DozeLog.PULSE_REASON_NOTIFICATION) {
             return;
+        }
+
+        if (newDozingKeyguardStates()) {
+            // When already pulsing, quick pickup and longpress gestures don't need to request
+            // a new pulse
+            if (alreadyPulsing
+                    && (reason == DozeLog.REASON_SENSOR_QUICK_PICKUP
+                    || reason == DozeLog.REASON_SENSOR_UDFPS_LONG_PRESS)) {
+                return;
+            }
+
+            // When already showing auth UI, PULSE_REASON_FINGERPRINT_PULSE_SHOW_AUTH_UI
+            // doesn't need to request a new pulse
+            if ((dozeState == State.DOZE_PULSING_AUTH_UI || dozeState == State.DOZE_PULSING)
+                    && reason == DozeLog.PULSE_REASON_FINGERPRINT_PULSE_SHOW_AUTH_UI) {
+                return;
+            }
+
+            // When already showing full aod UI, PULSE_REASON_FINGERPRINT_PULSE_SHOW_FULL_UI
+            // doesn't need to request a new pulse
+            if (dozeState == State.DOZE_PULSING
+                    && reason == DozeLog.PULSE_REASON_FINGERPRINT_PULSE_SHOW_FULL_UI) {
+                return;
+            }
+
+            // When we're already pulsing and showing selective or no UI,
+            // we can directly go to other pulsing states.
+            if (selectiveUiPulsing) {
+                if (reason == DozeLog.PULSE_REASON_FINGERPRINT_PULSE_SHOW_AUTH_UI) {
+                    mMachine.requestState(State.DOZE_PULSING_AUTH_UI);
+                } else {
+                    // all other pulses should show full aod ui
+                    mMachine.requestState(State.DOZE_PULSING);
+                }
+                return;
+            }
         }
 
         if (!mAllowPulseTriggers || mDozeHost.isPulsePending()
@@ -811,6 +837,7 @@ public class DozeTriggers implements DozeMachine.Part {
     }
 
     private DozeHost.Callback mHostCallback = new DozeHost.Callback() {
+        private int mUdfpsHelpMessagesThisAodSession = 0;
         @Override
         public void onNotificationAlerted(Runnable onPulseSuppressedListener) {
             onNotification(onPulseSuppressedListener);
@@ -822,10 +849,14 @@ public class DozeTriggers implements DozeMachine.Part {
         }
 
         @Override
-        public void onUltrasonicUdfpsPulseWhileScreenOff(FingerprintAuthenticationStatus state) {
-            if (!udfpsScreenOffUnlockFlicker()) return;
-            mDozeLog.traceUltrasonicScreenOffPulseEvent(state);
-            requestPulse(DozeLog.REASON_USUDFPS_PULSE, true, null);
+        public void onFingerprintPulseWhileScreenOff(FingerprintAuthenticationStatus state) {
+            mUdfpsHelpMessagesThisAodSession++;
+            mDozeLog.traceFingerprintScreenOffPulseEvent(state, mUdfpsHelpMessagesThisAodSession);
+            if (mUdfpsHelpMessagesThisAodSession >= 3) {
+                requestPulse(DozeLog.PULSE_REASON_FINGERPRINT_PULSE_SHOW_FULL_UI, true, null);
+            } else {
+                requestPulse(DozeLog.PULSE_REASON_FINGERPRINT_PULSE_SHOW_AUTH_UI, true, null);
+            }
         }
     };
 }

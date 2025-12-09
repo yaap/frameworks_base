@@ -24,6 +24,7 @@ import static android.content.pm.ActivityInfo.RESIZE_MODE_UNRESIZEABLE;
 import static android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 import static android.content.pm.ApplicationInfo.CATEGORY_GAME;
 import static android.content.pm.ApplicationInfo.CATEGORY_UNDEFINED;
+import static android.view.Display.TYPE_INTERNAL;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
@@ -81,6 +82,8 @@ class AppCompatActivityRobot {
     private final TestComponentStack<ActivityRecord> mActivityStack;
     @NonNull
     private final TestComponentStack<Task> mTaskStack;
+    @NonNull
+    private final WindowTestsBase mWindowTestsBase;
 
     private final int mDisplayWidth;
     private final int mDisplayHeight;
@@ -94,13 +97,15 @@ class AppCompatActivityRobot {
     @Nullable
     private Consumer<DisplayContent> mOnPostDisplayContentCreation;
 
-    AppCompatActivityRobot(@NonNull WindowManagerService wm,
-            @NonNull ActivityTaskManagerService atm, @NonNull ActivityTaskSupervisor supervisor,
+    private int mNextPid = 1;
+
+    AppCompatActivityRobot(@NonNull WindowTestsBase windowTestBase,
             int displayWidth, int displayHeight,
             @Nullable Consumer<ActivityRecord> onPostActivityCreation,
             @Nullable Consumer<DisplayContent> onPostDisplayContentCreation) {
-        mAtm = atm;
-        mSupervisor = supervisor;
+        mAtm = windowTestBase.mAtm;
+        mSupervisor = windowTestBase.mSupervisor;
+        mWindowTestsBase = windowTestBase;
         mDisplayWidth = displayWidth;
         mDisplayHeight = displayHeight;
         mActivityStack = new TestComponentStack<>();
@@ -110,16 +115,14 @@ class AppCompatActivityRobot {
         createNewDisplay();
     }
 
-    AppCompatActivityRobot(@NonNull WindowManagerService wm,
-            @NonNull ActivityTaskManagerService atm, @NonNull ActivityTaskSupervisor supervisor,
+    AppCompatActivityRobot(@NonNull WindowTestsBase windowTestBase,
             int displayWidth, int displayHeight) {
-        this(wm, atm, supervisor, displayWidth, displayHeight, /* onPostActivityCreation */ null,
+        this(windowTestBase, displayWidth, displayHeight, /* onPostActivityCreation */ null,
                 /* onPostDisplayContentCreation */ null);
     }
 
-    AppCompatActivityRobot(@NonNull WindowManagerService wm,
-            @NonNull ActivityTaskManagerService atm, @NonNull ActivityTaskSupervisor supervisor) {
-        this(wm, atm, supervisor, DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT);
+    AppCompatActivityRobot(@NonNull WindowTestsBase windowTestBase) {
+        this(windowTestBase, DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT);
     }
 
     void createActivityWithComponent() {
@@ -136,7 +139,11 @@ class AppCompatActivityRobot {
     }
 
     void createActivityWithComponentInNewTaskAndDisplay() {
-        createActivityWithComponentInNewTask(/* inNewTask */ true, /* inNewDisplay */ true);
+        createActivityWithComponentInNewTaskAndDisplay(TYPE_INTERNAL);
+    }
+    void createActivityWithComponentInNewTaskAndDisplay(int displayType) {
+        createActivityWithComponentInNewTask(/* inNewTask */ true, /* inNewDisplay */ true,
+                displayType);
     }
 
     void configureTopActivity(float minAspect, float maxAspect, int screenOrientation,
@@ -156,6 +163,10 @@ class AppCompatActivityRobot {
 
     void setDisplayIgnoreActivitySizeRestrictions(boolean enabled) {
         doReturn(enabled).when(mDisplayContent).isDisplayIgnoreActivitySizeRestrictions();
+    }
+
+    void setDisplayId(int displayId) {
+        doReturn(displayId).when(mDisplayContent).getDisplayId();
     }
 
     void configureTaskBounds(@NonNull Rect taskBounds) {
@@ -178,6 +189,11 @@ class AppCompatActivityRobot {
     @NonNull
     DisplayContent displayContent() {
         return mDisplayContent;
+    }
+
+    @NonNull
+    WindowTestsBase testBase() {
+        return mWindowTestsBase;
     }
 
     @NonNull
@@ -210,9 +226,9 @@ class AppCompatActivityRobot {
     }
 
     void enableFullscreenCameraCompatTreatmentForTopActivity(boolean enabled) {
-        if (mDisplayContent.mAppCompatCameraPolicy.hasDisplayRotationCompatPolicy()) {
+        if (mDisplayContent.mAppCompatCameraPolicy.hasDisplayRotationPolicy()) {
             doReturn(enabled).when(
-                    mDisplayContent.mAppCompatCameraPolicy.mDisplayRotationCompatPolicy)
+                    mDisplayContent.mAppCompatCameraPolicy.mDisplayRotationPolicy)
                         .isTreatmentEnabledForActivity(eq(mActivityStack.top()));
         }
     }
@@ -224,7 +240,7 @@ class AppCompatActivityRobot {
     }
 
     void setIsCameraRunningAndWindowingModeEligibleFreeform(boolean enabled) {
-        doReturn(enabled).when(getTopCameraCompatFreeformPolicy())
+        doReturn(enabled).when(getTopCameraCompatSimReqOrientationPolicy())
                 .isCameraRunningAndWindowingModeEligible(eq(mActivityStack.top()));
     }
 
@@ -358,7 +374,11 @@ class AppCompatActivityRobot {
     }
 
     void createNewDisplay() {
+        createNewDisplay(TYPE_INTERNAL);
+    }
+    void createNewDisplay(int type) {
         mDisplayContent = new TestDisplayContent.Builder(mAtm, mDisplayWidth, mDisplayHeight)
+                .setType(type)
                 .build();
         onPostDisplayContentCreation(mDisplayContent);
     }
@@ -486,6 +506,10 @@ class AppCompatActivityRobot {
                 anyInt());
     }
 
+    void checkTopActivityProcessRestarted(boolean restarted) {
+        verify(mActivityStack.top(), times(restarted ? 1 : 0)).restartProcessIfVisible();
+    }
+
     void checkTopActivityRecomputedConfiguration() {
         verify(mActivityStack.top()).recomputeConfiguration();
     }
@@ -569,17 +593,28 @@ class AppCompatActivityRobot {
     }
 
     private void createActivityWithComponentInNewTask(boolean inNewTask, boolean inNewDisplay) {
+        createActivityWithComponentInNewTask(inNewTask, inNewDisplay, TYPE_INTERNAL);
+    }
+
+    private void createActivityWithComponentInNewTask(boolean inNewTask, boolean inNewDisplay,
+            int displayType) {
         if (inNewDisplay) {
-            createNewDisplay();
+            createNewDisplay(displayType);
         }
         if (inNewTask) {
             createNewTask();
         }
+        final ComponentName componentName = ComponentName.createRelative(mAtm.mContext,
+                TEST_COMPONENT_NAME);
         final WindowTestsBase.ActivityBuilder activityBuilder =
                 new WindowTestsBase.ActivityBuilder(mAtm).setOnTop(true)
-                // Set the component to be that of the test class in order
-                // to enable compat changes
-                .setComponent(ComponentName.createRelative(mAtm.mContext, TEST_COMPONENT_NAME));
+                        // Set the component to be that of the test class in order
+                        // to enable compat changes
+                        .setComponent(componentName)
+                        .setUseProcess(SystemServicesTestRule.addProcess(mAtm,
+                                componentName.getPackageName(),
+                                componentName.getPackageName() + "Proc",
+                                getNextPid(), /* uid= */ 0));
         if (!mTaskStack.isEmpty()) {
             // We put the Activity in the current task if any.
             activityBuilder.setTask(mTaskStack.top());
@@ -622,19 +657,22 @@ class AppCompatActivityRobot {
         }
     }
 
-    private DisplayRotationCompatPolicy getTopDisplayRotationCompatPolicy() {
+    private AppCompatCameraDisplayRotationPolicy getTopDisplayRotationCompatPolicy() {
         return mActivityStack.top().mDisplayContent.mAppCompatCameraPolicy
-                .mDisplayRotationCompatPolicy;
+                .mDisplayRotationPolicy;
     }
 
-    private CameraCompatFreeformPolicy getTopCameraCompatFreeformPolicy() {
-        return mActivityStack.top().mDisplayContent.mAppCompatCameraPolicy
-                .mCameraCompatFreeformPolicy;
+    private AppCompatCameraSimReqOrientationPolicy getTopCameraCompatSimReqOrientationPolicy() {
+        return mActivityStack.top().mDisplayContent.mAppCompatCameraPolicy.mSimReqOrientationPolicy;
     }
 
     // We add the activity to the stack and spyOn() on its properties.
     private void pushActivity(@NonNull ActivityRecord activity) {
         mActivityStack.push(activity);
         onPostActivityCreation(activity);
+    }
+
+    private int getNextPid() {
+        return mNextPid++;
     }
 }

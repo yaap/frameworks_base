@@ -14,9 +14,12 @@ import com.android.systemui.biometrics.domain.model.BiometricPromptRequest
 import com.android.systemui.biometrics.shared.model.BiometricUserInfo
 import com.android.systemui.biometrics.shared.model.FallbackOptionModel
 import com.android.systemui.biometrics.shared.model.PromptKind
+import com.android.systemui.biometrics.shared.model.WatchRangingState
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.res.R
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
+import com.google.android.msdl.data.model.MSDLToken
+import com.google.android.msdl.domain.MSDLPlayer
 import javax.inject.Inject
 import kotlin.reflect.KClass
 import kotlinx.coroutines.flow.Flow
@@ -36,10 +39,25 @@ constructor(
     private val promptCredentialInteractor: PromptCredentialInteractor,
     shadeInteractor: ShadeInteractor,
     private val promptSelectorInteractor: PromptSelectorInteractor,
+    private val msdlPlayer: MSDLPlayer,
 ) {
-    /** Whether credential is allowed in the prompt */
+    /**
+     * Whether credential is allowed in the prompt True if bp caller requested credential and
+     * identity check or watch ranging allow it
+     */
     val isCredentialAllowed: Flow<Boolean> =
-        promptCredentialInteractor.prompt.map { it?.credentialAllowed == true }
+        if (Flags.bpFallbackOptions()) {
+            combine(
+                promptCredentialInteractor.prompt,
+                promptSelectorInteractor.watchRangingState,
+            ) { prompt, watchRangingState ->
+                prompt?.credentialRequested == true &&
+                    (watchRangingState == WatchRangingState.WATCH_RANGING_SUCCESSFUL ||
+                        prompt.credentialAllowed)
+            }
+        } else {
+            promptCredentialInteractor.prompt.map { it?.credentialAllowed == true }
+        }
 
     /** Top level information about the prompt. */
     val header: Flow<CredentialHeaderViewModel> =
@@ -77,6 +95,9 @@ constructor(
 
     /** Whether the shade is being interacted with */
     val isShadeInteracted = shadeInteractor.isUserInteracting
+
+    /** If the back button should be shown. */
+    val isBackButtonVisible: Flow<Boolean> = promptCredentialInteractor.isCredentialOnly
 
     /** Input flags for text based credential views */
     val inputFlags: Flow<Int?> =
@@ -137,6 +158,9 @@ constructor(
     private val biometricsRequested: Flow<Boolean> =
         promptCredentialInteractor.prompt.map { it?.biometricsRequested == true }
 
+    /** The current [BiometricPromptView] being shown */
+    val currentView = promptSelectorInteractor.currentView
+
     /** List of fallback options set by prompt caller */
     val fallbackOptions: Flow<List<FallbackOptionModel>> =
         promptCredentialInteractor.fallbackOptions
@@ -176,6 +200,10 @@ constructor(
     /** Switch to the auth view. */
     fun onSwichToAuthScreen() {
         promptSelectorInteractor.onSwitchToAuth()
+    }
+
+    suspend fun resetAttestation() {
+        _validatedAttestation.emit(null)
     }
 
     /** Check a PIN or password and update [validatedAttestation] or [remainingAttempts]. */
@@ -221,6 +249,8 @@ constructor(
                 )
         context.startActivity(intent)
     }
+
+    fun performPatternDotFeedback() = msdlPlayer.playToken(MSDLToken.DRAG_INDICATOR_DISCRETE)
 }
 
 private fun Context.asBadCredentialErrorMessage(prompt: BiometricPromptRequest?): String =
@@ -246,6 +276,11 @@ private fun Context.asLockIcon(userId: Int): Drawable {
     val id =
         if (Utils.isManagedProfile(this, userId)) {
             R.drawable.auth_dialog_enterprise
+        } else if (
+            android.multiuser.Flags.allowSupervisingProfile() &&
+                Utils.isSupervisingProfile(this, userId)
+        ) {
+            R.drawable.ic_account_child_invert
         } else {
             R.drawable.auth_dialog_lock
         }
@@ -258,7 +293,7 @@ private fun Context.asResetTitle(credentialKind: PromptKind): String =
             PromptKind.Pin -> R.string.biometric_dialog_enter_pin
             PromptKind.Pattern -> R.string.biometric_dialog_enter_pattern
             PromptKind.Password -> R.string.biometric_dialog_enter_password
-            else -> 0 // credentialKind should always be a credential
+            else -> R.string.biometric_dialog_enter_password
         }
     )
 
@@ -268,7 +303,7 @@ private fun Context.asResetSubtitle(credentialKind: PromptKind): String =
             PromptKind.Pin -> R.string.biometric_dialog_recovery_pin
             PromptKind.Pattern -> R.string.biometric_dialog_recovery_pattern
             PromptKind.Password -> R.string.biometric_dialog_recovery_password
-            else -> 0 // credentialKind should always be a credential
+            else -> R.string.biometric_dialog_recovery_password
         }
     )
 

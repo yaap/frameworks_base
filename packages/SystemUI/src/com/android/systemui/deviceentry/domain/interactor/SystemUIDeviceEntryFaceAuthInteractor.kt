@@ -20,6 +20,7 @@ import android.app.trust.TrustManager
 import android.content.Context
 import android.hardware.biometrics.BiometricFaceConstants
 import android.hardware.biometrics.BiometricSourceType
+import android.security.Flags.secureLockDevice
 import android.service.dreams.Flags.dreamsV2
 import com.android.keyguard.KeyguardUpdateMonitor
 import com.android.systemui.biometrics.data.repository.FacePropertyRepository
@@ -36,6 +37,7 @@ import com.android.systemui.deviceentry.data.repository.FaceWakeUpTriggersConfig
 import com.android.systemui.deviceentry.shared.FaceAuthUiEvent
 import com.android.systemui.deviceentry.shared.model.ErrorFaceAuthenticationStatus
 import com.android.systemui.deviceentry.shared.model.FaceAuthenticationStatus
+import com.android.systemui.deviceentry.shared.model.SuccessFaceAuthenticationStatus
 import com.android.systemui.keyguard.data.repository.BiometricSettingsRepository
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
 import com.android.systemui.keyguard.shared.model.DevicePosture
@@ -55,6 +57,7 @@ import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.Scenes
+import com.android.systemui.statusbar.pipeline.mobile.data.repository.MobileConnectionsRepository
 import com.android.systemui.user.data.model.SelectionStatus
 import com.android.systemui.user.data.repository.UserRepository
 import com.android.systemui.util.kotlin.pairwise
@@ -72,6 +75,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -110,6 +114,7 @@ constructor(
     private val sceneInteractor: Lazy<SceneInteractor>,
     deviceEntryFaceAuthStatusInteractor: DeviceEntryFaceAuthStatusInteractor,
     cameraSensorPrivacyInteractor: CameraSensorPrivacyInteractor,
+    private val mobileConnectionsRepository: MobileConnectionsRepository,
 ) : DeviceEntryFaceAuthInteractor {
 
     private val listeners: MutableList<FaceAuthenticationListener> = mutableListOf()
@@ -168,7 +173,12 @@ constructor(
             add(keyguardTransitionInteractor.transition(Edge.create(DOZING, LOCKSCREEN)))
 
             if (dreamsV2()) {
-                add(keyguardTransitionInteractor.transition(Edge.create(DREAMING, LOCKSCREEN)))
+                add(
+                    keyguardTransitionInteractor.transition(
+                        edge = Edge.create(Scenes.Dream, LOCKSCREEN),
+                        edgeWithoutSceneContainer = Edge.create(DREAMING, LOCKSCREEN),
+                    )
+                )
             }
         }
 
@@ -195,6 +205,13 @@ constructor(
                     FaceAuthUiEvent.FACE_AUTH_UPDATED_KEYGUARD_VISIBILITY_CHANGED,
                     fallbackToDetect = true,
                 )
+            }
+            .launchIn(applicationScope)
+
+        mobileConnectionsRepository.isAnySimSecure
+            .whenItFlipsToFalse()
+            .onEach {
+                runFaceAuth(FaceAuthUiEvent.FACE_AUTH_SIM_PIN_SUCCESS, fallbackToDetect = true)
             }
             .launchIn(applicationScope)
 
@@ -301,6 +318,16 @@ constructor(
         runFaceAuth(FaceAuthUiEvent.FACE_AUTH_TRIGGERED_SWIPE_UP_ON_BOUNCER, false)
     }
 
+    override fun onSecureLockDeviceBiometricAuthRequested() {
+        runFaceAuth(FaceAuthUiEvent.FACE_AUTH_UPDATED_BIOMETRIC_ENABLED_ON_KEYGUARD, false)
+    }
+
+    override fun onSecureLockDeviceBiometricAuthHidden() {
+        if (!secureLockDevice()) return
+
+        repository.cancel()
+    }
+
     override fun onNotificationPanelClicked() {
         runFaceAuth(FaceAuthUiEvent.FACE_AUTH_TRIGGERED_NOTIFICATION_PANEL_CLICKED, true)
     }
@@ -360,6 +387,23 @@ constructor(
         repository.cancel()
     }
 
+    private val _pendingFaceAuthConfirmationInSecureLockDevice = MutableStateFlow(false)
+    private val _pendingRetryBiometricAuthInSecureLockDevice = MutableStateFlow(false)
+
+    override fun onSecureLockDeviceConfirmButtonShowingChanged(isShowingConfirmButton: Boolean) {
+        if (!secureLockDevice()) return
+
+        _pendingFaceAuthConfirmationInSecureLockDevice.value = isShowingConfirmButton
+        repository.cancel()
+    }
+
+    override fun onSecureLockDeviceTryAgainButtonShowingChanged(isShowingTryAgainButton: Boolean) {
+        if (!secureLockDevice()) return
+
+        _pendingRetryBiometricAuthInSecureLockDevice.value = isShowingTryAgainButton
+        repository.cancel()
+    }
+
     private val faceAuthenticationStatusOverride = MutableStateFlow<FaceAuthenticationStatus?>(null)
 
     /** Provide the status of face authentication */
@@ -389,7 +433,18 @@ constructor(
             )
     override val isBypassEnabled: StateFlow<Boolean> = repository.isBypassEnabled
 
+    val faceSuccess: Flow<SuccessFaceAuthenticationStatus> =
+        authenticationStatus.filterIsInstance<SuccessFaceAuthenticationStatus>()
+
     private fun runFaceAuth(uiEvent: FaceAuthUiEvent, fallbackToDetect: Boolean) {
+        if (
+            secureLockDevice() &&
+                (_pendingFaceAuthConfirmationInSecureLockDevice.value ||
+                    _pendingRetryBiometricAuthInSecureLockDevice.value)
+        ) {
+            return
+        }
+
         if (repository.isLockedOut.value && !isBypassEnabled.value) {
             faceAuthenticationStatusOverride.value =
                 ErrorFaceAuthenticationStatus(
@@ -482,5 +537,13 @@ constructor(
 private fun Flow<Boolean>.whenItFlipsToTrue(): Flow<Boolean> {
     return this.pairwise()
         .filter { pair -> !pair.previousValue && pair.newValue }
+        .map { it.newValue }
+}
+
+// Extension method that filters a generic Boolean flow to one that emits
+// whenever there is flip from true -> false
+private fun Flow<Boolean>.whenItFlipsToFalse(): Flow<Boolean> {
+    return this.pairwise()
+        .filter { pair -> pair.previousValue && !pair.newValue }
         .map { it.newValue }
 }

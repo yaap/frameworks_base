@@ -2,20 +2,6 @@ package: "android.app"
 container: "system"
 
 flag {
-  name: "remove_next_wallpaper_component"
-  namespace: "systemui"
-  description: "Remove deprecated field WallpaperData#nextWallpaperComponent. Only effective after rebooting."
-  bug: "365991991"
-}
-
-flag {
-  name: "fix_wallpaper_changed"
-  namespace: "systemui"
-  description: "Fixes timing of wallpaper changed notification and adds extra information. Only effective after rebooting."
-  bug: "369814294"
-}
-
-flag {
   name: "live_wallpaper_content_handling"
   namespace: "systemui"
   description: "Support for user-generated content in live wallpapers. Only effective after rebooting."
@@ -61,11 +47,21 @@ flag {
 }
 
 flag {
-  name: "fix_get_bitmap_crops"
+  name: "fix_wallpaper_crops_on_restore"
   namespace: "systemui"
-  description: "Avoid some rounding errors in WallpaperManager.getBitmapCrops(..., originalBitmap=true)"
-  bug: "384502688"
+  description: "Preserve center for wallpaper crops on restore"
+  bug: "332937943"
   metadata {
     purpose: PURPOSE_BUGFIX
   }
+}
+
+flag {
+  name: "always_rebind_user_set_wallpaper"
+    namespace: "systemui"
+    description: "Always rebind wallpapers after a change via WallpaperManager API"
+    bug: "438411848"
+    metadata {
+      purpose: PURPOSE_BUGFIX
+    }
 }

@@ -19,7 +19,10 @@ package com.android.systemui.ambientcue
 import com.android.systemui.CoreStartable
 import com.android.systemui.ambientcue.data.repository.AmbientCueRepository
 import com.android.systemui.ambientcue.data.repository.AmbientCueRepositoryImpl
+import com.android.systemui.ambientcue.shared.logger.AmbientCueLogger
+import com.android.systemui.ambientcue.shared.logger.AmbientCueLoggerImpl
 import com.android.systemui.ambientcue.ui.startable.AmbientCueCoreStartable
+import com.android.systemui.dagger.SysUISingleton
 import dagger.Binds
 import dagger.Module
 import dagger.multibindings.ClassKey
@@ -34,4 +37,6 @@ interface AmbientCueModule {
     fun bindAmbientCueCoreStartable(startable: AmbientCueCoreStartable): CoreStartable
 
     @Binds fun bindsAmbientCueRepository(impl: AmbientCueRepositoryImpl): AmbientCueRepository
+
+    @Binds @SysUISingleton fun bindsAmbientCueLogger(impl: AmbientCueLoggerImpl): AmbientCueLogger
 }

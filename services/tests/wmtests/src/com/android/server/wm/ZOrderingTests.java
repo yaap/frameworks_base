@@ -52,7 +52,7 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.platform.test.annotations.Presubmit;
 import android.view.SurfaceControl;
-import android.window.ScreenCapture;
+import android.window.ScreenCaptureInternal;
 
 import androidx.test.filters.SmallTest;
 
@@ -298,6 +298,7 @@ public class ZOrderingTests extends WindowTestsBase {
         mDisplayContent.setImeLayeringTarget(imeAppTarget);
         assertWithMessage("IME control target was updated")
                 .that(mDisplayContent.getImeControlTarget()).isEqualTo(imeAppTarget);
+        mDisplayContent.mTransitionController.mBuildingTransitionLayers = true;
         mDisplayContent.assignChildLayers(mTransaction);
 
         // Ime should be above all app windows except for non-fullscreen app window above it and
@@ -374,6 +375,7 @@ public class ZOrderingTests extends WindowTestsBase {
                 ACTIVITY_TYPE_HOME).setDisplay(mDisplayContent).build();
         final WindowState anyWindow2 = createWindow("anyWindow2");
 
+        mDisplayContent.mTransitionController.mBuildingTransitionLayers = true;
         mDisplayContent.assignChildLayers(mTransaction);
 
         assertWindowHigher(dockedStackWindow, homeActivityWindow);
@@ -526,9 +528,9 @@ public class ZOrderingTests extends WindowTestsBase {
         final Task task = createTask(mDisplayContent);
         final WindowState imeAppTarget = createAppWindow(task, TYPE_APPLICATION, "imeAppTarget");
         final Rect bounds = mImeWindow.getParentFrame();
-        final ScreenCapture.ScreenshotHardwareBuffer imeBuffer =
-                ScreenCapture.captureLayersExcluding(mImeWindow.getSurfaceControl(),
-                bounds, 1.0f, PixelFormat.RGB_565, null);
+        final ScreenCaptureInternal.ScreenshotHardwareBuffer imeBuffer =
+                ScreenCaptureInternal.captureLayersExcluding(
+                        mImeWindow.getSurfaceControl(), bounds, 1.0f, PixelFormat.RGB_565, null);
 
         spyOn(mDisplayContent.mWmService.mTaskSnapshotController);
         doReturn(imeBuffer).when(mDisplayContent.mWmService.mTaskSnapshotController)
@@ -538,6 +540,7 @@ public class ZOrderingTests extends WindowTestsBase {
 
         assertEquals(imeAppTarget, mDisplayContent.mImeScreenshot.getImeTarget());
         assertNotNull(mDisplayContent.mImeScreenshot);
+        assertNotNull(imeBuffer);
         assertZOrderGreaterThan(mTransaction, mDisplayContent.mImeScreenshot.getSurface(),
                 imeAppTarget.mSurfaceControl);
     }

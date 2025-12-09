@@ -53,9 +53,6 @@ import android.graphics.Insets;
 import android.os.Build;
 import android.os.RemoteException;
 import android.os.SystemClock;
-import android.platform.test.annotations.RequiresFlagsEnabled;
-import android.platform.test.flag.junit.CheckFlagsRule;
-import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.Settings;
 import android.server.wm.DumpOnFailure;
 import android.server.wm.LockScreenSession;
@@ -66,10 +63,10 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsAnimation;
 import android.view.WindowManagerGlobal;
 import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.Flags;
 import android.view.inputmethod.InputMethodManager;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.MediumTest;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -146,9 +143,6 @@ public class InputMethodServiceTest {
     private final GestureNavSwitchHelper mGestureNavSwitchHelper = new GestureNavSwitchHelper();
 
     @Rule
-    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
-
-    @Rule
     public final TestName mName = new TestName();
 
     @Rule
@@ -162,7 +156,8 @@ public class InputMethodServiceTest {
     private TestActivity mActivity;
     private InputMethodServiceWrapper mInputMethodService;
     private boolean mOriginalVerboseImeTrackerLoggingEnabled;
-    private boolean mOriginalShowImeWithHardKeyboardEnabled;
+    @Nullable
+    private Boolean mOriginalShowImeWithHardKeyboardEnabled;
 
     @Before
     public void setUp() throws Exception {
@@ -212,7 +207,9 @@ public class InputMethodServiceTest {
             setVerboseImeTrackerLogging(false);
         }
         // Change back the original value of show_ime_with_hard_keyboard in Settings.
-        setShowImeWithHardKeyboard(mOriginalShowImeWithHardKeyboardEnabled);
+        if (mOriginalShowImeWithHardKeyboardEnabled != null) {
+            setShowImeWithHardKeyboard(mOriginalShowImeWithHardKeyboardEnabled);
+        }
         executeShellCommand("ime disable " + mInputMethodId);
     }
 
@@ -1026,7 +1023,6 @@ public class InputMethodServiceTest {
      * Shows the Input Method Switcher menu and verifies opening the IME Language Settings activity
      * by tapping on the button, when the device is provisioned.
      */
-    @RequiresFlagsEnabled(Flags.FLAG_IME_SWITCHER_REVAMP)
     @Test
     public void testImeSwitcherMenu_openLanguageSettings() throws Exception {
         final var context = mInstrumentation.getTargetContext();
@@ -1071,7 +1067,6 @@ public class InputMethodServiceTest {
      * Shows the Input Method Switcher menu and verifies the IME Language Settings button is not
      * visible when the screen is secure locked.
      */
-    @RequiresFlagsEnabled(Flags.FLAG_IME_SWITCHER_REVAMP)
     @Test
     public void testImeSwitcherMenu_noLanguageSettingsWhenScreenLocked() throws Exception {
         final var context = mInstrumentation.getTargetContext();
@@ -1120,7 +1115,6 @@ public class InputMethodServiceTest {
      * Shows the Input Method Switcher menu and verifies the IME Language Settings button is not
      * visible when the device is not provisioned.
      */
-    @RequiresFlagsEnabled(Flags.FLAG_IME_SWITCHER_REVAMP)
     @Test
     public void testImeSwitcherMenu_noLanguageSettingsWhenDeviceNotProvisioned() throws Exception {
         final var context = mInstrumentation.getTargetContext();
@@ -1393,9 +1387,12 @@ public class InputMethodServiceTest {
             return;
         }
 
-        final boolean currentEnabled =
+        final Boolean currentEnabled =
                 mInputMethodService.getShouldShowImeWithHardKeyboardForTesting();
-        if (currentEnabled != enable) {
+        if (currentEnabled == null) {
+            // IME is being destroyed, reset the system property without checking the set value.
+            executeShellCommand(SET_SHOW_IME_WITH_HARD_KEYBOARD_CMD + " " + (enable ? "1" : "0"));
+        } else if (currentEnabled != enable) {
             executeShellCommand(SET_SHOW_IME_WITH_HARD_KEYBOARD_CMD + " " + (enable ? "1" : "0"));
             eventually(() -> assertWithMessage("showImeWithHardKeyboard updated")
                     .that(mInputMethodService.getShouldShowImeWithHardKeyboardForTesting())

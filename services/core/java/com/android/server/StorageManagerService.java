@@ -32,6 +32,7 @@ import static android.content.pm.PackageManager.MATCH_DIRECT_BOOT_AWARE;
 import static android.content.pm.PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
 import static android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.mmd.flags.Flags.mmdEnabled;
 import static android.os.IInstalld.IFsveritySetupAuthToken;
 import static android.os.ParcelFileDescriptor.MODE_READ_WRITE;
 import static android.os.storage.OnObbStateChangeListener.ERROR_ALREADY_MOUNTED;
@@ -41,7 +42,6 @@ import static android.os.storage.OnObbStateChangeListener.ERROR_NOT_MOUNTED;
 import static android.os.storage.OnObbStateChangeListener.ERROR_PERMISSION_DENIED;
 import static android.os.storage.OnObbStateChangeListener.MOUNTED;
 import static android.os.storage.OnObbStateChangeListener.UNMOUNTED;
-import static android.mmd.flags.Flags.mmdEnabled;
 
 import static com.android.internal.util.XmlUtils.readStringAttribute;
 import static com.android.internal.util.XmlUtils.writeStringAttribute;
@@ -109,14 +109,13 @@ import android.os.Trace;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.os.storage.DiskInfo;
-import android.os.storage.ICeStorageLockEventListener;
 import android.os.storage.IObbActionListener;
 import android.os.storage.IStorageEventListener;
 import android.os.storage.IStorageManager;
 import android.os.storage.IStorageShutdownObserver;
 import android.os.storage.OnObbStateChangeListener;
 import android.os.storage.StorageManager;
-import android.os.storage.StorageManagerInternal;
+import android.os.storage.StorageManager.StorageFlags;
 import android.os.storage.StorageVolume;
 import android.os.storage.VolumeInfo;
 import android.os.storage.VolumeRecord;
@@ -195,7 +194,6 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -622,10 +620,6 @@ class StorageManagerService extends IStorageManager.Stub
     private final Set<Integer> mUidsWithLegacyExternalStorage = new ArraySet<>();
     // Not guarded by lock, always used on the ActivityManager thread
     private final SparseArray<PackageMonitor> mPackageMonitorsForUser = new SparseArray<>();
-
-    /** List of listeners registered for ce storage callbacks */
-    private final CopyOnWriteArrayList<ICeStorageLockEventListener>
-            mCeStorageEventCallbacks = new CopyOnWriteArrayList<>();
 
     class ObbState implements IBinder.DeathRecipient {
         public ObbState(String rawPath, String canonicalPath, int callingUid,
@@ -3340,64 +3334,6 @@ class StorageManagerService extends IStorageManager.Stub
 
     @android.annotation.EnforcePermission(android.Manifest.permission.STORAGE_INTERNAL)
     @Override
-    public void createUserStorageKeys(int userId, boolean ephemeral) {
-
-        super.createUserStorageKeys_enforcePermission();
-
-        try {
-            mVold.createUserStorageKeys(userId, ephemeral);
-            // Since the user's CE key was just created, the user's CE storage is now unlocked.
-            synchronized (mLock) {
-                mCeUnlockedUsers.append(userId);
-            }
-        } catch (Exception e) {
-            Slog.wtf(TAG, e);
-        }
-    }
-
-    @android.annotation.EnforcePermission(android.Manifest.permission.STORAGE_INTERNAL)
-    @Override
-    public void destroyUserStorageKeys(int userId) {
-
-        super.destroyUserStorageKeys_enforcePermission();
-
-        try {
-            mVold.destroyUserStorageKeys(userId);
-            // Since the user's CE key was just destroyed, the user's CE storage is now locked.
-            synchronized (mLock) {
-                mCeUnlockedUsers.remove(userId);
-            }
-        } catch (Exception e) {
-            Slog.wtf(TAG, e);
-        }
-    }
-
-    /* Only for use by LockSettingsService */
-    @android.annotation.EnforcePermission(android.Manifest.permission.STORAGE_INTERNAL)
-    @Override
-    public void setCeStorageProtection(@UserIdInt int userId, byte[] secret)
-            throws RemoteException {
-        super.setCeStorageProtection_enforcePermission();
-
-        mVold.setCeStorageProtection(userId, secret);
-    }
-
-    /* Only for use by LockSettingsService */
-    @android.annotation.EnforcePermission(android.Manifest.permission.STORAGE_INTERNAL)
-    @Override
-    public void unlockCeStorage(@UserIdInt int userId, byte[] secret) throws RemoteException {
-        super.unlockCeStorage_enforcePermission();
-
-        if (StorageManager.isFileEncrypted()) {
-            mVold.unlockCeStorage(userId, secret);
-        }
-        synchronized (mLock) {
-            mCeUnlockedUsers.append(userId);
-        }
-    }
-
-    @android.annotation.EnforcePermission(android.Manifest.permission.STORAGE_INTERNAL)
-    @Override
     public void lockCeStorage(int userId) {
         super.lockCeStorage_enforcePermission();
 
@@ -3421,11 +3357,6 @@ class StorageManagerService extends IStorageManager.Stub
 
         synchronized (mLock) {
             mCeUnlockedUsers.remove(userId);
-        }
-        if (android.os.Flags.allowPrivateProfile()
-                && android.multiuser.Flags.enablePrivateSpaceFeatures()
-                && android.multiuser.Flags.enableBiometricsToUnlockPrivateSpace()) {
-            dispatchCeStorageLockedEvent(userId);
         }
     }
 
@@ -3465,19 +3396,6 @@ class StorageManagerService extends IStorageManager.Stub
         }
     }
 
-    @android.annotation.EnforcePermission(android.Manifest.permission.STORAGE_INTERNAL)
-    @Override
-    public void prepareUserStorage(String volumeUuid, int userId, int flags) {
-
-        super.prepareUserStorage_enforcePermission();
-
-        try {
-            prepareUserStorageInternal(volumeUuid, userId, flags);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private void prepareUserStorageInternal(String volumeUuid, int userId, int flags)
             throws Exception {
         try {
@@ -3507,19 +3425,6 @@ class StorageManagerService extends IStorageManager.Stub
                 return;
             }
             throw e;
-        }
-    }
-
-    @android.annotation.EnforcePermission(android.Manifest.permission.STORAGE_INTERNAL)
-    @Override
-    public void destroyUserStorage(String volumeUuid, int userId, int flags) {
-
-        super.destroyUserStorage_enforcePermission();
-
-        try {
-            mVold.destroyUserStorage(volumeUuid, userId, flags);
-        } catch (Exception e) {
-            Slog.wtf(TAG, e);
         }
     }
 
@@ -4699,18 +4604,6 @@ class StorageManagerService extends IStorageManager.Stub
         return StorageManager.MOUNT_MODE_EXTERNAL_NONE;
     }
 
-    @VisibleForTesting
-    CopyOnWriteArrayList<ICeStorageLockEventListener> getCeStorageEventCallbacks() {
-        return mCeStorageEventCallbacks;
-    }
-
-    @VisibleForTesting
-    void dispatchCeStorageLockedEvent(int userId) {
-        for (ICeStorageLockEventListener listener: mCeStorageEventCallbacks) {
-            listener.onStorageLocked(userId);
-        }
-    }
-
     private static class Callbacks extends Handler {
         private static final int MSG_STORAGE_STATE_CHANGED = 1;
         private static final int MSG_VOLUME_STATE_CHANGED = 2;
@@ -5149,6 +5042,52 @@ class StorageManagerService extends IStorageManager.Stub
         }
 
         @Override
+        public void createUserStorageKeys(int userId, boolean ephemeral) {
+            try {
+                mVold.createUserStorageKeys(userId, ephemeral);
+                // Since the user's CE key was just created, the user's CE storage is now unlocked.
+                synchronized (mLock) {
+                    mCeUnlockedUsers.append(userId);
+                }
+            } catch (Exception e) {
+                Slog.wtf(TAG, e);
+            }
+        }
+
+        @Override
+        public void destroyUserStorageKeys(int userId) {
+            try {
+                mVold.destroyUserStorageKeys(userId);
+                // Since the user's CE key was just destroyed, the user's CE storage is now locked.
+                synchronized (mLock) {
+                    mCeUnlockedUsers.remove(userId);
+                }
+            } catch (Exception e) {
+                Slog.wtf(TAG, e);
+            }
+        }
+
+        @Override
+        public void prepareUserStorage(
+                @Nullable String volumeUuid, @UserIdInt int userId, @StorageFlags int flags) {
+            try {
+                prepareUserStorageInternal(volumeUuid, userId, flags);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public void destroyUserStorage(
+                @Nullable String volumeUuid, @UserIdInt int userId, @StorageFlags int flags) {
+            try {
+                mVold.destroyUserStorage(volumeUuid, userId, flags);
+            } catch (Exception e) {
+                Slog.wtf(TAG, e);
+            }
+        }
+
+        @Override
         public void markCeStoragePrepared(int userId) {
             synchronized (mLock) {
                 mCeStoragePreparedUsers.add(userId);
@@ -5159,6 +5098,29 @@ class StorageManagerService extends IStorageManager.Stub
         public boolean isCeStoragePrepared(int userId) {
             synchronized (mLock) {
                 return mCeStoragePreparedUsers.contains(userId);
+            }
+        }
+
+        @Override
+        public void setCeStorageProtection(@UserIdInt int userId, byte[] secret) {
+            try {
+                mVold.setCeStorageProtection(userId, secret);
+            } catch (RemoteException e) {
+                e.rethrowAsRuntimeException();
+            }
+        }
+
+        @Override
+        public void unlockCeStorage(@UserIdInt int userId, byte[] secret) {
+            if (StorageManager.isFileEncrypted()) {
+                try {
+                    mVold.unlockCeStorage(userId, secret);
+                } catch (RemoteException e) {
+                    e.rethrowAsRuntimeException();
+                }
+            }
+            synchronized (mLock) {
+                mCeUnlockedUsers.append(userId);
             }
         }
 
@@ -5196,24 +5158,6 @@ class StorageManagerService extends IStorageManager.Stub
                 return mInstaller.enableFsverity(authToken, filePath, packageName);
             } catch (Installer.InstallerException e) {
                 throw new IOException(e);
-            }
-        }
-
-        @Override
-        public void registerStorageLockEventListener(
-                @NonNull ICeStorageLockEventListener listener) {
-            boolean registered = mCeStorageEventCallbacks.add(listener);
-            if (!registered) {
-                Slog.w(TAG, "Failed to register listener: " + listener);
-            }
-        }
-
-        @Override
-        public void unregisterStorageLockEventListener(
-                @NonNull ICeStorageLockEventListener listener) {
-            boolean unregistered = mCeStorageEventCallbacks.remove(listener);
-            if (!unregistered) {
-                Slog.w(TAG, "Unregistering " + listener + " that was not registered");
             }
         }
     }

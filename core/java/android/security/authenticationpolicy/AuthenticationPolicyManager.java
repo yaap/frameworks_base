@@ -18,6 +18,7 @@ package android.security.authenticationpolicy;
 import static android.Manifest.permission.MANAGE_SECURE_LOCK_DEVICE;
 import static android.Manifest.permission.USE_BIOMETRIC_INTERNAL;
 import static android.hardware.biometrics.Flags.FLAG_IDENTITY_CHECK_WATCH;
+import static android.Manifest.permission.TEST_BIOMETRIC;
 import static android.security.Flags.FLAG_SECURE_LOCKDOWN;
 import static android.security.Flags.FLAG_SECURE_LOCK_DEVICE;
 
@@ -28,6 +29,7 @@ import android.annotation.NonNull;
 import android.annotation.RequiresPermission;
 import android.annotation.SystemApi;
 import android.annotation.SystemService;
+import android.annotation.TestApi;
 import android.content.Context;
 import android.os.Binder;
 import android.os.Build;
@@ -63,7 +65,7 @@ import java.util.concurrent.Executor;
  *
  * <p>
  * To check if the device meets the requirements to enable secure lock, call
- * {@link #isSecureLockDeviceAvailable}. This will require the caller to have the
+ * {@link #getSecureLockDeviceAvailability}. This will require the caller to have the
  * {@link android.Manifest.permission#MANAGE_SECURE_LOCK_DEVICE} permission.
  *
  * <p>
@@ -101,17 +103,6 @@ public final class AuthenticationPolicyManager {
             mSecureLockDeviceStatusListeners = new ConcurrentHashMap<>();
 
     /**
-     * Error result code for {@link #enableSecureLockDevice} and {@link #disableSecureLockDevice}.
-     *
-     * Secure lock device request status unknown.
-     *
-     * @hide
-     */
-    @SystemApi
-    @FlaggedApi(FLAG_SECURE_LOCKDOWN)
-    public static final int ERROR_UNKNOWN = 0;
-
-    /**
      * Success result code for {@link #enableSecureLockDevice} and {@link #disableSecureLockDevice}.
      *
      * Secure lock device request successful.
@@ -120,9 +111,18 @@ public final class AuthenticationPolicyManager {
      */
     @SystemApi
     @FlaggedApi(FLAG_SECURE_LOCKDOWN)
-    public static final int SUCCESS = 1;
+    public static final int SUCCESS = 0;
 
-
+    /**
+     * Error result code for {@link #enableSecureLockDevice} and {@link #disableSecureLockDevice}.
+     *
+     * Secure lock device request status unknown.
+     *
+     * @hide
+     */
+    @SystemApi
+    @FlaggedApi(FLAG_SECURE_LOCKDOWN)
+    public static final int ERROR_UNKNOWN = 1;
 
     /**
      * Error result code for {@link #enableSecureLockDevice} and {@link #disableSecureLockDevice}.
@@ -198,8 +198,8 @@ public final class AuthenticationPolicyManager {
      * @hide
      */
     @IntDef(prefix = {"ENABLE_SECURE_LOCK_DEVICE_STATUS_"}, value = {
-            ERROR_UNKNOWN,
             SUCCESS,
+            ERROR_UNKNOWN,
             ERROR_UNSUPPORTED,
             ERROR_INVALID_PARAMS,
             ERROR_NO_BIOMETRICS_ENROLLED,
@@ -215,8 +215,8 @@ public final class AuthenticationPolicyManager {
      * @hide
      */
     @IntDef(prefix = {"DISABLE_SECURE_LOCK_DEVICE_STATUS_"}, value = {
-            ERROR_UNKNOWN,
             SUCCESS,
+            ERROR_UNKNOWN,
             ERROR_UNSUPPORTED,
             ERROR_INVALID_PARAMS,
             ERROR_NOT_AUTHORIZED
@@ -230,14 +230,14 @@ public final class AuthenticationPolicyManager {
      *
      * @hide
      */
-    @IntDef(prefix = {"IS_SECURE_LOCK_DEVICE_AVAILABLE_STATUS_"}, value = {
+    @IntDef(prefix = {"GET_SECURE_LOCK_DEVICE_AVAILABILITY_STATUS_"}, value = {
             SUCCESS,
             ERROR_UNSUPPORTED,
             ERROR_NO_BIOMETRICS_ENROLLED,
             ERROR_INSUFFICIENT_BIOMETRICS,
     })
     @Retention(RetentionPolicy.SOURCE)
-    public @interface IsSecureLockDeviceAvailableRequestStatus {}
+    public @interface GetSecureLockDeviceAvailabilityRequestStatus {}
 
     /** @hide */
     public AuthenticationPolicyManager(@NonNull Context context,
@@ -266,12 +266,13 @@ public final class AuthenticationPolicyManager {
         /**
          * Called when the availability of secure lock device changes for the listening user.
          * @param available An int of type
-         * {@link AuthenticationPolicyManager.IsSecureLockDeviceAvailableRequestStatus} that
+         * {@link AuthenticationPolicyManager.GetSecureLockDeviceAvailabilityRequestStatus} that
          *                  indicates if the listening user has the necessary requirements to
          *                  enable secure lock device ({@link #SUCCESS} if the user can enable
          *                  secure lock device).
          */
-        void onSecureLockDeviceAvailableStatusChanged(int available);
+        void onSecureLockDeviceAvailableStatusChanged(
+                @GetSecureLockDeviceAvailabilityRequestStatus int available);
     }
 
     /**
@@ -323,7 +324,8 @@ public final class AuthenticationPolicyManager {
             }
 
             @Override
-            public void onSecureLockDeviceAvailableStatusChanged(int available) {
+            public void onSecureLockDeviceAvailableStatusChanged(
+                    @GetSecureLockDeviceAvailabilityRequestStatus int available) {
                 if (!mSecureLockDeviceStatusListeners.containsKey(listener)) {
                     if (DEBUG) {
                         Log.d(TAG, "Listener " + listener + " no longer registered. Skipping "
@@ -398,22 +400,23 @@ public final class AuthenticationPolicyManager {
      * Called by a privileged component to indicate if secure lock device is available for the
      * calling user.
      *
-     * @return {@link IsSecureLockDeviceAvailableRequestStatus} int indicating whether secure lock
-     * device is available for the calling user. This will return {@link #SUCCESS} if the device
-     * meets all requirements to enable secure lock device, {@link #ERROR_INSUFFICIENT_BIOMETRICS}
-     * if the device is missing a strong biometric enrollment, {@link #ERROR_NO_BIOMETRICS_ENROLLED}
-     * if the device has no biometric enrollments, or {@link #ERROR_UNSUPPORTED} if secure lock
+     * @return {@link GetSecureLockDeviceAvailabilityRequestStatus} int indicating whether secure
+     * lock device is available for the calling user. This will return {@link #SUCCESS} if the
+     * device meets all requirements to enable secure lock device,
+     * {@link #ERROR_INSUFFICIENT_BIOMETRICS} if the device does not have a biometric sensor of
+     * sufficient strength, {@link #ERROR_NO_BIOMETRICS_ENROLLED} if the user does not have
+     * enrollments on the strong biometric sensor, or {@link #ERROR_UNSUPPORTED} if secure lock
      * device is otherwise unsupported.
      *
      * @hide
      */
-    @IsSecureLockDeviceAvailableRequestStatus
+    @GetSecureLockDeviceAvailabilityRequestStatus
     @RequiresPermission(MANAGE_SECURE_LOCK_DEVICE)
     @SystemApi
     @FlaggedApi(FLAG_SECURE_LOCK_DEVICE)
-    public int isSecureLockDeviceAvailable() {
+    public int getSecureLockDeviceAvailability() {
         try {
-            return mAuthenticationPolicyService.isSecureLockDeviceAvailable(mContext.getUser());
+            return mAuthenticationPolicyService.getSecureLockDeviceAvailability(mContext.getUser());
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -422,8 +425,8 @@ public final class AuthenticationPolicyManager {
 
     /**
      * Called by a privileged component to remotely enable secure lock on the device across all
-     * users. This operation will first check {@link #isSecureLockDeviceAvailable()} to see if the
-     * calling user meets the requirements to enable secure lock device, including a strong
+     * users. This operation will first check {@link #getSecureLockDeviceAvailability()} to see if
+     * the calling user meets the requirements to enable secure lock device, including a strong
      * biometric enrollment, and will return an error if not.
      *
      * Secure lock is an enhanced security state that restricts access to sensitive data (app
@@ -503,6 +506,23 @@ public final class AuthenticationPolicyManager {
     }
 
     /**
+     * Sets test mode for Secure Lock Device. This allows tests to indicate that security features
+     * that would interfere with testing (disabling ADB, USB) should be skipped.
+     * @hide
+     */
+    @TestApi
+    @RequiresPermission(TEST_BIOMETRIC)
+    @FlaggedApi(FLAG_SECURE_LOCK_DEVICE)
+    public void setSecureLockDeviceTestStatus(boolean isTestMode) {
+        try {
+            Slog.d(TAG, "#setTestModeForSecureLockDevice(isTestMode=" + isTestMode + ")");
+            mAuthenticationPolicyService.setSecureLockDeviceTestStatus(isTestMode);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * This function will start watch ranging for Identity Check. We will remove specific
      * Identity Check implementation when this is generalized.
      *
@@ -525,6 +545,8 @@ public final class AuthenticationPolicyManager {
     }
 
     /**
+     * Cancels watch ranging for the given authentication request id.
+     *
      * @hide
      */
     @RequiresPermission(USE_BIOMETRIC_INTERNAL)
@@ -532,6 +554,21 @@ public final class AuthenticationPolicyManager {
     public void cancelWatchRangingForRequestId(long authenticationRequestId) {
         try {
             mAuthenticationPolicyService.cancelWatchRangingForRequestId(authenticationRequestId);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Checks if watch ranging is available. Returns value using IProximityResultCallback.
+     *
+     * @hide
+     */
+    @RequiresPermission(USE_BIOMETRIC_INTERNAL)
+    @FlaggedApi(FLAG_IDENTITY_CHECK_WATCH)
+    public void isWatchRangingAvailable(@NonNull IProximityResultCallback resultCallback) {
+        try {
+            mAuthenticationPolicyService.isWatchRangingAvailable(resultCallback);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

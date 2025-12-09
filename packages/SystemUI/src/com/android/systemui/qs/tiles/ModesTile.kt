@@ -25,10 +25,12 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.coroutineScope
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.app.tracing.coroutines.runBlockingTraced as runBlocking
 import com.android.internal.logging.MetricsLogger
+import com.android.systemui.Flags
 import com.android.systemui.animation.Expandable
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.dagger.qualifiers.Main
@@ -40,7 +42,6 @@ import com.android.systemui.plugins.statusbar.StatusBarStateController
 import com.android.systemui.qs.QSHost
 import com.android.systemui.qs.QsEventLogger
 import com.android.systemui.qs.asQSTileIcon
-import com.android.systemui.qs.flags.QsInCompose
 import com.android.systemui.qs.logging.QSLogger
 import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.tiles.base.shared.model.QSTileConfigProvider
@@ -89,11 +90,7 @@ constructor(
 
     init {
         lifecycle.coroutineScope.launch {
-            lifecycle.repeatOnLifecycle(
-                // TODO: b/403434908 - Workaround for "not listening to tile updates". Can be reset
-                //   to RESUMED if either b/403434908 is fixed or QsInCompose is inlined.
-                if (QsInCompose.isEnabled) Lifecycle.State.RESUMED else Lifecycle.State.CREATED
-            ) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 dataInteractor.tileData().collect { refreshState(it) }
             }
         }
@@ -112,13 +109,26 @@ constructor(
         }
     }
 
-    override fun handleClick(expandable: Expandable?) = runBlocking {
-        userActionInteractor.handleClick(expandable)
+    override fun handleClick(expandable: Expandable?) {
+        if (Flags.doNotUseRunBlocking()) {
+            lifecycleScope.launch { userActionInteractor.handleClick(expandable) }
+        } else {
+            runBlocking { userActionInteractor.handleClick(expandable) }
+        }
     }
 
-    override fun handleSecondaryClick(expandable: Expandable?) = runBlocking {
-        val model = dataInteractor.getCurrentTileModel()
-        userActionInteractor.handleToggleClick(model)
+    override fun handleSecondaryClick(expandable: Expandable?) {
+        if (Flags.doNotUseRunBlocking()) {
+            lifecycleScope.launch {
+                val model = dataInteractor.getCurrentTileModel()
+                userActionInteractor.handleToggleClick(model)
+            }
+        } else {
+            runBlocking {
+                val model = dataInteractor.getCurrentTileModel()
+                userActionInteractor.handleToggleClick(model)
+            }
+        }
     }
 
     override fun getDetailsViewModel(): TileDetailsViewModel {

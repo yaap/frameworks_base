@@ -18,7 +18,6 @@ package com.android.server.vibrator;
 
 import android.os.SystemClock;
 import android.os.VibrationEffect;
-import android.os.vibrator.Flags;
 
 import java.util.List;
 
@@ -33,7 +32,7 @@ abstract class AbstractComposedVibratorStep extends AbstractVibratorStep {
     /**
      * @param conductor          The {@link VibrationStepConductor} for these steps.
      * @param startTime          The time to schedule this step in the conductor.
-     * @param controller         The vibrator that is playing the effect.
+     * @param vibrator           The vibrator that is playing the effect.
      * @param effect             The effect being played in this step.
      * @param index              The index of the next segment to be played by this step
      * @param pendingVibratorOffDeadline The time the vibrator is expected to complete any
@@ -42,9 +41,9 @@ abstract class AbstractComposedVibratorStep extends AbstractVibratorStep {
      *                           be used to play effects back-to-back.
      */
     AbstractComposedVibratorStep(VibrationStepConductor conductor, long startTime,
-            VibratorController controller, VibrationEffect.Composed effect, int index,
+            HalVibrator vibrator, VibrationEffect.Composed effect, int index,
             long pendingVibratorOffDeadline) {
-        super(conductor, startTime, controller, pendingVibratorOffDeadline);
+        super(conductor, startTime, vibrator, pendingVibratorOffDeadline);
         this.effect = effect;
         this.segmentIndex = index;
     }
@@ -54,10 +53,7 @@ abstract class AbstractComposedVibratorStep extends AbstractVibratorStep {
      * current segment from the effect.
      */
     protected List<Step> skipStep() {
-        return Flags.vibrationThreadHandlingHalFailure()
-                ? skipStep(SystemClock.uptimeMillis())
-                // Preserve old behavior when fix is not enabled.
-                : vibratorOnNextSteps(/* segmentsPlayed= */ 1);
+        return skipStep(SystemClock.uptimeMillis());
     }
 
     /**
@@ -77,25 +73,15 @@ abstract class AbstractComposedVibratorStep extends AbstractVibratorStep {
      * and it will cancel the playback if the HAL result is unsupported or failure.
      */
     protected List<Step> vibratorOnNextSteps(int segmentsPlayed) {
-        if (Flags.vibrationThreadHandlingHalFailure()) {
-            if (mVibratorOnResult > 0) {
-                // Vibrator was turned on by this step, with mVibratorOnResult as the duration.
-                // Schedule next steps for right after the vibration finishes.
-                long nextStartTime = SystemClock.uptimeMillis() + mVibratorOnResult;
-                return nextSteps(nextStartTime, segmentsPlayed);
-            } else {
-                // Step unsupported or failed, cancel the vibration on this vibrator.
-                return cancelStep();
-            }
-        }
-        // Schedule next steps to run right away.
-        long nextStartTime = SystemClock.uptimeMillis();
         if (mVibratorOnResult > 0) {
             // Vibrator was turned on by this step, with mVibratorOnResult as the duration.
             // Schedule next steps for right after the vibration finishes.
-            nextStartTime += mVibratorOnResult;
+            long nextStartTime = SystemClock.uptimeMillis() + mVibratorOnResult;
+            return nextSteps(nextStartTime, segmentsPlayed);
+        } else {
+            // Step unsupported or failed, cancel the vibration on this vibrator.
+            return cancelStep();
         }
-        return nextSteps(nextStartTime, segmentsPlayed);
     }
 
     /**
@@ -116,7 +102,7 @@ abstract class AbstractComposedVibratorStep extends AbstractVibratorStep {
             getVibration().stats.reportRepetition(loopSegmentsPlayed / loopSize);
             nextSegmentIndex = repeatIndex + ((nextSegmentIndex - effectSize) % loopSize);
         }
-        Step nextStep = conductor.nextVibrateStep(nextStartTime, controller, effect,
+        Step nextStep = conductor.nextVibrateStep(nextStartTime, vibrator, effect,
                 nextSegmentIndex, mPendingVibratorOffDeadline);
         return List.of(nextStep);
     }
@@ -124,6 +110,6 @@ abstract class AbstractComposedVibratorStep extends AbstractVibratorStep {
     /** Return next steps for cancelling the vibration playback. */
     protected List<Step> cancelStep() {
         return List.of(new CompleteEffectVibratorStep(conductor, SystemClock.uptimeMillis(),
-                /* cancelled= */ true, controller, /* pendingVibratorOffDeadline= */ 0));
+                /* cancelled= */ true, vibrator, /* pendingVibratorOffDeadline= */ 0));
     }
 }

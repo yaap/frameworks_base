@@ -35,6 +35,8 @@ import com.android.systemui.statusbar.core.StatusBarRootModernization
 import com.android.systemui.statusbar.pipeline.mobile.data.model.SubscriptionModel
 import com.android.systemui.statusbar.pipeline.mobile.domain.interactor.fakeMobileIconsInteractor
 import com.android.systemui.statusbar.pipeline.mobile.domain.model.SignalIconModel
+import com.android.systemui.statusbar.pipeline.shared.connectivityConstants
+import com.android.systemui.statusbar.pipeline.shared.data.model.DataActivityModel
 import com.android.systemui.testKosmos
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
@@ -47,9 +49,11 @@ import org.mockito.kotlin.whenever
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class StackedMobileIconViewModelTest : SysuiTestCase() {
-    private val kosmos = testKosmos().useUnconfinedTestDispatcher()
+    private val kosmos =
+        testKosmos().useUnconfinedTestDispatcher().apply {
+            connectivityConstants.shouldShowActivityConfig = true
+        }
 
     private val Kosmos.underTest: StackedMobileIconViewModelImpl by Fixture {
         stackedMobileIconViewModelImpl
@@ -94,7 +98,7 @@ class StackedMobileIconViewModelTest : SysuiTestCase() {
                 .value =
                 SignalIconModel.Satellite(
                     level = 0,
-                    icon = Icon.Resource(res = 0, contentDescription = null),
+                    icon = Icon.Resource(resId = 0, contentDescription = null),
                 )
             fakeMobileIconsInteractor.filteredSubscriptions.value = listOf(SUB_1, SUB_2)
             assertThat(underTest.dualSim).isNull()
@@ -240,10 +244,84 @@ class StackedMobileIconViewModelTest : SysuiTestCase() {
             assertThat(underTest.roaming).isFalse()
         }
 
+    @Test
+    @EnableFlags(NewStatusBarIcons.FLAG_NAME, StatusBarRootModernization.FLAG_NAME)
+    fun activityInVisible_tracksPrimaryConnection() =
+        kosmos.runTest {
+            fakeMobileIconsInteractor.filteredSubscriptions.value = listOf(SUB_1, SUB_2)
+            fakeMobileIconsInteractor.activeMobileDataSubscriptionId.value = SUB_1.subscriptionId
+
+            setActivity(
+                SUB_1.subscriptionId,
+                DataActivityModel(hasActivityIn = true, hasActivityOut = false),
+            )
+
+            assertThat(underTest.activityInVisible).isTrue()
+            assertThat(underTest.activityContainerVisible).isTrue()
+
+            setActivity(
+                SUB_1.subscriptionId,
+                DataActivityModel(hasActivityIn = false, hasActivityOut = false),
+            )
+
+            assertThat(underTest.activityInVisible).isFalse()
+            assertThat(underTest.activityContainerVisible).isFalse()
+
+            // Change the activity for the secondary connection
+            setActivity(
+                SUB_2.subscriptionId,
+                DataActivityModel(hasActivityIn = true, hasActivityOut = false),
+            )
+
+            // Assert the stacked icon activity is unchanged
+            assertThat(underTest.activityInVisible).isFalse()
+            assertThat(underTest.activityContainerVisible).isFalse()
+        }
+
+    @Test
+    @EnableFlags(NewStatusBarIcons.FLAG_NAME, StatusBarRootModernization.FLAG_NAME)
+    fun activityOutVisible_tracksPrimaryConnection() =
+        kosmos.runTest {
+            fakeMobileIconsInteractor.filteredSubscriptions.value = listOf(SUB_1, SUB_2)
+            fakeMobileIconsInteractor.activeMobileDataSubscriptionId.value = SUB_1.subscriptionId
+
+            setActivity(
+                SUB_1.subscriptionId,
+                DataActivityModel(hasActivityIn = false, hasActivityOut = true),
+            )
+
+            assertThat(underTest.activityOutVisible).isTrue()
+            assertThat(underTest.activityContainerVisible).isTrue()
+
+            setActivity(
+                SUB_1.subscriptionId,
+                DataActivityModel(hasActivityIn = false, hasActivityOut = false),
+            )
+
+            assertThat(underTest.activityOutVisible).isFalse()
+            assertThat(underTest.activityContainerVisible).isFalse()
+
+            // Change the activity for the secondary connection
+            setActivity(
+                SUB_2.subscriptionId,
+                DataActivityModel(hasActivityIn = false, hasActivityOut = true),
+            )
+
+            // Assert the stacked icon activity is unchanged
+            assertThat(underTest.activityOutVisible).isFalse()
+            assertThat(underTest.activityContainerVisible).isFalse()
+        }
+
     private fun setIconLevel(subId: Int, level: Int) {
         with(kosmos.fakeMobileIconsInteractor.getInteractorForSubId(subId)!!) {
             signalLevelIcon.value =
                 (signalLevelIcon.value as SignalIconModel.Cellular).copy(level = level)
+        }
+    }
+
+    private fun setActivity(subId: Int, activity: DataActivityModel) {
+        with(kosmos.fakeMobileIconsInteractor.getInteractorForSubId(subId)!!) {
+            this.activity.value = activity
         }
     }
 

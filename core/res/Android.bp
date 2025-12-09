@@ -156,12 +156,14 @@ android_app {
     generate_product_characteristics_rro: true,
 
     flags_packages: [
+        "android.systemserver.flags-aconfig",
         "android.app.appfunctions.flags-aconfig",
         "android.app.contextualsearch.flags-aconfig",
         "android.app.flags-aconfig",
         "android.appwidget.flags-aconfig",
         "android.companion.virtualdevice.flags-aconfig",
         "android.content.pm.flags-aconfig",
+        "android.hardware.serial.flags-aconfig",
         "android.location.flags-aconfig",
         "android.media.audio-aconfig",
         "android.provider.flags-aconfig",
@@ -187,6 +189,8 @@ android_app {
         "appsearch_aconfig_flags",
         "aconfig_trade_in_mode_flags",
         "com.android.media.flags.projection-aconfig",
+        "surfaceflinger_flags",
+        "power_flags",
     ],
 }
 

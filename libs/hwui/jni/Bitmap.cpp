@@ -563,6 +563,13 @@ static void Bitmap_recycle(JNIEnv* env, jobject, jlong bitmapHandle) {
     bitmap->freePixels();
 }
 
+static void Bitmap_noop(BitmapWrapper* bitmap) {
+}
+
+static jlong Bitmap_getNativeNoop(JNIEnv*, jobject) {
+    return static_cast<jlong>(reinterpret_cast<uintptr_t>(&Bitmap_noop));
+}
+
 static void Bitmap_reconfigure(JNIEnv* env, jobject clazz, jlong bitmapHandle,
         jint width, jint height, jint configHandle, jboolean requestPremul) {
     LocalScopedBitmap bitmap(bitmapHandle);
@@ -980,10 +987,6 @@ static bool shouldParcelAsMutable(SkBitmap& bitmap, AParcel* parcel) {
         return false;
     }
 
-    if (!com::android::graphics::hwui::flags::bitmap_parcel_ashmem_as_immutable()) {
-        return true;
-    }
-
     // If we're going to copy the bitmap to ashmem and write that to the parcel,
     // then parcel as immutable, since we won't be mutating the bitmap after
     // writing it to the parcel.
@@ -1029,8 +1032,9 @@ static jboolean Bitmap_writeToParcel(JNIEnv* env, jobject, jlong bitmapHandle, j
     p.writeInt32(bitmap.rowBytes());
     p.writeInt32(density);
     p.writeInt64(id);
+    const uint64_t parcel_id = getParcelId();
+    p.writeInt64(parcel_id);
 
-    uint64_t parcel_id = getParcelId();
     if (id != UNDEFINED_BITMAP_ID) {
         traceSliceBeginWithGlobalFlow("Bitmap_writeToParcel", id, bitmap.computeByteSize(),
                                       bitmap.width(), bitmap.height(), density, -1,
@@ -1044,7 +1048,6 @@ static jboolean Bitmap_writeToParcel(JNIEnv* env, jobject, jlong bitmapHandle, j
     binder_status_t status;
     int fd = bitmapWrapper->bitmap().getAshmemFd();
     if (fd >= 0 && p.allowFds() && bitmap.isImmutable()) {
-        p.writeInt64(parcel_id);
 #if DEBUG_PARCEL
         ALOGD("Bitmap.writeToParcel: transferring immutable bitmap's ashmem fd as "
               "immutable blob (fds %s)",
@@ -1065,7 +1068,6 @@ static jboolean Bitmap_writeToParcel(JNIEnv* env, jobject, jlong bitmapHandle, j
     ALOGD("Bitmap.writeToParcel: copying bitmap into new blob (fds %s)",
           p.allowFds() ? "allowed" : "forbidden");
 #endif
-    p.writeInt64(0Ull);
     status = writeBlob(p.get(), id, bitmap, !asMutable);
     if (status) {
         doThrowRE(env, "Could not copy bitmap to parcel blob.");
@@ -1420,6 +1422,7 @@ static const JNINativeMethod gBitmapMethods[] = {
         {"nativeCopyAshmemConfig", "(JI)Landroid/graphics/Bitmap;", (void*)Bitmap_copyAshmemConfig},
         {"nativeGetAshmemFD", "(J)I", (void*)Bitmap_getAshmemFd},
         {"nativeGetNativeFinalizer", "()J", (void*)Bitmap_getNativeFinalizer},
+        {"nativeGetNativeNoop", "()J", (void*)Bitmap_getNativeNoop},
         {"nativeRecycle", "(J)V", (void*)Bitmap_recycle},
         {"nativeReconfigure", "(JIIIZ)V", (void*)Bitmap_reconfigure},
         {"nativeCompress", "(JIILjava/io/OutputStream;[B)Z", (void*)Bitmap_compress},

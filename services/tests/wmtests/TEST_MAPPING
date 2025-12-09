@@ -1,10 +1,16 @@
 {
-  "wm-cf": [
+  "wm": [
+    {
+      "name": "WmTests-CatchAll"
+    },
     {
       "name": "WmTests-policy-DeferredKeyActionExecutorTests"
     },
     {
       "name": "WmTests-policy-KeyGestureEventTests"
+    },
+    {
+      "name": "WmTests-policy-KeyGestureEventTvTests"
     },
     {
       "name": "WmTests-policy-PhoneWindowManagerTests"
@@ -67,10 +73,28 @@
       "name": "WmTests-wm-AppCompatAspectRatioOverridesTest"
     },
     {
+      "name": "WmTests-wm-AppCompatCameraDisplayRotationPolicyTests"
+    },
+    {
       "name": "WmTests-wm-AppCompatCameraOverridesTest"
     },
     {
       "name": "WmTests-wm-AppCompatCameraPolicyTest"
+    },
+    {
+      "name": "WmTests-wm-AppCompatCameraRotationStateTests"
+    },
+    {
+      "name": "WmTests-wm-AppCompatCameraSimReqOrientationPolicyTests"
+    },
+    {
+      "name": "WmTests-wm-AppCompatCameraStateSourceTests"
+    },
+    {
+      "name": "WmTests-wm-AppCompatCameraStateStrategyForPackageTests"
+    },
+    {
+      "name": "WmTests-wm-AppCompatCameraStateStrategyForTaskTests"
     },
     {
       "name": "WmTests-wm-AppCompatConfigurationPersisterTest"
@@ -82,10 +106,16 @@
       "name": "WmTests-wm-AppCompatDisplayCompatTests"
     },
     {
+      "name": "WmTests-wm-AppCompatDisplayOverridesTest"
+    },
+    {
       "name": "WmTests-wm-AppCompatFocusOverridesTest"
     },
     {
       "name": "WmTests-wm-AppCompatLetterboxOverrideTest"
+    },
+    {
+      "name": "WmTests-wm-AppCompatLetterboxPolicyStateTest"
     },
     {
       "name": "WmTests-wm-AppCompatLetterboxPolicyTest"
@@ -136,13 +166,13 @@
       "name": "WmTests-wm-BackgroundLaunchProcessControllerTests"
     },
     {
-      "name": "WmTests-wm-CameraCompatFreeformPolicyTests"
+      "name": "WmTests-wm-CameraIdAppPairsSetTests"
     },
     {
       "name": "WmTests-wm-CameraIdPackageNameBiMappingTests"
     },
     {
-      "name": "WmTests-wm-CameraStateMonitorImplTests"
+      "name": "WmTests-wm-CameraStateMonitorTests"
     },
     {
       "name": "WmTests-wm-ClientLifecycleManagerTests"
@@ -220,9 +250,6 @@
       "name": "WmTests-wm-DisplayPolicyTests"
     },
     {
-      "name": "WmTests-wm-DisplayRotationCompatPolicyTests"
-    },
-    {
       "name": "WmTests-wm-DisplayRotationCoordinatorTests"
     },
     {
@@ -244,10 +271,16 @@
       "name": "WmTests-wm-DisplayWindowSettingsTests"
     },
     {
+      "name": "WmTests-wm-DisplayWindowSettingsXmlHelperTests"
+    },
+    {
       "name": "WmTests-wm-DragDropControllerTests"
     },
     {
       "name": "WmTests-wm-DualDisplayAreaGroupPolicyTest"
+    },
+    {
+      "name": "WmTests-wm-EmulatorDisplayOverlayTests"
     },
     {
       "name": "WmTests-wm-FrameRateSelectionPriorityTests"
@@ -497,9 +530,6 @@
     },
     {
       "name": "WmTests-wm-utils-WmDisplayCutoutTest"
-    },
-    {
-      "name": "WmTests-CatchAll"
     }
   ]
 }

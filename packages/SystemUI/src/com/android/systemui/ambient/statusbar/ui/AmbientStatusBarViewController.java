@@ -32,10 +32,12 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.compose.ui.platform.ComposeView;
 
+import com.android.app.displaylib.PerDisplayRepository;
 import com.android.systemui.ambient.statusbar.shared.flag.OngoingActivityChipsOnDream;
 import com.android.systemui.ambient.statusbar.ui.binder.AmbientStatusBarViewBinder;
 import com.android.systemui.communal.domain.interactor.CommunalSceneInteractor;
 import com.android.systemui.dagger.qualifiers.Main;
+import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent;
 import com.android.systemui.dreams.DreamLogger;
 import com.android.systemui.dreams.DreamOverlayNotificationCountProvider;
 import com.android.systemui.dreams.DreamOverlayStateController;
@@ -57,7 +59,6 @@ import com.android.systemui.statusbar.policy.NextAlarmController;
 import com.android.systemui.statusbar.policy.ZenModeController;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.statusbar.window.StatusBarWindowStateListener;
-import com.android.systemui.touch.TouchInsetManager;
 import com.android.systemui.util.ViewController;
 import com.android.systemui.util.time.DateFormatUtil;
 
@@ -72,6 +73,7 @@ import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 import javax.inject.Inject;
+
 
 /**
  * View controller for {@link AmbientStatusBarView}.
@@ -100,17 +102,14 @@ public class AmbientStatusBarViewController extends ViewController<AmbientStatus
     private final AmbientStatusBarViewModel.Factory mAmbientStatusBarViewModelFactory;
     private final ConnectedDisplaysStatusBarNotificationIconViewStore.Factory mIconViewStoreFactory;
     private final DreamLogger mLogger;
-
-    @Nullable
-    private final TouchInsetManager.TouchInsetSession mTouchInsetSession;
+    private final PerDisplayRepository<SystemUIDisplaySubcomponent>
+            mPerDisplayDisplaySubcomponentRepo;
 
     private boolean mIsAttached;
     private boolean mCommunalVisible;
 
     // Whether dream entry animations are finished.
     private boolean mEntryAnimationsFinished = false;
-
-    @Nullable private ComposeView mOngoingActivityChipsView = null;
 
     private final DreamOverlayStateController.Callback mDreamOverlayStateCallback =
             new DreamOverlayStateController.Callback() {
@@ -166,7 +165,7 @@ public class AmbientStatusBarViewController extends ViewController<AmbientStatus
             IndividualSensorPrivacyController sensorPrivacyController,
             Optional<DreamOverlayNotificationCountProvider> dreamOverlayNotificationCountProvider,
             ZenModeController zenModeController,
-            StatusBarWindowStateController statusBarWindowStateController,
+            PerDisplayRepository<SystemUIDisplaySubcomponent> perDisplaySubcomponentRepository,
             DreamOverlayStatusBarItemsProvider statusBarItemsProvider,
             DreamOverlayStateController dreamOverlayStateController,
             UserTracker userTracker,
@@ -175,8 +174,8 @@ public class AmbientStatusBarViewController extends ViewController<AmbientStatus
             CommunalSceneInteractor communalSceneInteractor,
             AmbientStatusBarViewModel.Factory ambientStatusBarViewModelFactory,
             ConnectedDisplaysStatusBarNotificationIconViewStore.Factory iconViewStoreFactory,
-            @Nullable TouchInsetManager.TouchInsetSession touchInsetSession,
-            @DreamLog LogBuffer logBuffer) {
+            @DreamLog LogBuffer logBuffer,
+            PerDisplayRepository<SystemUIDisplaySubcomponent> perDisplayDisplaySubcomponentRepo) {
         super(view);
         mResources = resources;
         mMainExecutor = mainExecutor;
@@ -185,7 +184,10 @@ public class AmbientStatusBarViewController extends ViewController<AmbientStatus
         mDateFormatUtil = dateFormatUtil;
         mSensorPrivacyController = sensorPrivacyController;
         mDreamOverlayNotificationCountProvider = dreamOverlayNotificationCountProvider;
-        mStatusBarWindowStateController = statusBarWindowStateController;
+        int displayId = view.getContext().getDisplayId();
+        SystemUIDisplaySubcomponent displaySubComponent =
+                perDisplaySubcomponentRepository.getOrDefault(displayId);
+        mStatusBarWindowStateController = displaySubComponent.getStatusBarWindowStateController();
         mStatusBarItemsProvider = statusBarItemsProvider;
         mZenModeController = zenModeController;
         mDreamOverlayStateController = dreamOverlayStateController;
@@ -195,8 +197,8 @@ public class AmbientStatusBarViewController extends ViewController<AmbientStatus
         mCommunalSceneInteractor = communalSceneInteractor;
         mAmbientStatusBarViewModelFactory = ambientStatusBarViewModelFactory;
         mIconViewStoreFactory = iconViewStoreFactory;
-        mTouchInsetSession = touchInsetSession;
         mLogger = new DreamLogger(logBuffer, TAG);
+        mPerDisplayDisplaySubcomponentRepo = perDisplayDisplaySubcomponentRepo;
     }
 
     @Override
@@ -222,21 +224,14 @@ public class AmbientStatusBarViewController extends ViewController<AmbientStatus
         mIsAttached = true;
 
         if (OngoingActivityChipsOnDream.isEnabled()) {
-            mOngoingActivityChipsView =
+            final ComposeView ongoingActivityChipsView =
                     mView.findViewById(R.id.dream_overlay_ongoing_activity_chips);
-
-            if (mOngoingActivityChipsView != null) {
-                AmbientStatusBarViewBinder.bindOngoingActivityChipsView(
-                        getContext(),
-                        mOngoingActivityChipsView,
-                        mAmbientStatusBarViewModelFactory,
-                        mIconViewStoreFactory);
-
-                // Allow the ongoing activity chips view to receive touch events.
-                if (mTouchInsetSession != null) {
-                    mTouchInsetSession.addViewToTracking(mOngoingActivityChipsView);
-                }
-            }
+            AmbientStatusBarViewBinder.bindOngoingActivityChipsView(
+                    getContext(),
+                    ongoingActivityChipsView,
+                    mAmbientStatusBarViewModelFactory,
+                    mIconViewStoreFactory,
+                    mPerDisplayDisplaySubcomponentRepo);
         }
 
         mFlows.add(collectFlow(
@@ -284,12 +279,6 @@ public class AmbientStatusBarViewController extends ViewController<AmbientStatus
             flow.dispose();
         }
         mFlows.clear();
-
-        if (mTouchInsetSession != null && mOngoingActivityChipsView != null) {
-            mTouchInsetSession.removeViewFromTracking(mOngoingActivityChipsView);
-            mOngoingActivityChipsView = null;
-        }
-
         mIsAttached = false;
     }
 

@@ -17,6 +17,7 @@
 package android.app;
 
 import static android.Manifest.permission.POST_NOTIFICATIONS;
+import static android.annotation.SystemApi.Client.MODULE_LIBRARIES;
 import static android.app.NotificationChannel.DEFAULT_CHANNEL_ID;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.service.notification.Flags.notificationClassification;
@@ -95,6 +96,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.Executor;
 
@@ -462,7 +464,7 @@ public class NotificationManager {
      * @hide
      */
     @SdkConstant(SdkConstant.SdkConstantType.BROADCAST_INTENT_ACTION)
-    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @SystemApi(client = MODULE_LIBRARIES)
     public static final String ACTION_NOTIFICATION_LISTENER_ENABLED_CHANGED =
             "android.app.action.NOTIFICATION_LISTENER_ENABLED_CHANGED";
 
@@ -683,13 +685,13 @@ public class NotificationManager {
 
     private final InstantSource mClock;
     private final RateLimiter mUpdateRateLimiter = new RateLimiter("notify (update)",
-            "notifications.value_client_throttled_notify_update",
             MAX_NOTIFICATION_UPDATE_RATE);
     private final RateLimiter mUnnecessaryCancelRateLimiter = new RateLimiter("cancel (dupe)",
-            "notifications.value_client_throttled_cancel_duplicate",
             MAX_NOTIFICATION_UNNECESSARY_CANCEL_RATE);
-    // Value is KNOWN_STATUS_ENQUEUED/_CANCELLED
-    private final LruCache<NotificationKey, Integer> mKnownNotifications = new LruCache<>(100);
+    // KnownStatus is KNOWN_STATUS_ENQUEUED/_CANCELLED
+    private record KnownNotification(int knownStatus, OptionalInt progressState) {}
+    private final LruCache<NotificationKey, KnownNotification> mKnownNotifications =
+            new LruCache<>(100);
     private final Object mThrottleLock = new Object();
 
     @UnsupportedAppUsage
@@ -712,20 +714,20 @@ public class NotificationManager {
         return getService();
     }
 
-    /** {@hide} */
+    /** @hide */
     public NotificationManager(Context context)
     {
         this(context, SystemClock.elapsedRealtimeClock());
     }
 
-    /** {@hide} */
+    /** @hide */
     @UnsupportedAppUsage
     public NotificationManager(Context context, InstantSource clock) {
         mContext = context;
         mClock = clock;
     }
 
-    /** {@hide} */
+    /** @hide */
     @UnsupportedAppUsage
     public static NotificationManager from(Context context) {
         return (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -848,16 +850,30 @@ public class NotificationManager {
         if (Flags.nmBinderPerfThrottleNotify()) {
             NotificationKey key = new NotificationKey(user, pkg, tag, id);
             synchronized (mThrottleLock) {
-                Integer status = mKnownNotifications.get(key);
-                if (status != null && status == KNOWN_STATUS_ENQUEUED
-                        && !notification.hasCompletedProgress()) {
-                    if (mUpdateRateLimiter.eventExceedsRate()) {
-                        mUpdateRateLimiter.recordRejected(key);
-                        return true;
+                KnownNotification status = mKnownNotifications.get(key);
+                if (Flags.notificationUpdateSheddingAllowProgressCompletion()) {
+                    if (status != null && status.knownStatus == KNOWN_STATUS_ENQUEUED
+                            && status.progressState.orElse(-1) == notification.getProgressState()) {
+                        if (mUpdateRateLimiter.eventExceedsRate()) {
+                            mUpdateRateLimiter.recordRejected(key);
+                            return true;
+                        }
+                        mUpdateRateLimiter.recordAccepted();
                     }
-                    mUpdateRateLimiter.recordAccepted();
+                    mKnownNotifications.put(key, new KnownNotification(KNOWN_STATUS_ENQUEUED,
+                                OptionalInt.of(notification.getProgressState())));
+                } else {
+                    if (status != null && status.knownStatus == KNOWN_STATUS_ENQUEUED
+                            && !notification.hasCompletedProgress()) {
+                        if (mUpdateRateLimiter.eventExceedsRate()) {
+                            mUpdateRateLimiter.recordRejected(key);
+                            return true;
+                        }
+                        mUpdateRateLimiter.recordAccepted();
+                    }
+                    mKnownNotifications.put(key, new KnownNotification(KNOWN_STATUS_ENQUEUED,
+                            OptionalInt.empty()));
                 }
-                mKnownNotifications.put(key, KNOWN_STATUS_ENQUEUED);
             }
         }
 
@@ -875,16 +891,14 @@ public class NotificationManager {
         private final RateEstimator mInputRateEstimator;
         private final RateEstimator mOutputRateEstimator;
         private final String mName;
-        private final String mCounterName;
         private final float mLimitRate;
 
         private Instant mLogSilencedUntil;
 
-        private RateLimiter(String name, String counterName, float limitRate) {
+        private RateLimiter(String name, float limitRate) {
             mInputRateEstimator = new RateEstimator();
             mOutputRateEstimator = new RateEstimator();
             mName = name;
-            mCounterName = counterName;
             mLimitRate = limitRate;
         }
 
@@ -902,14 +916,6 @@ public class NotificationManager {
             Instant now = mClock.instant();
             if (mLogSilencedUntil != null && now.isBefore(mLogSilencedUntil)) {
                 return;
-            }
-
-            if (Flags.nmBinderPerfLogNmThrottling()) {
-                try {
-                    service().incrementCounter(mCounterName);
-                } catch (RemoteException e) {
-                    Slog.w(TAG, "Ignoring error while trying to log " + mCounterName, e);
-                }
             }
 
             long nowMillis = now.toEpochMilli();
@@ -1047,15 +1053,16 @@ public class NotificationManager {
         if (Flags.nmBinderPerfThrottleNotify()) {
             NotificationKey key = new NotificationKey(user, pkg, tag, id);
             synchronized (mThrottleLock) {
-                Integer status = mKnownNotifications.get(key);
-                if (status != null && status == KNOWN_STATUS_CANCELLED) {
+                KnownNotification status = mKnownNotifications.get(key);
+                if (status != null && status.knownStatus == KNOWN_STATUS_CANCELLED) {
                     if (mUnnecessaryCancelRateLimiter.eventExceedsRate()) {
                         mUnnecessaryCancelRateLimiter.recordRejected(key);
                         return true;
                     }
                     mUnnecessaryCancelRateLimiter.recordAccepted();
                 }
-                mKnownNotifications.put(key, KNOWN_STATUS_CANCELLED);
+                mKnownNotifications.put(key, new KnownNotification(KNOWN_STATUS_CANCELLED,
+                        OptionalInt.empty()));
             }
         }
 
@@ -1076,7 +1083,8 @@ public class NotificationManager {
             synchronized (mThrottleLock) {
                 for (NotificationKey key : mKnownNotifications.snapshot().keySet()) {
                     if (key.pkg.equals(pkg) && key.user.equals(user)) {
-                        mKnownNotifications.put(key, KNOWN_STATUS_CANCELLED);
+                        mKnownNotifications.put(key, new KnownNotification(KNOWN_STATUS_CANCELLED,
+                                OptionalInt.empty()));
                     }
                 }
             }
@@ -2345,7 +2353,10 @@ public class NotificationManager {
     }
 
     /** @hide */
-    public void setNotificationPolicyAccessGranted(String pkg, boolean granted) {
+    @FlaggedApi(android.companion.Flags.FLAG_ENABLE_MEDICAL_PROFILE)
+    @SystemApi
+    @RequiresPermission(android.Manifest.permission.MANAGE_NOTIFICATIONS)
+    public void setNotificationPolicyAccessGranted(@NonNull String pkg, boolean granted) {
         INotificationManager service = service();
         try {
             service.setNotificationPolicyAccessGranted(pkg, granted);

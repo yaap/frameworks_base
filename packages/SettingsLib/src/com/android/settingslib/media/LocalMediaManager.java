@@ -16,6 +16,7 @@
 package com.android.settingslib.media;
 
 import static android.media.MediaRoute2ProviderService.REASON_UNKNOWN_ERROR;
+import static android.media.RoutingChangeInfo.ENTRY_POINT_PROXY_ROUTER_UNSPECIFIED;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -25,7 +26,10 @@ import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.media.AudioDeviceAttributes;
 import android.media.AudioManager;
+import android.media.RoutingChangeInfo;
+import android.media.RoutingChangeInfo.EntryPoint;
 import android.media.RoutingSessionInfo;
+import android.media.SuggestedDeviceInfo;
 import android.os.Build;
 import android.os.Handler;
 import android.text.TextUtils;
@@ -46,14 +50,12 @@ import com.android.settingslib.bluetooth.HearingAidProfile;
 import com.android.settingslib.bluetooth.LeAudioProfile;
 import com.android.settingslib.bluetooth.LocalBluetoothManager;
 import com.android.settingslib.bluetooth.LocalBluetoothProfile;
-import com.android.settingslib.media.InfoMediaManager.SuggestedDeviceState;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -189,10 +191,28 @@ public class LocalMediaManager implements BluetoothCallback {
 
     /**
      * Connect the MediaDevice to transfer media
+     *
      * @param connectDevice the MediaDevice
      * @return {@code true} if successfully call, otherwise return {@code false}
+     * @deprecated Use {@link #connectDevice(MediaDevice, RoutingChangeInfo)} instead.
      */
+    @Deprecated
     public boolean connectDevice(MediaDevice connectDevice) {
+        return connectDevice(
+                connectDevice,
+                new RoutingChangeInfo(
+                        ENTRY_POINT_PROXY_ROUTER_UNSPECIFIED, /* isSuggested= */ false));
+    }
+
+    /**
+     * Connect the MediaDevice to transfer media
+     *
+     * @param connectDevice the MediaDevice
+     * @param routingChangeInfo the invocation details of the connect device request.
+     * @return {@code true} if successfully call, otherwise return {@code false}
+     */
+    public boolean connectDevice(
+            @NonNull MediaDevice connectDevice, @NonNull RoutingChangeInfo routingChangeInfo) {
         MediaDevice device = getMediaDeviceById(connectDevice.getId());
         if (device == null) {
             Log.w(TAG, "connectDevice() connectDevice not in the list!");
@@ -215,7 +235,7 @@ public class LocalMediaManager implements BluetoothCallback {
         }
 
         mInfoMediaManager.setDeviceState(device, MediaDeviceState.STATE_CONNECTING);
-        mInfoMediaManager.connectToDevice(device);
+        mInfoMediaManager.connectToDevice(device, routingChangeInfo);
         return true;
     }
 
@@ -224,25 +244,26 @@ public class LocalMediaManager implements BluetoothCallback {
      * to attempt to discover the device.
      *
      * @param suggestion the suggested device to connect to.
+     * @param routingChangeInfo the invocation details of the connect device request.
      */
-    public void connectSuggestedDevice(SuggestedDeviceState suggestion) {
+    public void connectSuggestedDevice(
+            @NonNull SuggestedDeviceState suggestion,
+            @NonNull RoutingChangeInfo routingChangeInfo) {
         synchronized (mMediaDevicesLock) {
-            if (suggestion == null || mConnectingSuggestedDeviceState != null) {
-                return;
-            }
-            SuggestedDeviceState currentSuggestion = mInfoMediaManager.getSuggestedDevice();
-            if (!Objects.equals(suggestion, currentSuggestion)) {
+            if (mConnectingSuggestedDeviceState != null) {
                 return;
             }
             for (MediaDevice device : mMediaDevices) {
                 if (suggestion.getSuggestedDeviceInfo().getRouteId().equals(device.getId())) {
-                    connectDevice(device);
+                    Log.i(TAG, "Suggestion: device is available, connecting. deviceId = "
+                            + device.getId());
+                    connectDevice(device, routingChangeInfo);
                     return;
                 }
             }
             mConnectingSuggestedDeviceState =
                     new ConnectingSuggestedDeviceState(
-                            currentSuggestion, mConnectSuggestedDeviceHandler);
+                            suggestion, routingChangeInfo.getEntryPoint());
             mConnectingSuggestedDeviceState.tryConnect();
         }
     }
@@ -253,34 +274,20 @@ public class LocalMediaManager implements BluetoothCallback {
         long currentRequestTime = System.currentTimeMillis();
         if (currentRequestTime - mLastSuggestionRequestTime
                 > MIN_DURATION_BETWEEN_SUGGESTION_REQUESTS_MILLIS) {
-            Log.d(TAG, "requesting device suggestion");
+            Log.i(TAG, "requesting device suggestion");
             mLastSuggestionRequestTime = currentRequestTime;
             mInfoMediaManager.requestDeviceSuggestion();
         } else {
             Log.d(
                     TAG,
-                    "requestDeviceSuggestion() ignored due to difference between requests: "
+                    "requesting device suggestion throttled, elapsed time: "
                             + (currentRequestTime - mLastSuggestionRequestTime));
         }
     }
 
-    @Nullable
-    public SuggestedDeviceState getSuggestedDevice() {
-        return mInfoMediaManager.getSuggestedDevice();
-    }
-
-    private boolean connectToDeviceIfConnectionPending(MediaDevice device) {
-        synchronized (mMediaDevicesLock) {
-            if (mConnectingSuggestedDeviceState != null
-                    && mConnectingSuggestedDeviceState
-                            .mSuggestedDeviceState
-                            .getSuggestedDeviceInfo()
-                            .getRouteId()
-                            .equals(device.getId())) {
-                return connectDevice(device);
-            }
-            return false;
-        }
+    @NonNull
+    public List<SuggestedDeviceInfo> getSuggestions() {
+        return mInfoMediaManager.getSuggestions();
     }
 
     void dispatchSelectedDeviceStateChanged(MediaDevice device, @MediaDeviceState int state) {
@@ -342,9 +349,15 @@ public class LocalMediaManager implements BluetoothCallback {
         }
     }
 
-    void dispatchOnSuggestedDeviceUpdated(@Nullable SuggestedDeviceState device) {
+    void dispatchDeviceSuggestionsUpdated(List<SuggestedDeviceInfo> deviceSuggestions) {
         for (DeviceCallback callback : getCallbacks()) {
-            callback.onSuggestedDeviceUpdated(device);
+            callback.onDeviceSuggestionsUpdated(deviceSuggestions);
+        }
+    }
+
+    void dispatchConnectSuggestedDeviceFinished(SuggestedDeviceState state, boolean success) {
+        for (DeviceCallback callback : getCallbacks()) {
+            callback.onConnectSuggestedDeviceFinished(state, success);
         }
     }
 
@@ -397,6 +410,17 @@ public class LocalMediaManager implements BluetoothCallback {
     }
 
     /**
+     * Returns a list of MediaDevice objects.
+     *
+     * @return a list of media devices
+     */
+    public List<MediaDevice> getMediaDevices() {
+        synchronized (mMediaDevicesLock) {
+            return new ArrayList<>(mMediaDevices);
+        }
+    }
+
+    /**
      * Find the current connected MediaDevice.
      *
      * @return MediaDevice
@@ -410,51 +434,25 @@ public class LocalMediaManager implements BluetoothCallback {
      * Add a MediaDevice to let it play current media.
      *
      * @param device MediaDevice
+     * @param routingChangeInfo the invocation details of the media routing change.
      * @return If add device successful return {@code true}, otherwise return {@code false}
      */
-    public boolean addDeviceToPlayMedia(MediaDevice device) {
+    public boolean addDeviceToPlayMedia(MediaDevice device, RoutingChangeInfo routingChangeInfo) {
         mInfoMediaManager.setDeviceState(device, MediaDeviceState.STATE_GROUPING);
-        return mInfoMediaManager.addDeviceToPlayMedia(device);
+        return mInfoMediaManager.addDeviceToPlayMedia(device, routingChangeInfo);
     }
 
     /**
      * Remove a {@code device} from current media.
      *
      * @param device MediaDevice
+     * @param routingChangeInfo the invocation details of the media routing change.
      * @return If device stop successful return {@code true}, otherwise return {@code false}
      */
-    public boolean removeDeviceFromPlayMedia(MediaDevice device) {
+    public boolean removeDeviceFromPlayMedia(
+            MediaDevice device, RoutingChangeInfo routingChangeInfo) {
         mInfoMediaManager.setDeviceState(device, MediaDeviceState.STATE_GROUPING);
-        return mInfoMediaManager.removeDeviceFromPlayMedia(device);
-    }
-
-    /**
-     * Get the MediaDevice list that can be added to current media.
-     *
-     * @return list of MediaDevice
-     */
-    public List<MediaDevice> getSelectableMediaDevice() {
-        return mInfoMediaManager.getSelectableMediaDevices();
-    }
-
-    /**
-     * Gets the MediaDevice list that can be transferred to with the current media session by the
-     * media route provider.
-     *
-     * @return list of MediaDevice
-     */
-    @NonNull
-    public List<MediaDevice> getTransferableMediaDevices() {
-        return mInfoMediaManager.getTransferableMediaDevices();
-    }
-
-    /**
-     * Get the MediaDevice list that can be removed from current media session.
-     *
-     * @return list of MediaDevice
-     */
-    public List<MediaDevice> getDeselectableMediaDevice() {
-        return mInfoMediaManager.getDeselectableMediaDevices();
+        return mInfoMediaManager.removeDeviceFromPlayMedia(device, routingChangeInfo);
     }
 
     /**
@@ -471,15 +469,6 @@ public class LocalMediaManager implements BluetoothCallback {
      */
     public boolean releaseSession() {
         return mInfoMediaManager.releaseSession();
-    }
-
-    /**
-     * Get the MediaDevice list that has been selected to current media.
-     *
-     * @return list of MediaDevice
-     */
-    public List<MediaDevice> getSelectedMediaDevice() {
-        return mInfoMediaManager.getSelectedMediaDevices();
     }
 
     /**
@@ -793,8 +782,9 @@ public class LocalMediaManager implements BluetoothCallback {
         }
 
         @Override
-        public void onSuggestedDeviceUpdated(@Nullable SuggestedDeviceState device) {
-            dispatchOnSuggestedDeviceUpdated(device);
+        public void onDeviceSuggestionsUpdated(
+                @NonNull List<SuggestedDeviceInfo> deviceSuggestions) {
+            dispatchDeviceSuggestionsUpdated(deviceSuggestions);
         }
     }
 
@@ -874,8 +864,15 @@ public class LocalMediaManager implements BluetoothCallback {
          */
         default void onAboutToConnectDeviceRemoved() {}
 
-        /** Callback for notifying that the suggested device has been updated. */
-        default void onSuggestedDeviceUpdated(@Nullable SuggestedDeviceState device) {}
+        /** Callback for notifying that the suggested device list has been updated. */
+        default void onDeviceSuggestionsUpdated(
+                @NonNull List<SuggestedDeviceInfo> deviceSuggestions) {
+        }
+
+        /** Callback for notifying that connection to suggested device is finished. */
+        default void onConnectSuggestedDeviceFinished(
+                @NonNull SuggestedDeviceState suggestedDeviceState, boolean success) {
+        }
     }
 
     /**
@@ -902,51 +899,96 @@ public class LocalMediaManager implements BluetoothCallback {
     }
 
     private class ConnectingSuggestedDeviceState {
-        private static final int SCAN_DURATION_MS = 10000;
+        private static final int SCAN_AND_CONNECTION_DURATION_MS = 30000;
 
         @NonNull final SuggestedDeviceState mSuggestedDeviceState;
-        @NonNull final Handler mConnectSuggestedDeviceHandler;
         @NonNull final DeviceCallback mDeviceCallback;
         @NonNull final Runnable mConnectionAttemptFinishedRunnable;
 
-        ConnectingSuggestedDeviceState(SuggestedDeviceState suggestedDeviceState, Handler handler) {
+        boolean mIsConnectionAttemptActive = false;
+        boolean mDidAttemptCompleteSuccessfully = false;
+
+        ConnectingSuggestedDeviceState(
+                @NonNull SuggestedDeviceState suggestedDeviceState, @EntryPoint int entryPoint) {
             mSuggestedDeviceState = suggestedDeviceState;
-            mConnectSuggestedDeviceHandler = handler;
             mDeviceCallback =
                     new DeviceCallback() {
                         @Override
                         public void onDeviceListUpdate(List<MediaDevice> mediaDevices) {
-                            for (MediaDevice mediaDevice : mediaDevices) {
-                                if (connectToDeviceIfConnectionPending(mediaDevice)) {
-                                    mConnectSuggestedDeviceHandler.removeCallbacks(
-                                            mConnectionAttemptFinishedRunnable);
-                                    mConnectionAttemptFinishedRunnable.run();
-                                    break;
+                            synchronized (mMediaDevicesLock) {
+                                for (MediaDevice mediaDevice : mediaDevices) {
+                                    if (isSuggestedDevice(mediaDevice)) {
+                                        Log.i(
+                                                TAG,
+                                                "Suggestion: scan found matched device, "
+                                                        + "connecting. deviceId = "
+                                                        + mediaDevice.getId());
+                                        connectDevice(
+                                                mediaDevice,
+                                                new RoutingChangeInfo(
+                                                        entryPoint, /* isSuggested= */ true));
+                                        mIsConnectionAttemptActive = true;
+                                        break;
+                                    }
                                 }
                             }
                         }
+
+                        @Override
+                        public void onSelectedDeviceStateChanged(
+                                @NonNull MediaDevice device, @MediaDeviceState int state) {
+                            if (isSuggestedDevice(device)
+                                    && state == MediaDeviceState.STATE_CONNECTED) {
+                                if (!mConnectSuggestedDeviceHandler.hasCallbacks(
+                                        mConnectionAttemptFinishedRunnable)) {
+                                    return;
+                                }
+                                mDidAttemptCompleteSuccessfully = true;
+                                // Remove the postDelayed runnable previously set and post a new one
+                                // to be executed right away.
+                                mConnectSuggestedDeviceHandler.removeCallbacks(
+                                        mConnectionAttemptFinishedRunnable);
+                                mConnectSuggestedDeviceHandler.post(
+                                        mConnectionAttemptFinishedRunnable);
+                            }
+                        }
+
+                        private boolean isSuggestedDevice(MediaDevice device) {
+                            return mConnectingSuggestedDeviceState != null
+                                    && mConnectingSuggestedDeviceState
+                                            .mSuggestedDeviceState
+                                            .getSuggestedDeviceInfo()
+                                            .getRouteId()
+                                            .equals(device.getId());
+                        }
                     };
             mConnectionAttemptFinishedRunnable =
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            synchronized (mMediaDevicesLock) {
-                                mConnectingSuggestedDeviceState = null;
-                            }
-                            unregisterCallback(mDeviceCallback);
-                            stopScan();
-                            mInfoMediaManager.onConnectionAttemptCompletedForSuggestion(
-                                    mSuggestedDeviceState);
+                    () -> {
+                        synchronized (mMediaDevicesLock) {
+                            mConnectingSuggestedDeviceState = null;
+                            mIsConnectionAttemptActive = false;
                         }
+                        unregisterCallback(mDeviceCallback);
+                        stopScan();
+                        Log.i(TAG, "Suggestion: scan stopped. success = "
+                                + mDidAttemptCompleteSuccessfully);
+                        dispatchConnectSuggestedDeviceFinished(mSuggestedDeviceState,
+                                mDidAttemptCompleteSuccessfully);
                     };
         }
 
         void tryConnect() {
+            // Attempt connection only if there isn't one already in progress.
+            if (mIsConnectionAttemptActive) {
+                return;
+            }
+            Log.i(TAG, "Suggestion: scanning for devices.");
+            // Reset mDidAttemptCompleteSuccessfully at the start of each connection attempt.
+            mDidAttemptCompleteSuccessfully = false;
             registerCallback(mDeviceCallback);
             startScan();
             mConnectSuggestedDeviceHandler.postDelayed(
-                    mConnectionAttemptFinishedRunnable, SCAN_DURATION_MS);
-            mInfoMediaManager.onConnectionAttemptedForSuggestion(mSuggestedDeviceState);
+                    mConnectionAttemptFinishedRunnable, SCAN_AND_CONNECTION_DURATION_MS);
         }
     }
 }

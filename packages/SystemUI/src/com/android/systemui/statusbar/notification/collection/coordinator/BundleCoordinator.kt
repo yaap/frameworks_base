@@ -22,9 +22,9 @@ import android.app.NotificationChannel.RECS_ID
 import android.app.NotificationChannel.SOCIAL_MEDIA_ID
 import android.os.Build
 import android.os.SystemProperties
+import android.os.UserHandle
 import androidx.annotation.VisibleForTesting
 import com.android.systemui.dagger.qualifiers.Application
-import com.android.systemui.notifications.ui.composable.row.BundleHeader
 import com.android.systemui.statusbar.notification.Bundles
 import com.android.systemui.statusbar.notification.OnboardingAffordanceManager
 import com.android.systemui.statusbar.notification.collection.BundleEntry
@@ -35,6 +35,7 @@ import com.android.systemui.statusbar.notification.collection.NotifPipeline
 import com.android.systemui.statusbar.notification.collection.NotificationEntry
 import com.android.systemui.statusbar.notification.collection.PipelineEntry
 import com.android.systemui.statusbar.notification.collection.coordinator.dagger.CoordinatorScope
+import com.android.systemui.statusbar.notification.collection.listbuilder.OnBeforeFinalizeFilterListener
 import com.android.systemui.statusbar.notification.collection.listbuilder.OnBeforeRenderListListener
 import com.android.systemui.statusbar.notification.collection.listbuilder.pluggable.Invalidator
 import com.android.systemui.statusbar.notification.collection.listbuilder.pluggable.NotifBundler
@@ -55,7 +56,6 @@ import com.android.systemui.statusbar.notification.stack.BUCKET_SOCIAL
 import com.android.systemui.util.time.SystemClock
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /** Coordinator for sections derived from NotificationAssistantService classification. */
@@ -190,18 +190,17 @@ constructor(
      * counted.
      */
     @get:VisibleForTesting
-    val bundleCountUpdater = OnBeforeRenderListListener { entries ->
+    val bundleCountUpdater = OnBeforeFinalizeFilterListener { entries ->
         entries.forEachBundleEntry { bundleEntry ->
-            val notifEntrySet = mutableSetOf<NotificationEntry>()
-            fun collectNotifEntry(listEntries: List<ListEntry>) {
+            fun countNotifications(listEntries: List<ListEntry>): Int {
+                var count = 0
                 for (entry in listEntries) {
                     when (entry) {
                         is NotificationEntry -> {
-                            notifEntrySet.add(entry)
+                            count++
                         }
                         is GroupEntry -> {
-                            // Do not count group summary NotifEntry
-                            collectNotifEntry(entry.children)
+                            count += entry.children.size
                         }
                         else -> {
                             error(
@@ -212,9 +211,9 @@ constructor(
                         }
                     }
                 }
+                return count
             }
-            collectNotifEntry(bundleEntry.children)
-            bundleEntry.bundleRepository.numberOfChildren = notifEntrySet.size
+            bundleEntry.bundleRepository.numberOfChildren = countNotifications(bundleEntry.children)
         }
     }
 
@@ -256,22 +255,6 @@ constructor(
         updateEntryList(entries, /* currentBundleKey */ null)
     }
 
-    private fun getAppDataForListEntry(listEntry: ListEntry): AppData? {
-        if (listEntry.representativeEntry == null) {
-            error(
-                "getAppDataForListEntry BundleEntry child (key: ${listEntry.key})" +
-                    "has no representativeEntry"
-            )
-        }
-        val representative = listEntry.representativeEntry!!
-        val time = representative.timeAddedToBundle.second
-        return if (time > 0L) {
-            AppData(representative.sbn.packageName, representative.sbn.user, time)
-        } else {
-            error("getAppDataForListEntry not in bundle (key: ${listEntry.key})")
-        }
-    }
-
     /**
      * For each BundleEntry, populate its bundleRepository.appDataList with unique AppData (package
      * name, UserHandle, latest timeAddedToBundle) by recursively checking all NotificationEntry
@@ -280,52 +263,42 @@ constructor(
     @get:VisibleForTesting
     val bundleAppDataUpdater = OnBeforeRenderListListener { entries ->
         entries.forEachBundleEntry { bundleEntry ->
-            if (bundleEntry.bundleRepository.state?.currentScene == BundleHeader.Scenes.Expanded) {
-                bundleEntry.bundleRepository.appDataList.value = emptyList()
-            } else {
-                val appDataList = mutableListOf<AppData>()
+            val appDataList = mutableListOf<AppData>()
 
-                fun collectAppData(listEntries: List<ListEntry>) {
-                    for (listEntry in listEntries) {
-                        when (listEntry) {
-                            is NotificationEntry -> {
-                                val time = listEntry.timeAddedToBundle.second
-                                appDataList.add(
-                                    AppData(listEntry.sbn.packageName, listEntry.sbn.user, time)
-                                )
-                            }
+            fun collectAppData(listEntries: List<ListEntry>) {
+                for (listEntry in listEntries) {
+                    when (listEntry) {
+                        is NotificationEntry -> {
+                            appDataList.add(listEntry.toAppData())
+                        }
 
-                            is GroupEntry -> {
-                                listEntry.representativeEntry?.let { summary ->
-                                    val time = summary.timeAddedToBundle.second
-                                    appDataList.add(
-                                        AppData(summary.sbn.packageName, summary.sbn.user, time)
-                                    )
-                                }
-                                collectAppData(listEntry.children)
+                        is GroupEntry -> {
+                            listEntry.representativeEntry?.let { summary ->
+                                appDataList.add(summary.toAppData())
                             }
-                            else -> {
-                                error(
-                                    "bundleAppDataUpdater: unexpected ListEntry type: " +
-                                        "${listEntry::class.simpleName} while collecting " +
-                                        "AppData for BundleEntry (key: ${bundleEntry.key})"
-                                )
-                            }
+                            collectAppData(listEntry.children)
+                        }
+                        else -> {
+                            error(
+                                "bundleAppDataUpdater: unexpected ListEntry type: " +
+                                    "${listEntry::class.simpleName} while collecting " +
+                                    "AppData for BundleEntry (key: ${bundleEntry.key})"
+                            )
                         }
                     }
                 }
-                collectAppData(bundleEntry.children)
-
-                // Group by package name and user, then for each group, pick the AppData
-                // with the maximum (latest) non-zero timeAddedToBundle.
-                bundleEntry.bundleRepository.appDataList.value =
-                    appDataList
-                        .filter { it.timeAddedToBundle > 0L }
-                        .groupBy { Pair(it.packageName, it.user) }
-                        .mapNotNull { (_, appDataListForSameApp) ->
-                            appDataListForSameApp.maxByOrNull { it.timeAddedToBundle }
-                        }
             }
+            collectAppData(bundleEntry.children)
+
+            // Group by package name and user, then for each group, pick the AppData
+            // with the maximum (latest) non-zero timeAddedToBundle.
+            bundleEntry.bundleRepository.appDataList.value =
+                appDataList
+                    .filter { it.timeAddedToBundle > 0L }
+                    .groupBy { Pair(it.packageName, it.user) }
+                    .mapNotNull { (_, appDataListForSameApp) ->
+                        appDataListForSameApp.maxByOrNull { it.timeAddedToBundle }
+                    }
         }
     }
 
@@ -333,8 +306,8 @@ constructor(
         if (NotificationBundleUi.isEnabled) {
             pipeline.setNotifBundler(bundler)
             pipeline.addOnBeforeFinalizeFilterListener(this::inflateAllBundleEntries)
+            pipeline.addOnBeforeFinalizeFilterListener(bundleCountUpdater)
             pipeline.addFinalizeFilter(bundleFilter)
-            pipeline.addOnBeforeRenderListListener(bundleCountUpdater)
             pipeline.addOnBeforeRenderListListener(bundleMembershipUpdater)
             pipeline.addOnBeforeRenderListListener(bundleAppDataUpdater)
             bindOnboardingAffordanceInvalidator(pipeline)
@@ -385,3 +358,6 @@ constructor(
         }
     }
 }
+
+private fun NotificationEntry.toAppData(): AppData =
+    AppData(sbn.packageName, UserHandle.of(sbn.normalizedUserId), timeAddedToBundle.second)

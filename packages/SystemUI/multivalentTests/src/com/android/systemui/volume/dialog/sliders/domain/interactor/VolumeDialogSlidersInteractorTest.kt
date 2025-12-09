@@ -25,12 +25,12 @@ import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.coroutines.collectLastValue
 import com.android.systemui.kosmos.testScope
+import com.android.systemui.kosmos.useUnconfinedTestDispatcher
 import com.android.systemui.plugins.VolumeDialogController
 import com.android.systemui.plugins.fakeVolumeDialogController
 import com.android.systemui.testKosmos
 import com.android.systemui.volume.dialog.sliders.domain.model.VolumeDialogSliderType
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -42,10 +42,9 @@ private const val AUDIO_SHARING_STREAM = 99
 @SmallTest
 @RunWith(AndroidJUnit4::class)
 @TestableLooper.RunWithLooper
-@android.platform.test.annotations.EnabledOnRavenwood
 class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
 
-    private val kosmos = testKosmos()
+    private val kosmos = testKosmos().useUnconfinedTestDispatcher()
 
     private lateinit var underTest: VolumeDialogSlidersInteractor
 
@@ -66,7 +65,6 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
     fun activeStreamIsSlider() =
         with(kosmos) {
             testScope.runTest {
-                runCurrent()
                 fakeVolumeDialogController.updateState {
                     activeStream = AudioManager.STREAM_SYSTEM
                     states.put(AudioManager.STREAM_MUSIC, buildStreamState())
@@ -74,7 +72,6 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
                 }
 
                 val slidersModel by collectLastValue(underTest.sliders)
-                runCurrent()
 
                 assertThat(slidersModel!!.slider)
                     .isEqualTo(VolumeDialogSliderType.Stream(AudioManager.STREAM_SYSTEM))
@@ -87,7 +84,6 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
     fun streamsOrder() =
         with(kosmos) {
             testScope.runTest {
-                runCurrent()
                 fakeVolumeDialogController.onAccessibilityModeChanged(true)
                 fakeVolumeDialogController.updateState {
                     activeStream = AudioManager.STREAM_MUSIC
@@ -98,7 +94,6 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
                 }
 
                 val slidersModel by collectLastValue(underTest.sliders)
-                runCurrent()
 
                 assertThat(slidersModel!!.slider)
                     .isEqualTo(VolumeDialogSliderType.Stream(AudioManager.STREAM_MUSIC))
@@ -114,10 +109,9 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
         }
 
     @Test
-    fun accessibilityStreamDisabled_filteredOut() =
+    fun accessibilityStreamDisabledFilteredOut() =
         with(kosmos) {
             testScope.runTest {
-                runCurrent()
                 fakeVolumeDialogController.onAccessibilityModeChanged(false)
                 fakeVolumeDialogController.updateState {
                     states.put(AudioManager.STREAM_ACCESSIBILITY, buildStreamState())
@@ -125,7 +119,6 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
                 }
 
                 val slidersModel by collectLastValue(underTest.sliders)
-                runCurrent()
 
                 assertThat(slidersModel!!.slider)
                     .isEqualTo(VolumeDialogSliderType.Stream(AudioManager.STREAM_MUSIC))
@@ -134,10 +127,21 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
         }
 
     @Test
-    fun isTv_onlyActiveStream() =
+    fun noStreamsReturnsNothing() =
         with(kosmos) {
             testScope.runTest {
-                runCurrent()
+                fakeVolumeDialogController.updateState { activeStream = AudioManager.STREAM_SYSTEM }
+
+                val slidersModel by collectLastValue(underTest.sliders)
+
+                assertThat(slidersModel).isNull()
+            }
+        }
+
+    @Test
+    fun isTvOnlyActiveStream() =
+        with(kosmos) {
+            testScope.runTest {
                 isTv = true
                 fakeVolumeDialogController.updateState {
                     activeStream = AudioManager.STREAM_SYSTEM
@@ -146,7 +150,6 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
                 }
 
                 val slidersModel by collectLastValue(underTest.sliders)
-                runCurrent()
 
                 assertThat(slidersModel!!.slider)
                     .isEqualTo(VolumeDialogSliderType.Stream(AudioManager.STREAM_SYSTEM))
@@ -155,20 +158,17 @@ class VolumeDialogSlidersInteractorTest : SysuiTestCase() {
         }
 
     @Test
-    fun activeStreamChanges_showBoth() {
+    fun activeStreamChangesShowBoth() {
         with(kosmos) {
             testScope.runTest {
-                runCurrent()
                 fakeVolumeDialogController.updateState {
                     activeStream = AudioManager.STREAM_SYSTEM
                     states.put(AudioManager.STREAM_MUSIC, buildStreamState())
                     states.put(AudioManager.STREAM_SYSTEM, buildStreamState())
                 }
                 val slidersModel by collectLastValue(underTest.sliders)
-                runCurrent()
 
                 fakeVolumeDialogController.updateState { activeStream = AudioManager.STREAM_MUSIC }
-                runCurrent()
 
                 assertThat(slidersModel!!.slider)
                     .isEqualTo(VolumeDialogSliderType.Stream(AudioManager.STREAM_SYSTEM))

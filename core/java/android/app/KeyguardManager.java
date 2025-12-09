@@ -467,7 +467,7 @@ public class KeyguardManager {
      * Controls whether notifications can be shown atop a securely locked screen in their full
      * private form (same as when the device is unlocked).
      *
-     * <p>Other sources like the DevicePolicyManger and Settings app can modify this configuration.
+     * <p>Other sources like the DevicePolicyManager and Settings app can modify this configuration.
      * The result is that private notifications are only shown if all sources allow it.
      *
      * @param allow secure notifications can be shown if {@code true},
@@ -1285,7 +1285,7 @@ public class KeyguardManager {
             if (response == null) {
                 return false;
             }
-            return response.getResponseCode() == VerifyCredentialResponse.RESPONSE_OK;
+            return response.isMatched();
         }
     }
 

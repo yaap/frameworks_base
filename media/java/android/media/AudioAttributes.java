@@ -25,7 +25,6 @@ import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.annotation.TestApi;
-// TODO switch from HIDL imports to AIDL
 import android.audio.policy.configuration.V7_0.AudioUsage;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.media.audiopolicy.AudioProductStrategy;
@@ -36,6 +35,7 @@ import android.os.Parcelable;
 import android.text.TextUtils;
 import android.util.IntArray;
 import android.util.Log;
+import android.util.SparseArray;
 import android.util.SparseIntArray;
 import android.util.proto.ProtoOutputStream;
 
@@ -98,8 +98,8 @@ public final class AudioAttributes implements Parcelable {
      */
     public final static int CONTENT_TYPE_MUSIC = 2;
     /**
-     * Content type value to use when the content type is a soundtrack, typically accompanying
-     * a movie or TV program.
+     * Content type value to use when the content type is the audio typically accompanying
+     * a movie or TV program, containing a mix of dialogue, music and sound effects.
      */
     public final static int CONTENT_TYPE_MOVIE = 3;
     /**
@@ -373,6 +373,13 @@ public final class AudioAttributes implements Parcelable {
     @TestApi
     public static int[] getSdkUsages() {
         return SDK_USAGES.toArray();
+    }
+
+    /**
+     * @hide
+     */
+    public static int getSuppressibleUsage(@AttributeSdkUsage int usage) {
+        return SUPPRESSIBLE_USAGES.get(usage);
     }
 
     /**
@@ -1194,24 +1201,22 @@ public final class AudioAttributes implements Parcelable {
         public Builder setInternalLegacyStreamType(int streamType) {
             mContentType = CONTENT_TYPE_UNKNOWN;
             mUsage = USAGE_UNKNOWN;
-            if (AudioProductStrategy.getAudioProductStrategies().size() > 0) {
-                AudioAttributes attributes =
-                        AudioProductStrategy.getAudioAttributesForStrategyWithLegacyStreamType(
-                                streamType);
-                if (attributes != null) {
-                    mUsage = attributes.mUsage;
-                    // on purpose ignoring the content type: stream types are deprecated for
-                    // playback, making assumptions about the content type is prone to
-                    // interpretation errors for ambiguous types such as STREAM_TTS and STREAM_MUSIC
-                    //mContentType = attributes.mContentType;
-                    mFlags = attributes.getAllFlags();
-                    mMuteHapticChannels = attributes.areHapticChannelsMuted();
-                    mIsContentSpatialized = attributes.isContentSpatialized();
-                    mSpatializationBehavior = attributes.getSpatializationBehavior();
-                    mTags = attributes.mTags;
-                    mBundle = attributes.mBundle;
-                    mSource = attributes.mSource;
-                }
+            AudioAttributes attributes =
+                    AudioProductStrategy.getAudioAttributesForStrategyWithLegacyStreamType(
+                            streamType);
+            if (attributes != null) {
+                mUsage = attributes.mUsage;
+                // on purpose ignoring the content type: stream types are deprecated for
+                // playback, making assumptions about the content type is prone to
+                // interpretation errors for ambiguous types such as STREAM_TTS and STREAM_MUSIC
+                //mContentType = attributes.mContentType;
+                mFlags = attributes.getAllFlags();
+                mMuteHapticChannels = attributes.areHapticChannelsMuted();
+                mIsContentSpatialized = attributes.isContentSpatialized();
+                mSpatializationBehavior = attributes.getSpatializationBehavior();
+                mTags = attributes.mTags;
+                mBundle = attributes.mBundle;
+                mSource = attributes.mSource;
             }
             switch (streamType) {
                 case AudioSystem.STREAM_VOICE_CALL:
@@ -1503,9 +1508,52 @@ public final class AudioAttributes implements Parcelable {
                 + " content=" + contentTypeToString()
                 + (mSource != MediaRecorder.AudioSource.AUDIO_SOURCE_INVALID
                     ? " source=" + MediaRecorder.toLogFriendlyAudioSource(mSource) : "")
-                + " flags=0x" + Integer.toHexString(mFlags).toUpperCase()
+                + " flags=0x" + Integer.toHexString(mFlags).toUpperCase() + flagsToString()
                 + " tags=" + mFormattedTags
                 + " bundle=" + (mBundle == null ? "null" : mBundle.toString()));
+    }
+
+    private static final SparseArray<String> FLAG_NAMES = new SparseArray<>(17);
+
+    static {
+        FLAG_NAMES.put(AudioAttributes.FLAG_AUDIBILITY_ENFORCED, "FLAG_AUDIBILITY_ENFORCED");
+        FLAG_NAMES.put(AudioAttributes.FLAG_SECURE, "FLAG_SECURE");
+        FLAG_NAMES.put(AudioAttributes.FLAG_SCO, "FLAG_SCO");
+        FLAG_NAMES.put(AudioAttributes.FLAG_BEACON, "FLAG_BEACON");
+        FLAG_NAMES.put(AudioAttributes.FLAG_HW_AV_SYNC, "FLAG_HW_AV_SYNC");
+        FLAG_NAMES.put(AudioAttributes.FLAG_HW_HOTWORD, "FLAG_HW_HOTWORD");
+        FLAG_NAMES.put(AudioAttributes.FLAG_BYPASS_INTERRUPTION_POLICY,
+                "FLAG_BYPASS_INTERRUPTION_POLICY");
+        FLAG_NAMES.put(AudioAttributes.FLAG_BYPASS_MUTE, "FLAG_BYPASS_MUTE");
+        FLAG_NAMES.put(AudioAttributes.FLAG_LOW_LATENCY, "FLAG_LOW_LATENCY");
+        FLAG_NAMES.put(AudioAttributes.FLAG_DEEP_BUFFER, "FLAG_DEEP_BUFFER");
+        FLAG_NAMES.put(AudioAttributes.FLAG_NO_MEDIA_PROJECTION, "FLAG_NO_MEDIA_PROJECTION");
+        FLAG_NAMES.put(AudioAttributes.FLAG_MUTE_HAPTIC, "FLAG_MUTE_HAPTIC");
+        FLAG_NAMES.put(AudioAttributes.FLAG_NO_SYSTEM_CAPTURE, "FLAG_NO_SYSTEM_CAPTURE");
+        FLAG_NAMES.put(AudioAttributes.FLAG_CAPTURE_PRIVATE, "FLAG_CAPTURE_PRIVATE");
+        FLAG_NAMES.put(AudioAttributes.FLAG_CONTENT_SPATIALIZED, "FLAG_CONTENT_SPATIALIZED");
+        FLAG_NAMES.put(AudioAttributes.FLAG_NEVER_SPATIALIZE, "FLAG_NEVER_SPATIALIZE");
+        FLAG_NAMES.put(AudioAttributes.FLAG_CALL_REDIRECTION, "FLAG_CALL_REDIRECTION");
+    }
+
+    private String flagsToString() {
+        if (mFlags == 0) {
+            return "";
+        }
+        String separator = (Integer.bitCount(mFlags) > 1) ? "+" : "";
+        StringBuilder sb = new StringBuilder("(");
+        final int numFlags = FLAG_NAMES.size();
+        boolean first = true;
+        for (int i = 0; i < numFlags; i++) {
+            int flagKey = FLAG_NAMES.keyAt(i);
+            String flagName = FLAG_NAMES.valueAt(i);
+            if ((mFlags & flagKey) == flagKey) {
+                sb.append(first ? "" : separator).append(flagName);
+                first = false;
+            }
+        }
+        sb.append(") ");
+        return sb.toString();
     }
 
     /** @hide */
@@ -1819,16 +1867,18 @@ public final class AudioAttributes implements Parcelable {
                     AudioSystem.STREAM_MUSIC : AudioSystem.STREAM_TTS;
         }
 
-        if (AudioProductStrategy.getAudioProductStrategies().size() > 0) {
-            return AudioProductStrategy.getLegacyStreamTypeForStrategyWithAudioAttributes(aa);
+        int stream = AudioProductStrategy.getLegacyStreamTypeForStrategyWithAudioAttributes(aa);
+        if (stream != AudioSystem.STREAM_DEFAULT) {
+            return stream;
         }
         // usage to stream type mapping
         switch (aa.getUsage()) {
             case USAGE_MEDIA:
             case USAGE_GAME:
             case USAGE_ASSISTANCE_NAVIGATION_GUIDANCE:
-            case USAGE_ASSISTANT:
                 return AudioSystem.STREAM_MUSIC;
+            case USAGE_ASSISTANT:
+                return AudioSystem.STREAM_ASSISTANT;
             case USAGE_ASSISTANCE_SONIFICATION:
                 return AudioSystem.STREAM_SYSTEM;
             case USAGE_VOICE_COMMUNICATION:

@@ -16,6 +16,8 @@
 
 package android.view;
 
+import static android.app.UiModeManager.FORCE_INVERT_TYPE_DARK;
+import static android.app.UiModeManager.MODE_NIGHT_YES;
 import static android.util.SequenceUtils.getInitSeq;
 import static android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING;
 import static android.view.InputDevice.SOURCE_ROTARY_ENCODER;
@@ -41,7 +43,6 @@ import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
 import static android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
 import static android.view.WindowManager.LayoutParams.TYPE_TOAST;
 import static android.view.accessibility.Flags.FLAG_FORCE_INVERT_COLOR;
-import static android.view.flags.Flags.FLAG_ADD_SCHANDLE_TO_VRI_SURFACE;
 import static android.view.flags.Flags.FLAG_TOOLKIT_FRAME_RATE_BY_SIZE_READ_ONLY;
 import static android.view.flags.Flags.FLAG_TOOLKIT_SET_FRAME_RATE_READ_ONLY;
 import static android.view.flags.Flags.FLAG_VIEW_VELOCITY_API;
@@ -58,16 +59,20 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import android.annotation.NonNull;
 import android.app.Instrumentation;
 import android.app.UiModeManager;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.ForceDarkType;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManagerGlobal;
 import android.os.Binder;
 import android.os.VibrationAttributes;
+import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.annotations.RequiresFlagsEnabled;
@@ -76,11 +81,15 @@ import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.provider.Settings;
 import android.sysprop.ViewProperties;
+import android.testing.TestableContext;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.MergedConfiguration;
+import android.util.SequenceUtils;
 import android.view.WindowInsets.Side;
 import android.view.WindowInsets.Type;
 import android.view.accessibility.AccessibilityManager;
+import android.window.ClientWindowFrames;
 
 import androidx.test.annotation.UiThreadTest;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -102,6 +111,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.lang.reflect.Field;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -166,6 +176,7 @@ public class ViewRootImplTest {
     public void teardown() {
         ShellIdentityUtils.invokeWithShellPermissions(() -> {
             Settings.Secure.resetToDefaults(sContext.getContentResolver(), TAG);
+            Settings.System.resetToDefaults(sContext.getContentResolver(), TAG);
 
             var uiModeManager = sContext.getSystemService(UiModeManager.class);
             uiModeManager.setNightMode(UiModeManager.MODE_NIGHT_NO);
@@ -391,6 +402,139 @@ public class ViewRootImplTest {
     }
 
     @Test
+    public void enteringTouchMode_whenWindowIsFocused_nothingFocused_noChange() throws Throwable {
+        sInstrumentation.setInTouchMode(false);
+        setUpViewAndApplyFocusStates(/* windowFocused = */ true, /* viewFocused= */ false);
+
+        assertThat(mView.hasFocus()).isFalse();
+
+        sInstrumentation.setInTouchMode(true);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isFalse();
+    }
+
+    @Test
+    public void enteringTouchMode_whenWindowIsFocused_withFocusedItem_noChange() throws Throwable {
+        sInstrumentation.setInTouchMode(false);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ true, /* viewFocused= */ true);
+
+        assertThat(mView.hasFocus()).isTrue();
+
+        sInstrumentation.setInTouchMode(true);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isTrue();
+    }
+
+    @Test
+    public void enteringTouchMode_whenWindowIsNotFocused_nothingFocused_noChange()
+            throws Throwable {
+        sInstrumentation.setInTouchMode(false);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ false, /* viewFocused= */ false);
+
+        assertThat(mView.hasFocus()).isFalse();
+
+        sInstrumentation.setInTouchMode(true);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isFalse();
+    }
+
+    @Test
+    public void enteringTouchMode_whenWindowIsNotFocused_withFocusedItem_noChange()
+            throws Throwable {
+        sInstrumentation.setInTouchMode(false);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ false, /* viewFocused= */ true);
+
+        assertThat(mView.hasFocus()).isTrue();
+
+        sInstrumentation.setInTouchMode(true);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isTrue();
+    }
+
+    @Test
+    public void leavingTouchMode_whenWindowIsFocused_nothingFocused_assignsDefaultFocus()
+            throws Throwable {
+        sInstrumentation.setInTouchMode(true);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ true, /* viewFocused= */ false);
+
+        assertThat(mView.hasFocus()).isFalse();
+
+        sInstrumentation.setInTouchMode(false);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isTrue();
+    }
+
+    @Test
+    public void leavingTouchMode_whenWindowIsFocused_withFocusedItem_noChange() throws Throwable {
+        sInstrumentation.setInTouchMode(true);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ true, /* viewFocused= */ true);
+
+        assertThat(mView.hasFocus()).isTrue();
+
+        sInstrumentation.setInTouchMode(false);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isTrue();
+    }
+
+    @Test
+    public void leavingTouchMode_whenWindowIsNotFocused_withFocusedItem_noChange()
+            throws Throwable {
+        sInstrumentation.setInTouchMode(true);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ false, /* viewFocused= */ true);
+
+        assertThat(mView.hasFocus()).isTrue();
+
+        sInstrumentation.setInTouchMode(false);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isTrue();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_DEFER_RESUME_FOCUS_IN_NON_FOCUSED_WINDOW)
+    public void leavingTouchMode_whenWindowIsNotFocused_nothingFocused_noChange() throws Throwable {
+        sInstrumentation.setInTouchMode(true);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ false, /* viewFocused= */ false);
+
+        assertThat(mView.hasFocus()).isFalse();
+
+        sInstrumentation.setInTouchMode(false);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isFalse();
+    }
+
+    @Test
+    @DisableFlags(Flags.FLAG_DEFER_RESUME_FOCUS_IN_NON_FOCUSED_WINDOW)
+    public void leavingTouchMode_whenWindowIsNotFocused_nothingFocused_assignsDefaultFocus() throws
+            Throwable {
+        sInstrumentation.setInTouchMode(true);
+        setUpViewAndApplyFocusStates(/* windowFocused= */ false, /* viewFocused= */ false);
+
+        assertThat(mView.hasFocus()).isFalse();
+
+        sInstrumentation.setInTouchMode(false);
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+
+        assertThat(mView.hasFocus()).isTrue();
+    }
+
+    @Test
     public void whenDispatchFakeFocus_focusDoesNotPersist() throws Exception {
         mView = new View(sContext);
         attachViewToWindow(mView);
@@ -405,7 +549,6 @@ public class ViewRootImplTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_SURFACE_CONTROL_INPUT_RECEIVER)
     public void whenViewIsAttachedToWindow_getHostToken() {
         mView = new View(sContext);
         attachViewToWindow(mView);
@@ -453,6 +596,42 @@ public class ViewRootImplTest {
         checkKeyEvent(() -> {
             mViewRootImpl.setPausedForTransition(true /*paused*/);
         }, false /*shouldReceiveKey*/);
+    }
+
+    @Test
+    public void relayoutOnWindowSizeChange() throws Throwable {
+        mView = new View(sContext);
+        attachViewToWindow(mView);
+
+        final Configuration config = mView.getResources().getConfiguration();
+        final MergedConfiguration mergedConfiguration = new MergedConfiguration(config, config);
+        final ClientWindowFrames frames = new ClientWindowFrames();
+        frames.frame.set(config.windowConfiguration.getBounds());
+        frames.frame.scale(0.5f);
+        frames.seq = SequenceUtils.getInitSeq() + 10;
+        final Field fieldWindow = ViewRootImpl.class.getDeclaredField("mWindow");
+        fieldWindow.setAccessible(true);
+        final Field fieldRelayoutSeq = ViewRootImpl.class.getDeclaredField("mRelayoutSeq");
+        fieldRelayoutSeq.setAccessible(true);
+        final int initRelayoutSeq = fieldRelayoutSeq.getInt(mView.getViewRootImpl());
+        final IWindow iWindow = (IWindow) fieldWindow.get(mView.getViewRootImpl());
+        final WindowRelayoutResult layout = new WindowRelayoutResult(frames, mergedConfiguration,
+                new InsetsState(), null /* insetControls */);
+        iWindow.resized(layout, true /* reportDraw */, false /* forceLayout */,
+                mView.getDisplay().getDisplayId(), false /* syncWithBuffers */,
+                false /* dragResizing */);
+        final int[] resizedRelayoutSeq = new int[1];
+        runAfterDraw(() -> {
+            try {
+                resizedRelayoutSeq[0] = fieldRelayoutSeq.getInt(mView.getViewRootImpl());
+            } catch (IllegalAccessException e) {
+                resizedRelayoutSeq[0] = -1;
+            }
+        });
+        waitForAfterDraw();
+
+        assertWithMessage("Window size change must invoke relayoutWindow")
+                .that(resizedRelayoutSeq[0]).isGreaterThan(initRelayoutSeq);
     }
 
     @UiThreadTest
@@ -1368,7 +1547,7 @@ public class ViewRootImplTest {
 
         waitForFrameRateCategoryToSettle(mView);
 
-         // reset the frame rate category counts
+        // reset the frame rate category counts
         for (int i = 0; i < 5; i++) {
             Thread.sleep(delay);
             sInstrumentation.runOnMainSync(() -> {
@@ -1490,6 +1669,129 @@ public class ViewRootImplTest {
 
     @Test
     @EnableFlags(FLAG_FORCE_INVERT_COLOR)
+    public void determineForceDarkType_isOverrideDefault_lightTheme_forceInverted()
+            throws Exception {
+        TestableContext testableContext = new TestableContext(sContext);
+        final UiModeManager mockUiModeManager = mock(UiModeManager.class);
+        when(mockUiModeManager.getForceInvertOverrideState()).thenReturn(
+                UiModeManager.FORCE_INVERT_PACKAGE_ALLOWED);
+        testableContext.addMockSystemService(Context.UI_MODE_SERVICE, mockUiModeManager);
+        sInstrumentation.runOnMainSync(() -> mViewRootImpl =
+                new ViewRootImpl(testableContext, testableContext.getDisplayNoVerify()));
+
+        when(mockUiModeManager.getForceInvertState()).thenReturn(FORCE_INVERT_TYPE_DARK);
+        when(mockUiModeManager.getNightMode()).thenReturn(MODE_NIGHT_YES);
+
+        waitForSystemNightModeActivated(testableContext, true);
+
+        setUpViewAttributes(testableContext, /* isLightTheme= */ true, /* isForceDarkAllowed= */
+                false);
+
+        TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
+                () -> (mViewRootImpl.determineForceDarkType()
+                        == ForceDarkType.FORCE_INVERT_COLOR_DARK));
+    }
+
+    @Test
+    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
+    public void determineForceDarkType_isOverrideEnabled_lightTheme_forceInverted()
+            throws Exception {
+        TestableContext testableContext = new TestableContext(sContext);
+        final UiModeManager mockUiModeManager = mock(UiModeManager.class);
+        when(mockUiModeManager.getForceInvertOverrideState()).thenReturn(
+                UiModeManager.FORCE_INVERT_PACKAGE_ALWAYS_ENABLE);
+        testableContext.addMockSystemService(Context.UI_MODE_SERVICE, mockUiModeManager);
+        sInstrumentation.runOnMainSync(() -> mViewRootImpl =
+                new ViewRootImpl(testableContext, testableContext.getDisplayNoVerify()));
+
+        when(mockUiModeManager.getForceInvertState()).thenReturn(FORCE_INVERT_TYPE_DARK);
+        when(mockUiModeManager.getNightMode()).thenReturn(MODE_NIGHT_YES);
+
+        waitForSystemNightModeActivated(testableContext, true);
+
+        setUpViewAttributes(testableContext, /* isLightTheme= */ true, /* isForceDarkAllowed= */
+                false);
+
+        TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
+                () -> (mViewRootImpl.determineForceDarkType()
+                        == ForceDarkType.FORCE_INVERT_COLOR_DARK));
+    }
+
+    @Test
+    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
+    public void determineForceDarkType_isOverrideEnabled_darkTheme_forceInverted()
+            throws Exception {
+        TestableContext testableContext = new TestableContext(sContext);
+        final UiModeManager mockUiModeManager = mock(UiModeManager.class);
+        when(mockUiModeManager.getForceInvertOverrideState()).thenReturn(
+                UiModeManager.FORCE_INVERT_PACKAGE_ALWAYS_ENABLE);
+        testableContext.addMockSystemService(Context.UI_MODE_SERVICE, mockUiModeManager);
+        sInstrumentation.runOnMainSync(() -> mViewRootImpl =
+                new ViewRootImpl(testableContext, testableContext.getDisplayNoVerify()));
+
+        when(mockUiModeManager.getForceInvertState()).thenReturn(FORCE_INVERT_TYPE_DARK);
+        when(mockUiModeManager.getNightMode()).thenReturn(MODE_NIGHT_YES);
+
+        waitForSystemNightModeActivated(testableContext, true);
+
+        setUpViewAttributes(testableContext, /* isLightTheme= */ false, /* isForceDarkAllowed= */
+                false);
+
+        TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
+                () -> (mViewRootImpl.determineForceDarkType()
+                        == ForceDarkType.FORCE_INVERT_COLOR_DARK));
+    }
+
+    @Test
+    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
+    public void determineForceDarkType_isOverrideDisabled_lightTheme_returnsNone()
+            throws Exception {
+        TestableContext testableContext = new TestableContext(sContext);
+        final UiModeManager mockUiModeManager = mock(UiModeManager.class);
+        when(mockUiModeManager.getForceInvertOverrideState()).thenReturn(
+                UiModeManager.FORCE_INVERT_PACKAGE_ALWAYS_DISABLE);
+        testableContext.addMockSystemService(Context.UI_MODE_SERVICE, mockUiModeManager);
+        sInstrumentation.runOnMainSync(() -> mViewRootImpl =
+                new ViewRootImpl(testableContext, testableContext.getDisplayNoVerify()));
+
+        when(mockUiModeManager.getForceInvertState()).thenReturn(FORCE_INVERT_TYPE_DARK);
+        when(mockUiModeManager.getNightMode()).thenReturn(MODE_NIGHT_YES);
+
+        waitForSystemNightModeActivated(testableContext, true);
+
+        setUpViewAttributes(testableContext, /* isLightTheme= */ true, /* isForceDarkAllowed= */
+                false);
+
+        TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
+                () -> (mViewRootImpl.determineForceDarkType() == ForceDarkType.NONE));
+    }
+
+    @Test
+    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
+    public void determineForceDarkType_isOverrideDisabled_darkTheme_returnsNone()
+            throws Exception {
+        TestableContext testableContext = new TestableContext(sContext);
+        final UiModeManager mockUiModeManager = mock(UiModeManager.class);
+        when(mockUiModeManager.getForceInvertOverrideState()).thenReturn(
+                UiModeManager.FORCE_INVERT_PACKAGE_ALWAYS_DISABLE);
+        testableContext.addMockSystemService(Context.UI_MODE_SERVICE, mockUiModeManager);
+        sInstrumentation.runOnMainSync(() -> mViewRootImpl =
+                new ViewRootImpl(testableContext, testableContext.getDisplayNoVerify()));
+
+        when(mockUiModeManager.getForceInvertState()).thenReturn(FORCE_INVERT_TYPE_DARK);
+        when(mockUiModeManager.getNightMode()).thenReturn(MODE_NIGHT_YES);
+
+        waitForSystemNightModeActivated(testableContext, true);
+
+        setUpViewAttributes(testableContext, /* isLightTheme= */ false, /* isForceDarkAllowed= */
+                false);
+
+        TestUtils.waitUntil("Waiting for ForceDarkType to be ready",
+                () -> (mViewRootImpl.determineForceDarkType() == ForceDarkType.NONE));
+    }
+
+    @Test
+    @EnableFlags(FLAG_FORCE_INVERT_COLOR)
     public void determineForceDarkType_notLightTheme_returnsNone() throws Exception {
         // Set up configurations for force invert color
         waitForSystemNightModeActivated(true);
@@ -1547,7 +1849,6 @@ public class ViewRootImplTest {
     }
 
     @Test
-    @RequiresFlagsEnabled({FLAG_ADD_SCHANDLE_TO_VRI_SURFACE})
     public void testASurfaceControl_createFromWindow() throws Throwable {
         mView = new View(sContext);
         attachViewToWindow(mView);
@@ -1594,7 +1895,6 @@ public class ViewRootImplTest {
     }
 
     @Test
-    @EnableFlags(android.view.accessibility.Flags.FLAG_FOCUS_RECT_MIN_SIZE)
     public void testAdjustAccessibilityFocusedBounds_largeEnoughBoundsAreUnchanged() {
         final int strokeWidth = sContext.getSystemService(AccessibilityManager.class)
                 .getAccessibilityFocusStrokeWidth();
@@ -1610,7 +1910,6 @@ public class ViewRootImplTest {
     }
 
     @Test
-    @EnableFlags(android.view.accessibility.Flags.FLAG_FOCUS_RECT_MIN_SIZE)
     public void testAdjustAccessibilityFocusedBounds_smallBoundsAreExpanded() {
         final int strokeWidth = sContext.getSystemService(AccessibilityManager.class)
                 .getAccessibilityFocusStrokeWidth();
@@ -1661,6 +1960,41 @@ public class ViewRootImplTest {
         } finally {
             threadRunning.set(0);
         }
+    }
+
+    private void setUpViewAndApplyFocusStates(boolean windowFocused, boolean viewFocused)
+            throws Throwable {
+        mView = new View(sContext);
+        mView.setFocusableInTouchMode(true);
+        mView.setFocusable(true);
+        attachViewToWindow(mView);
+        sInstrumentation.runOnMainSync(() -> {
+            mView.setVisibility(View.VISIBLE);
+            mView.layout(0, 0, 100, 100);
+            mView.invalidate();
+            runAfterDraw(() -> {
+            });
+        });
+        waitForAfterDraw();
+        mViewRootImpl = mView.getViewRootImpl();
+        waitForFrameRateCategoryToSettle(mView);
+
+        sInstrumentation.runOnMainSync(() -> {
+            mViewRootImpl.windowFocusChanged(windowFocused);
+        });
+        sInstrumentation.waitForIdleSync();
+        waitForFrameRateCategoryToSettle(mView);
+        assertThat(mView.hasWindowFocus()).isEqualTo(windowFocused);
+
+        sInstrumentation.runOnMainSync(() -> {
+            if (viewFocused) {
+                mView.requestFocus();
+            } else {
+                mView.clearFocusInternal(null, true, false);
+            }
+        });
+        waitForAfterDraw();
+        waitForFrameRateCategoryToSettle(mView);
     }
 
     static class InputView extends View {
@@ -1771,18 +2105,26 @@ public class ViewRootImplTest {
     }
 
     private void waitForSystemNightModeActivated(boolean active) {
+        waitForSystemNightModeActivated(sContext, active);
+    }
+
+    private void waitForSystemNightModeActivated(Context context, boolean active) {
         ShellIdentityUtils.invokeWithShellPermissions(() ->
                 sInstrumentation.runOnMainSync(() -> {
-                    var uiModeManager = sContext.getSystemService(UiModeManager.class);
+                    var uiModeManager = context.getSystemService(UiModeManager.class);
                     uiModeManager.setNightModeActivated(active);
                 }));
         sInstrumentation.waitForIdleSync();
     }
 
     private void enableForceInvertColor(boolean enabled) {
+        enableForceInvertColor(sContext, enabled);
+    }
+
+    private void enableForceInvertColor(Context context, boolean enabled) {
         ShellIdentityUtils.invokeWithShellPermissions(() -> {
             Settings.Secure.putInt(
-                    sContext.getContentResolver(),
+                    context.getContentResolver(),
                     Settings.Secure.ACCESSIBILITY_FORCE_INVERT_COLOR_ENABLED,
                     enabled ? 1 : 0
             );
@@ -1790,6 +2132,11 @@ public class ViewRootImplTest {
     }
 
     private void setUpViewAttributes(boolean isLightTheme, boolean isForceDarkAllowed) {
+        setUpViewAttributes(sContext, isLightTheme, isForceDarkAllowed);
+    }
+
+    private void setUpViewAttributes(Context context, boolean isLightTheme,
+            boolean isForceDarkAllowed) {
         ShellIdentityUtils.invokeWithShellPermissions(() -> {
             int themeId;
             if (isForceDarkAllowed) {
@@ -1805,17 +2152,17 @@ public class ViewRootImplTest {
                     themeId = R.style.ForceDarkAllowedFalse_Dark;
                 }
             }
-            sContext.setTheme(themeId);
+            context.setTheme(themeId);
         });
 
         sInstrumentation.runOnMainSync(() -> {
-            View view = new View(sContext);
+            View view = new View(context);
             WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams(
                     TYPE_APPLICATION_OVERLAY);
             layoutParams.token = new Binder();
             view.setLayoutParams(layoutParams);
             mViewRootImpl.setView(view, layoutParams, /* panelParentView= */ null);
-            mViewRootImpl.updateConfiguration(sContext.getDisplayNoVerify().getDisplayId());
+            mViewRootImpl.updateConfiguration(context.getDisplayNoVerify().getDisplayId());
         });
     }
 }

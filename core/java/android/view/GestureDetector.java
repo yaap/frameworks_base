@@ -18,10 +18,10 @@ package android.view;
 
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__DEEP_PRESS;
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__DOUBLE_TAP;
+import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__FLING;
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS;
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__SCROLL;
 import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__SINGLE_TAP;
-import static com.android.internal.util.FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__UNKNOWN_CLASSIFICATION;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -250,6 +250,7 @@ public class GestureDetector {
     private int mTapTimeout;
     private int mDoubleTapTimeout;
     private int mDoubleTapMinTime;
+    private ViewConfiguration mViewConfiguration = null;
 
     // constants for Message.what used by GestureHandler below
     private static final int SHOW_PRESS = 1;
@@ -503,17 +504,17 @@ public class GestureDetector {
             mDoubleTapMinTime = ViewConfiguration.getDoubleTapMinTime();
         } else {
             StrictMode.assertConfigurationContext(context, "GestureDetector#init");
-            final ViewConfiguration configuration = ViewConfiguration.get(context);
-            touchSlop = configuration.getScaledTouchSlop();
-            doubleTapTouchSlop = configuration.getScaledDoubleTapTouchSlop();
-            doubleTapSlop = configuration.getScaledDoubleTapSlop();
-            mMinimumFlingVelocity = configuration.getScaledMinimumFlingVelocity();
-            mMaximumFlingVelocity = configuration.getScaledMaximumFlingVelocity();
-            mAmbiguousGestureMultiplier = configuration.getScaledAmbiguousGestureMultiplier();
+            mViewConfiguration = ViewConfiguration.get(context);
+            touchSlop = mViewConfiguration.getScaledTouchSlop();
+            doubleTapTouchSlop = mViewConfiguration.getScaledDoubleTapTouchSlop();
+            doubleTapSlop = mViewConfiguration.getScaledDoubleTapSlop();
+            mMinimumFlingVelocity = mViewConfiguration.getScaledMinimumFlingVelocity();
+            mMaximumFlingVelocity = mViewConfiguration.getScaledMaximumFlingVelocity();
+            mAmbiguousGestureMultiplier = mViewConfiguration.getScaledAmbiguousGestureMultiplier();
             if (Flags.viewconfigurationApis()) {
-                mTapTimeout = configuration.getTapTimeoutMillis();
-                mDoubleTapTimeout = configuration.getDoubleTapTimeoutMillis();
-                mDoubleTapMinTime = configuration.getDoubleTapMinTimeMillis();
+                mTapTimeout = mViewConfiguration.getTapTimeoutMillis();
+                mDoubleTapTimeout = mViewConfiguration.getDoubleTapTimeoutMillis();
+                mDoubleTapMinTime = mViewConfiguration.getDoubleTapMinTimeMillis();
             } else {
                 mTapTimeout = ViewConfiguration.getTapTimeout();
                 mDoubleTapTimeout = ViewConfiguration.getDoubleTapTimeout();
@@ -687,7 +688,7 @@ public class GestureDetector {
                                     TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS,
                                     0 /* arg2 */),
                             mCurrentDownEvent.getDownTime()
-                                    + ViewConfiguration.getLongPressTimeout());
+                                    + getLongPressTimeoutMillis());
                 }
                 mHandler.sendEmptyMessageAtTime(SHOW_PRESS,
                         mCurrentDownEvent.getDownTime() + mTapTimeout);
@@ -728,14 +729,14 @@ public class GestureDetector {
                             // will happen in response to user input. To prevent this,
                             // reschedule long press with a modified timeout.
                             mHandler.removeMessages(LONG_PRESS);
-                            final long longPressTimeout = ViewConfiguration.getLongPressTimeout();
                             mHandler.sendMessageAtTime(
                                     mHandler.obtainMessage(
                                             LONG_PRESS,
                                             TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__LONG_PRESS,
                                             0 /* arg2 */),
                                     ev.getDownTime()
-                                        + (long) (longPressTimeout * mAmbiguousGestureMultiplier));
+                                        + (long) (getLongPressTimeoutMillis()
+                                            * mAmbiguousGestureMultiplier));
                         }
                         // Inhibit default scroll. If a gesture is ambiguous, we prevent scroll
                         // until the gesture is resolved.
@@ -796,7 +797,6 @@ public class GestureDetector {
                         mDoubleTapListener.onSingleTapConfirmed(ev);
                     }
                 } else if (!mIgnoreNextUpEvent) {
-
                     // A fling must travel the minimum tap distance
                     final VelocityTracker velocityTracker = mVelocityTracker;
                     final int pointerId = ev.getPointerId(0);
@@ -806,6 +806,9 @@ public class GestureDetector {
 
                     if ((Math.abs(velocityY) > mMinimumFlingVelocity)
                             || (Math.abs(velocityX) > mMinimumFlingVelocity)) {
+                        recordGestureClassification(
+                                TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__FLING,
+                                (float) Math.hypot(velocityX, velocityY) / 1000);
                         handled = mListener.onFling(mCurrentDownEvent, ev, velocityX, velocityY);
                     }
                 }
@@ -908,6 +911,12 @@ public class GestureDetector {
         mIgnoreNextUpEvent = false;
     }
 
+    private int getLongPressTimeoutMillis() {
+        return mViewConfiguration != null && Flags.viewconfigurationApis()
+                ? mViewConfiguration.getLongPressTimeoutMillis()
+                : ViewConfiguration.getLongPressTimeout();
+    }
+
     private boolean isConsideredDoubleTap(@NonNull MotionEvent firstDown,
             @NonNull MotionEvent firstUp, @NonNull MotionEvent secondDown) {
         if (!mAlwaysInBiggerTapRegion) {
@@ -935,10 +944,14 @@ public class GestureDetector {
     }
 
     private void recordGestureClassification(int classification) {
+        recordGestureClassification(classification, 0 /* velocity */);
+    }
+
+    private void recordGestureClassification(int classification, float velocity) {
+        // Only record the first classification for an event stream -- except for FLING,
+        // which can occur at the end of an event stream after a SCROLL.
         if (mHasRecordedClassification
-                || classification
-                    == TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__UNKNOWN_CLASSIFICATION) {
-            // Only record the first classification for an event stream.
+                && classification != TOUCH_GESTURE_CLASSIFIED__CLASSIFICATION__FLING) {
             return;
         }
         if (mCurrentDownEvent == null || mCurrentMotionEvent == null) {
@@ -946,13 +959,21 @@ public class GestureDetector {
             mHasRecordedClassification = true;
             return;
         }
+        if (velocity == 0 && mVelocityTracker != null) {
+            // Compute velocity if it was not provided (i.e. for non-FLING gestures).
+            mVelocityTracker.computeCurrentVelocity(1000, mMaximumFlingVelocity);
+            final int pointerId = mCurrentMotionEvent.getPointerId(0);
+            velocity = (float) Math.hypot(mVelocityTracker.getXVelocity(pointerId),
+                                          mVelocityTracker.getYVelocity(pointerId)) / 1000;
+        }
         FrameworkStatsLog.write(
                 FrameworkStatsLog.TOUCH_GESTURE_CLASSIFIED,
                 getClass().getName(),
                 classification,
                 (int) (SystemClock.uptimeMillis() - mCurrentMotionEvent.getDownTime()),
                 (float) Math.hypot(mCurrentMotionEvent.getRawX() - mCurrentDownEvent.getRawX(),
-                                   mCurrentMotionEvent.getRawY() - mCurrentDownEvent.getRawY()));
+                                   mCurrentMotionEvent.getRawY() - mCurrentDownEvent.getRawY()),
+                (float) velocity);
         mHasRecordedClassification = true;
     }
 }

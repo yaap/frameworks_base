@@ -18,6 +18,8 @@ package com.android.systemui.media.remedia.data.repository
 
 import android.content.packageManager
 import android.media.session.MediaSession
+import android.os.UserHandle
+import android.provider.Settings
 import androidx.test.annotation.UiThreadTest
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
@@ -30,6 +32,7 @@ import com.android.systemui.media.controls.shared.model.MediaData
 import com.android.systemui.media.remedia.data.model.MediaDataModel
 import com.android.systemui.res.R
 import com.android.systemui.testKosmos
+import com.android.systemui.util.settings.fakeSettings
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -104,6 +107,28 @@ class MediaRepositoryTest : SysuiTestCase() {
             assertThat(currentUserEntries?.get(instanceId)).isEqualTo(userMedia)
 
             assertThat(underTest.removeCurrentUserMediaEntry(instanceId)).isEqualTo(userMedia)
+        }
+
+    @Test
+    fun addMultipleCurrentUserMediaEntries_thenRemove_returnsValues() =
+        testScope.runTest {
+            val currentUserEntries by collectLastValue(underTest.currentUserEntries)
+
+            val firstInstanceId = InstanceId.fakeInstanceId(123)
+            val secondInstanceId = InstanceId.fakeInstanceId(321)
+            val firstUserMedia = createMediaData("app1", false, LOCAL, false, firstInstanceId)
+            val secondUserMedia = createMediaData("app2", true, LOCAL, false, secondInstanceId)
+
+            addCurrentUserMediaEntry(firstUserMedia)
+            addCurrentUserMediaEntry(secondUserMedia)
+
+            assertThat(currentUserEntries?.get(firstInstanceId)).isEqualTo(firstUserMedia)
+            assertThat(currentUserEntries?.get(secondInstanceId)).isEqualTo(secondUserMedia)
+
+            assertThat(underTest.removeCurrentUserMediaEntry(firstInstanceId))
+                .isEqualTo(firstUserMedia)
+            assertThat(underTest.removeCurrentUserMediaEntry(secondInstanceId))
+                .isEqualTo(secondUserMedia)
         }
 
     @Test
@@ -241,6 +266,30 @@ class MediaRepositoryTest : SysuiTestCase() {
                 .inOrder()
         }
 
+    @Test
+    fun toggleMediaControlsOnLockscreen() =
+        testScope.runTest {
+            val allowMediaOnLockscreen by collectLastValue(underTest.allowMediaPlayerOnLockscreen)
+
+            assertThat(allowMediaOnLockscreen).isTrue()
+
+            kosmos.fakeSettings.putBoolForUser(
+                Settings.Secure.MEDIA_CONTROLS_LOCK_SCREEN,
+                value = false,
+                UserHandle.USER_CURRENT,
+            )
+
+            assertThat(allowMediaOnLockscreen).isFalse()
+
+            kosmos.fakeSettings.putBoolForUser(
+                Settings.Secure.MEDIA_CONTROLS_LOCK_SCREEN,
+                value = true,
+                UserHandle.USER_CURRENT,
+            )
+
+            assertThat(allowMediaOnLockscreen).isTrue()
+        }
+
     private fun TestScope.addCurrentUserMediaEntry(data: MediaData) {
         underTest.addCurrentUserMediaEntry(data)
         runCurrent()
@@ -289,6 +338,7 @@ class MediaRepositoryTest : SysuiTestCase() {
             resumeAction = resumeAction,
             isExplicit = isExplicit,
             suggestionData = mediaModel.suggestionData,
+            token = session.sessionToken,
         )
     }
 

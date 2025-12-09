@@ -42,16 +42,6 @@ flag {
 }
 
 flag {
-  name: "high_contrast_text_inner_text_color"
-  namespace: "accessibility"
-  description: "Render text color by modifying its brightness instead of defaulting to black and white"
-  bug: "384793956"
-  metadata {
-      purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
   name: "hdr_10bit_plus"
   namespace: "core_graphics"
   description: "Use 10101010 and FP16 formats for HDR-UI when available"
@@ -179,25 +169,11 @@ flag {
 }
 
 flag {
-  name: "early_preload_gl_context"
-  namespace: "core_graphics"
-  description: "Preload GL context on renderThread preload. This improves app startup time for apps using GL."
-  bug: "383612849"
-}
-
-flag {
   name: "early_preinit_buffer_allocator"
   namespace: "core_graphics"
   description: "Initialize GraphicBufferAllocater on ViewRootImpl init, to avoid blocking on init during buffer allocation, improving app launch latency."
   bug: "389908734"
   is_fixed_read_only: true
-}
-
-flag {
-  name: "bitmap_parcel_ashmem_as_immutable"
-  namespace: "system_performance"
-  description: "Whether to parcel implicit copies of bitmaps to ashmem as immutable"
-  bug: "400807118"
 }
 
 flag {
@@ -213,4 +189,24 @@ flag {
   namespace: "core_graphics"
   description: "Add two helper constants to SurfaceControl to improve @IntDef lint"
   bug: "413710706"
+}
+
+flag {
+  name: "separate_pipeline_cache"
+  namespace: "core_graphics"
+  description: "Store pipeline cache objects in a separate cache independent of ShaderCache"
+  bug: "269117286"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+  name: "surfaceview_stretch_alignment"
+  namespace: "core_graphics"
+  description: "Fix SurfaceView alignment when overscroll stretch is occurring"
+  bug: "419836766"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }

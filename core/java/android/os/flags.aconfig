@@ -1,6 +1,5 @@
 package: "android.os"
 container: "system"
-container: "system"
 
 # keep-sorted start block=yes newline_separated=yes
 flag {
@@ -162,13 +161,6 @@ flag {
 }
 
 flag {
-     name: "app_zygote_retry_start"
-     namespace: "arc_next"
-     description: "Guard the new added retry logic in app zygote."
-     bug: "361799815"
-}
-
-flag {
     name: "async_trace_for_track"
     is_exported: true
     namespace: "perfetto"
@@ -210,6 +202,14 @@ flag {
 }
 
 flag {
+    name: "bluetooth_bugreport_mode"
+    is_exported: true
+    namespace: "bluetooth"
+    description: "Add bluetooth bugreport mode containing subset of log sections only related to bluetooth debugging."
+    bug: "410692617"
+}
+
+flag {
     name: "bugreport_multi_display_screenshot_enabled"
     namespace: "crumpet"
     description: "Enable a flag taking screenshots of all displays in bugreport."
@@ -239,18 +239,27 @@ flag {
 }
 
 flag {
-    name: "disallow_cellular_null_ciphers_restriction"
-    namespace: "cellular_security"
-    description: "Guards a new UserManager user restriction that admins can use to require cellular encryption on their managed devices."
-    bug: "276752881"
+    name: "enable_angle_deny_list"
+    namespace: "gpu"
+    description: "Whether to use native driver for apps in the denylist"
+    bug: "434014731"
 }
 
 flag {
-    name: "enable_angle_allow_list"
+    name: "enable_angle_for_games"
     namespace: "gpu"
-    description: "Whether to read from angle allowlist to determine if app should use ANGLE"
-    is_fixed_read_only: true
-    bug: "370845648"
+    description: "Whether to use angle driver for games not in the denylist"
+    bug: "440630034"
+}
+
+flag {
+    name: "enforce_strict_file_mode_check"
+    namespace: "backstage_power"
+    description: "Throw an IllegalArgumentException if the file mode passed to ParcelFileDescriptor#parseMode is unknown."
+    bug: "414387646"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }
 
 flag {
@@ -317,6 +326,13 @@ flag {
 }
 
 flag {
+    name: "material_default_user_icon"
+    namespace: "systemui"
+    description: "Shows the material themed default user icon."
+    bug: "424367031"
+}
+
+flag {
     name: "material_motion_tokens"
     namespace: "systemui"
     description: "Adding new Material Tokens for M3 Motion Spec"
@@ -342,6 +358,13 @@ flag {
 }
 
 flag {
+    name: "native_framework_prototype"
+    namespace: "system_performance"
+    description: "Enable support for the native framework prototype"
+    bug: "406925781"
+}
+
+flag {
     name: "network_time_uses_shared_memory"
     namespace: "system_performance"
     description: "SystemClock.currentNetworkTimeMillis() reads network time offset from shared memory"
@@ -355,6 +378,13 @@ flag {
     namespace: "bluetooth"
     description: "Guards the Context.sendOrderedBroadcastMultiplePermissions API"
     bug: "345802719"
+}
+
+flag {
+    name: "parcel_string_cache_enabled"
+    namespace: "system_performance"
+    description: "Enable JNIStringCache in Parcel"
+    bug: "442140362"
 }
 
 flag {
@@ -414,12 +444,36 @@ flag {
 }
 
 flag {
+    name: "use_query_angle_choice"
+    namespace: "gpu"
+    description: "Use new query for ANGLE choice"
+    bug: "408439360"
+}
+
+flag {
+    namespace: "system_performance"
+    name: "binder_cache_transaction_trace_names"
+    description: "Reuse transaction names caches across binder instances of the same interface."
+    bug: "330738126"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
      namespace: "system_performance"
      name: "enable_has_binders"
      is_exported: true
      description: "Add hasBinders to Public API under a flag."
      is_fixed_read_only: true
      bug: "330345513"
+}
+
+flag {
+    namespace: "system_performance"
+    name: "native_looper_skip_epoll_wait_for_zero_timeout"
+    description: "Skips epoll_wait if pollOnce is called with a timeout of 0."
+    bug: "410218466"
 }
 
 flag {
@@ -447,18 +501,18 @@ flag {
 
 flag {
      namespace: "system_performance"
+     name: "perfetto_sdk_tracing_v3"
+     description: "Tracing using Perfetto SDK API from the 'dev.perfetto.sdk' package."
+     bug: "303199244"
+}
+
+flag {
+     namespace: "system_performance"
      name: "telemetry_apis_framework_initialization"
      is_exported: true
      description: "Control framework initialization APIs of telemetry APIs feature."
      is_fixed_read_only: true
      bug: "324241334"
-}
-
-flag {
-    namespace: "system_performance"
-    name: "zygote_app_launch_latency_ablation"
-    description: "Fast is overrated. Let's make Android slower."
-    bug: "423047108"
 }
 
 flag {

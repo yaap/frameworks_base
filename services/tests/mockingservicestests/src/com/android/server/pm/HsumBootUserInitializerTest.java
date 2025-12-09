@@ -15,104 +15,53 @@
  */
 package com.android.server.pm;
 
-import static android.multiuser.Flags.FLAG_CREATE_INITIAL_USER;
-import static android.os.UserHandle.USER_NULL;
-import static android.os.UserHandle.USER_SYSTEM;
-import static android.content.pm.UserInfo.FLAG_ADMIN;
-import static android.content.pm.UserInfo.FLAG_FULL;
-import static android.content.pm.UserInfo.FLAG_MAIN;
-import static android.content.pm.UserInfo.FLAG_SYSTEM;
+import static android.provider.Settings.Global.DEVICE_PROVISIONED;
+import static android.provider.Settings.Secure.USER_SETUP_COMPLETE;
 
-import static com.android.server.pm.HsumBootUserInitializerTest.ExpectedResult.ADMIN_USER_CREATED;
-import static com.android.server.pm.HsumBootUserInitializerTest.ExpectedResult.FIRST_ADMIN_USER_PROMOTED_TO_MAIN;
-import static com.android.server.pm.HsumBootUserInitializerTest.ExpectedResult.MAIN_USER_CREATED;
-import static com.android.server.pm.HsumBootUserInitializerTest.ExpectedResult.MAIN_USER_DEMOTED;
-import static com.android.server.pm.HsumBootUserInitializerTest.ExpectedResult.NO_USER_CREATED;
-import static com.android.server.pm.HsumBootUserInitializerTest.ExpectedResult.SECOND_ADMIN_USER_PROMOTED_TO_MAIN;
-import static com.android.server.pm.HsumBootUserInitializerTest.InitialUsers.SYSTEM_AND_MAIN;
-import static com.android.server.pm.HsumBootUserInitializerTest.InitialUsers.SYSTEM_AND_ADMINS;
-import static com.android.server.pm.HsumBootUserInitializerTest.InitialUsers.SYSTEM_AND_ADMINS_FIRST_ADMIN_UNPROMOTABLE;
-import static com.android.server.pm.HsumBootUserInitializerTest.InitialUsers.SYSTEM_AND_REGULAR;
-import static com.android.server.pm.HsumBootUserInitializerTest.InitialUsers.SYSTEM_ONLY;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-import android.annotation.Nullable;
-import android.annotation.SpecialUsers.CanBeNULL;
-import android.annotation.UserIdInt;
 import android.content.ContentResolver;
-import android.content.pm.UserInfo;
-import android.content.pm.UserInfo.UserInfoFlag;
+import android.content.Context;
+import android.database.ContentObserver;
 import android.os.UserManager;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
-import android.platform.test.flag.junit.SetFlagsRule;
+import android.provider.Settings;
 import android.util.Log;
 
+import androidx.test.platform.app.InstrumentationRegistry;
+
+import com.android.modules.utils.testing.ExtendedMockitoRule;
 import com.android.server.am.ActivityManagerService;
-import com.android.server.utils.TimingsTraceAndSlog;
 
 import com.google.common.truth.Expect;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-
-// NOTE: rename to HsumBootUserInitializerInitMethodTest if it needs to test other methods
-@RunWith(Parameterized.class)
 public final class HsumBootUserInitializerTest {
 
     private static final String TAG = HsumBootUserInitializerTest.class.getSimpleName();
 
-    @UserIdInt
-    private static final int MAIN_USER_ID = 4;
-    @UserIdInt
-    private static final int ADMIN_USER_ID = 8;
-    @UserIdInt
-    private static final int ANOTHER_ADMIN_USER_ID = 15;
-    @UserIdInt
-    private static final int REGULAR_USER_ID = 16;
-
-    // Pre-defined users. NOTE: only setting basic flags and not setting UserType.
-    private final UserInfo mHeadlessSystemUser =
-            createUser(USER_SYSTEM, FLAG_SYSTEM | FLAG_ADMIN);
-    private final UserInfo mMainUser =
-            createUser(MAIN_USER_ID, FLAG_FULL | FLAG_MAIN | FLAG_ADMIN);
-    private final UserInfo mAdminUser =
-            createUser(ADMIN_USER_ID, FLAG_FULL | FLAG_ADMIN);
-    private final UserInfo mAnotherAdminUser =
-            createUser(ANOTHER_ADMIN_USER_ID, FLAG_FULL | FLAG_ADMIN);
-    private final UserInfo mRegularUser =
-            createUser(REGULAR_USER_ID, FLAG_FULL);
-
     @Rule
     public final Expect expect = Expect.create();
-
-    // NOTE: replace by ExtendedMockitoRule once it needs to mock UM.isHSUM() or other methods
     @Rule
-    public final MockitoRule mockito = MockitoJUnit.rule();
-
-    @Rule
-    public final SetFlagsRule setFlagsRule =
-            new SetFlagsRule(SetFlagsRule.DefaultInitValueType.DEVICE_DEFAULT);
-
+    public final ExtendedMockitoRule extendedMockito = new ExtendedMockitoRule.Builder(this)
+            .mockStatic(UserManager.class)
+            .spyStatic(Settings.Global.class)
+            .spyStatic(Settings.Secure.class)
+            .build();
     @Mock
     private UserManagerService mMockUms;
     @Mock
@@ -121,358 +70,127 @@ public final class HsumBootUserInitializerTest {
     private PackageManagerService mMockPms;
     @Mock
     private ContentResolver mMockContentResolver;
+    @Captor
+    private ArgumentCaptor<ContentObserver> mCaptorContentObserver;
 
-    @Nullable // Must be created in the same thread that it's used
-    private TimingsTraceAndSlog mTracer;
+    // NOTE: not mocking yet, but need a real one because of resources
+    private final Context mRealContext =
+            InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-    private final boolean mShouldAlwaysHaveMainUser;
-    private final boolean mShouldCreateInitialUser;
-    private final InitialUsers mInitialUsers;
-    private final ExpectedResult mExpectedResult;
-
-    /** Useless javadoc to make checkstyle happy... */
-    @Parameters(name = "{index}: hasMain={0},createInitial={1},initial={2},result={3}")
-    public static Collection<Object[]> junitParametersPassedToConstructor() {
-        return Arrays.asList(new Object[][] {
-                // shouldAlwaysHaveMainUser false, shouldCreateInitialUser false
-                { false, false, SYSTEM_ONLY, NO_USER_CREATED },
-                { false, false, SYSTEM_AND_MAIN, MAIN_USER_DEMOTED },
-                { false, false, SYSTEM_AND_ADMINS, NO_USER_CREATED },
-                { false, false, SYSTEM_AND_ADMINS_FIRST_ADMIN_UNPROMOTABLE, NO_USER_CREATED },
-                { false, false, SYSTEM_AND_REGULAR, NO_USER_CREATED },
-                // shouldAlwaysHaveMainUser false, shouldCreateInitialUser true
-                { false, true, SYSTEM_ONLY, ADMIN_USER_CREATED},
-                { false, true, SYSTEM_AND_MAIN, MAIN_USER_DEMOTED },
-                { false, true, SYSTEM_AND_ADMINS, NO_USER_CREATED },
-                { false, true, SYSTEM_AND_ADMINS_FIRST_ADMIN_UNPROMOTABLE, NO_USER_CREATED },
-                { false, true, SYSTEM_AND_REGULAR, NO_USER_CREATED },
-                // shouldAlwaysHaveMainUser true, shouldCreateInitialUser false
-                { true, false, SYSTEM_ONLY, MAIN_USER_CREATED },
-                { true, false, SYSTEM_AND_MAIN, NO_USER_CREATED },
-                { true, false, SYSTEM_AND_ADMINS, FIRST_ADMIN_USER_PROMOTED_TO_MAIN },
-                { true, false, SYSTEM_AND_ADMINS_FIRST_ADMIN_UNPROMOTABLE,
-                    SECOND_ADMIN_USER_PROMOTED_TO_MAIN },
-                { true, false, SYSTEM_AND_REGULAR, MAIN_USER_CREATED },
-                // shouldAlwaysHaveMainUser true, shouldCreateInitialUser true
-                { true, true, SYSTEM_ONLY, MAIN_USER_CREATED },
-                { true, true, SYSTEM_AND_MAIN, NO_USER_CREATED },
-                { true, true, SYSTEM_AND_ADMINS_FIRST_ADMIN_UNPROMOTABLE,
-                    SECOND_ADMIN_USER_PROMOTED_TO_MAIN },
-                { true, true, SYSTEM_AND_REGULAR, MAIN_USER_CREATED }
-        });
-    }
-
-    public HsumBootUserInitializerTest(boolean shouldAlwaysHaveMainUser,
-            boolean shouldCreateInitialUser, InitialUsers initialUsers,
-            ExpectedResult expectedResult) {
-        mShouldAlwaysHaveMainUser = shouldAlwaysHaveMainUser;
-        mShouldCreateInitialUser = shouldCreateInitialUser;
-        mInitialUsers = initialUsers;
-        mExpectedResult = expectedResult;
-        Log.i(TAG, "Constructor: shouldAlwaysHaveMainUser=" + shouldAlwaysHaveMainUser
-                + ", shouldCreateInitialUser=" + shouldCreateInitialUser
-                + ", initialUsers=" + initialUsers + ",expectedResult=" + expectedResult);
-    }
+    private HsumBootUserInitializer mFixture;
 
     @Before
-    public void setDefaultExpectations() throws Exception {
-        switch (mInitialUsers) {
-            case SYSTEM_ONLY:
-                mockGetUsers(mHeadlessSystemUser);
-                mockGetMainUserId(USER_NULL);
-                break;
-            case SYSTEM_AND_MAIN:
-                mockGetUsers(mHeadlessSystemUser, mMainUser);
-                mockGetMainUserId(MAIN_USER_ID);
-                break;
-            case SYSTEM_AND_ADMINS_FIRST_ADMIN_UNPROMOTABLE:
-                mockPromoteToMainUserFails(ADMIN_USER_ID);
-                // fall through
-            case SYSTEM_AND_ADMINS:
-                mockGetUsers(mHeadlessSystemUser, mAdminUser, mAnotherAdminUser);
-                mockGetMainUserId(USER_NULL);
-                break;
-            case SYSTEM_AND_REGULAR:
-                mockGetUsers(mHeadlessSystemUser, mRegularUser);
-                mockGetMainUserId(USER_NULL);
-                break;
-        }
-        // NOTE: need to mock createNewUser() as the user id is used on Slog.
-        switch (mExpectedResult) {
-            case ADMIN_USER_CREATED:
-                mockCreateNewUser(ADMIN_USER_ID);
-                break;
-            case FIRST_ADMIN_USER_PROMOTED_TO_MAIN:
-                mockPromoteToMainUser(ADMIN_USER_ID);
-                break;
-            case SECOND_ADMIN_USER_PROMOTED_TO_MAIN:
-                mockPromoteToMainUserFails(ADMIN_USER_ID);
-                mockPromoteToMainUser(ANOTHER_ADMIN_USER_ID);
-                break;
-            case MAIN_USER_CREATED:
-                mockCreateNewUser(MAIN_USER_ID);
-                break;
-            case MAIN_USER_DEMOTED:
-                mockGetMainUserId(MAIN_USER_ID);
-                break;
-            default:
-                // don't need to mock it
-        }
-    }
-
-    @After
-    public void expectAllTracingCallsAreFinished() {
-        if (mTracer == null) {
-            return;
-        }
-        var unfinished = mTracer.getUnfinishedTracesForDebug();
-        if (!unfinished.isEmpty()) {
-            expect.withMessage("%s unfinished tracing calls: %s", unfinished.size(), unfinished)
-                    .fail();
-        }
+    public void setFixtures() {
+        mFixture = new HsumBootUserInitializer(mMockUms, mMockAms, mMockPms, mMockContentResolver,
+                // value of args below don't matter
+                /* shouldDesignateMainUser= */ false, /* shouldCreateInitialUser= */ false);
     }
 
     @Test
-    @EnableFlags(FLAG_CREATE_INITIAL_USER)
-    public void testFlagEnabled() {
-        var initializer = createHsumBootUserInitializer(mShouldAlwaysHaveMainUser,
-                mShouldCreateInitialUser);
+    public void testCreateInstance_hsum() {
+        mockIsHsum(true);
 
-        initializer.init(mTracer);
+        var instance = HsumBootUserInitializer.createInstance(mMockUms, mMockAms, mMockPms,
+                mMockContentResolver, mRealContext);
 
-        switch (mExpectedResult) {
-            case ADMIN_USER_CREATED:
-                expectAdminUserCreated();
-                expectSetBootUserId(ADMIN_USER_ID);
-                expectMainUserNotDemoted();
-                break;
-            case FIRST_ADMIN_USER_PROMOTED_TO_MAIN:
-                expectNoUserCreated();
-                expectSetBootUserIdNeverCalled();
-                expectAdminPromotedToMainUser(ADMIN_USER_ID);
-                expectAdminNotPromotedToMainUser(ANOTHER_ADMIN_USER_ID);
-                break;
-            case SECOND_ADMIN_USER_PROMOTED_TO_MAIN:
-                expectNoUserCreated();
-                expectSetBootUserIdNeverCalled();
-                // don't need to verify call to ADMIN_USER_ID - it was mocked to return false
-                expectAdminPromotedToMainUser(ANOTHER_ADMIN_USER_ID);
-                break;
-            case MAIN_USER_CREATED:
-                expectMainUserCreated();
-                expectSetBootUserId(MAIN_USER_ID);
-                expectMainUserNotDemoted();
-                expectNoAdminPromotedToMainUser();
-                break;
-            case NO_USER_CREATED:
-                expectNoUserCreated();
-                expectMainUserNotDemoted();
-                expectNoAdminPromotedToMainUser();
-                break;
-            case MAIN_USER_DEMOTED:
-                expectNoUserCreated();
-                expectMainUserDemoted();
-                expectNoAdminPromotedToMainUser();
-                break;
-        }
+        expect.withMessage("result of createInstance()").that(instance).isNotNull();
     }
-
-    // TODO(b/409650316): remove tests below after flag's completely pushed
     @Test
-    @DisableFlags(FLAG_CREATE_INITIAL_USER)
-    public void testFlagDisabled() {
-        var initializer =
-                createHsumBootUserInitializer(mShouldAlwaysHaveMainUser, mShouldCreateInitialUser);
+    public void testCreateInstance_nonHsum() {
+        mockIsHsum(false);
 
-        initializer.init(mTracer);
+        var instance = HsumBootUserInitializer.createInstance(mMockUms, mMockAms, mMockPms,
+                mMockContentResolver, mRealContext);
 
-        switch (mExpectedResult) {
-            // When the flag is disabled, it shouldn't trigger the "create admin user" workflow
-            case ADMIN_USER_CREATED:
-            case NO_USER_CREATED:
-            case MAIN_USER_DEMOTED:
-                expectNoUserCreated();
-                break;
-            case MAIN_USER_CREATED:
-                expectMainUserCreated();
-                break;
-        }
-        expectMainUserNotDemoted();
+        expect.withMessage("result of createInstance()").that(instance).isNull();
     }
 
-    private HsumBootUserInitializer createHsumBootUserInitializer(
-            boolean shouldAlwaysHaveMainUser, boolean shouldCreateInitialUser) {
-        mTracer = new TimingsTraceAndSlog(TAG);
-        return new HsumBootUserInitializer(mMockUms, mMockAms, mMockPms, mMockContentResolver,
-                shouldAlwaysHaveMainUser, shouldCreateInitialUser);
+    @Test
+    @DisableFlags(android.multiuser.Flags.FLAG_HSU_DEVICE_PROVISIONER)
+    public void testObserveDeviceProvisioning_flagDisabled_provisioned() {
+        mockIsDeviceProvisioned(true);
+
+        mFixture.observeDeviceProvisioning();
+
+        verifyUserSetupCompleteNeverCalled();
+        verifyContentObserverNeverRegistered();
     }
 
-    private void expectMainUserCreated() {
-        expectUserCreated(UserInfo.FLAG_ADMIN | UserInfo.FLAG_MAIN);
+    @Test
+    @DisableFlags(android.multiuser.Flags.FLAG_HSU_DEVICE_PROVISIONER)
+    public void testObserveDeviceProvisioning_flagDisabled_notProvisioned() {
+        mockIsDeviceProvisioned(false);
+
+        // First trigger setting an observer...
+        mFixture.observeDeviceProvisioning();
+        verify(mMockContentResolver).registerContentObserver(
+                eq(Settings.Global.getUriFor(Settings.Global.DEVICE_PROVISIONED)), eq(false),
+                mCaptorContentObserver.capture());
+        var contentObserver = mCaptorContentObserver.getValue();
+
+        // ...then trigger the observer itself
+        mockIsDeviceProvisioned(true); // onChange() expected it has changed
+        contentObserver.onChange(true);
+        verifyUserSetupCompleteCalled();
+        verifyContentObserverUnregistered(contentObserver);
     }
 
-    private void expectAdminUserCreated() {
-        expectUserCreated(UserInfo.FLAG_ADMIN);
+    @Test
+    @EnableFlags(android.multiuser.Flags.FLAG_HSU_DEVICE_PROVISIONER)
+    public void testObserveDeviceProvisioning_flagEnabled_provisioned() {
+        testObserveDeviceProvisioning_flagDisabled_provisioned();
     }
 
-    private void expectUserCreated(@UserInfoFlag int flags) {
+    @Test
+    @EnableFlags(android.multiuser.Flags.FLAG_HSU_DEVICE_PROVISIONER)
+    public void testObserveDeviceProvisioning_flagEnabled_notprovisioned() {
+        testObserveDeviceProvisioning_flagDisabled_notProvisioned();
+    }
+
+    private void mockIsHsum(boolean value) {
+        Log.v(TAG, "mockIsHsum(" + value + ")");
+        doReturn(value).when(UserManager::isHeadlessSystemUserMode);
+    }
+
+    private void mockIsDeviceProvisioned(boolean value) {
+        Log.v(TAG, "mockIsDeviceProvisioned(" + value + ")");
+        doReturn(value ? 1 : 0).when(() -> Settings.Global.getInt(any(), eq(DEVICE_PROVISIONED)));
+    }
+
+    private void verifyContentObserverUnregistered(ContentObserver contentObserver) {
         try {
-            verify(mMockUms).createUserInternalUnchecked(/* name= */ null,
-                    UserManager.USER_TYPE_FULL_SECONDARY, flags, /* parentId= */ USER_NULL,
-                    /* preCreated= */ false, /* disallowedPackages= */ null, /* token= */ null);
-        } catch (Exception e) {
-            String msg = "didn't create user with flags " + flags;
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
+            verify(mMockContentResolver).unregisterContentObserver(contentObserver);
+        } catch (Throwable t) {
+            Log.e(TAG, "verify failure:", t);
+            expect.withMessage("ContentResolver (%s) was not unregistered", contentObserver).fail();
         }
     }
 
-    private void expectNoUserCreated() {
+    private void verifyContentObserverNeverRegistered() {
         try {
-            verify(mMockUms, never()).createUserInternalUnchecked(any(), any(), anyInt(), anyInt(),
-                    anyBoolean(), any(), any());
-        } catch (Exception e) {
-            String msg = "shouldn't have created any user";
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
+            verify(mMockContentResolver, never()).registerContentObserver(any(), anyBoolean(),
+                    any());
+        } catch (Throwable t) {
+            Log.e(TAG, "verify failure:", t);
+            expect.withMessage("should not have registered a content observer").fail();
         }
-
-        // Since the user was not created, we can automatically infer that the boot user should not
-        // have been set as well
-        expectSetBootUserIdNeverCalled();
     }
 
-    private void expectMainUserDemoted() {
+    private void verifyUserSetupCompleteCalled() {
         try {
-            verify(mMockUms).demoteMainUser();
-        } catch (Exception e) {
-            String msg = "should have demoted main user";
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
+            verify(() -> Settings.Secure.putInt(mMockContentResolver, USER_SETUP_COMPLETE, 1));
+        } catch (Throwable t) {
+            Log.e(TAG, "verify failure:", t);
+            expect.withMessage("USER_SETUP_COMPLETE was not set").fail();
         }
     }
 
-    private void expectMainUserNotDemoted() {
+    private void verifyUserSetupCompleteNeverCalled() {
         try {
-            verify(mMockUms, never()).demoteMainUser();
-        } catch (Exception e) {
-            String msg = "should not have demoted main user";
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
+            verify(() -> Settings.Secure.putInt(any(), eq(USER_SETUP_COMPLETE), anyInt()), never());
+        } catch (Throwable t) {
+            Log.e(TAG, "verify failure:", t);
+            expect.withMessage("USER_SETUP_COMPLETE should not have been set").fail();
         }
-    }
-
-    private void expectAdminPromotedToMainUser(@UserIdInt int userId) {
-        try {
-            verify(mMockUms).setMainUser(userId);
-        } catch (Exception e) {
-            String msg = "should have set main user as " + userId;
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
-        }
-    }
-
-    private void expectAdminNotPromotedToMainUser(@UserIdInt int userId) {
-        try {
-            verify(mMockUms, never()).setMainUser(userId);
-        } catch (Exception e) {
-            String msg = "should have not set main user as " + userId;
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
-        }
-    }
-
-    private void expectNoAdminPromotedToMainUser() {
-        try {
-            verify(mMockUms, never()).setMainUser(anyInt());
-        } catch (Exception e) {
-            String msg = "should not have set main user";
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
-        }
-    }
-
-    private void expectSetBootUserId(@UserIdInt int userId) {
-        try {
-            verify(mMockUms).setBootUserIdUnchecked(userId);
-        } catch (Exception e) {
-            String msg = "didn't call setBootUserId(" +  userId + ")";
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
-        }
-    }
-
-    private void expectSetBootUserIdNeverCalled() {
-        try {
-            verify(mMockUms, never()).setBootUserIdUnchecked(anyInt());
-        } catch (Exception e) {
-            String msg = "setBootUserId() should never be called";
-            Log.e(TAG, msg, e);
-            expect.withMessage(msg).fail();
-        }
-    }
-
-    private void mockCreateNewUser(@UserIdInt int userId) throws Exception {
-        @SuppressWarnings("deprecation")
-        UserInfo userInfo = new UserInfo();
-        userInfo.id = userId;
-        Log.d(TAG, "createUserEvenWhenDisallowed() will return " + userInfo);
-        when(mMockUms.createUserInternalUnchecked(any(), any(), anyInt(), anyInt(), anyBoolean(),
-                any(), any())).thenReturn(userInfo);
-    }
-
-    private void mockGetMainUserId(@CanBeNULL @UserIdInt int userId) {
-        Log.d(TAG, "mockGetMainUserId(): " + userId);
-        when(mMockUms.getMainUserId()).thenReturn(userId);
-    }
-
-    private void mockGetUsers(UserInfo... users) {
-        List<UserInfo> asList = new ArrayList<>(users.length);
-        int[] userIds = new int[users.length];
-        for (int i = 0; i < users.length; i++) {
-            var user = users[i];
-            asList.add(user);
-            userIds[i] = user.id;
-        }
-        Log.d(TAG, "mockGetUsers(): returning " + asList + " for getUsers(), and "
-                + Arrays.toString(userIds) + " to getUserIds()");
-
-        when(mMockUms.getUsers(/* excludingDying= */ true)).thenReturn(asList);
-        when(mMockUms.getUserIds()).thenReturn(userIds);
-    }
-
-    private void mockPromoteToMainUser(@UserIdInt int userId) {
-        Log.d(TAG, "mockPromoteToMainUser(): " + userId);
-        when(mMockUms.setMainUser(userId)).thenReturn(true);
-    }
-
-    private void mockPromoteToMainUserFails(@UserIdInt int userId) {
-        Log.d(TAG, "mockPromoteToMainUserFails(): " + userId);
-        when(mMockUms.setMainUser(userId)).thenReturn(false);
-    }
-
-    private static UserInfo createUser(@UserIdInt int userId, @UserInfoFlag int flags) {
-        return new UserInfo(userId, /* name= */ null, /* iconPath= */ null, flags,
-                // Not using userType (for now)
-                /* userType= */ "AB Positive");
-    }
-
-    // NOTE: enums below must be public to be static imported
-
-    public enum InitialUsers {
-        SYSTEM_ONLY,
-        SYSTEM_AND_MAIN,
-        SYSTEM_AND_ADMINS,
-        SYSTEM_AND_ADMINS_FIRST_ADMIN_UNPROMOTABLE, // hacky case to mock failure
-        SYSTEM_AND_REGULAR
-    }
-
-    public enum ExpectedResult {
-        NO_USER_CREATED,
-        MAIN_USER_CREATED,
-        MAIN_USER_DEMOTED,
-        FIRST_ADMIN_USER_PROMOTED_TO_MAIN,
-        SECOND_ADMIN_USER_PROMOTED_TO_MAIN,
-        ADMIN_USER_CREATED
     }
 }

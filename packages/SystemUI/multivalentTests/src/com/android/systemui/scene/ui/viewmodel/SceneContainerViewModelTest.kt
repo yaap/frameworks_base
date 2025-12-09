@@ -25,8 +25,13 @@ import androidx.test.filters.SmallTest
 import com.android.compose.animation.scene.DefaultEdgeDetector
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.classifier.fakeFalsingManager
+import com.android.systemui.desktop.domain.interactor.enableUsingDesktopStatusBar
+import com.android.systemui.deviceentry.domain.interactor.deviceUnlockedInteractor
 import com.android.systemui.flags.EnableSceneContainer
+import com.android.systemui.keyguard.data.repository.fakeDeviceEntryFingerprintAuthRepository
+import com.android.systemui.keyguard.shared.model.SuccessFingerprintAuthenticationStatus
 import com.android.systemui.kosmos.collectLastValue
+import com.android.systemui.kosmos.currentValue
 import com.android.systemui.kosmos.runCurrent
 import com.android.systemui.kosmos.runTest
 import com.android.systemui.kosmos.testScope
@@ -139,7 +144,7 @@ class SceneContainerViewModelTest : SysuiTestCase() {
             assertThat(currentScene).isEqualTo(Scenes.Lockscreen)
 
             sceneContainerConfig.sceneKeys
-                .filter { it != currentScene }
+                .filter { it != currentScene && it != Scenes.Gone }
                 .forEach { toScene ->
                     assertWithMessage("Scene $toScene incorrectly protected when allowed")
                         .that(underTest.canChangeScene(toScene = toScene))
@@ -159,8 +164,8 @@ class SceneContainerViewModelTest : SysuiTestCase() {
             sceneContainerConfig.sceneKeys
                 .filter { it != currentScene }
                 .filter {
-                    // Moving to the Communal and Dream scene is not currently falsing protected.
-                    it != Scenes.Communal && it != Scenes.Dream
+                    // These scenes are not currently falsing protected.
+                    it != Scenes.Communal && it != Scenes.Dream && it != Scenes.Occluded
                 }
                 .forEach { toScene ->
                     assertWithMessage("Protected scene $toScene not properly protected")
@@ -206,6 +211,31 @@ class SceneContainerViewModelTest : SysuiTestCase() {
                         .that(underTest.canChangeScene(toScene = toScene))
                         .isTrue()
                 }
+        }
+
+    @Test
+    fun canChangeScene_toGone_whenLocked_returnsFalse() =
+        kosmos.runTest {
+            assertThat(currentValue(deviceUnlockedInteractor.deviceUnlockStatus).isUnlocked)
+                .isFalse()
+            val currentScene by collectLastValue(underTest.currentScene)
+            assertThat(currentScene).isNotEqualTo(Scenes.Gone)
+
+            assertThat(underTest.canChangeScene(toScene = Scenes.Gone)).isFalse()
+        }
+
+    @Test
+    fun canChangeScene_toGone_whenUnlocked_returnsTrue() =
+        kosmos.runTest {
+            fakeDeviceEntryFingerprintAuthRepository.setAuthenticationStatus(
+                SuccessFingerprintAuthenticationStatus(0, true)
+            )
+            assertThat(currentValue(deviceUnlockedInteractor.deviceUnlockStatus).isUnlocked)
+                .isTrue()
+            val currentScene by collectLastValue(underTest.currentScene)
+            assertThat(currentScene).isNotEqualTo(Scenes.Gone)
+
+            assertThat(underTest.canChangeScene(toScene = Scenes.Gone)).isTrue()
         }
 
     @Test
@@ -400,5 +430,22 @@ class SceneContainerViewModelTest : SysuiTestCase() {
             assertThat(shadeMode).isEqualTo(ShadeMode.Dual)
             assertThat(underTest.swipeSourceDetector)
                 .isInstanceOf(SceneContainerSwipeDetector::class.java)
+        }
+
+    @Test
+    fun onEmptySpaceMotionEvent_hidesDualShadeOverlays_onDesktopMode() =
+        kosmos.runTest {
+            // GIVEN a device in desktop mode with dual shade enabled and an overlay present
+            val currentOverlays by collectLastValue(sceneInteractor.currentOverlays)
+            enableDualShade()
+            enableUsingDesktopStatusBar()
+            sceneInteractor.showOverlay(Overlays.QuickSettingsShade, "test")
+            assertThat(currentOverlays).isNotEmpty()
+
+            // WHEN a touch event occurs outside the shade window
+            underTest.onEmptySpaceMotionEvent(MotionEvent.obtain(0, 0, ACTION_OUTSIDE, 0f, 0f, 0))
+
+            // THEN the overlay is hidden
+            assertThat(currentOverlays).isEmpty()
         }
 }

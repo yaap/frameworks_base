@@ -127,13 +127,6 @@ flag {
 }
 
 flag {
-    name: "cache_sdk_system_features"
-    namespace: "system_performance"
-    description: "Feature flag to enable optimized cache for SDK-defined system feature lookups."
-    bug: "326623529"
-}
-
-flag {
     name: "provide_info_of_apk_in_apex"
     is_exported: true
     namespace: "package_manager_service"
@@ -236,14 +229,6 @@ flag {
 }
 
 flag {
-    name: "reduce_broadcasts_for_component_state_changes"
-    namespace: "package_manager_service"
-    description: "Feature flag to limit sending of the PACKAGE_CHANGED broadcast to only the system and the application itself during component state changes."
-    bug: "292261144"
-    is_fixed_read_only: true
-}
-
-flag {
     name: "change_launcher_badging"
     namespace: "package_manager_service"
     description: "Feature flag to introduce a new way to change the launcher badging."
@@ -271,6 +256,14 @@ flag {
 }
 
 flag {
+    name: "app_compat_warnings_16kb"
+    namespace: "devoptions_settings"
+    description: "Feature flag to enable page size app compat warnings based on the alignment checks."
+    bug: "418267369"
+    is_fixed_read_only: true
+}
+
+flag {
     name: "remove_hidden_module_usage"
     namespace: "modularization"
     description: "Feature flag to remove the consumption of the hidden module status (ModuleInfo#IsHidden) in the Android source tree."
@@ -286,35 +279,12 @@ flag {
 }
 
 flag {
-    name: "optimize_parsing_in_registered_services_cache"
-    namespace: "package_manager_service"
-    description: "Feature flag to optimize RegisteredServicesCache ServiceInfo parsing by using caches."
-    bug: "319137634"
-    is_fixed_read_only: true
-}
-
-flag {
     name: "always_load_past_certs_v4"
     is_exported: true
     namespace: "package_manager_service"
     description: "Always read the corresponding v3/3.1 signature block for the current v4 to get the past rotated certificates, even when not verifying integrity."
     bug: "378539511"
     is_fixed_read_only: true
-}
-
-flag {
-    name: "cloud_compilation_verification"
-    namespace: "art_mainline"
-    description: "Feature flag to enable the Cloud Compilation install-time verification in the package manager."
-    bug: "377474232"
-    is_fixed_read_only: true
-}
-
-flag {
-    name: "parallel_package_parsing_across_system_dirs"
-    namespace: "system_performance"
-    description: "Continue parsing packages in system dirs instead of blocking on install completion for each directory."
-    bug: "401622806"
 }
 
 flag {
@@ -330,4 +300,48 @@ flag {
     description: "Feature flag to add delivery group policy for PACKAGE_CHANGED broadcast to allow merging broadcasts."
     bug: "381949725"
     is_fixed_read_only: true
+}
+
+flag {
+    name: "verification_service"
+    namespace: "package_manager_service"
+    description: "Feature flag to enable the new verification service."
+    bug: "360129103"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "cache_query_intent_activities_in_client_side"
+    namespace: "package_manager_service"
+    description: "Feature flag to implement client side caching for queryIntentActivities."
+    bug: "339648913"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "consolidate_package_changed_broadcasts"
+    namespace: "package_manager_service"
+    description: "Flag guarding the changes to consolidate package_changed broadcasts into a single one, instead of sending them individually"
+    bug: "433394697"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "alternative_for_dexopt_cleanup"
+    namespace: "art_cloud"
+    description: "Flag guarding the alternative code path replacing the legacy dexopt code, to allow legacy dexopt cleanup."
+    bug: "258223472"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "include_broadcast_debug_reason"
+    namespace: "package_manager_service"
+    description: "Include the debug reason when sending the package_changed broadcast"
+    bug: "433392586"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }

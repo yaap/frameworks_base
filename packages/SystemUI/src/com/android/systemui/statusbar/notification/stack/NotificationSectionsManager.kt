@@ -20,6 +20,7 @@ import android.util.Log
 import android.view.View
 import com.android.internal.annotations.VisibleForTesting
 import com.android.systemui.media.controls.ui.controller.KeyguardMediaController
+import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.statusbar.notification.SourceType
 import com.android.systemui.statusbar.notification.collection.NotificationClassificationFlag
@@ -36,6 +37,7 @@ import com.android.systemui.statusbar.notification.dagger.SocialHeader
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow
 import com.android.systemui.statusbar.notification.row.ExpandableView
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi
+import com.android.systemui.statusbar.notification.shared.NotificationSummarizationOnboardingUi
 import com.android.systemui.statusbar.notification.stack.StackScrollAlgorithm.SectionProvider
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.util.foldToSparseArray
@@ -130,8 +132,9 @@ internal constructor(
         peopleHeaderController.reinflateView(parent)
         incomingHeaderController.reinflateView(parent)
         mediaContainerController.reinflateView(parent)
-        keyguardMediaController.attachSinglePaneContainer(mediaControlsView)
-
+        if (!SceneContainerFlag.isEnabled) {
+            keyguardMediaController.attachSinglePaneContainer(mediaControlsView)
+        }
         if (NotificationClassificationFlag.isEnabled) {
             newsHeaderController.reinflateView(parent)
             socialHeaderController.reinflateView(parent)
@@ -159,7 +162,7 @@ internal constructor(
     }
 
     override fun beginsSection(view: View, previous: View?): Boolean =
-        view === silentHeaderView ||
+        (view === silentHeaderView ||
             view === mediaControlsView ||
             view === peopleHeaderView ||
             view === alertingHeaderView ||
@@ -169,7 +172,11 @@ internal constructor(
                     view === socialHeaderView ||
                     view === recsHeaderView ||
                     view === promoHeaderView)) ||
-            getBucket(view) != getBucket(previous)
+            getBucket(view) != getBucket(previous)) &&
+            // don't consider the first notification after onboarding to be a new section, so that
+            // the onboarding affordance remains close to the notification
+            !(NotificationSummarizationOnboardingUi.isEnabled &&
+                previous is OnboardingAffordanceView)
 
     private fun getBucket(view: View?): Int? =
         when {

@@ -108,7 +108,7 @@ sealed class ExternalState(
     permissionAllowlist: PermissionAllowlist,
     implicitToSourcePermissions: IndexedMap<String, IndexedListSet<String>>,
     isSystemReady: Boolean,
-    agentAllowlist: List<SignedPackage>,
+    agentAllowlist: Set<SignedPackage>?,
 ) : Immutable<MutableExternalState> {
     val userIds: IntSet
         get() = userIdsReference.get()
@@ -145,7 +145,7 @@ sealed class ExternalState(
     var isSystemReady: Boolean = isSystemReady
         protected set
 
-    var agentAllowlist: List<SignedPackage> = agentAllowlist
+    var agentAllowlist: Set<SignedPackage>? = agentAllowlist
         protected set
 
     override fun toMutable(): MutableExternalState = MutableExternalState(this)
@@ -164,7 +164,7 @@ private constructor(
     permissionAllowlist: PermissionAllowlist,
     implicitToSourcePermissions: IndexedMap<String, IndexedListSet<String>>,
     isSystemReady: Boolean,
-    agentAllowlist: List<SignedPackage>,
+    agentAllowlist: Set<SignedPackage>?,
 ) :
     ExternalState(
         userIdsReference,
@@ -193,7 +193,7 @@ private constructor(
             PermissionAllowlist(),
             MutableIndexedMap(),
             false,
-            emptyList(),
+            null,
         )
 
     internal constructor(
@@ -267,7 +267,7 @@ private constructor(
     }
 
     @JvmName("setAgentAllowlistPublic")
-    fun setAgentAllowlist(agentAllowlist: List<SignedPackage>) {
+    fun setAgentAllowlist(agentAllowlist: Set<SignedPackage>?) {
         this.agentAllowlist = agentAllowlist
     }
 }
@@ -408,6 +408,7 @@ sealed class UserState(
     internal val packageAppOpModesReference: PackageAppOpModesReference,
     internal val appIdAppFunctionAccessFlagsReference: AppIdAppFunctionAccessFlagsReference,
     defaultPermissionGrantFingerprint: String?,
+    appFunctionAccessPregrantFingerprint: String?,
     writeMode: Int,
 ) : WritableState, Immutable<MutableUserState> {
     val packageVersions: IndexedMap<String, Int>
@@ -431,6 +432,8 @@ sealed class UserState(
     var defaultPermissionGrantFingerprint: String? = defaultPermissionGrantFingerprint
         protected set
 
+    var appFunctionAccessPregrantFingerprint: String? = appFunctionAccessPregrantFingerprint
+
     override var writeMode: Int = writeMode
         protected set
 
@@ -446,6 +449,7 @@ private constructor(
     packageAppOpModesReference: PackageAppOpModesReference,
     appIdAppFunctionAccessFlagsReference: AppIdAppFunctionAccessFlagsReference,
     defaultPermissionGrantFingerprint: String?,
+    appFunctionAccessPregrantFingerprint: String?,
     writeMode: Int,
 ) :
     UserState(
@@ -456,6 +460,7 @@ private constructor(
         packageAppOpModesReference,
         appIdAppFunctionAccessFlagsReference,
         defaultPermissionGrantFingerprint,
+        appFunctionAccessPregrantFingerprint,
         writeMode,
     ),
     MutableWritableState {
@@ -467,6 +472,7 @@ private constructor(
             AppIdAppOpModesReference(MutableAppIdAppOpModes()),
             PackageAppOpModesReference(MutablePackageAppOpModes()),
             AppIdAppFunctionAccessFlagsReference(MutableAppIdAppFunctionAccessFlags()),
+            null,
             null,
             WriteMode.NONE,
         )
@@ -481,6 +487,7 @@ private constructor(
         userState.packageAppOpModesReference.toImmutable(),
         userState.appIdAppFunctionAccessFlagsReference.toImmutable(),
         userState.defaultPermissionGrantFingerprint,
+        userState.appFunctionAccessPregrantFingerprint,
         WriteMode.NONE,
     )
 

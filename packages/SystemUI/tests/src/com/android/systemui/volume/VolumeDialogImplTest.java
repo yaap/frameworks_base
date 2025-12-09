@@ -50,7 +50,6 @@ import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
 import android.media.AudioSystem;
 import android.os.SystemClock;
-import android.platform.test.annotations.EnableFlags;
 import android.provider.Settings;
 import android.testing.TestableLooper;
 import android.util.Log;
@@ -69,7 +68,6 @@ import androidx.test.filters.SmallTest;
 
 import com.android.internal.jank.InteractionJankMonitor;
 import com.android.internal.logging.testing.UiEventLoggerFake;
-import com.android.settingslib.flags.Flags;
 import com.android.systemui.Prefs;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.animation.AnimatorTestRule;
@@ -100,6 +98,7 @@ import junit.framework.Assert;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -114,6 +113,7 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 @SmallTest
+@Ignore("b/368308908 class isn't used; waiting on flag removal")
 @RunWith(AndroidJUnit4.class)
 @TestableLooper.RunWithLooper(setAsMainLooper = true)
 public class VolumeDialogImplTest extends SysuiTestCase {
@@ -657,34 +657,6 @@ public class VolumeDialogImplTest extends SysuiTestCase {
     }
 
     /**
-     * The click should be a single tap, thus we inject a down and an up event.
-     */
-    @Test
-    public void clickCaptionsButton_logsUiEvent() {
-        UiEventLoggerFake logger = new UiEventLoggerFake();
-        Events.sUiEventLogger = logger;
-        MotionEvent down = MotionEventBuilder.newBuilder()
-                .setAction(MotionEvent.ACTION_DOWN).build();
-        MotionEvent up = MotionEventBuilder.newBuilder()
-                .setAction(MotionEvent.ACTION_UP).build();
-
-        mODICaptionsIcon.onTouchEvent(down);
-        mODICaptionsIcon.onTouchEvent(up);
-        mTestableLooper.moveTimeForward(300); // to confirm it was only a single tap
-        mTestableLooper.processAllMessages();
-
-        boolean foundCaptionLog = false;
-        for (UiEventLoggerFake.FakeUiEvent event : logger.getLogs()) {
-            if (event.eventId
-                    == Events.VolumeDialogEvent.VOLUME_DIALOG_ODI_CAPTIONS_CLICKED.getId()) {
-                foundCaptionLog = true;
-                break;
-            }
-        }
-        Assert.assertTrue("Did not log the captions button click.", foundCaptionLog);
-    }
-
-    /**
      * Pressing the small x button at top right dismisses the captions tooltip.
      */
     @Test
@@ -783,7 +755,6 @@ public class VolumeDialogImplTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_VOLUME_DIALOG_AUDIO_SHARING_FIX)
     public void testDynamicStreamForBroadcast_createRow() {
         State state = createShellState();
         VolumeDialogController.StreamState ss = new VolumeDialogController.StreamState();

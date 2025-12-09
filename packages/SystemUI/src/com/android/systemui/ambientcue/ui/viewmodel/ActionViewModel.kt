@@ -19,12 +19,14 @@ package com.android.systemui.ambientcue.ui.viewmodel
 import android.graphics.drawable.Drawable
 
 data class ActionViewModel(
-    val icon: Drawable,
+    val icon: IconViewModel,
     val label: String,
     val attribution: String? = null,
     val onClick: () -> Unit,
     val onLongClick: () -> Unit,
     val actionType: ActionType,
+    val oneTapEnabled: Boolean = false,
+    val oneTapDelayMs: Long = 0L,
 )
 
 enum class ActionType {
@@ -32,3 +34,10 @@ enum class ActionType {
     MR,
     Unknown,
 }
+
+data class IconViewModel(
+    val small: Drawable,
+    val large: Drawable,
+    val iconId: String,
+    val repeatCount: Int,
+)

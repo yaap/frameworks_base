@@ -52,7 +52,6 @@ import org.mockito.MockitoAnnotations
 
 @RunWith(AndroidJUnit4::class)
 @SmallTest
-@android.platform.test.annotations.EnabledOnRavenwood
 class DeviceFoldStateProviderTest : SysuiTestCase() {
 
     @Mock private lateinit var activityTypeProvider: ActivityManagerActivityTypeProvider
@@ -458,17 +457,6 @@ class DeviceFoldStateProviderTest : SysuiTestCase() {
         foldStateProvider.start()
 
         assertThat(foldProvider.getNumberOfCallbacks()).isEqualTo(1)
-    }
-
-    @Test(expected = AssertionError::class)
-    fun startMethod_whileNotOnMainThread_throwsException() {
-        whenever(mainLooper.isCurrentThread).thenReturn(true)
-        try {
-            foldStateProvider.start()
-            fail("Should have thrown AssertionError: should be called from the main thread.")
-        } catch (e: AssertionError) {
-            assertThat(e.message).contains("backgroundThread")
-        }
     }
 
     @Test

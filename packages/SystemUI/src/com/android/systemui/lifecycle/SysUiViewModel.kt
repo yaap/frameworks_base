@@ -18,16 +18,16 @@ package com.android.systemui.lifecycle
 
 import android.view.View
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import com.android.app.tracing.TraceUtils
 import com.android.app.tracing.coroutines.launchTraced as launch
-import com.android.app.tracing.coroutines.launchTraced
 import com.android.app.tracing.coroutines.traceCoroutine
-import com.android.systemui.Flags.rememberViewModelOffMainThread
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 
 /**
  * Returns a remembered view-model of the type [T]. If the returned instance is also an
@@ -39,31 +39,44 @@ import kotlinx.coroutines.Dispatchers
  * that's unique enough and easy enough to find in code search; this should help correlate
  * performance findings with actual code. One recommendation: prefer whole string literals instead
  * of some complex concatenation or templating scheme.
+ *
+ * Note that, by default, `rememberViewModel` will activate its view-model in the [CoroutineContext]
+ * from which it was called. To configure this, either pass a [coroutineContext] to this method or
+ * use [WithConfiguredRememberViewModels] to bulk-configure all usages of `rememberViewModel`s
+ * within the composable hierarchy. If you do both, the provided [coroutineContext] takes precedence
+ * over the [WithConfiguredRememberViewModels] one.
  */
 @Composable
 fun <T> rememberViewModel(
     traceName: String,
     key: Any = Unit,
-    context: CoroutineContext = EmptyCoroutineContext,
+    coroutineContext: CoroutineContext = LocalCoroutineContext.current,
     factory: () -> T,
 ): T {
     val instance = remember(key) { factory() }
     if (instance is Activatable) {
+        // TODO(b/436984081): Pass the coroutineContext once we use LaunchedEffectWithLifecycle
+        // again.
         LaunchedEffect(instance) {
-            launchTraced(
-                spanName = traceName,
-                context =
-                    when {
-                        context != EmptyCoroutineContext -> context
-                        rememberViewModelOffMainThread() -> Dispatchers.Default
-                        else -> coroutineContext
-                    },
-            ) {
-                instance.activate()
+            TraceUtils.traceAsync("SystemUI.rememberViewModel", traceName) {
+                traceCoroutine(traceName) { instance.activate() }
             }
         }
     }
     return instance
+}
+
+/**
+ * Configures all usages of [rememberViewModel] in this composition to use the provided
+ * [coroutineContext] to run their activations. Individual calls to [rememberViewModel] can still
+ * override this behavior by passing a different [CoroutineContext].
+ */
+@Composable
+fun WithConfiguredRememberViewModels(
+    coroutineContext: CoroutineContext = EmptyCoroutineContext,
+    block: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(LocalCoroutineContext provides coroutineContext, block)
 }
 
 /**
@@ -89,3 +102,6 @@ suspend fun <T> View.viewModel(
         }
         block(instance)
     }
+
+private val LocalCoroutineContext =
+    staticCompositionLocalOf<CoroutineContext> { EmptyCoroutineContext }

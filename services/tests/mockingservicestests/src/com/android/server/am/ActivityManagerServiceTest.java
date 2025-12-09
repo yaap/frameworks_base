@@ -287,7 +287,8 @@ public class ActivityManagerServiceTest {
                 mUserController);
         mAms.mConstants.mNetworkAccessTimeoutMs = 2000;
         mAms.mActivityTaskManager = new ActivityTaskManagerService(mContext);
-        mAms.mActivityTaskManager.initialize(null, null, mHandler.getLooper());
+        mAms.mActivityTaskManager.initialize(null, null, mAms.mProcessStateController,
+                mHandler.getLooper());
         mAms.mAtmInternal = mActivityTaskManagerInternal;
         mHandler.setRunnablesToIgnore(
                 List.of(mAms.mUidObserverController.getDispatchRunnableForTest()));
@@ -1591,8 +1592,7 @@ public class ActivityManagerServiceTest {
         mAms.mInternal.startForegroundServiceDelegate(options, conn);
 
         assertThat(latchHolder[0].await(5, TimeUnit.SECONDS)).isTrue();
-        assertEquals(ActivityManager.PROCESS_STATE_FOREGROUND_SERVICE,
-                app.mState.getCurProcState());
+        assertEquals(ActivityManager.PROCESS_STATE_FOREGROUND_SERVICE, app.getCurProcState());
         final long timeoutMs = 5000L;
         final VerificationMode mode = withNotification
                 ? timeout(timeoutMs) : after(timeoutMs).atMost(0);
@@ -1605,8 +1605,7 @@ public class ActivityManagerServiceTest {
         mAms.mInternal.stopForegroundServiceDelegate(options);
 
         assertThat(latchHolder[0].await(5, TimeUnit.SECONDS)).isTrue();
-        assertEquals(ActivityManager.PROCESS_STATE_CACHED_EMPTY,
-                app.mState.getCurProcState());
+        assertEquals(ActivityManager.PROCESS_STATE_CACHED_EMPTY, app.getCurProcState());
         verify(mNotificationManagerInternal, mode)
                 .cancelNotification(eq(app.info.packageName), eq(app.info.packageName),
                         eq(app.info.uid), eq(app.mPid), eq(null),

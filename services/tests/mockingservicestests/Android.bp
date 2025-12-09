@@ -48,6 +48,7 @@ android_test {
         "androidx.test.ext.truth",
         "flag-junit",
         "frameworks-base-testutils",
+        "guava-android-testlib", // for EqualsTester
         "hamcrest-library",
         "kotlin-test",
         "mockingservicestests-utils-mockito",
@@ -56,6 +57,7 @@ android_test {
         "platform-parametric-runner-lib",
         "platform-test-annotations",
         "PlatformProperties",
+        "service-art.stubs.system_server",
         "service-blobstore",
         "service-jobscheduler",
         "service-permission.impl",
@@ -67,6 +69,7 @@ android_test {
         "services.net",
         "services.usage",
         "services.wallpapereffectsgeneration",
+        "servicestests-assert-utils",
         "servicestests-core-utils",
         "servicestests-utils-mockito-extended",
         "testables",
@@ -408,4 +411,11 @@ test_module_config {
     base: "FrameworksMockingServicesTests",
     test_suites: ["device-tests"],
     include_filters: ["com.android.server.BatteryServiceTest"],
+}
+
+test_module_config {
+    name: "FrameworksMockingServicesTests_advanced_protection_mode",
+    base: "FrameworksMockingServicesTests",
+    test_suites: ["device-tests"],
+    include_filters: ["com.android.server.security.advancedprotection.features.UsbDataAdvancedProtectionHookTest"],
 }

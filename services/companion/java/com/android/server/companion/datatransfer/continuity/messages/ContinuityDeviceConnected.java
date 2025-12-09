@@ -26,56 +26,24 @@ import java.util.List;
 /**
  * Deserialized version of the {@link ContinuityDeviceConnected} proto.
  */
-public class ContinuityDeviceConnected implements TaskContinuityMessageData {
+public record ContinuityDeviceConnected(
+    List<RemoteTaskInfo> remoteTasks) implements TaskContinuityMessage {
 
-    private int mCurrentForegroundTaskId = 0;
-    private List<RemoteTaskInfo> mRemoteTasks;
+    public static ContinuityDeviceConnected readFromProto(ProtoInputStream pis) throws IOException {
 
-    public ContinuityDeviceConnected(
-        int currentForegroundTaskId,
-        List<RemoteTaskInfo> remoteTasks) {
-
-        mCurrentForegroundTaskId = currentForegroundTaskId;
-        mRemoteTasks = remoteTasks;
-    }
-
-    static ContinuityDeviceConnected readFromProto(ProtoInputStream pis) throws IOException {
-
-        int currentForegroundTaskId = 0;
         List<RemoteTaskInfo> remoteTasks = new ArrayList<>();
         while (pis.nextField() != ProtoInputStream.NO_MORE_FIELDS) {
             switch (pis.getFieldNumber()) {
-                case (int) android.companion.ContinuityDeviceConnected.CURRENT_FOREGROUND_TASK_ID:
-                    currentForegroundTaskId = pis.readInt(
-                        android.companion.ContinuityDeviceConnected.CURRENT_FOREGROUND_TASK_ID
-                    );
-
-                    break;
-
                 case (int) android.companion.ContinuityDeviceConnected.REMOTE_TASKS:
                     final long remoteTasksToken = pis.start(
                         android.companion.ContinuityDeviceConnected.REMOTE_TASKS);
-                    remoteTasks.add(new RemoteTaskInfo(pis));
+                    remoteTasks.add(RemoteTaskInfo.fromProto(pis));
                     pis.end(remoteTasksToken);
                     break;
             }
         }
 
-        return new ContinuityDeviceConnected(currentForegroundTaskId, remoteTasks);
-    }
-
-    /**
-     * Returns the current foreground task ID.
-     */
-    public int getCurrentForegroundTaskId() {
-        return mCurrentForegroundTaskId;
-    }
-
-    /**
-     * Gets which remote tasks are running on the device.
-     */
-    public List<RemoteTaskInfo> getRemoteTasks() {
-        return mRemoteTasks;
+        return new ContinuityDeviceConnected(remoteTasks);
     }
 
     /**
@@ -90,12 +58,8 @@ public class ContinuityDeviceConnected implements TaskContinuityMessageData {
      * Writes this object to a proto output stream.
      */
     @Override
-    public void writeToProto(ProtoOutputStream pos) {
-        pos.writeInt32(
-            android.companion.ContinuityDeviceConnected.CURRENT_FOREGROUND_TASK_ID,
-            mCurrentForegroundTaskId);
-
-        for (RemoteTaskInfo remoteTaskInfo : mRemoteTasks) {
+    public void writeToProto(ProtoOutputStream pos) throws IOException {
+        for (RemoteTaskInfo remoteTaskInfo : remoteTasks()) {
             long remoteTasksToken = pos.start(
                 android.companion.ContinuityDeviceConnected.REMOTE_TASKS);
             remoteTaskInfo.writeToProto(pos);

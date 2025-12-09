@@ -27,10 +27,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.animation.DialogTransitionAnimator
-import com.android.systemui.common.domain.interactor.SysUIStateDisplaysInteractor
 import com.android.systemui.common.ui.view.SeekBarWithIconButtonsView
 import com.android.systemui.res.R
 import com.android.systemui.settings.UserTracker
+import com.android.systemui.shade.domain.interactor.FakeShadeDialogContextInteractor
 import com.android.systemui.statusbar.phone.SystemUIDialog
 import com.android.systemui.statusbar.phone.SystemUIDialog.DEFAULT_DISMISS_ON_DEVICE_LOCK
 import com.android.systemui.statusbar.phone.SystemUIDialogManager
@@ -73,7 +73,6 @@ class FontScalingDialogDelegateTest : SysuiTestCase() {
     @Mock private lateinit var dialogManager: SystemUIDialogManager
     @Mock private lateinit var dialogFactory: SystemUIDialog.Factory
     @Mock private lateinit var userTracker: UserTracker
-    @Mock private lateinit var sysUIStateInteractor: SysUIStateDisplaysInteractor
     @Mock private lateinit var mDialogTransitionAnimator: DialogTransitionAnimator
 
     @Before
@@ -101,6 +100,7 @@ class FontScalingDialogDelegateTest : SysuiTestCase() {
                     userTracker,
                     mainHandler,
                     backgroundDelayableExecutor,
+                    FakeShadeDialogContextInteractor(mContext),
                 )
             )
 
@@ -110,7 +110,6 @@ class FontScalingDialogDelegateTest : SysuiTestCase() {
                 0,
                 DEFAULT_DISMISS_ON_DEVICE_LOCK,
                 dialogManager,
-                sysUIStateInteractor,
                 fakeBroadcastDispatcher,
                 mDialogTransitionAnimator,
                 fontScalingDialogDelegate,

@@ -178,7 +178,7 @@ public class DiscreteOpsMigrationAndRollbackTest {
                     ATTRIBUTION_FLAG_ACCESSOR, i, 1, false);
         }
         // flush records from cache to the database.
-        appOpHistoryHelper.shutdown();
+        appOpHistoryHelper.persistPendingHistory();
         assertThat(appOpHistoryHelper.getAppOpHistory().size()).isEqualTo(RECORD_COUNT);
         assertThat(appOpHistoryHelper.getLargestAttributionChainId()).isEqualTo(RECORD_COUNT);
 
@@ -230,6 +230,38 @@ public class DiscreteOpsMigrationAndRollbackTest {
         assertThat(xmlRegistry.getAllDiscreteOps().mUids).isEmpty();
         assertThat(appops.size()).isEqualTo(RECORD_COUNT);
         assertThat(appOpHistoryHelper.getLargestAttributionChainId()).isEqualTo(RECORD_COUNT);
+    }
+
+    @Test
+    public void rollbackFromUnifiedSchemaSqliteToXml() {
+        // write to unified schema sqlite registry
+        AppOpHistoryHelper appOpHistoryHelper = new AppOpHistoryHelper(mContext,
+                mContext.getDatabasePath(DISCRETE_OPS_UNIFIED_SCHEMA_DB_NAME),
+                HistoricalRegistry.AggregationTimeWindow.SHORT, 1);
+        appOpHistoryHelper.systemReady(Duration.ofMinutes(1).toMillis(),
+                Duration.ofDays(7).toMillis());
+        for (int i = 1; i <= RECORD_COUNT; i++) {
+            appOpHistoryHelper.incrementOpAccessedCount(AppOpsManager.OP_COARSE_LOCATION,
+                    RECORD_COUNT + i, mContext.getPackageName(),
+                    VirtualDeviceManager.PERSISTENT_DEVICE_ID_DEFAULT,  null,
+                    UID_STATE_FOREGROUND, AppOpsManager.OP_FLAG_SELF, System.currentTimeMillis(),
+                    ATTRIBUTION_FLAG_ACCESSOR, i, 1, false);
+        }
+        // flush records from cache to the database.
+        appOpHistoryHelper.persistPendingHistory();
+        assertThat(appOpHistoryHelper.getAppOpHistory().size()).isEqualTo(RECORD_COUNT);
+        assertThat(appOpHistoryHelper.getLargestAttributionChainId()).isEqualTo(RECORD_COUNT);
+
+        // now rollback to xml registry
+        DiscreteOpsXmlRegistry xmlRegistry = new DiscreteOpsXmlRegistry(mLock, mMockDataDirectory);
+        xmlRegistry.systemReady();
+        DiscreteOpsMigrationHelper.rollbackFromUnifiedSchemaSqliteToXml(
+                appOpHistoryHelper, xmlRegistry);
+        DiscreteOpsXmlRegistry.DiscreteOps xmlOps = xmlRegistry.getAllDiscreteOps();
+
+        assertThat(appOpHistoryHelper.getAppOpHistory()).isEmpty();
+        assertThat(xmlOps.mLargestChainId).isEqualTo(RECORD_COUNT);
+        assertThat(xmlOps.mUids.size()).isEqualTo(RECORD_COUNT);
     }
 
     private static class DiscreteOpBuilder {

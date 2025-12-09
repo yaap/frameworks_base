@@ -239,10 +239,14 @@ public interface EntryAdapter {
      */
     boolean isBundle();
 
+    /** Processes when the bundle this entry is within is disabled. */
+    void onBundleDisabledForEntry();
+
     /**
-     * Processes when the bundle this entry is within is disabled.
+     * Processes when the entry is removed from the bundle it's within because of changed app
+     * permissions.
      */
-    void onBundleDisabled();
+    void onBundleDisabledForApp();
 
     /**
      * Returns the bundle type of this entry if it is a bundle.

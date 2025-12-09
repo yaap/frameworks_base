@@ -618,7 +618,7 @@ public final class AutofillManager {
 
     /**
      * There is currently no session running.
-     * {@hide}
+     * @hide
      */
     public static final int NO_SESSION = Integer.MAX_VALUE;
 
@@ -965,6 +965,10 @@ public final class AutofillManager {
      * @hide
      */
     public AutofillManager(Context context, IAutoFillManager service) {
+        if (sVerbose) {
+            Log.v(TAG,
+                    "Constructing AutofillManager instance: " + this + " with context: " + context);
+        }
         mContext = Objects.requireNonNull(context, "context cannot be null");
         mService = service;
         mOptions = context.getAutofillOptions();
@@ -1327,7 +1331,7 @@ public final class AutofillManager {
      *
      * @param savedInstanceState The state to be restored
      *
-     * {@hide}
+     * @hide
      */
     public void onCreate(Bundle savedInstanceState) {
         if (!hasAutofillFeature()) {
@@ -1388,7 +1392,7 @@ public final class AutofillManager {
      *
      * @see AutofillClient#autofillClientIsVisibleForAutofill()
      *
-     * {@hide}
+     * @hide
      */
     public void onVisibleForAutofill() {
         // This gets called when the client just got visible at which point the visibility
@@ -1412,7 +1416,7 @@ public final class AutofillManager {
      *
      * @param isExpiredResponse The response has expired or not
      *
-     * {@hide}
+     * @hide
      */
     public void onInvisibleForAutofill(boolean isExpiredResponse) {
         synchronized (mLock) {
@@ -1445,7 +1449,7 @@ public final class AutofillManager {
      *
      * @param outState Place to store the state
      *
-     * {@hide}
+     * @hide
      */
     public void onSaveInstanceState(Bundle outState) {
         if (!hasAutofillFeature()) {
@@ -2628,7 +2632,8 @@ public final class AutofillManager {
     /** @hide */
     public void onAuthenticationResult(int authenticationId, Intent data, View focusView) {
         if (sVerbose) {
-            Log.v(TAG, "onAuthenticationResult(): authId= " + authenticationId + ", data=" + data);
+            Log.v(TAG, "onAuthenticationResult(): authId= " + authenticationId + ", data="
+                    + data + ", autofill manager instance=" + this + ", context=" + mContext);
         }
         if (!hasAutofillFeature()) {
             if (sVerbose) {
@@ -2745,7 +2750,9 @@ public final class AutofillManager {
                     + ", compatMode=" + isCompatibilityModeEnabledLocked()
                     + ", augmentedOnly=" + mForAugmentedAutofillOnly
                     + ", enabledAugmentedOnly=" + mEnabledForAugmentedAutofillOnly
-                    + ", enteredIds=" + mEnteredIds);
+                    + ", enteredIds=" + mEnteredIds
+                    + ", autofill manager instance=" + this
+                    + ", context=" + mContext);
         }
         // We need to reset the augmented-only state when a manual request is made, as it's possible
         // that the service returned null for the first request and now the user is manually

@@ -240,31 +240,7 @@ public class VirtualDisplayAdapterTest {
     }
 
     @Test
-    public void testCreateManyVirtualDisplays_LimitFlagDisabled() {
-        when(mFeatureFlags.isVirtualDisplayLimitEnabled()).thenReturn(false);
-
-        // Displays for the same package
-        for (int i = 0; i < MAX_DEVICES_PER_PACKAGE * 2; i++) {
-            IVirtualDisplayCallback callback = createCallback();
-            DisplayDevice device = mAdapter.createVirtualDisplayLocked(callback,
-                    mMediaProjectionMock, 1234, "test.package", "123",
-                    mSurfaceMock, /* flags= */ 0, mVirtualDisplayConfigMock);
-            assertNotNull(device);
-        }
-
-        // Displays for different packages
-        for (int i = 0; i < MAX_DEVICES * 2; i++) {
-            IVirtualDisplayCallback callback = createCallback();
-            DisplayDevice device = mAdapter.createVirtualDisplayLocked(callback,
-                    mMediaProjectionMock, 1234 + i, "test.package", "123",
-                    mSurfaceMock, /* flags= */ 0, mVirtualDisplayConfigMock);
-            assertNotNull(device);
-        }
-    }
-
-    @Test
     public void testCreateVirtualDisplay_MaxDisplaysPerPackage() {
-        when(mFeatureFlags.isVirtualDisplayLimitEnabled()).thenReturn(true);
         List<IVirtualDisplayCallback> callbacks = new ArrayList<>();
         int ownerUid = 1234;
 
@@ -335,7 +311,6 @@ public class VirtualDisplayAdapterTest {
 
     @Test
     public void testCreateVirtualDisplay_MaxDisplays() {
-        when(mFeatureFlags.isVirtualDisplayLimitEnabled()).thenReturn(true);
         List<IVirtualDisplayCallback> callbacks = new ArrayList<>();
         int firstOwnerUid = 1000;
 
@@ -394,6 +369,31 @@ public class VirtualDisplayAdapterTest {
                 assertNull(device);
             }
         }
+    }
+
+    @Test
+    public void ownDisplayGroup_notNeverBlank() {
+        DisplayDevice device = mAdapter.createVirtualDisplayLocked(mMockCallback,
+                /* projection= */ null, /* ownerUid= */ 10, /* packageName= */ "testpackage",
+                "uniqueId", /* surface= */ mSurfaceMock,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP, mVirtualDisplayConfigMock);
+
+        DisplayDeviceInfo info = device.getDisplayDeviceInfoLocked();
+        assertThat(info.state).isEqualTo(Display.STATE_UNKNOWN);
+        assertThat(info.flags & DisplayDeviceInfo.FLAG_NEVER_BLANK).isEqualTo(0);
+    }
+
+    @Test
+    public void deviceDisplayGroup_notNeverBlank() {
+        DisplayDevice device = mAdapter.createVirtualDisplayLocked(mMockCallback,
+                /* projection= */ null, /* ownerUid= */ 10, /* packageName= */ "testpackage",
+                "uniqueId", /* surface= */ mSurfaceMock,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_DEVICE_DISPLAY_GROUP,
+                mVirtualDisplayConfigMock);
+
+        DisplayDeviceInfo info = device.getDisplayDeviceInfoLocked();
+        assertThat(info.state).isEqualTo(Display.STATE_UNKNOWN);
+        assertThat(info.flags & DisplayDeviceInfo.FLAG_NEVER_BLANK).isEqualTo(0);
     }
 
     @EnableFlags(

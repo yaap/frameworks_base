@@ -23,12 +23,13 @@ import com.android.systemui.testKosmos
 import com.android.systemui.volume.panel.shared.model.VolumePanelComponentKey
 import com.android.systemui.volume.panel.shared.model.mockVolumePanelUiComponentProvider
 import com.google.common.truth.Truth
+import org.junit.Assert
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class ComponentsFactoryTest : SysuiTestCase() {
 
     private val kosmos = testKosmos()
@@ -49,12 +50,14 @@ class ComponentsFactoryTest : SysuiTestCase() {
         Truth.assertThat(component).isNotNull()
     }
 
-    @Test(expected = IllegalArgumentException::class)
+    @Test
     fun componentAbsence_throws() {
         kosmos.componentByKey = emptyMap()
         initUnderTest()
 
-        underTest.createComponent(TEST_COMPONENT)
+        assertThrows(IllegalArgumentException::class.java) {
+            underTest.createComponent(TEST_COMPONENT)
+        }
     }
 
     private companion object {

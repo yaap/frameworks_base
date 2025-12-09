@@ -27,6 +27,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothHearingAid;
 import android.bluetooth.BluetoothLeAudio;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothStatusCodes;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -68,12 +69,24 @@ import java.util.stream.Collectors;
 
     private static final String HEARING_AID_ROUTE_ID_PREFIX = "HEARING_AID_";
     private static final String LE_AUDIO_ROUTE_ID_PREFIX = "LE_AUDIO_";
+    private static final List<Integer> BT_DEVICE_TYPES =
+            List.of(
+                    MediaRoute2Info.TYPE_BLE_HEADSET,
+                    MediaRoute2Info.TYPE_HEARING_AID,
+                    MediaRoute2Info.TYPE_BLUETOOTH_A2DP);
 
     /** Interface for receiving events about Bluetooth routes changes. */
     interface BluetoothRoutesUpdatedListener {
 
         /** Called when Bluetooth routes have changed. */
         void onBluetoothRoutesUpdated();
+    }
+
+    /** Interface for receiving events about Broadcast sinks changes. */
+    interface OnBroadcastSinkChangedListener {
+
+        /** Called when Bluetooth sink in broadcast has changed. */
+        void onBroadcastSinkChanged();
     }
 
     @NonNull
@@ -91,40 +104,38 @@ import java.util.stream.Collectors;
     private final Context mContext;
     @NonNull private final Handler mHandler;
     @NonNull private final BluetoothAdapter mBluetoothAdapter;
-    @NonNull private final BluetoothRoutesUpdatedListener mListener;
+    @NonNull private BluetoothRoutesUpdatedListener mListener;
     @NonNull
     private final BluetoothProfileMonitor mBluetoothProfileMonitor;
 
     BluetoothDeviceRoutesManager(
             @NonNull Context context,
-            @NonNull Handler handler,
             @NonNull Looper looper,
-            @NonNull BluetoothAdapter bluetoothAdapter,
-            @NonNull BluetoothRoutesUpdatedListener listener) {
+            @NonNull BluetoothAdapter bluetoothAdapter) {
         this(
                 context,
-                handler,
+                looper,
                 bluetoothAdapter,
-                new BluetoothProfileMonitor(context, looper, bluetoothAdapter),
-                listener);
+                new BluetoothProfileMonitor(context, looper, bluetoothAdapter));
     }
 
     @VisibleForTesting
     BluetoothDeviceRoutesManager(
             @NonNull Context context,
-            @NonNull Handler handler,
+            @NonNull Looper looper,
             @NonNull BluetoothAdapter bluetoothAdapter,
-            @NonNull BluetoothProfileMonitor bluetoothProfileMonitor,
-            @NonNull BluetoothRoutesUpdatedListener listener) {
+            @NonNull BluetoothProfileMonitor bluetoothProfileMonitor) {
         mContext = Objects.requireNonNull(context);
-        mHandler = handler;
+        mHandler = new Handler(Objects.requireNonNull(looper));
         mBluetoothAdapter = Objects.requireNonNull(bluetoothAdapter);
         mBluetoothProfileMonitor = Objects.requireNonNull(bluetoothProfileMonitor);
-        mListener = Objects.requireNonNull(listener);
+        // no-op listener, will be overrode in start()
+        mListener = () -> {};
     }
 
-    public void start(UserHandle user) {
-        mBluetoothProfileMonitor.start();
+    public void start(UserHandle user, @NonNull BluetoothRoutesUpdatedListener listener) {
+        mListener = listener;
+        mBluetoothProfileMonitor.start(() -> listener.onBluetoothRoutesUpdated());
 
         IntentFilter adapterStateChangedIntentFilter = new IntentFilter();
 
@@ -181,6 +192,31 @@ import java.util.stream.Collectors;
         mBluetoothAdapter.setActiveDevice(btRouteInfo.mBtDevice, ACTIVE_DEVICE_AUDIO);
     }
 
+    public synchronized boolean isMediaOnlyRouteInBroadcast(@NonNull String routeId) {
+        for (BluetoothRouteInfo info : mBluetoothRoutes.values()) {
+            if (info.mRoute.getId().equals(routeId)) {
+                if (mBluetoothProfileMonitor.isMediaOnlyDeviceInBroadcast(info.mBtDevice)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public synchronized boolean setRouteVolume(@NonNull String routeId, int volume) {
+        boolean volumeUpdated = false;
+        for (BluetoothRouteInfo info : mBluetoothRoutes.values()) {
+            if (info.mRoute.getId().equals(routeId)) {
+                // There could be multiple BT devices for the same route id, for example, LE Audio
+                // devices, hearing aids.
+                mBluetoothProfileMonitor.setDeviceVolume(
+                        info.mBtDevice, volume, /* isGroupOp= */ false);
+                volumeUpdated = true;
+            }
+        }
+        return volumeUpdated;
+    }
+
     private void updateBluetoothRoutes() {
         Set<BluetoothDevice> bondedDevices = mBluetoothAdapter.getBondedDevices();
 
@@ -201,7 +237,8 @@ import java.util.stream.Collectors;
                                             BluetoothDevice::getAddress, Function.identity()));
             for (BluetoothDevice device : bondedDevices) {
                 if (device.isConnected()) {
-                    BluetoothRouteInfo newBtRoute = createBluetoothRoute(device);
+                    BluetoothRouteInfo newBtRoute =
+                            createBluetoothRoute(device, /* setVolume= */ false);
                     if (newBtRoute.mConnectedProfiles.size() > 0) {
                         mBluetoothRoutes.put(device.getAddress(), newBtRoute);
                     }
@@ -269,6 +306,30 @@ import java.util.stream.Collectors;
         mBluetoothProfileMonitor.stopBroadcast();
     }
 
+    /** Returns whether {@link MediaRoute2Info} is info of Bluetooth route. */
+    protected boolean isBtRoute(@NonNull MediaRoute2Info mediaRoute2Info) {
+        return BT_DEVICE_TYPES.contains(mediaRoute2Info.getType());
+    }
+
+    /**
+     * Trigger {@link BluetoothProfileMonitor} to stop the broadcast, optionally making a new BT
+     * device active.
+     *
+     * @param routeId id of the Bluetooth route to be set as active after broadcast stops.
+     */
+    protected void stopBroadcast(@Nullable String routeId) {
+        Slog.d(TAG, "stopBroadcast: for route id " + routeId);
+        BluetoothDevice bluetoothDevice =
+                routeId == null
+                        ? null
+                        : mBluetoothRoutes.values().stream()
+                                .filter(routeInfo -> routeInfo.mRoute.getId().equals(routeId))
+                                .findFirst()
+                                .map(routeInfo -> routeInfo.mBtDevice)
+                                .orElse(null);
+        mBluetoothProfileMonitor.stopBroadcast(bluetoothDevice);
+    }
+
     /**
      * Obtains a list of selected bluetooth route infos.
      *
@@ -285,9 +346,23 @@ import java.util.stream.Collectors;
 
         // Convert List<BluetoothDevice> to List<MediaRoute2Info>
         return mBluetoothProfileMonitor.getDevicesWithBroadcastSource().stream()
-                .map(device -> createBluetoothRoute(device).mRoute)
+                .map(
+                        device ->
+                                createBluetoothRoute(
+                                                device,
+                                                /* setVolume= */ mBluetoothProfileMonitor
+                                                        .isMediaOnlyDeviceInBroadcast(device))
+                                        .mRoute)
                 .filter(routeInfo -> routeIdSet.add(routeInfo.getId()))
                 .toList();
+    }
+
+    /** Returns whether LE Audio broadcast is supported. */
+    public boolean isLEAudioBroadcastSupported() {
+        return mBluetoothAdapter.isLeAudioBroadcastAssistantSupported()
+                == BluetoothStatusCodes.FEATURE_SUPPORTED
+                && mBluetoothAdapter.isLeAudioBroadcastSourceSupported()
+                == BluetoothStatusCodes.FEATURE_SUPPORTED;
     }
 
     private void notifyBluetoothRoutesUpdated() {
@@ -309,9 +384,8 @@ import java.util.stream.Collectors;
      * bluetooth devices individually, since the audio stack refers to a bluetooth device group by
      * any of its member devices.
      */
-    private BluetoothRouteInfo createBluetoothRoute(BluetoothDevice device) {
-        BluetoothRouteInfo
-                newBtRoute = new BluetoothRouteInfo();
+    private BluetoothRouteInfo createBluetoothRoute(BluetoothDevice device, boolean setVolume) {
+        BluetoothRouteInfo newBtRoute = new BluetoothRouteInfo();
         newBtRoute.mBtDevice = device;
         String deviceName = getDeviceName(device);
 
@@ -319,9 +393,7 @@ import java.util.stream.Collectors;
         String routeId = getRouteIdForType(device, type);
 
         newBtRoute.mConnectedProfiles = getConnectedProfiles(device);
-        // Note that volume is only relevant for active bluetooth routes, and those are managed via
-        // AudioManager.
-        newBtRoute.mRoute =
+        MediaRoute2Info.Builder routeInfoBuilder =
                 new MediaRoute2Info.Builder(routeId, deviceName)
                         .addFeature(MediaRoute2Info.FEATURE_LIVE_AUDIO)
                         .addFeature(MediaRoute2Info.FEATURE_LOCAL_PLAYBACK)
@@ -331,8 +403,17 @@ import java.util.stream.Collectors;
                                         .getText(R.string.bluetooth_a2dp_audio_route_name)
                                         .toString())
                         .setType(type)
-                        .setAddress(device.getAddress())
-                        .build();
+                        .setAddress(device.getAddress());
+        // Note that volume is only relevant for active bluetooth routes, and those are managed via
+        // AudioManager.
+        // The only exception is media only devices in broadcast, the volume is fetched from
+        // bluetooth volume control profile.
+        if (setVolume) {
+            routeInfoBuilder
+                    .setVolume(mBluetoothProfileMonitor.getDeviceVolume(device))
+                    .setVolumeMax(BluetoothProfileMonitor.MAXIMUM_DEVICE_VOLUME);
+        }
+        newBtRoute.mRoute = routeInfoBuilder.build();
         return newBtRoute;
     }
 
@@ -346,6 +427,7 @@ import java.util.stream.Collectors;
         }
         return deviceName;
     }
+
     private SparseBooleanArray getConnectedProfiles(@NonNull BluetoothDevice device) {
         SparseBooleanArray connectedProfiles = new SparseBooleanArray();
         if (mBluetoothProfileMonitor.isProfileSupported(BluetoothProfile.A2DP, device)) {

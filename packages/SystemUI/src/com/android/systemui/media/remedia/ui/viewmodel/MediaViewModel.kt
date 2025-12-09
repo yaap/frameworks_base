@@ -27,7 +27,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.ImageBitmap
+import com.android.systemui.animation.Expandable
 import com.android.systemui.classifier.Classifier
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
@@ -38,6 +38,7 @@ import com.android.systemui.media.remedia.shared.model.MediaColorScheme
 import com.android.systemui.media.remedia.shared.model.MediaSessionState
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.res.R
+import com.android.systemui.statusbar.notification.collection.provider.VisualStabilityProvider
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -52,7 +53,8 @@ class MediaViewModel
 @AssistedInject
 constructor(
     private val interactor: MediaInteractor,
-    private val falsingSystem: FalsingSystem,
+    private val falsingSystem: MediaFalsingSystem,
+    val visualStabilityProvider: VisualStabilityProvider,
     @Assisted private val context: Context,
     @Assisted private val carouselVisibility: MediaCarouselVisibility,
 ) : ExclusiveActivatable() {
@@ -67,6 +69,12 @@ constructor(
     private var selectedCardIndex: Int by mutableIntStateOf(0)
         private set
 
+    /** The index of the currently visible card across different locations of media carousel */
+    val currentIndex: Int by derivedStateOf { interactor.currentCarouselIndex }
+
+    /** Whether media carousel should scroll to the first card in the list after composition */
+    val scrollToFirst: Boolean by derivedStateOf { interactor.shouldScrollToFirst }
+
     /** The current list of cards to show in the UI. */
     val cards: List<MediaCardViewModel> by derivedStateOf {
         interactor.sessions.mapIndexed { sessionIndex, session ->
@@ -74,7 +82,7 @@ constructor(
             object : MediaCardViewModel {
                 override val key = session.key
                 override val icon = session.appIcon
-                override val background: ImageBitmap?
+                override val background: Icon?
                     get() = session.background
 
                 override val colorScheme: MediaColorScheme?
@@ -199,7 +207,7 @@ constructor(
                                 MediaGutsSettingsButtonViewModel(
                                     icon =
                                         Icon.Resource(
-                                            res = R.drawable.ic_settings,
+                                            resId = R.drawable.ic_settings,
                                             contentDescription =
                                                 ContentDescription.Resource(
                                                     res = R.string.controls_media_settings_button
@@ -226,12 +234,11 @@ constructor(
                                         it.name,
                                     ),
                                 isConnecting = it.isInProgress,
-                                onClick = {
+                                onClick = { expandable ->
                                     falsingSystem.runIfNotFalseTap(
                                         FalsingManager.MODERATE_PENALTY
                                     ) {
-                                        // TODO(b/397989775): Perform selection of the suggested
-                                        // device
+                                        it.onClick(expandable)
                                     }
                                 },
                             )
@@ -245,10 +252,9 @@ constructor(
                             text =
                                 if (session.suggestedOutputDevice == null) session.outputDevice.name
                                 else null,
-                            onClick = {
+                            onClick = { expandable ->
                                 falsingSystem.runIfNotFalseTap(FalsingManager.MODERATE_PENALTY) {
-                                    // TODO(b/397989775): tell the UI to show the output
-                                    // switcher.
+                                    session.outputDevice.onClick(expandable)
                                 }
                             },
                         )
@@ -266,8 +272,10 @@ constructor(
                         )
                     }
 
-                override val onClick = {
-                    falsingSystem.runIfNotFalseTap(FalsingManager.LOW_PENALTY) { session.onClick() }
+                override val onClick = { expandable: Expandable ->
+                    falsingSystem.runIfNotFalseTap(FalsingManager.LOW_PENALTY) {
+                        session.onClick(expandable)
+                    }
                 }
                 override val onClickLabel =
                     context.getString(R.string.controls_media_playing_item_description)
@@ -280,7 +288,7 @@ constructor(
         MediaSettingsButtonViewModel(
             icon =
                 Icon.Resource(
-                    res = R.drawable.ic_settings,
+                    resId = R.drawable.ic_settings,
                     contentDescription =
                         ContentDescription.Resource(res = R.string.controls_media_settings_button),
                 ),
@@ -305,9 +313,16 @@ constructor(
     fun onCardSelected(cardIndex: Int) {
         check(cardIndex >= 0 && cardIndex < cards.size)
         selectedCardIndex = cardIndex
+        interactor.storeCurrentCarouselIndex(selectedCardIndex)
+    }
+
+    /** Notifies that the carousel is reordered and first card is now visible on screen. */
+    fun onScrollToFirstCard() {
+        interactor.resetScrollToFirst()
     }
 
     override suspend fun onActivated(): Nothing {
+        visualStabilityProvider.addPersistentReorderingAllowedListener { interactor.reorderMedia() }
         awaitCancellation()
     }
 
@@ -395,12 +410,6 @@ constructor(
      */
     private fun Offset.isHorizontal(): Boolean {
         return abs(x) >= abs(y)
-    }
-
-    interface FalsingSystem {
-        fun runIfNotFalseTap(@FalsingManager.Penalty penalty: Int, block: () -> Unit)
-
-        fun isFalseTouch(@Classifier.InteractionType interactionType: Int): Boolean
     }
 
     @AssistedFactory

@@ -42,16 +42,6 @@ flag {
 }
 
 flag {
-     namespace: "system_performance"
-     name: "app_start_info_timestamps"
-     description: "Additional timestamps."
-     bug: "287153617"
-     metadata {
-         purpose: PURPOSE_BUGFIX
-     }
-}
-
-flag {
      namespace: "backstage_power"
      name: "skip_bg_mem_trim_on_fg_app"
      description: "Skip background memory trim event on foreground processes."
@@ -107,26 +97,6 @@ flag {
 }
 
 flag {
-     namespace: "system_performance"
-     name: "app_start_info_cleanup_old_records"
-     description: "Cleanup old records to reduce size of in memory store."
-     bug: "384539178"
-     metadata {
-         purpose: PURPOSE_BUGFIX
-     }
-}
-
-flag {
-     namespace: "system_performance"
-     name: "app_start_info_keep_records_sorted"
-     description: "Ensure records are kept sorted to avoid extra work"
-     bug: "384539178"
-     metadata {
-         purpose: PURPOSE_BUGFIX
-     }
-}
-
-flag {
      name: "enable_process_observer_broadcast_on_process_started"
      namespace: "system_performance"
      description: "Enable ProcessObserver's onProcessStarted callbacks."
@@ -142,12 +112,29 @@ flag {
 }
 
 flag {
-     namespace: "backstage_power"
-     name: "optimize_get_apps_and_shortcuts"
-     description: "Get Available Apps and Shortcuts"
-     is_fixed_read_only: true
-     bug: "364133831"
+     namespace: "system_performance"
+     name: "early_render_thread_priority_boost"
+     description: "Boost the render thread priority during preload."
+     bug: "417909658"
      metadata {
          purpose: PURPOSE_BUGFIX
      }
+}
+
+flag {
+    namespace: "telecom"
+    name: "system_dialer_phone_call_fgs_grant"
+    description: "Ensures that the system dialer app can use a phone call fgs."
+    bug: "425971621"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+     namespace: "desktop_serviceability"
+     name: "get_free_memory"
+     is_exported: true
+     description: "Add API to get free memory."
+     bug: "417906997"
 }

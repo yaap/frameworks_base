@@ -20,13 +20,13 @@ import com.android.systemui.dump.dumpManager
 import com.android.systemui.flags.featureFlagsClassic
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.Kosmos.Fixture
-import com.android.systemui.kosmos.testScope
 import com.android.systemui.scene.domain.interactor.sceneInteractor
 import com.android.systemui.shade.domain.interactor.shadeInteractor
 import com.android.systemui.shade.domain.interactor.shadeModeInteractor
 import com.android.systemui.statusbar.domain.interactor.remoteInputInteractor
 import com.android.systemui.statusbar.notification.stack.domain.interactor.headsUpNotificationInteractor
 import com.android.systemui.statusbar.notification.stack.domain.interactor.notificationStackAppearanceInteractor
+import com.android.systemui.wallpapers.domain.interactor.wallpaperFocalAreaInteractor
 
 val Kosmos.notificationsPlaceholderViewModel by Fixture {
     NotificationsPlaceholderViewModel(
@@ -38,7 +38,7 @@ val Kosmos.notificationsPlaceholderViewModel by Fixture {
         remoteInputInteractor = remoteInputInteractor,
         featureFlags = featureFlagsClassic,
         dumpManager = dumpManager,
-        mainContext = testScope.coroutineContext,
+        wallpaperFocalAreaInteractor = wallpaperFocalAreaInteractor,
     )
 }
 

@@ -17,19 +17,26 @@
 package com.android.server.pm;
 
 import static android.content.pm.PackageManager.installStatusToPublicStatus;
+import static android.os.Process.INVALID_UID;
 
 import android.annotation.Nullable;
 import android.content.pm.DataLoaderType;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageManagerInternal;
+import android.content.pm.verify.developer.DeveloperVerificationSession;
+import android.content.pm.verify.developer.DeveloperVerificationStatus;
 import android.os.Handler;
 
 import com.android.internal.util.FrameworkStatsLog;
+import com.android.server.LocalServices;
+import com.android.server.pm.verify.developer.DeveloperVerificationStatusInternal;
 
 import java.util.Arrays;
 
 final class SessionMetrics {
     private static final String TAG = "SessionMetrics";
+    private final PackageManagerInternal mPackageManagerInternal;
     private final Handler mHandler;
     private final int mSessionId;
     private final int mUserId;
@@ -70,12 +77,45 @@ final class SessionMetrics {
     private final boolean mIsAutoInstallDependenciesEnabled;
     private long mApksSizeBytes;
     private boolean mWasUserActionIntentSent;
+    private boolean mWasUserResponseReceived;
+    private final int mDefaultDeveloperVerificationPolicy;
+    private long mDeveloperVerifierBindStartedMillis;
+    private long mDeveloperVerifierConnectedMillis;
+    private long mDeveloperVerifierRequestSentMillis;
+    private long mDeveloperVerificationDurationMillis;
+    private long mDeveloperVerifierRetryRequestSentMillis;
+    private long mDeveloperVerificationRetryDurationMillis;
+    private int mDeveloperVerifierUid = INVALID_UID;
+    private int mIsDeveloperVerificationBypassedReason =
+            DeveloperVerificationSession.DEVELOPER_VERIFICATION_BYPASSED_REASON_UNSPECIFIED;
+    private boolean mIsDeveloperVerificationTimeoutExtensionRequested = false;
+    private final boolean mHasDeveloperVerificationExtensionParams;
+    private boolean mIsDeveloperVerificationPolicyOverridden = false;
+    private DeveloperVerificationStatusInternal mDeveloperVerificationStatus =
+            DeveloperVerificationStatusInternal.UNKNOWN;
+    private @DeveloperVerificationStatus.AppMetadataVerificationStatus int mAslStatus;
+    private @PackageInstaller.DeveloperVerificationPolicy int mDeveloperVerificationPolicyOverride;
+    private boolean mWasDeveloperVerificationUserActionRequired = false;
+    private boolean mWasDeveloperVerificationUserResponseReceived = false;
+    private @PackageInstaller.DeveloperVerificationUserConfirmationInfo.UserActionNeededReason int
+            mDeveloperVerificationUserActionRequiredReason;
+    private @PackageInstaller.DeveloperVerificationUserResponse int
+            mDeveloperVerificationUserResponse = -1;
+    private int mDeveloperVerificationRetryCount;
+    private @PackageInstaller.DeveloperVerificationFailedReason int
+            mDeveloperVerificationFailureReason;
+    @Nullable
+    private String mPackageNameWhenDeveloperVerificationFailed = null;
+    private boolean mDeveloperVerificationCancelled;
+    private int mUidOfPackageInstalled = INVALID_UID;
 
     SessionMetrics(Handler handler,
             int sessionId, int userId, int installerUid,
             PackageInstaller.SessionParams params, long createdMillis, long committedMillis,
             boolean committed, @Nullable int[] childSessionIds, int parentSessionId,
-            int sessionStatusCode) {
+            int sessionStatusCode,
+            @PackageInstaller.DeveloperVerificationPolicy int defaultDeveloperVerificationPolicy) {
+        mPackageManagerInternal = LocalServices.getService(PackageManagerInternal.class);
         mHandler = handler;
         mSessionId = sessionId;
         mUserId = userId;
@@ -105,6 +145,9 @@ final class SessionMetrics {
         mIsMultiPackage = params.isMultiPackage;
         mIsUnarchive = params.unarchiveId != PackageInstaller.SessionInfo.INVALID_ID;
         mIsAutoInstallDependenciesEnabled = params.isAutoInstallDependenciesEnabled;
+        mDefaultDeveloperVerificationPolicy = defaultDeveloperVerificationPolicy;
+        mHasDeveloperVerificationExtensionParams =
+                params.extensionParams != null && !params.extensionParams.isEmpty();
     }
 
     public void onPreapprovalSet() {
@@ -113,6 +156,10 @@ final class SessionMetrics {
 
     public void onUserActionIntentSent() {
         mWasUserActionIntentSent = true;
+    }
+
+    public void onUserResponseReceived() {
+        mWasUserResponseReceived = true;
     }
 
     public void onSessionCommitted(long committedMillis) {
@@ -143,9 +190,13 @@ final class SessionMetrics {
         mInternalInstallationFinished = System.currentTimeMillis();
     }
 
-    public void onSessionFinished(int statusCode) {
+    public void onSessionFinished(int statusCode, String packageName) {
         mStatusCode = statusCode;
         mFinishedMillis = System.currentTimeMillis();
+        if (statusCode == PackageManager.INSTALL_SUCCEEDED && packageName != null) {
+            mUidOfPackageInstalled = mPackageManagerInternal.getPackageUid(
+                    packageName, /* flags= */ 0, mUserId);
+        }
         reportStats();
     }
 
@@ -153,6 +204,79 @@ final class SessionMetrics {
         mFinishedMillis = System.currentTimeMillis();
         mIsExpired = true;
         reportStats();
+    }
+
+    public void onDeveloperVerificationBindStarted(int verifierUid) {
+        mDeveloperVerifierBindStartedMillis = System.currentTimeMillis();
+        mDeveloperVerifierUid = verifierUid;
+    }
+
+    public void onDeveloperVerifierConnectionEstablished() {
+        mDeveloperVerifierConnectedMillis = System.currentTimeMillis();
+    }
+
+    public void onDeveloperVerificationRequestSent() {
+        mDeveloperVerifierRequestSentMillis = System.currentTimeMillis();
+    }
+
+    public void onDeveloperVerificationRetryRequestSent() {
+        mDeveloperVerifierRetryRequestSentMillis = System.currentTimeMillis();
+        mDeveloperVerificationRetryCount++;
+    }
+
+    public void onDeveloperVerificationBypassed(int bypassReason) {
+        mIsDeveloperVerificationBypassedReason = bypassReason;
+    }
+
+    public void onDeveloperVerificationTimeoutExtensionRequested() {
+        mIsDeveloperVerificationTimeoutExtensionRequested = true;
+    }
+
+    public void onDeveloperVerificationPolicyOverridden(
+            @PackageInstaller.DeveloperVerificationPolicy int defaultDeveloperVerificationPolicy) {
+        mIsDeveloperVerificationPolicyOverridden = true;
+        mDeveloperVerificationPolicyOverride = defaultDeveloperVerificationPolicy;
+    }
+
+    public void onDeveloperVerificationFinished(DeveloperVerificationStatusInternal status) {
+        mDeveloperVerificationStatus = status;
+        final long responseReceivedMillis = System.currentTimeMillis();
+        if (mDeveloperVerifierRequestSentMillis != 0
+                && mDeveloperVerifierRetryRequestSentMillis == 0) {
+            mDeveloperVerificationDurationMillis =
+                    responseReceivedMillis - mDeveloperVerifierRequestSentMillis;
+        } else if (mDeveloperVerifierRetryRequestSentMillis != 0) {
+            // Sum the total retry duration
+            mDeveloperVerificationRetryDurationMillis +=
+                    responseReceivedMillis - mDeveloperVerifierRetryRequestSentMillis;
+        }
+    }
+
+    public void onDeveloperVerificationUserActionRequired(
+            @PackageInstaller.DeveloperVerificationUserConfirmationInfo.UserActionNeededReason int
+                    reason) {
+        mWasDeveloperVerificationUserActionRequired = true;
+        mDeveloperVerificationUserActionRequiredReason = reason;
+    }
+
+    public void onDeveloperVerificationUserResponseReceived(
+            @PackageInstaller.DeveloperVerificationUserResponse int response) {
+        mDeveloperVerificationUserResponse = response;
+        mWasDeveloperVerificationUserResponseReceived = true;
+    }
+
+    public void onDeveloperVerificationFailed(
+            @PackageInstaller.DeveloperVerificationFailedReason int reason, String packageName) {
+        mDeveloperVerificationFailureReason = reason;
+        mPackageNameWhenDeveloperVerificationFailed = packageName;
+    }
+
+    public void onDeveloperVerificationCancelled() {
+        mDeveloperVerificationCancelled = true;
+    }
+
+    public void onAddedApksSizeBytesCalculated(long apksSizeBytes) {
+        mApksSizeBytes = apksSizeBytes;
     }
 
     private void reportStats() {
@@ -165,44 +289,81 @@ final class SessionMetrics {
         final long internalInstallationDurationMillis =
                 mInternalInstallationFinished - mInternalInstallationStarted;
         final long sessionLifetimeMillis = mFinishedMillis - mCreatedMillis;
+        final long developerVerifierConnectionDurationMillis =
+                mDeveloperVerifierConnectedMillis == 0
+                        ? 0 // Binding was already established before ths installation
+                        : mDeveloperVerifierConnectedMillis - mDeveloperVerifierBindStartedMillis;
+        final long developerVerificationPrepDurationMillis =
+                        mDeveloperVerifierRequestSentMillis - mDeveloperVerifierBindStartedMillis;
         // Do this on a handler so that we don't block anything critical
         mHandler.post(() ->
                 FrameworkStatsLog.write(
                         FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED,
-                        mSessionId,
-                        mUserId,
-                        mInstallerUid,
-                        mChildSessionIds,
-                        mParentSessionId,
-                        getTranslatedModeForStats(mMode),
-                        mRequireUserAction,
-                        mInstallFlags,
-                        mInstallLocation,
-                        mInstallReason,
-                        mInstallScenario,
-                        mIsStaged,
-                        mRequiredInstalledVersionCode,
-                        mDataLoaderType,
-                        getTranslatedRollbackDataPolicyForStats(mRollbackDataPolicy),
-                        mRollbackLifetimeMillis,
-                        getTranslatedRollbackImpactLevelForStats(mRollbackImpactLevel),
-                        mForceQueryableOverride,
-                        mApplicationEnabledSettingPersistent,
-                        mIsMultiPackage,
-                        mIsPreapproval,
-                        mIsUnarchive,
-                        mIsAutoInstallDependenciesEnabled,
-                        mApksSizeBytes, // TODO: compute apks size bytes
-                        getTranslatedStatusCodeForStats(installStatusToPublicStatus(mStatusCode)),
-                        mWasUserActionIntentSent,
-                        mIsExpired,
-                        sessionIdleDurationMillis,
-                        sessionCommitDurationMillis,
-                        nativeLibExtractionDurationMillis,
-                        packageVerificationDurationMillis,
-                        internalInstallationDurationMillis,
-                        sessionLifetimeMillis
-                )
+                        mSessionId, // 1
+                        mUserId, // 2
+                        mInstallerUid, // 3
+                        mChildSessionIds, // 4
+                        mParentSessionId, // 5
+                        getTranslatedModeForStats(mMode), // 6
+                        mRequireUserAction, // 7
+                        mInstallFlags, // 8
+                        mInstallLocation, // 9
+                        mInstallReason, // 10
+                        mInstallScenario, // 11
+                        mIsStaged, // 12
+                        mRequiredInstalledVersionCode, // 13
+                        mDataLoaderType, // 14
+                        getTranslatedRollbackDataPolicyForStats(mRollbackDataPolicy), // 15
+                        mRollbackLifetimeMillis, // 16
+                        getTranslatedRollbackImpactLevelForStats(mRollbackImpactLevel), // 17
+                        mForceQueryableOverride, // 18
+                        mApplicationEnabledSettingPersistent, // 19
+                        mIsMultiPackage, // 20
+                        mIsPreapproval, // 21
+                        mIsUnarchive, // 22
+                        mIsAutoInstallDependenciesEnabled, // 23
+                        mApksSizeBytes, // 24
+                        getTranslatedStatusCodeForStats(
+                                installStatusToPublicStatus(mStatusCode)), // 25
+                        mWasUserActionIntentSent, // 26
+                        mIsExpired, // 27
+                        sessionIdleDurationMillis, // 28
+                        sessionCommitDurationMillis, // 29
+                        nativeLibExtractionDurationMillis, // 30
+                        packageVerificationDurationMillis, // 31
+                        internalInstallationDurationMillis, // 32
+                        sessionLifetimeMillis, // 33
+                        getTranslatedPolicyCodeForStats(mDefaultDeveloperVerificationPolicy), // 34
+                        mDeveloperVerifierUid, // 35
+                        mIsDeveloperVerificationBypassedReason, // 36
+                        mIsDeveloperVerificationTimeoutExtensionRequested, // 37
+                        mHasDeveloperVerificationExtensionParams, // 38
+                        mIsDeveloperVerificationPolicyOverridden, // 39
+                        getTranslatedPolicyCodeForStats(
+                                mDeveloperVerificationPolicyOverride), // 40
+                        getTranslatedResponseCodeForStats(
+                                mDeveloperVerificationStatus.getInternalStatus()), // 41
+                        getTranslatedAppMetadataVerificationStatusForStats(
+                                mDeveloperVerificationStatus.getAppMetadataVerificationStatus()
+                        ), // 42
+                        mWasDeveloperVerificationUserActionRequired, // 43
+                        getTranslatedDeveloperVerificationUserActionReasonForStats(
+                                mDeveloperVerificationUserActionRequiredReason), // 44
+                        getTranslatedDeveloperVerificationUserResponseForStats(
+                                mDeveloperVerificationUserResponse), // 45
+                        mDeveloperVerificationRetryCount, // 46
+                        mDeveloperVerificationStatus.isLiteVerification(), // 47
+                        mDeveloperVerificationFailureReason, // 48
+                        mPackageNameWhenDeveloperVerificationFailed, // 49
+                        mDeveloperVerificationCancelled, // 50
+                        mDeveloperVerificationDurationMillis, // 51
+                        developerVerificationPrepDurationMillis, // 52
+                        mDeveloperVerificationRetryDurationMillis, // 53
+                        developerVerifierConnectionDurationMillis, // 54
+                        mWasUserResponseReceived, // 55
+                        mWasDeveloperVerificationUserResponseReceived, // 56
+                        mUidOfPackageInstalled // 57
+                        )
         );
     }
 
@@ -270,6 +431,89 @@ final class SessionMetrics {
                     FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__STATUS_CODE__STATUS_FAILURE_TIMEOUT;
             default ->
                     FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__STATUS_CODE__STATUS_UNSPECIFIED;
+        };
+    }
+
+    private static int getTranslatedPolicyCodeForStats(
+            @PackageInstaller.DeveloperVerificationPolicy int policy) {
+        return switch (policy) {
+            case PackageInstaller.DEVELOPER_VERIFICATION_POLICY_NONE ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFICATION_POLICY__POLICY_NONE;
+            case PackageInstaller.DEVELOPER_VERIFICATION_POLICY_BLOCK_FAIL_CLOSED ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFICATION_POLICY__POLICY_FAIL_CLOSED;
+            case PackageInstaller.DEVELOPER_VERIFICATION_POLICY_BLOCK_FAIL_OPEN ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFICATION_POLICY__POLICY_FAIL_OPEN;
+            case PackageInstaller.DEVELOPER_VERIFICATION_POLICY_BLOCK_FAIL_WARN ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFICATION_POLICY__POLICY_FAIL_WARN;
+            default ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFICATION_POLICY__POLICY_UNSPECIFIED;
+        };
+    }
+
+    private static int getTranslatedResponseCodeForStats(
+            @DeveloperVerificationStatusInternal.Status int internalStatus) {
+        return switch (internalStatus) {
+            case DeveloperVerificationStatusInternal.STATUS_COMPLETED_WITH_PASS ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_COMPLETE_WITH_PASS;
+            case DeveloperVerificationStatusInternal.STATUS_COMPLETED_WITH_REJECT ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_COMPLETE_WITH_REJECT;
+            case DeveloperVerificationStatusInternal.STATUS_INCOMPLETE_UNKNOWN ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_INCOMPLETE_UNKNOWN;
+            case DeveloperVerificationStatusInternal.STATUS_INCOMPLETE_NETWORK_UNAVAILABLE ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_INCOMPLETE_NETWORK_UNAVAILABLE;
+            case DeveloperVerificationStatusInternal.STATUS_TIMEOUT ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_TIMEOUT;
+            case DeveloperVerificationStatusInternal.STATUS_DISCONNECTED ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_MODULE_DISCONNECTED;
+            case DeveloperVerificationStatusInternal.STATUS_INFEASIBLE ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_OTHER;
+            default ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_VERIFIER_RESPONSE__RESPONSE_UNSPECIFIED;
+        };
+    }
+
+    private static int getTranslatedAppMetadataVerificationStatusForStats(
+            @DeveloperVerificationStatus.AppMetadataVerificationStatus int aslStatus) {
+        return switch (aslStatus) {
+            case DeveloperVerificationStatus.APP_METADATA_VERIFICATION_STATUS_GOOD ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ASL_STATUS__ASL_STATUS_GOOD;
+            case DeveloperVerificationStatus.APP_METADATA_VERIFICATION_STATUS_BAD ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ASL_STATUS__ASL_STATUS_BAD;
+            default ->
+                FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ASL_STATUS__ASL_STATUS_UNSPECIFIED;
+        };
+    }
+
+    private static int getTranslatedDeveloperVerificationUserActionReasonForStats(
+            @PackageInstaller.DeveloperVerificationUserConfirmationInfo.UserActionNeededReason int
+                    reason) {
+        return switch (reason) {
+            case PackageInstaller.DeveloperVerificationUserConfirmationInfo.DEVELOPER_VERIFICATION_USER_ACTION_NEEDED_REASON_UNKNOWN ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_ACTION_REQUIRED_REASON__USER_ACTION_REQUIRED_REASON_UNKNOWN;
+            case PackageInstaller.DeveloperVerificationUserConfirmationInfo.DEVELOPER_VERIFICATION_USER_ACTION_NEEDED_REASON_NETWORK_UNAVAILABLE ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_ACTION_REQUIRED_REASON__USER_ACTION_REQUIRED_REASON_NETWORK_UNAVAILABLE;
+            case PackageInstaller.DeveloperVerificationUserConfirmationInfo.DEVELOPER_VERIFICATION_USER_ACTION_NEEDED_REASON_DEVELOPER_BLOCKED ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_ACTION_REQUIRED_REASON__USER_ACTION_REQUIRED_REASON_DEVELOPER_BLOCKED;
+            case PackageInstaller.DeveloperVerificationUserConfirmationInfo.DEVELOPER_VERIFICATION_USER_ACTION_NEEDED_REASON_LITE_VERIFICATION ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_ACTION_REQUIRED_REASON__USER_ACTION_REQUIRED_REASON_LITE_VERIFICATION;
+            default ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_ACTION_REQUIRED_REASON__USER_ACTION_REQUIRED_REASON_UNSPECIFIED;
+        };
+    }
+
+    private static int getTranslatedDeveloperVerificationUserResponseForStats(
+            @PackageInstaller.DeveloperVerificationUserResponse int response) {
+        return switch (response) {
+            case PackageInstaller.DEVELOPER_VERIFICATION_USER_RESPONSE_ERROR ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_RESPONSE__USER_RESPONSE_ERROR;
+            case PackageInstaller.DEVELOPER_VERIFICATION_USER_RESPONSE_ABORT ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_RESPONSE__USER_RESPONSE_ABORT;
+            case PackageInstaller.DEVELOPER_VERIFICATION_USER_RESPONSE_RETRY ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_RESPONSE__USER_RESPONSE_RETRY;
+            case PackageInstaller.DEVELOPER_VERIFICATION_USER_RESPONSE_INSTALL_ANYWAY ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_RESPONSE__USER_RESPONSE_INSTALL_ANYWAY;
+            default ->
+                    FrameworkStatsLog.PACKAGE_INSTALLER_SESSION_REPORTED__ADI_USER_RESPONSE__USER_RESPONSE_UNSPECIFIED;
         };
     }
 }

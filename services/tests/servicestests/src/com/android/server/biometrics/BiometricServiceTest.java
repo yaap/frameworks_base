@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -73,6 +74,7 @@ import android.hardware.biometrics.IBiometricSensorReceiver;
 import android.hardware.biometrics.IBiometricService;
 import android.hardware.biometrics.IBiometricServiceReceiver;
 import android.hardware.biometrics.IBiometricSysuiReceiver;
+import android.hardware.biometrics.IIdentityCheckStateListener.WatchRangingState;
 import android.hardware.biometrics.PromptInfo;
 import android.hardware.biometrics.SensorProperties;
 import android.hardware.display.DisplayManagerGlobal;
@@ -92,6 +94,7 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.UserManager;
 import android.platform.test.annotations.DisableFlags;
+import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.annotations.RequiresFlagsDisabled;
 import android.platform.test.annotations.RequiresFlagsEnabled;
@@ -1072,6 +1075,7 @@ public class BiometricServiceTest {
     }
 
     @Test
+    @DisableFlags(Flags.FLAG_BP_FALLBACK_OPTIONS)
     public void testBiometricAuth_whenBiometricLockoutPermanent_sendsErrorAndModality()
             throws Exception {
         testBiometricAuth_whenLockout(LockoutTracker.LOCKOUT_PERMANENT,
@@ -1101,6 +1105,7 @@ public class BiometricServiceTest {
     }
 
     @Test
+    @DisableFlags(Flags.FLAG_BP_FALLBACK_OPTIONS)
     public void testMultiBiometricAuth_whenLockoutPermanent_sendsErrorAndModality()
             throws Exception {
         testMultiBiometricAuth_whenLockout(LockoutTracker.LOCKOUT_PERMANENT,
@@ -1145,6 +1150,17 @@ public class BiometricServiceTest {
                 Authenticators.DEVICE_CREDENTIAL | Authenticators.BIOMETRIC_STRONG,
                 false /* useDefaultSubtitle */, false /* deviceCredentialAllowed */);
         waitForIdle();
+
+        if (Flags.bpFallbackOptions()) {
+            assertEquals(STATE_AUTH_CALLED, mBiometricService.mAuthSession.getState());
+
+            mBiometricService.mAuthSession.mSensorReceiver.onError(
+                    SENSOR_ID_FINGERPRINT,
+                    getCookieForPendingSession(mBiometricService.mAuthSession),
+                    BiometricConstants.BIOMETRIC_ERROR_LOCKOUT_PERMANENT,
+                    0 /* vendorCode */);
+            waitForIdle();
+        }
 
         verify(mReceiver1, never()).onError(anyInt(), anyInt(), anyInt());
         assertNotNull(mBiometricService.mAuthSession);
@@ -1412,6 +1428,37 @@ public class BiometricServiceTest {
     }
 
     @Test
+    public void testAuthenticationPolicyManagerInitialization_whenAuthenticationIsInvoked()
+            throws Exception {
+        when(mInjector.getAuthenticationPolicyManager(mContext)).thenReturn(
+                mAuthenticationPolicyManager);
+
+        setupAuthForOnly(TYPE_FACE, Authenticators.BIOMETRIC_STRONG);
+        invokeAuthenticateAndStart(mBiometricService.mImpl, mReceiver1,
+                false /* requireConfirmation */, null /* authenticators */);
+
+        verify(mInjector).getAuthenticationPolicyManager(mContext);
+        assertThat(mBiometricService.mAuthenticationPolicyManager).isEqualTo(
+                mAuthenticationPolicyManager);
+
+        //Finish current authentication
+        mBiometricService.mAuthSession.mSensorReceiver.onError(
+                SENSOR_ID_FACE,
+                getCookieForCurrentSession(mBiometricService.mAuthSession),
+                BiometricConstants.BIOMETRIC_ERROR_TIMEOUT,
+                0 /* vendorCode */);
+        mBiometricService.mAuthSession.mSysuiReceiver.onDialogDismissed(
+                BiometricPrompt.DISMISSED_REASON_CONTENT_VIEW_MORE_OPTIONS,
+                null /* credentialAttestation */);
+        waitForIdle();
+
+        invokeAuthenticateAndStart(mBiometricService.mImpl, mReceiver1,
+                false /* requireConfirmation */, null /* authenticators */);
+
+        verify(mInjector, atMostOnce()).getAuthenticationPolicyManager(mContext);
+    }
+
+    @Test
     public void testAcquire_whenAuthenticating_sentToSystemUI() throws Exception {
         when(mContext.getResources().getString(anyInt())).thenReturn("test string");
 
@@ -1499,14 +1546,14 @@ public class BiometricServiceTest {
         verify(mAuthenticationPolicyService).startWatchRangingForIdentityCheck(anyLong(),
                 proximityResultCallbackArgumentCaptor.capture());
         assertThat(mBiometricService.mAuthSession.getWatchRangingState()).isEqualTo(
-                WatchRangingHelper.WATCH_RANGING_STARTED);
+                WatchRangingState.WATCH_RANGING_STARTED);
 
         proximityResultCallbackArgumentCaptor.getValue().onSuccess(ProximityResultCode.SUCCESS);
         waitForIdle();
 
         verify(mAuthenticationPolicyService).cancelWatchRangingForRequestId(anyLong());
         assertThat(mBiometricService.mAuthSession.getWatchRangingState()).isEqualTo(
-                WatchRangingHelper.WATCH_RANGING_SUCCESSFUL);
+                WatchRangingState.WATCH_RANGING_SUCCESSFUL);
     }
 
     @Test
@@ -1528,7 +1575,7 @@ public class BiometricServiceTest {
         verify(mAuthenticationPolicyService).startWatchRangingForIdentityCheck(anyLong(),
                 proximityResultCallbackArgumentCaptor.capture());
         assertThat(mBiometricService.mAuthSession.getWatchRangingState()).isEqualTo(
-                WatchRangingHelper.WATCH_RANGING_STARTED);
+                WatchRangingState.WATCH_RANGING_STARTED);
 
         proximityResultCallbackArgumentCaptor.getValue().onError(
                 ProximityResultCode.NO_RANGING_RESULT);
@@ -1536,7 +1583,7 @@ public class BiometricServiceTest {
 
         verify(mAuthenticationPolicyService).cancelWatchRangingForRequestId(anyLong());
         assertThat(mBiometricService.mAuthSession.getWatchRangingState()).isEqualTo(
-                WatchRangingHelper.WATCH_RANGING_STOPPED);
+                WatchRangingState.WATCH_RANGING_STOPPED);
     }
 
     @Test
@@ -1646,13 +1693,56 @@ public class BiometricServiceTest {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_BP_FALLBACK_OPTIONS)
+    public void testCanAuthenticate_whenLockoutTimed() throws Exception {
+        testCanAuthenticate_whenLockedOut(LockoutTracker.LOCKOUT_TIMED);
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_BP_FALLBACK_OPTIONS)
+    public void testCanAuthenticate_whenLockoutPermanent() throws Exception {
+        testCanAuthenticate_whenLockedOut(LockoutTracker.LOCKOUT_PERMANENT);
+    }
+
+    private void testCanAuthenticate_whenLockedOut(@LockoutTracker.LockoutMode int lockoutMode)
+            throws Exception {
+        // When only biometric is requested, and sensor is strong enough
+        setupAuthForOnly(TYPE_FINGERPRINT, Authenticators.BIOMETRIC_STRONG);
+
+        when(mFingerprintAuthenticator.getLockoutModeForUser(anyInt()))
+                .thenReturn(lockoutMode);
+
+        // Lockout is not considered an error for BiometricManager#canAuthenticate
+        assertEquals(BiometricManager.BIOMETRIC_SUCCESS,
+                invokeCanAuthenticate(mBiometricService, Authenticators.BIOMETRIC_STRONG));
+    }
+
+    @Test
+    @DisableFlags(Flags.FLAG_BP_FALLBACK_OPTIONS)
     public void testCanAuthenticate_whenLockoutTimed_returnsLockoutError() throws Exception {
         testCanAuthenticate_whenLockedOut_returnLockoutError(LockoutTracker.LOCKOUT_TIMED);
     }
 
     @Test
+    @DisableFlags(Flags.FLAG_BP_FALLBACK_OPTIONS)
     public void testCanAuthenticate_whenLockoutPermanent_returnsLockoutError() throws Exception {
         testCanAuthenticate_whenLockedOut_returnLockoutError(LockoutTracker.LOCKOUT_PERMANENT);
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_BP_FALLBACK_OPTIONS)
+    public void testCanAuthenticate_whenLockoutPermanent_returnsSuccess() throws Exception {
+        // When only biometric is requested, and sensor is strong enough
+        setupAuthForOnly(TYPE_FINGERPRINT, Authenticators.BIOMETRIC_STRONG);
+
+        when(mFingerprintAuthenticator.getLockoutModeForUser(anyInt()))
+                .thenReturn(LockoutTracker.LOCKOUT_PERMANENT);
+
+        // When only biometric is requested
+        int authenticators = Authenticators.BIOMETRIC_STRONG;
+        // Lockout is not considered an error for BiometricManager#canAuthenticate
+        assertEquals(BiometricManager.BIOMETRIC_SUCCESS,
+                invokeCanAuthenticate(mBiometricService, authenticators));
     }
 
     private void testCanAuthenticate_whenLockedOut_returnLockoutError(

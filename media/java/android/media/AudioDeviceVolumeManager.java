@@ -232,7 +232,12 @@ public class AudioDeviceVolumeManager {
     @FlaggedApi(FLAG_UNIFY_ABSOLUTE_VOLUME_MANAGEMENT)
     public interface OnAudioDeviceVolumeChangedListener {
         /**
-         * Called the device for the given audio device has changed.
+         * Called when the volume for the given audio device has changed.
+         *
+         * <p>This method will not be called after #notifyAbsoluteVolumeChanged is called since this
+         * is used to inform the audio framework that the external controller has already applied
+         * the new volume.
+         *
          * @param device the audio device whose volume has changed
          * @param vol the new volume for the device
          */
@@ -242,6 +247,12 @@ public class AudioDeviceVolumeManager {
 
         /**
          * Called when the volume for the given audio device has been adjusted.
+         *
+         * <p>This method will be called only when registered for a volume behavior with the
+         * parameter {@code handlesVolumeAdjustment} set to {@code true} in the
+         * {@code setDeviceAbsoluteVolumeBehavior} registration methods and will be called as a
+         * result of an adjustment to the volume in any direction
+         *
          * @param device the audio device whose volume has been adjusted
          * @param vol the volume info for the device
          * @param direction the direction of the adjustment
@@ -734,7 +745,15 @@ public class AudioDeviceVolumeManager {
      * @hide
      * Sets the volume on the given audio device
      *
-     * @param vi the volume information, only stream-based volumes are supported
+     * @param vi the volume information, only stream-based volumes are supported for now.
+     * <ul>If vi doesn't contain a mute state: the index is set to vi's index </ul>
+     * <ul>If vi contains a mute state:
+     * <li> if the ada device is the current device for the VolumeInfo routing strategy, the mute
+     *          state will be applied to the stream type</li>
+     * <li> otherwise, the mute state is left unchanged: if vi is muted, the index is set to its
+     *           min value; if vi is unmuted, the index is set to vi's index.</li>
+     * </ul>
+     *
      * @param ada the device for which volume is to be modified
      */
     @SystemApi

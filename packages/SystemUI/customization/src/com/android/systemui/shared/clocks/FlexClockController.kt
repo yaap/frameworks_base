@@ -20,37 +20,43 @@ import android.content.res.Resources
 import android.icu.util.TimeZone
 import com.android.systemui.animation.GSFAxes
 import com.android.systemui.customization.R
-import com.android.systemui.customization.clocks.FontUtils.put
-import com.android.systemui.customization.clocks.FontUtils.toClockAxis
-import com.android.systemui.plugins.clocks.AlarmData
-import com.android.systemui.plugins.clocks.AxisPresetConfig
-import com.android.systemui.plugins.clocks.AxisType
-import com.android.systemui.plugins.clocks.ClockAxisStyle
-import com.android.systemui.plugins.clocks.ClockConfig
-import com.android.systemui.plugins.clocks.ClockController
-import com.android.systemui.plugins.clocks.ClockEventListeners
-import com.android.systemui.plugins.clocks.ClockEvents
-import com.android.systemui.plugins.clocks.ClockFontAxis
-import com.android.systemui.plugins.clocks.ClockFontAxis.Companion.merge
-import com.android.systemui.plugins.clocks.ClockSettings
-import com.android.systemui.plugins.clocks.TimeFormatKind
-import com.android.systemui.plugins.clocks.WeatherData
-import com.android.systemui.plugins.clocks.ZenData
-import com.android.systemui.shared.clocks.view.FlexClockView
+import com.android.systemui.customization.clocks.ClockContext
+import com.android.systemui.customization.clocks.utils.FontUtils.put
+import com.android.systemui.customization.clocks.utils.FontUtils.set
+import com.android.systemui.customization.clocks.utils.FontUtils.toClockAxis
+import com.android.systemui.plugins.keyguard.data.model.AlarmData
+import com.android.systemui.plugins.keyguard.data.model.WeatherData
+import com.android.systemui.plugins.keyguard.data.model.ZenData
+import com.android.systemui.plugins.keyguard.ui.clocks.AxisPresetConfig
+import com.android.systemui.plugins.keyguard.ui.clocks.AxisType
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockAxisStyle
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockConfig
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockEventListeners
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockEvents
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFontAxis
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFontAxis.Companion.merge
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockMessageBuffers
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockSettings
+import com.android.systemui.plugins.keyguard.ui.clocks.TimeFormatKind
+import com.android.systemui.shared.clocks.view.FlexClockViewGroup
 import java.io.PrintWriter
 import java.util.Locale
 
 /** Controller for the default flex clock */
-class FlexClockController(private val clockCtx: ClockContext) : ClockController {
+class FlexClockController(
+    private val clockCtx: ClockContext,
+    private val messageBuffers: ClockMessageBuffers,
+) : ClockController {
     override val smallClock =
         FlexClockFaceController(
-            clockCtx.copy(messageBuffer = clockCtx.messageBuffers.smallClockMessageBuffer),
+            clockCtx.copy(messageBuffer = messageBuffers.smallClockMessageBuffer),
             isLargeClock = false,
         )
 
     override val largeClock =
         FlexClockFaceController(
-            clockCtx.copy(messageBuffer = clockCtx.messageBuffers.largeClockMessageBuffer),
+            clockCtx.copy(messageBuffer = messageBuffers.largeClockMessageBuffer),
             isLargeClock = true,
         )
 
@@ -67,7 +73,7 @@ class FlexClockController(private val clockCtx: ClockContext) : ClockController 
             override var isReactiveTouchInteractionEnabled = false
                 set(value) {
                     field = value
-                    val view = largeClock.view as FlexClockView
+                    val view = largeClock.view as FlexClockViewGroup
                     view.isReactiveTouchInteractionEnabled = value
                 }
 
@@ -106,7 +112,12 @@ class FlexClockController(private val clockCtx: ClockContext) : ClockController 
 
     override fun initialize(isDarkTheme: Boolean, dozeFraction: Float, foldFraction: Float) {
         smallClock.run {
-            layerController.onViewBoundsChanged = { eventListeners.fire { onBoundsChanged(it) } }
+            layerController.onViewBoundsChanged = {
+                eventListeners.fire { onBoundsChanged(it, isLargeClock = false) }
+            }
+            layerController.onViewMaxSizeChanged = {
+                eventListeners.fire { onMaxSizeChanged(it, isLargeClock = false) }
+            }
             events.onThemeChanged(theme.copy(isDarkTheme = isDarkTheme))
             animations.onFontAxesChanged(clockCtx.settings.axes)
             animations.doze(dozeFraction)
@@ -115,7 +126,12 @@ class FlexClockController(private val clockCtx: ClockContext) : ClockController 
         }
 
         largeClock.run {
-            layerController.onViewBoundsChanged = { eventListeners.fire { onBoundsChanged(it) } }
+            layerController.onViewBoundsChanged = {
+                eventListeners.fire { onBoundsChanged(it, isLargeClock = true) }
+            }
+            layerController.onViewMaxSizeChanged = {
+                eventListeners.fire { onMaxSizeChanged(it, isLargeClock = true) }
+            }
             events.onThemeChanged(theme.copy(isDarkTheme = isDarkTheme))
             animations.onFontAxesChanged(clockCtx.settings.axes)
             animations.doze(dozeFraction)

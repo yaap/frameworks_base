@@ -44,7 +44,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -72,7 +71,6 @@ import android.os.Process;
 import android.os.UserHandle;
 import android.os.VibrationAttributes;
 import android.os.VibrationEffect;
-import android.os.Vibrator;
 import android.os.test.TestLooper;
 import android.os.vibrator.VibrationConfig;
 import android.platform.test.flag.junit.CheckFlagsRule;
@@ -104,7 +102,8 @@ public class VibrationSettingsTest {
     public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     private static final int USER_ID = 123;
-    private static final int UID = 1;
+    private static final int NON_SYSTEM_UID = USER_ID * 100_000 + 123;
+    private static final int SECONDARY_USER_SYSTEM_UID = USER_ID * 100_000 + Process.SYSTEM_UID;
     private static final int VIRTUAL_DEVICE_ID = 1;
     private static final String SYSUI_PACKAGE_NAME = "sysui";
     private static final PowerSaveState NORMAL_POWER_STATE = new PowerSaveState.Builder().build();
@@ -135,10 +134,10 @@ public class VibrationSettingsTest {
     @Mock private PackageManagerInternal mPackageManagerInternalMock;
     @Mock private AudioManager mAudioManagerMock;
     @Mock private IActivityManager mActivityManagerMock;
-    @Mock private VibrationConfig mVibrationConfigMock;
 
     private TestLooper mTestLooper;
     private ContextWrapper mContextSpy;
+    private VibrationConfig.Builder mVibrationConfigBuilder;
     private VibrationSettings mVibrationSettings;
 
     @Before
@@ -156,9 +155,8 @@ public class VibrationSettingsTest {
         when(mPackageManagerInternalMock.getSystemUiServiceComponent())
                 .thenReturn(new ComponentName(SYSUI_PACKAGE_NAME, ""));
 
-        setDefaultIntensity(VIBRATION_INTENSITY_MEDIUM);
+        mVibrationConfigBuilder = new VibrationConfig.Builder(null); // use defaults
 
-        setIgnoreVibrationsOnWirelessCharger(false);
         mockGoToSleep(/* goToSleepTime= */ 0, PowerManager.GO_TO_SLEEP_REASON_TIMEOUT);
 
         createSystemReadyVibrationSettings();
@@ -166,7 +164,7 @@ public class VibrationSettingsTest {
 
     private void createSystemReadyVibrationSettings() {
         mVibrationSettings = new VibrationSettings(mContextSpy,
-                new Handler(mTestLooper.getLooper()), mVibrationConfigMock);
+                new Handler(mTestLooper.getLooper()), mVibrationConfigBuilder.build());
 
         // Simulate System defaults.
         setUserSetting(Settings.System.HAPTIC_FEEDBACK_ENABLED, 1);
@@ -182,7 +180,7 @@ public class VibrationSettingsTest {
     @Test
     public void create_withOnlyRequiredSystemServices() {
         VibrationSettings minimalVibrationSettings = new VibrationSettings(mContextSpy,
-                new Handler(mTestLooper.getLooper()), mVibrationConfigMock);
+                new Handler(mTestLooper.getLooper()), mVibrationConfigBuilder.build());
 
         // The only core services that we depend on are Power, Package and Activity managers
         minimalVibrationSettings.onSystemReady(mPackageManagerInternalMock,
@@ -267,7 +265,7 @@ public class VibrationSettingsTest {
         ));
 
         mVibrationSettings.mUidObserver.onUidStateChanged(
-                UID, ActivityManager.PROCESS_STATE_IMPORTANT_BACKGROUND, 0, 0);
+                NON_SYSTEM_UID, ActivityManager.PROCESS_STATE_IMPORTANT_BACKGROUND, 0, 0);
 
         for (int usage : ALL_USAGES) {
             if (expectedAllowedVibrations.contains(usage)) {
@@ -281,7 +279,7 @@ public class VibrationSettingsTest {
     @Test
     public void shouldIgnoreVibration_fromForeground_allowsAnyUsage() {
         mVibrationSettings.mUidObserver.onUidStateChanged(
-                UID, ActivityManager.PROCESS_STATE_IMPORTANT_FOREGROUND, 0, 0);
+                NON_SYSTEM_UID, ActivityManager.PROCESS_STATE_IMPORTANT_FOREGROUND, 0, 0);
 
         for (int usage : ALL_USAGES) {
             assertVibrationNotIgnoredForUsage(usage);
@@ -290,7 +288,7 @@ public class VibrationSettingsTest {
 
     @Test
     public void wirelessChargingVibrationsEnabled_doesNotRegisterBatteryReceiver_allowsAnyUsage() {
-        setIgnoreVibrationsOnWirelessCharger(false);
+        mVibrationConfigBuilder.setIgnoreVibrationsOnWirelessCharger(false);
         createSystemReadyVibrationSettings();
 
         verify(mContextSpy, never()).registerReceiver(any(BroadcastReceiver.class),
@@ -303,7 +301,7 @@ public class VibrationSettingsTest {
 
     @Test
     public void shouldIgnoreVibration_noBatteryIntentWhenSystemReady_allowsAnyUsage() {
-        setIgnoreVibrationsOnWirelessCharger(true);
+        mVibrationConfigBuilder.setIgnoreVibrationsOnWirelessCharger(true);
         createSystemReadyVibrationSettings();
 
         for (int usage : ALL_USAGES) {
@@ -318,7 +316,7 @@ public class VibrationSettingsTest {
                 any(BroadcastReceiver.class),
                 argThat(filter -> filter.matchAction(Intent.ACTION_BATTERY_CHANGED)), anyInt());
 
-        setIgnoreVibrationsOnWirelessCharger(true);
+        mVibrationConfigBuilder.setIgnoreVibrationsOnWirelessCharger(true);
         createSystemReadyVibrationSettings();
 
         for (int usage : ALL_USAGES) {
@@ -333,7 +331,7 @@ public class VibrationSettingsTest {
                 any(BroadcastReceiver.class),
                 argThat(filter -> filter.matchAction(Intent.ACTION_BATTERY_CHANGED)), anyInt());
 
-        setIgnoreVibrationsOnWirelessCharger(true);
+        mVibrationConfigBuilder.setIgnoreVibrationsOnWirelessCharger(true);
         createSystemReadyVibrationSettings();
 
         for (int usage : ALL_USAGES) {
@@ -343,7 +341,7 @@ public class VibrationSettingsTest {
 
     @Test
     public void shouldIgnoreVibration_receivesWirelessChargingIntent_doesNotAllowFromAnyUsage() {
-        setIgnoreVibrationsOnWirelessCharger(true);
+        mVibrationConfigBuilder.setIgnoreVibrationsOnWirelessCharger(true);
         createSystemReadyVibrationSettings();
 
         Intent wirelessChargingIntent = getBatteryChangedIntent(BATTERY_PLUGGED_WIRELESS);
@@ -357,7 +355,7 @@ public class VibrationSettingsTest {
 
     @Test
     public void shouldIgnoreVibration_receivesNonWirelessChargingIntent_allowsAnyUsage() {
-        setIgnoreVibrationsOnWirelessCharger(true);
+        mVibrationConfigBuilder.setIgnoreVibrationsOnWirelessCharger(true);
         createSystemReadyVibrationSettings();
 
         Intent wirelessChargingIntent = getBatteryChangedIntent(BATTERY_PLUGGED_WIRELESS);
@@ -454,7 +452,7 @@ public class VibrationSettingsTest {
     @Test
     public void shouldIgnoreVibration_withoutAudioManager_allowsAllVibrations() {
         mVibrationSettings = new VibrationSettings(mContextSpy,
-                new Handler(mTestLooper.getLooper()), mVibrationConfigMock);
+                new Handler(mTestLooper.getLooper()), mVibrationConfigBuilder.build());
         mVibrationSettings.onSystemReady(mPackageManagerInternalMock,
                 mPowerManagerInternalMock, mActivityManagerMock, mVirtualDeviceManagerInternalMock,
                 /* audioManager= */ null);
@@ -604,7 +602,8 @@ public class VibrationSettingsTest {
 
     @Test
     public void shouldIgnoreVibration_withKeyboardSettingsOff_shouldIgnoreKeyboardVibration() {
-        setKeyboardVibrationSettingsSupported(true);
+        mVibrationConfigBuilder.setKeyboardVibrationSettingsSupported(true);
+        createSystemReadyVibrationSettings();
         setUserSetting(Settings.System.HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_MEDIUM);
         setUserSetting(Settings.System.KEYBOARD_VIBRATION_ENABLED, 0 /* OFF*/);
 
@@ -626,7 +625,8 @@ public class VibrationSettingsTest {
 
     @Test
     public void shouldIgnoreVibration_withKeyboardSettingsOn_shouldNotIgnoreKeyboardVibration() {
-        setKeyboardVibrationSettingsSupported(true);
+        mVibrationConfigBuilder.setKeyboardVibrationSettingsSupported(true);
+        createSystemReadyVibrationSettings();
         setUserSetting(Settings.System.HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_OFF);
         setUserSetting(Settings.System.KEYBOARD_VIBRATION_ENABLED, 1 /* ON */);
 
@@ -642,7 +642,8 @@ public class VibrationSettingsTest {
 
     @Test
     public void shouldIgnoreVibration_notSupportKeyboardVibration_followsTouchFeedbackSettings() {
-        setKeyboardVibrationSettingsSupported(false);
+        mVibrationConfigBuilder.setKeyboardVibrationSettingsSupported(false);
+        createSystemReadyVibrationSettings();
         setUserSetting(Settings.System.HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_OFF);
         setUserSetting(Settings.System.KEYBOARD_VIBRATION_ENABLED, 1 /* ON */);
 
@@ -691,16 +692,18 @@ public class VibrationSettingsTest {
         for (int usage : ALL_USAGES) {
             // Non-system vibration
             assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(createCallerInfo(
-                    UID, "some.app", usage), vibrateStartTime));
-            // Vibration with UID zero
+                    NON_SYSTEM_UID, "some.app", usage), vibrateStartTime));
+            // Vibration with ROOT UID
             assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                    createCallerInfo(/* uid= */ 0, "", usage), vibrateStartTime));
+                    createCallerInfo(Process.ROOT_UID, "", usage), vibrateStartTime));
             // System vibration
             assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
                     createCallerInfo(Process.SYSTEM_UID, "", usage), vibrateStartTime));
+            assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
+                    createCallerInfo(SECONDARY_USER_SYSTEM_UID, "", usage), vibrateStartTime));
             // SysUI vibration
             assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                    createCallerInfo(UID, SYSUI_PACKAGE_NAME, usage), vibrateStartTime));
+                    createCallerInfo(NON_SYSTEM_UID, SYSUI_PACKAGE_NAME, usage), vibrateStartTime));
         }
     }
 
@@ -718,16 +721,19 @@ public class VibrationSettingsTest {
             for (int usage : ALL_USAGES) {
                 // Non-system vibration
                 assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                        createCallerInfo(UID, "some.app", usage), vibrateStartTime));
+                        createCallerInfo(NON_SYSTEM_UID, "some.app", usage), vibrateStartTime));
                 // Vibration with UID zero
                 assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                        createCallerInfo(/* uid= */ 0, "", usage), vibrateStartTime));
+                        createCallerInfo(Process.ROOT_UID, "", usage), vibrateStartTime));
                 // System vibration
                 assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
                         createCallerInfo(Process.SYSTEM_UID, "", usage), vibrateStartTime));
+                assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
+                        createCallerInfo(SECONDARY_USER_SYSTEM_UID, "", usage), vibrateStartTime));
                 // SysUI vibration
                 assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                        createCallerInfo(UID, SYSUI_PACKAGE_NAME, usage), vibrateStartTime));
+                        createCallerInfo(NON_SYSTEM_UID, SYSUI_PACKAGE_NAME, usage),
+                        vibrateStartTime));
             }
         }
     }
@@ -739,12 +745,12 @@ public class VibrationSettingsTest {
 
         for (int usage : ALL_USAGES) {
             assertTrue(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                    createCallerInfo(UID, "some.app", usage), vibrateStartTime));
+                    createCallerInfo(NON_SYSTEM_UID, "some.app", usage), vibrateStartTime));
         }
     }
 
     @Test
-    public void shouldCancelVibrationOnScreenOff_withUidZero_returnsFalseForUsagesInAllowlist() {
+    public void shouldCancelVibrationOnScreenOff_withRootUid_returnsFalseForUsagesInAllowlist() {
         long vibrateStartTime = 100;
         mockGoToSleep(vibrateStartTime + 10, PowerManager.GO_TO_SLEEP_REASON_DEVICE_ADMIN);
 
@@ -758,10 +764,10 @@ public class VibrationSettingsTest {
         for (int usage : ALL_USAGES) {
             if (expectedAllowedVibrations.contains(usage)) {
                 assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                        createCallerInfo(/* uid= */ 0, "", usage), vibrateStartTime));
+                        createCallerInfo(Process.ROOT_UID, "", usage), vibrateStartTime));
             } else {
                 assertTrue(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                        createCallerInfo(/* uid= */ 0, "", usage), vibrateStartTime));
+                        createCallerInfo(Process.ROOT_UID, "", usage), vibrateStartTime));
             }
         }
     }
@@ -782,9 +788,13 @@ public class VibrationSettingsTest {
             if (expectedAllowedVibrations.contains(usage)) {
                 assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
                         createCallerInfo(Process.SYSTEM_UID, "", usage), vibrateStartTime));
+                assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
+                        createCallerInfo(SECONDARY_USER_SYSTEM_UID, "", usage), vibrateStartTime));
             } else {
                 assertTrue(mVibrationSettings.shouldCancelVibrationOnScreenOff(
                         createCallerInfo(Process.SYSTEM_UID, "", usage), vibrateStartTime));
+                assertTrue(mVibrationSettings.shouldCancelVibrationOnScreenOff(
+                        createCallerInfo(SECONDARY_USER_SYSTEM_UID, "", usage), vibrateStartTime));
             }
         }
     }
@@ -804,17 +814,25 @@ public class VibrationSettingsTest {
         for (int usage : ALL_USAGES) {
             if (expectedAllowedVibrations.contains(usage)) {
                 assertFalse(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                        createCallerInfo(UID, SYSUI_PACKAGE_NAME, usage), vibrateStartTime));
+                        createCallerInfo(NON_SYSTEM_UID, SYSUI_PACKAGE_NAME, usage),
+                        vibrateStartTime));
             } else {
                 assertTrue(mVibrationSettings.shouldCancelVibrationOnScreenOff(
-                        createCallerInfo(UID, SYSUI_PACKAGE_NAME, usage), vibrateStartTime));
+                        createCallerInfo(NON_SYSTEM_UID, SYSUI_PACKAGE_NAME, usage),
+                        vibrateStartTime));
             }
         }
     }
 
     @Test
     public void getDefaultIntensity_returnsIntensityFromVibratorConfig() {
-        setDefaultIntensity(VIBRATION_INTENSITY_HIGH);
+        mVibrationConfigBuilder.setDefaultAlarmVibrationIntensity(VIBRATION_INTENSITY_HIGH);
+        mVibrationConfigBuilder.setDefaultRingVibrationIntensity(VIBRATION_INTENSITY_HIGH);
+        mVibrationConfigBuilder.setDefaultNotificationVibrationIntensity(VIBRATION_INTENSITY_HIGH);
+        mVibrationConfigBuilder.setDefaultHapticFeedbackIntensity(VIBRATION_INTENSITY_HIGH);
+        mVibrationConfigBuilder.setDefaultMediaVibrationIntensity(VIBRATION_INTENSITY_HIGH);
+        mVibrationConfigBuilder.setDefaultKeyboardVibrationIntensity(VIBRATION_INTENSITY_HIGH);
+        createSystemReadyVibrationSettings();
         setUserSetting(Settings.System.ALARM_VIBRATION_INTENSITY, VIBRATION_INTENSITY_OFF);
         setUserSetting(Settings.System.HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_OFF);
         setUserSetting(Settings.System.HARDWARE_HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_OFF);
@@ -830,7 +848,13 @@ public class VibrationSettingsTest {
 
     @Test
     public void getCurrentIntensity_returnsIntensityFromSettings() {
-        setDefaultIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultAlarmVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultRingVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultNotificationVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultHapticFeedbackIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultMediaVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultKeyboardVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        createSystemReadyVibrationSettings();
         setUserSetting(Settings.System.ALARM_VIBRATION_INTENSITY, VIBRATION_INTENSITY_LOW);
         setUserSetting(Settings.System.HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_LOW);
         setUserSetting(Settings.System.HARDWARE_HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_LOW);
@@ -848,7 +872,13 @@ public class VibrationSettingsTest {
 
     @Test
     public void getCurrentIntensity_updateTriggeredAfterUserSwitched() {
-        setDefaultIntensity(USAGE_RINGTONE, VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultAlarmVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultRingVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultNotificationVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultHapticFeedbackIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultMediaVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        mVibrationConfigBuilder.setDefaultKeyboardVibrationIntensity(VIBRATION_INTENSITY_OFF);
+        createSystemReadyVibrationSettings();
         setUserSetting(Settings.System.RING_VIBRATION_INTENSITY, VIBRATION_INTENSITY_HIGH);
         assertEquals(VIBRATION_INTENSITY_HIGH,
                 mVibrationSettings.getCurrentIntensity(USAGE_RINGTONE));
@@ -869,7 +899,9 @@ public class VibrationSettingsTest {
 
     @Test
     public void getCurrentIntensity_noHardwareFeedbackValueUsesHapticFeedbackValue() {
-        setDefaultIntensity(USAGE_HARDWARE_FEEDBACK, VIBRATION_INTENSITY_MEDIUM);
+        mVibrationConfigBuilder.setDefaultHapticFeedbackIntensity(VIBRATION_INTENSITY_MEDIUM);
+        createSystemReadyVibrationSettings();
+
         setUserSetting(Settings.System.HAPTIC_FEEDBACK_INTENSITY, VIBRATION_INTENSITY_OFF);
         assertEquals(VIBRATION_INTENSITY_OFF, mVibrationSettings.getCurrentIntensity(USAGE_TOUCH));
         // If haptic feedback is off, fallback to default value.
@@ -890,16 +922,15 @@ public class VibrationSettingsTest {
 
     @Test
     public void getCurrentIntensity_ImeFeedbackValueReflectsToKeyboardVibrationSettings() {
-        setDefaultIntensity(USAGE_IME_FEEDBACK, VIBRATION_INTENSITY_MEDIUM);
-        setDefaultIntensity(USAGE_TOUCH, VIBRATION_INTENSITY_HIGH);
-
-        setKeyboardVibrationSettingsSupported(false);
-        mVibrationSettings.update();
+        mVibrationConfigBuilder.setDefaultKeyboardVibrationIntensity(VIBRATION_INTENSITY_MEDIUM);
+        mVibrationConfigBuilder.setDefaultHapticFeedbackIntensity(VIBRATION_INTENSITY_HIGH);
+        mVibrationConfigBuilder.setKeyboardVibrationSettingsSupported(false);
+        createSystemReadyVibrationSettings();
         assertEquals(VIBRATION_INTENSITY_HIGH,
                 mVibrationSettings.getCurrentIntensity(USAGE_IME_FEEDBACK));
 
-        setKeyboardVibrationSettingsSupported(true);
-        mVibrationSettings.update();
+        mVibrationConfigBuilder.setKeyboardVibrationSettingsSupported(true);
+        createSystemReadyVibrationSettings();
         assertEquals(VIBRATION_INTENSITY_MEDIUM,
                 mVibrationSettings.getCurrentIntensity(USAGE_IME_FEEDBACK));
     }
@@ -921,14 +952,15 @@ public class VibrationSettingsTest {
     private void assertVibrationIgnoredForUsageAndDevice(@VibrationAttributes.Usage int usage,
             int deviceId, Status expectedStatus) {
         CallerInfo callerInfo = new CallerInfo(
-                VibrationAttributes.createForUsage(usage), UID, deviceId, null, null);
+                VibrationAttributes.createForUsage(usage), NON_SYSTEM_UID, deviceId, null, null);
         assertEquals(errorMessageForUsage(usage), expectedStatus,
                 mVibrationSettings.shouldIgnoreVibration(callerInfo));
     }
 
     private void assertVibrationIgnoredForAttributes(VibrationAttributes attrs,
             Status expectedStatus) {
-        CallerInfo callerInfo = new CallerInfo(attrs, UID, Context.DEVICE_ID_DEFAULT, null, null);
+        CallerInfo callerInfo = new CallerInfo(attrs, NON_SYSTEM_UID,
+                Context.DEVICE_ID_DEFAULT, null, null);
         assertEquals(errorMessageForAttributes(attrs), expectedStatus,
                 mVibrationSettings.shouldIgnoreVibration(callerInfo));
     }
@@ -951,14 +983,14 @@ public class VibrationSettingsTest {
             @VibrationAttributes.Usage int usage, int deviceId,
             @VibrationAttributes.Flag int flags) {
         CallerInfo callerInfo = new CallerInfo(
-                new VibrationAttributes.Builder().setUsage(usage).setFlags(flags).build(), UID,
-                deviceId, null, null);
+                new VibrationAttributes.Builder().setUsage(usage).setFlags(flags).build(),
+                NON_SYSTEM_UID, deviceId, null, null);
         assertNull(errorMessageForUsage(usage),
                 mVibrationSettings.shouldIgnoreVibration(callerInfo));
     }
 
     private void assertVibrationNotIgnoredForAttributes(VibrationAttributes attrs) {
-        CallerInfo callerInfo = new CallerInfo(attrs, UID,
+        CallerInfo callerInfo = new CallerInfo(attrs, NON_SYSTEM_UID,
                 Context.DEVICE_ID_DEFAULT, null, null);
         assertNull(errorMessageForAttributes(attrs),
                 mVibrationSettings.shouldIgnoreVibration(callerInfo));
@@ -970,23 +1002,6 @@ public class VibrationSettingsTest {
 
     private String errorMessageForAttributes(VibrationAttributes attrs) {
         return "Error for attributes " + attrs;
-    }
-
-    private void setDefaultIntensity(@Vibrator.VibrationIntensity int intensity) {
-        when(mVibrationConfigMock.getDefaultVibrationIntensity(anyInt())).thenReturn(intensity);
-    }
-
-    private void setDefaultIntensity(@VibrationAttributes.Usage int usage,
-            @Vibrator.VibrationIntensity int intensity) {
-        when(mVibrationConfigMock.getDefaultVibrationIntensity(eq(usage))).thenReturn(intensity);
-    }
-
-    private void setIgnoreVibrationsOnWirelessCharger(boolean ignore) {
-        when(mVibrationConfigMock.ignoreVibrationsOnWirelessCharger()).thenReturn(ignore);
-    }
-
-    private void setKeyboardVibrationSettingsSupported(boolean supported) {
-        when(mVibrationConfigMock.isKeyboardVibrationSettingsSupported()).thenReturn(supported);
     }
 
     private void deleteUserSetting(String settingName) {

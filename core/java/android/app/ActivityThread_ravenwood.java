@@ -15,44 +15,31 @@
  */
 package android.app;
 
-import android.content.Context;
+import static org.junit.Assert.assertEquals;
 
-import java.util.Objects;
+import android.os.Looper;
 
 /**
  * Inject Ravenwood methods to {@link ActivityThread}.
+ *
+ * TODO: Move the initialization logic from {@link RavenwoodAppDriver} to this class.
+ * TODO: Port more initialization logic from {@link ActivityThread}.
  */
-public class ActivityThread_ravenwood {
+public final class ActivityThread_ravenwood {
     private ActivityThread_ravenwood() {
     }
 
     /**
-     * Equivalent to {@link ActivityThread#mInitialApplication}.
+     * Create a new instance, and also set it to sCurrentActivityThread.
+     * @return
      */
-    private static volatile Application sApplication;
+    public static ActivityThread createInstance() {
+        // This must be called on the main thread.
+        assertEquals(Looper.getMainLooper().getThread(), Thread.currentThread());
+        final var at = new ActivityThread();
 
-    /**
-     * Equivalent to {@link ActivityThread#getSystemContext}.
-     */
-    private static volatile Context sSystemContext;
+        ActivityThread.staticInitForRavenwood(at);
 
-    /** Initializer called by Ravenwood. */
-    public static void init(Application application, Context systemContext) {
-        sApplication = Objects.requireNonNull(application);
-        sSystemContext = Objects.requireNonNull(application);
-    }
-
-    private static <T> T ensureInitialized(T object) {
-        return Objects.requireNonNull(object, "ActivityThread_ravenwood not initialized");
-    }
-
-    /** Override the corresponding ActivityThread method. */
-    public static Context currentSystemContext() {
-        return ensureInitialized(sSystemContext);
-    }
-
-    /** Override the corresponding ActivityThread method. */
-    public static Application currentApplication() {
-        return ensureInitialized(sApplication);
+        return at;
     }
 }

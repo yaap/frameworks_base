@@ -35,7 +35,7 @@ import android.widget.TextView
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.recyclerview.widget.RecyclerView
-import com.android.settingslib.media.InputMediaDevice
+import com.android.media.flags.Flags
 import com.android.settingslib.media.MediaDevice
 import com.android.systemui.FontStyles.GSF_TITLE_MEDIUM_EMPHASIZED
 import com.android.systemui.FontStyles.GSF_TITLE_SMALL
@@ -52,58 +52,16 @@ import com.google.android.material.slider.Slider
 /** A RecyclerView adapter for the legacy UI media output dialog device list. */
 class MediaOutputAdapter(controller: MediaSwitchingController) :
     MediaOutputAdapterBase(controller) {
-    private var mGroupSelectedItems: Boolean? = null // Unset until the first render.
 
     /** Refreshes the RecyclerView dataset and forces re-render. */
     override fun updateItems() {
-        if (mGroupSelectedItems == null) {
-            // Decide whether to group devices only during the initial render.
-            mGroupSelectedItems = mController.selectedMediaDevice.size > 1
-        }
-
         val newList =
             mController.getMediaItemList(false /* addConnectNewDeviceButton */).toMutableList()
-
-        addSeparatorForTheFirstGroupDivider(newList)
-        coalesceSelectedDevices(newList)
 
         mMediaItemList.clear()
         mMediaItemList.addAll(newList)
 
         notifyDataSetChanged()
-    }
-
-    private fun addSeparatorForTheFirstGroupDivider(newList: MutableList<MediaItem>) {
-        for ((i, item) in newList.withIndex()) {
-            if (item.mediaItemType == TYPE_GROUP_DIVIDER) {
-                newList[i] = MediaItem.createGroupDividerWithSeparatorMediaItem(item.title)
-                break
-            }
-        }
-    }
-
-    /**
-     * If there are 2+ selected devices, adds an "Connected speakers" expandable group divider and
-     * displays a single session control instead of individual device controls.
-     */
-    private fun coalesceSelectedDevices(newList: MutableList<MediaItem>) {
-        val selectedDevices = newList.filter { this.isSelectedDevice(it) }
-
-        if (mGroupSelectedItems == true && selectedDevices.size > 1) {
-            newList.removeAll(selectedDevices.toSet())
-            if (mController.isGroupListCollapsed) {
-                newList.add(0, MediaItem.createDeviceGroupMediaItem())
-            } else {
-                newList.addAll(0, selectedDevices)
-            }
-            newList.add(0, mController.connectedSpeakersExpandableGroupDivider)
-        }
-    }
-
-    private fun isSelectedDevice(mediaItem: MediaItem): Boolean {
-        return mediaItem.mediaDevice.getOrNull()?.let { device ->
-            isDeviceIncluded(mController.selectedMediaDevice, device)
-        } ?: false
     }
 
     override fun getItemId(position: Int): Long {
@@ -208,6 +166,9 @@ class MediaOutputAdapter(controller: MediaSwitchingController) :
                 R.dimen.media_output_item_content_vertical_margin_active
             )
 
+        private val mDisabledContentAlpha =
+            mContext.resources.getFloat(R.dimen.media_output_item_disabled_alpha)
+
         private val mButtonRippleBackground =
             AppCompatResources.getDrawable(
                 mContext,
@@ -254,8 +215,8 @@ class MediaOutputAdapter(controller: MediaSwitchingController) :
             deviceStatusIcon: Drawable?,
         ) {
             val fixedVolumeConnected = connectionState == CONNECTED && restrictVolumeAdjustment
-            val colorTheme = ColorTheme(fixedVolumeConnected, deviceDisabled)
-
+            val contentAlpha = if (deviceDisabled) mDisabledContentAlpha else DEVICE_ACTIVE_ALPHA
+            val colorTheme = ColorTheme(fixedVolumeConnected, contentAlpha)
             updateItemBackground()
             updateTitle(device.name, connectionState, colorTheme)
             updateTitleIcon(device, connectionState, restrictVolumeAdjustment, colorTheme)
@@ -336,7 +297,7 @@ class MediaOutputAdapter(controller: MediaSwitchingController) :
                     },
                     settleCallback = { mController.logInteractionAdjustVolume(device) },
                     deviceDrawable = mController.getDeviceIconDrawable(device),
-                    isInputDevice = device is InputMediaDevice,
+                    isInputDevice = device.isInputDevice,
                     isVolumeControlAllowed = mController.isVolumeControlEnabled(device),
                     currentVolume = device.currentVolume,
                     maxVolume = device.maxVolume,
@@ -358,7 +319,17 @@ class MediaOutputAdapter(controller: MediaSwitchingController) :
             initSeekbar(
                 volumeChangeCallback = { volume: Int -> mController.adjustSessionVolume(volume) },
                 deviceDrawable = groupDrawable,
-                isVolumeControlAllowed = mController.isVolumeControlEnabledForSession,
+                // When Flags.enableOutputSwitcherPersonalAudioSharing() is on, no need to show
+                // disabled seek bar for volume control disabled session because devices won't be
+                // collapsed.
+                // This is a side effect of broadcast design: broadcast devices should be controlled
+                // separately so they should not be collapsed, so isVolumeControlEnabledForSession
+                // is added to {@link MediaOutputAdapter#updateItems()}. The logic will spread to
+                // casting devices without group volume control, so disabling seek bar will be
+                // unnecessary when Flags.enableOutputSwitcherPersonalAudioSharing() is on.
+                isVolumeControlAllowed =
+                    Flags.enableOutputSwitcherPersonalAudioSharing() ||
+                        mController.isVolumeControlEnabledForSession,
                 currentVolume = mController.sessionVolume,
                 maxVolume = mController.sessionVolumeMax,
                 colorTheme = colorTheme,
@@ -695,7 +666,7 @@ class MediaOutputAdapter(controller: MediaSwitchingController) :
 
     private inner class ColorTheme(
         isConnectedWithFixedVolume: Boolean = false,
-        deviceDisabled: Boolean = false,
+        val contentAlpha: Float = DEVICE_ACTIVE_ALPHA,
     ) {
         private val colorScheme: MediaOutputColorScheme = mController.colorScheme
 
@@ -728,12 +699,10 @@ class MediaOutputAdapter(controller: MediaSwitchingController) :
         val sliderInactiveColor = colorScheme.getSecondaryContainer()
         val sliderInactiveIconColor = colorScheme.getOnSurface()
         val containerRestrictedVolumeBackground = colorScheme.getPrimary()
-        val contentAlpha = if (deviceDisabled) DEVICE_DISABLED_ALPHA else DEVICE_ACTIVE_ALPHA
     }
 
     companion object {
         private const val TAG = "MediaOutputAdapter"
-        private const val DEVICE_DISABLED_ALPHA = 0.5f
         private const val DEVICE_ACTIVE_ALPHA = 1f
         private const val NO_VOLUME_SET = -1
     }

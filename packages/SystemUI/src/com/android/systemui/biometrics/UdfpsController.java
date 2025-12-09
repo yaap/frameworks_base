@@ -26,6 +26,7 @@ import static android.hardware.biometrics.BiometricRequestConstants.REASON_ENROL
 import static android.hardware.biometrics.BiometricRequestConstants.REASON_ENROLL_FIND_SENSOR;
 
 import static com.android.internal.util.LatencyTracker.ACTION_UDFPS_ILLUMINATE;
+import static com.android.internal.util.LatencyTracker.ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP;
 import static com.android.internal.util.Preconditions.checkNotNull;
 import static com.android.systemui.classifier.Classifier.UDFPS_AUTHENTICATION;
 
@@ -96,6 +97,7 @@ import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFaceAuthInt
 import com.android.systemui.doze.DozeReceiver;
 import com.android.systemui.dump.DumpManager;
 import com.android.systemui.keyguard.ScreenLifecycle;
+import com.android.systemui.keyguard.WakefulnessLifecycle;
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor;
 import com.android.systemui.log.SessionTracker;
 import com.android.systemui.plugins.FalsingManager;
@@ -114,6 +116,9 @@ import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
 import com.android.systemui.util.concurrency.DelayableExecutor;
 import com.android.systemui.util.concurrency.Execution;
 import com.android.systemui.util.time.SystemClock;
+
+import com.google.android.msdl.data.model.MSDLToken;
+import com.google.android.msdl.domain.MSDLPlayer;
 
 import dagger.Lazy;
 
@@ -190,6 +195,7 @@ public class UdfpsController implements DozeReceiver, Dumpable {
     @NonNull private final CoroutineScope mScope;
     @NonNull private final InputManager mInputManager;
     @NonNull private final SelectedUserInteractor mSelectedUserInteractor;
+    @NonNull private final MSDLPlayer mMsdlPlayer;
     private final boolean mIgnoreRefreshRate;
     private final KeyguardTransitionInteractor mKeyguardTransitionInteractor;
 
@@ -263,6 +269,29 @@ public class UdfpsController implements DozeReceiver, Dumpable {
             mScreenOn = false;
         }
     };
+
+    private final WakefulnessLifecycle mWakefulnessLifecycle;
+    private final WakefulnessLifecycle.Observer mWakefulnessLifecycleObserver =
+            new WakefulnessLifecycle.Observer() {
+                @Override
+                public void onStartedGoingToSleep() {
+                    mLatencyTracker.onActionCancel(
+                            ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP);
+                    mLatencyTracker.onActionStart(
+                            ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP);
+                }
+            };
+
+    private final View.OnAttachStateChangeListener mOverlayAttachStateListener =
+            new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(@NonNull View v) {
+                    mLatencyTracker.onActionEnd(ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP);
+                }
+
+                @Override
+                public void onViewDetachedFromWindow(@NonNull View v) {}
+            };
 
     @Override
     public void dump(@NonNull PrintWriter pw, @NonNull String[] args) {
@@ -699,7 +728,9 @@ public class UdfpsController implements DozeReceiver, Dumpable {
             @NonNull UdfpsOverlayInteractor udfpsOverlayInteractor,
             @NonNull PowerInteractor powerInteractor,
             @Application CoroutineScope scope,
-            UserActivityNotifier userActivityNotifier) {
+            UserActivityNotifier userActivityNotifier,
+            Lazy<WakefulnessLifecycle> wakefulnessLifecycle,
+            MSDLPlayer msdlPlayer) {
         mContext = context;
         mExecution = execution;
         mVibrator = vibrator;
@@ -752,6 +783,7 @@ public class UdfpsController implements DozeReceiver, Dumpable {
         mDeviceEntryUdfpsTouchOverlayViewModel = deviceEntryUdfpsTouchOverlayViewModel;
         mDefaultUdfpsTouchOverlayViewModel = defaultUdfpsTouchOverlayViewModel;
         mPromptUdfpsTouchOverlayViewModel = promptUdfpsTouchOverlayViewModel;
+        mMsdlPlayer = msdlPlayer;
 
         mDumpManager.registerDumpable(TAG, this);
 
@@ -778,6 +810,11 @@ public class UdfpsController implements DozeReceiver, Dumpable {
 
         udfpsHapticsSimulator.setUdfpsController(this);
         udfpsShell.setUdfpsOverlayController(mUdfpsOverlayController);
+
+        mWakefulnessLifecycle = wakefulnessLifecycle.get();
+        if (mWakefulnessLifecycle != null) {
+            mWakefulnessLifecycle.addObserver(mWakefulnessLifecycleObserver);
+        }
     }
 
     /**
@@ -827,7 +864,9 @@ public class UdfpsController implements DozeReceiver, Dumpable {
                     + " isn't running on keyguard. Skip show.");
             return;
         }
-        if (overlay.show(mOverlayParams)) {
+        final View.OnAttachStateChangeListener listener =
+                mWakefulnessLifecycle == null ? null : mOverlayAttachStateListener;
+        if (overlay.show(mOverlayParams, listener)) {
             Log.d(TAG, "showUdfpsOverlay | adding window reason=" + requestReason);
             mOnFingerDown = false;
             mAttemptedToDismissKeyguard = false;
@@ -890,14 +929,18 @@ public class UdfpsController implements DozeReceiver, Dumpable {
             mKeyguardViewManager.showPrimaryBouncer(true, "UdfpsController#onAodInterrupt");
 
             // play the same haptic as the DeviceEntryIcon longpress
-            if (mOverlay != null && mOverlay.getTouchOverlay() != null) {
-                mVibrator.performHapticFeedback(
-                        mOverlay.getTouchOverlay(),
-                        UdfpsController.LONG_PRESS
-                );
+            if (Flags.msdlFeedback()) {
+                mMsdlPlayer.playToken(MSDLToken.LONG_PRESS, null);
             } else {
-                Log.e(TAG, "No haptics played. Could not obtain overlay view to perform"
-                        + "vibration. Either the controller overlay is null or has no view");
+                if (mOverlay != null && mOverlay.getTouchOverlay() != null) {
+                    mVibrator.performHapticFeedback(
+                            mOverlay.getTouchOverlay(),
+                            UdfpsController.LONG_PRESS
+                    );
+                } else {
+                    Log.e(TAG, "No haptics played. Could not obtain overlay view to perform"
+                            + "vibration. Either the controller overlay is null or has no view");
+                }
             }
             return;
         }

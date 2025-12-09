@@ -19,27 +19,28 @@ package com.android.systemui;
 import static android.content.Intent.ACTION_PACKAGE_ADDED;
 import static android.content.Intent.EXTRA_CHANGED_COMPONENT_NAME_LIST;
 import static android.content.pm.PackageManager.MATCH_SYSTEM_ONLY;
-import static android.view.Display.INVALID_DISPLAY;
+import static android.view.KeyEvent.KEYCODE_BACK;
 import static android.view.MotionEvent.ACTION_CANCEL;
 import static android.view.MotionEvent.ACTION_DOWN;
 import static android.view.MotionEvent.ACTION_UP;
 import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_3BUTTON;
 import static android.window.BackEvent.EDGE_NONE;
 
+import static com.android.systemui.navigationbar.gestural.EdgeBackGestureHandler.DEBUG_MISSING_GESTURE;
+import static com.android.systemui.navigationbar.gestural.EdgeBackGestureHandler.DEBUG_MISSING_GESTURE_TAG;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_AWAKE;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_BOUNCER_SHOWING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_COMMUNAL_HUB_SHOWING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_DEVICE_DOZING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_DEVICE_DREAMING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_FREEFORM_ACTIVE_IN_DESKTOP_MODE;
+import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_NAVIGATION_BAR_DISABLED;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_STATUS_BAR_KEYGUARD_GOING_AWAY;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_STATUS_BAR_KEYGUARD_SHOWING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_STATUS_BAR_KEYGUARD_SHOWING_OCCLUDED;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_VOICE_INTERACTION_WINDOW_SHOWING;
 import static com.android.systemui.shared.system.QuickStepContract.SYSUI_STATE_WAKEFULNESS_TRANSITION;
 import static com.android.systemui.shared.system.QuickStepContract.addInterface;
-import static com.android.window.flags.Flags.predictiveBackSwipeEdgeNoneApi;
-import static com.android.window.flags.Flags.predictiveBackThreeButtonNav;
 
 import android.annotation.FloatRange;
 import android.annotation.Nullable;
@@ -75,8 +76,8 @@ import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
+import android.view.View;
 import android.view.accessibility.AccessibilityManager;
-import android.view.inputmethod.Flags;
 import android.view.inputmethod.InputMethodManager;
 
 import androidx.annotation.NonNull;
@@ -115,6 +116,7 @@ import com.android.systemui.settings.UserTracker;
 import com.android.systemui.shade.ShadeViewController;
 import com.android.systemui.shade.display.StatusBarTouchShadeDisplayPolicy;
 import com.android.systemui.shade.domain.interactor.ShadeInteractor;
+import com.android.systemui.shade.domain.interactor.ShadeModeInteractor;
 import com.android.systemui.shade.shared.flag.ShadeWindowGoesAround;
 import com.android.systemui.shared.recents.ILauncherProxy;
 import com.android.systemui.shared.recents.ISystemUiProxy;
@@ -175,6 +177,7 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
     private final NotificationShadeWindowController mStatusBarWinController;
     private final Provider<SceneInteractor> mSceneInteractor;
     private final Provider<ShadeInteractor> mShadeInteractor;
+    private final Provider<ShadeModeInteractor> mShadeModeInteractor;
     private final StatusBarTouchShadeDisplayPolicy mShadeDisplayPolicy;
 
     private final Runnable mConnectionRunnable = () ->
@@ -276,8 +279,7 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
                         } else if (action == ACTION_UP) {
                             // Gesture was too short to be picked up by scene container touch
                             // handling; programmatically start the transition to the shade.
-                            mShadeInteractor.get()
-                                    .expandNotificationsShade("short launcher swipe", null);
+                            onShadeExpansionGesture(event, "short launcher swipe");
                         }
                     }
                     event.recycle();
@@ -287,7 +289,7 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
 
         @VisibleForTesting
         public void moveShadeWindowIfNeeded(MotionEvent event) {
-            if (ShadeWindowGoesAround.isEnabled() && SceneContainerFlag.isEnabled()) {
+            if (ShadeWindowGoesAround.isEnabled()) {
                 Trace.beginSection("LauncherProxyService#moveShadeWindowIfNeeded");
                 // TODO: b/407496148 - Refactor to use DisplayMetricsRepository instead
                 final DisplayInfo displayInfo = new DisplayInfo();
@@ -303,9 +305,7 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
             if (ShadeWindowGoesAround.isEnabled() && !SceneContainerFlag.isEnabled()) {
                 // For legacy shade case, don't attempt to handle touch events on display that
                 // doesn't have the shade. They're handled with SceneContainerFlag enabled.
-                boolean touchingDisplayWithoutShade =
-                        event.getDisplayId() != mShadeDisplayPolicy.getDisplayId().getValue();
-                return touchingDisplayWithoutShade;
+                return event.getDisplayId() != mShadeDisplayPolicy.getDisplayId().getValue();
             }
             return false;
         }
@@ -317,11 +317,9 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
                 if (SceneContainerFlag.isEnabled()) {
                     int action = event.getActionMasked();
                     if (action == ACTION_DOWN) {
-                        mSceneInteractor.get().onRemoteUserInputStarted(
-                                "trackpad swipe");
+                        mSceneInteractor.get().onRemoteUserInputStarted("trackpad swipe");
                     } else if (action == ACTION_UP) {
-                        mShadeInteractor.get()
-                                .expandNotificationsShade("short trackpad swipe", null);
+                        onShadeExpansionGesture(event, "short trackpad swipe");
                     }
                     mStatusBarWinController.getWindowRootView().dispatchTouchEvent(event);
                 } else {
@@ -344,41 +342,41 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
         }
 
         @Override
-        public void onBackEvent(@Nullable KeyEvent keyEvent) throws RemoteException {
-            final int displayId = keyEvent == null ? INVALID_DISPLAY : keyEvent.getDisplayId();
-            if (predictiveBackThreeButtonNav() && predictiveBackSwipeEdgeNoneApi()
-                    && mBackAnimation != null && keyEvent != null) {
+        public void onBackEvent(@Nullable KeyEvent keyEvent, int displayId) throws RemoteException {
+            if (mBackAnimation != null && keyEvent != null) {
+                if (DEBUG_MISSING_GESTURE && keyEvent.isCanceled()) {
+                    Log.d(DEBUG_MISSING_GESTURE_TAG,
+                            "Cancel back [launcher key event]: " + keyEvent);
+                }
                 mBackAnimation.setTriggerBack(!keyEvent.isCanceled());
                 mBackAnimation.onBackMotion(/* touchX */ 0, /* touchY */ 0, keyEvent.getAction(),
                         EDGE_NONE, displayId);
             } else {
-                verifyCallerAndClearCallingIdentityPostMain("onBackPressed", () -> {
-                    sendEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, displayId);
-                    sendEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK, displayId);
-                });
+                onKeyEvent(KEYCODE_BACK, displayId);
             }
+        }
+
+        @Override
+        public void onKeyEvent(int keycode, int displayId) {
+            verifyCallerAndClearCallingIdentityPostMain(
+                    "onKeyEvent " + KeyEvent.keyCodeToString(keycode) + " displayId=" + displayId,
+                    () -> {
+                        sendEvent(KeyEvent.ACTION_DOWN, keycode, displayId);
+                        sendEvent(KeyEvent.ACTION_UP, keycode, displayId);
+                    });
         }
 
         @Override
         public void onImeSwitcherPressed() {
             // TODO(b/204901476) We're intentionally using the default display for now since
             // Launcher/Taskbar isn't display aware.
-            if (Flags.imeSwitcherRevamp()) {
-                mContext.getSystemService(InputMethodManager.class)
-                        .onImeSwitchButtonClickFromSystem(mDisplayTracker.getDefaultDisplayId());
-            } else {
-                mContext.getSystemService(InputMethodManager.class)
-                        .showInputMethodPickerFromSystem(true /* showAuxiliarySubtypes */,
-                                mDisplayTracker.getDefaultDisplayId());
-            }
+            mContext.getSystemService(InputMethodManager.class)
+                    .onImeSwitchButtonClickFromSystem(mDisplayTracker.getDefaultDisplayId());
             mUiEventLogger.log(KeyButtonView.NavBarButtonEvent.NAVBAR_IME_SWITCHER_BUTTON_TAP);
         }
 
         @Override
         public void onImeSwitcherLongPress() {
-            if (!Flags.imeSwitcherRevamp()) {
-                return;
-            }
             // TODO(b/204901476) We're intentionally using the default display for now since
             // Launcher/Taskbar isn't display aware.
             mContext.getSystemService(InputMethodManager.class)
@@ -506,6 +504,32 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
         public void toggleQuickSettingsPanel() {
             verifyCallerAndClearCallingIdentityPostMain("toggleQuickSettingsPanel", () ->
                     mCommandQueue.toggleQuickSettingsPanel());
+        }
+
+        private void onShadeExpansionGesture(MotionEvent event, String reason) {
+            if (!SceneContainerFlag.isEnabled()) {
+                return;
+            }
+            if (!mShadeModeInteractor.get().isDualShade()) {
+                mShadeInteractor.get().expandNotificationsShade(reason, null);
+                return;
+            }
+
+            final DisplayInfo displayInfo = new DisplayInfo();
+            mDisplayTracker.getDisplay(event.getDisplayId()).getDisplayInfo(displayInfo);
+            boolean isLeftSide = event.getX() < displayInfo.logicalWidth / 2f;
+
+            boolean isRtlLayout =
+                    mContext.getResources().getConfiguration().getLayoutDirection()
+                            == View.LAYOUT_DIRECTION_RTL;
+
+            boolean isStartSide = (isLeftSide && !isRtlLayout) || (!isLeftSide && isRtlLayout);
+
+            if (isStartSide) {
+                mShadeInteractor.get().expandNotificationsShade(reason, null);
+            } else {
+                mShadeInteractor.get().expandQuickSettingsShade(reason, null);
+            }
         }
 
         private boolean verifyCaller(String reason) {
@@ -745,6 +769,7 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
             PerDisplayRepository<SysUiState> perDisplaySysUiStateRepository,
             Provider<SceneInteractor> sceneInteractor,
             Provider<ShadeInteractor> shadeInteractor,
+            Provider<ShadeModeInteractor> shadeModeInteractor,
             StatusBarTouchShadeDisplayPolicy shadeDisplayPolicy,
             UserTracker userTracker,
             UserManager userManager,
@@ -788,6 +813,7 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
         mStatusBarWinController = statusBarWinController;
         mSceneInteractor = sceneInteractor;
         mShadeInteractor = shadeInteractor;
+        mShadeModeInteractor = shadeModeInteractor;
         mShadeDisplayPolicy = shadeDisplayPolicy;
         mUserTracker = userTracker;
         mConnectionBackoffAttempts = 0;
@@ -915,6 +941,10 @@ public class LauncherProxyService implements CallbackController<LauncherProxyLis
         if (navBarView != null) {
             navBarView.updateDisabledSystemUiStateFlags(displaySysuiState);
         }
+
+        displaySysuiState.setFlag(SYSUI_STATE_NAVIGATION_BAR_DISABLED,
+                !mNavBarControllerLazy.get().canCreateNavBarOrTaskBar(displayId))
+                .commitUpdate();
     }
 
     /** Force updates SystemUI state flags prior to sending them to Launcher. */

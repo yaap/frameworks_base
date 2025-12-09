@@ -25,7 +25,7 @@ import com.android.systemui.statusbar.notification.collection.provider.SectionSt
 import com.android.systemui.statusbar.notification.promoted.AutomaticPromotionCoordinator
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi
 import com.android.systemui.statusbar.notification.shared.NotificationMinimalism
-import com.android.systemui.statusbar.notification.shared.NotificationsLiveDataStoreRefactor
+import com.android.systemui.statusbar.notification.shared.NotificationSummarizationOnboardingUi
 import javax.inject.Inject
 
 /**
@@ -39,7 +39,6 @@ class NotifCoordinatorsImpl
 @Inject
 constructor(
     sectionStyleProvider: SectionStyleProvider,
-    dataStoreCoordinator: DataStoreCoordinator,
     hideLocallyDismissedNotifsCoordinator: HideLocallyDismissedNotifsCoordinator,
     hideNotifsForOtherUsersCoordinator: HideNotifsForOtherUsersCoordinator,
     keyguardCoordinator: KeyguardCoordinator,
@@ -69,6 +68,7 @@ constructor(
     dismissibilityCoordinator: DismissibilityCoordinator,
     statsLoggerCoordinator: NotificationStatsLoggerCoordinator,
     bundleCoordinator: BundleCoordinator,
+    summarizationCoordinator: SummarizationCoordinator,
     automaticPromotionCoordinator: AutomaticPromotionCoordinator,
 ) : NotifCoordinators {
 
@@ -78,9 +78,6 @@ constructor(
 
     /** Creates all the coordinators. */
     init {
-        // Attach core coordinators.
-        mCoreCoordinators.add(dataStoreCoordinator)
-
         // Attach normal coordinators.
         mCoordinators.add(hideLocallyDismissedNotifsCoordinator)
         mCoordinators.add(hideNotifsForOtherUsersCoordinator)
@@ -115,9 +112,10 @@ constructor(
         if (NotificationBundleUi.isEnabled) {
             mCoordinators.add(bundleCoordinator)
         }
-        if (NotificationsLiveDataStoreRefactor.isEnabled) {
-            mCoordinators.add(statsLoggerCoordinator)
+        if (NotificationSummarizationOnboardingUi.isEnabled) {
+            mCoordinators.add(summarizationCoordinator)
         }
+        mCoordinators.add(statsLoggerCoordinator)
         // Manually add Ordered Sections
         if (NotificationMinimalism.isEnabled) {
             mOrderedSections.add(lockScreenMinimalismCoordinator.topOngoingSectioner) // Top Ongoing

@@ -24,7 +24,7 @@ import static android.app.admin.DevicePolicyManager.PASSWORD_QUALITY_SOMETHING;
 import static android.app.admin.DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED;
 import static android.security.Flags.shouldTrustManagerListenForPrimaryAuth;
 
-import static com.android.internal.widget.flags.Flags.hideLastCharWithPhysicalInput;
+import static com.android.internal.widget.flags.Flags.enableDefaultVisibilityForSensitiveInputs;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -42,7 +42,6 @@ import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.UserInfo;
-import android.hardware.input.InputManagerGlobal;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -60,7 +59,6 @@ import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.util.SparseIntArray;
 import android.util.SparseLongArray;
-import android.view.InputDevice;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.ArrayUtils;
@@ -72,9 +70,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Utilities for the lock pattern and its settings.
@@ -221,6 +221,7 @@ public class LockPatternUtils {
     private final ContentResolver mContentResolver;
     private DevicePolicyManager mDevicePolicyManager;
     private ILockSettings mLockSettingsService;
+    private final Supplier<Duration> mTimeSinceBootSupplier;
     private UserManager mUserManager;
     private final Handler mHandler;
     private final SparseLongArray mLockoutDeadlines = new SparseLongArray();
@@ -308,17 +309,23 @@ public class LockPatternUtils {
 
     @UnsupportedAppUsage
     public LockPatternUtils(Context context) {
-        this(context, null);
+        this(context, null, LockPatternUtils::systemTimeSinceBoot);
+    }
+
+    private static Duration systemTimeSinceBoot() {
+        return Duration.ofMillis(SystemClock.elapsedRealtime());
     }
 
     @VisibleForTesting
-    public LockPatternUtils(Context context, ILockSettings lockSettings) {
+    public LockPatternUtils(
+            Context context, ILockSettings lockSettings, Supplier<Duration> timeSinceBootSupplier) {
         mContext = context;
         mContentResolver = context.getContentResolver();
 
         Looper looper = Looper.myLooper();
         mHandler = looper != null ? new Handler(looper) : null;
         mLockSettingsService = lockSettings;
+        mTimeSinceBootSupplier = timeSinceBootSupplier;
     }
 
     @UnsupportedAppUsage
@@ -518,9 +525,9 @@ public class LockPatternUtils {
                     credential, userId, wrapCallback(progressCallback));
             if (response == null) {
                 return false;
-            } else if (response.getResponseCode() == VerifyCredentialResponse.RESPONSE_OK) {
+            } else if (response.isMatched()) {
                 return true;
-            } else if (response.getResponseCode() == VerifyCredentialResponse.RESPONSE_RETRY) {
+            } else if (response.hasTimeout()) {
                 throw new RequestThrottledException(response.getTimeout());
             } else {
                 return false;
@@ -604,8 +611,14 @@ public class LockPatternUtils {
         String[] history = passwordHistory.split(PASSWORD_HISTORY_DELIMITER);
         // Password History may be too long...
         for (int i = 0; i < Math.min(passwordHistoryLength, history.length); i++) {
-            if (history[i].equals(legacyHash) || history[i].equals(passwordHash)) {
-                return true;
+            if (android.security.Flags.stopRecognizingLegacyPasswordHashes()) {
+                if (history[i].equals(passwordHash)) {
+                    return true;
+                }
+            } else {
+                if (history[i].equals(legacyHash) || history[i].equals(passwordHash)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -1065,18 +1078,17 @@ public class LockPatternUtils {
         return type == CREDENTIAL_TYPE_PATTERN;
     }
 
-    private boolean hasActivePointerDeviceAttached() {
-        return !getEnabledNonTouchInputDevices(InputDevice.SOURCE_CLASS_POINTER).isEmpty();
-    }
-
     /**
      * @return Whether the visible pattern is enabled.
      */
     @UnsupportedAppUsage
     public boolean isVisiblePatternEnabled(int userId) {
         boolean defaultValue = true;
-        if (hideLastCharWithPhysicalInput()) {
-            defaultValue = !hasActivePointerDeviceAttached();
+        if (enableDefaultVisibilityForSensitiveInputs()) {
+            defaultValue =
+                    mContext.getResources()
+                            .getBoolean(
+                                    com.android.internal.R.bool.config_lockPatternVisibleDefault);
         }
         return getBoolean(Settings.Secure.LOCK_PATTERN_VISIBLE, defaultValue, userId);
     }
@@ -1092,37 +1104,17 @@ public class LockPatternUtils {
         return getString(Settings.Secure.LOCK_PATTERN_VISIBLE, userId) != null;
     }
 
-    private List<InputDevice> getEnabledNonTouchInputDevices(int source) {
-        final InputManagerGlobal inputManager = InputManagerGlobal.getInstance();
-        final int[] inputIds = inputManager.getInputDeviceIds();
-        List<InputDevice> matchingDevices = new ArrayList<InputDevice>();
-        for (final int deviceId : inputIds) {
-            final InputDevice inputDevice = inputManager.getInputDevice(deviceId);
-            if (!inputDevice.isEnabled()) continue;
-            if (inputDevice.supportsSource(InputDevice.SOURCE_TOUCHSCREEN)) continue;
-            if (inputDevice.isVirtual()) continue;
-            if (!inputDevice.supportsSource(source)) continue;
-            matchingDevices.add(inputDevice);
-        }
-        return matchingDevices;
-    }
-
-    private boolean hasPhysicalKeyboardActive() {
-        final List<InputDevice> keyboards =
-                getEnabledNonTouchInputDevices(InputDevice.SOURCE_KEYBOARD);
-        for (final InputDevice keyboard : keyboards) {
-            if (keyboard.isFullKeyboard()) return true;
-        }
-        return false;
-    }
-
     /**
      * @return Whether enhanced pin privacy is enabled.
      */
     public boolean isPinEnhancedPrivacyEnabled(int userId) {
         boolean defaultValue = false;
-        if (hideLastCharWithPhysicalInput()) {
-            defaultValue = hasPhysicalKeyboardActive();
+        if (enableDefaultVisibilityForSensitiveInputs()) {
+            defaultValue =
+                    mContext.getResources()
+                            .getBoolean(
+                                    com.android.internal.R.bool
+                                            .config_lockPinEnhancedPrivacyDefault);
         }
         return getBoolean(LOCK_PIN_ENHANCED_PRIVACY, defaultValue, userId);
     }
@@ -1141,14 +1133,59 @@ public class LockPatternUtils {
         return getString(LOCK_PIN_ENHANCED_PRIVACY, userId) != null;
     }
 
+    /** Retrieve the lockout end time of a user. */
+    private final PropertyInvalidatedCache.QueryHandler<Integer, Duration> mLockoutEndTimeQuery =
+            new PropertyInvalidatedCache.QueryHandler<>() {
+                @Override
+                public Duration apply(Integer userId) {
+                    try {
+                        return getLockSettings().getLockoutEndTime(userId).getDuration();
+                    } catch (RemoteException re) {
+                        Log.e(TAG, "failed to get lockout end time", re);
+                        return Duration.ZERO;
+                    }
+                }
+            };
+
+    /** The API that is cached. */
+    @VisibleForTesting static final String LOCKOUT_END_TIME_API = "getLockoutEndTime";
+
+    /** Cache the lockout end time of a user. */
+    private final PropertyInvalidatedCache<Integer, Duration> mLockoutEndTimeCache =
+            new PropertyInvalidatedCache<>(
+                    4,
+                    PropertyInvalidatedCache.MODULE_SYSTEM,
+                    LOCKOUT_END_TIME_API,
+                    LOCKOUT_END_TIME_API,
+                    mLockoutEndTimeQuery);
+
     /**
-     * Set and store the lockout deadline, meaning the user can't attempt their unlock
-     * pattern until the deadline has passed.
+     * Invalidate the lockout end time cache
+     *
+     * @hide
+     */
+    public static final void invalidateLockoutEndTimeCache() {
+        PropertyInvalidatedCache.invalidateCache(
+                PropertyInvalidatedCache.MODULE_SYSTEM, LOCKOUT_END_TIME_API);
+    }
+
+    /**
+     * Set and store the lockout deadline, meaning the user can't attempt their unlock pattern until
+     * the deadline has passed.
+     *
      * @return the chosen deadline.
+     * @deprecated this function just returns the current lockout end time after
+     *     <tt>android.security.manage_lockout_end_time_in_service</tt> is launched. Call-sites will
+     *     be removed and replaced with {@link #getLockoutAttemptDeadline(int)} as needed.
      */
     @UnsupportedAppUsage
+    @Deprecated
     public long setLockoutAttemptDeadline(int userId, int timeoutMs) {
-        final long deadline = SystemClock.elapsedRealtime() + timeoutMs;
+        final long deadline = mTimeSinceBootSupplier.get().toMillis() + timeoutMs;
+        if (android.security.Flags.manageLockoutEndTimeInService()) {
+            final long lockoutEndTime = getLockoutAttemptDeadline(userId);
+            return Math.max(lockoutEndTime, deadline);
+        }
         if (userId == USER_FRP) {
             // For secure password storage (that is required for FRP), the underlying storage also
             // enforces the deadline. Since we cannot store settings for the FRP user, don't.
@@ -1159,13 +1196,29 @@ public class LockPatternUtils {
     }
 
     /**
-     * @return The elapsed time in millis in the future when the user is allowed to
-     *   attempt to enter their lock pattern, or 0 if the user is welcome to
-     *   enter a pattern.
+     * @return The time since boot when the user is allowed to attempt primary auth, or {@link
+     *     Duration#ZERO} if the user is currently allowed.
+     */
+    public Duration getLockoutEndTime(int userId) {
+        Duration lockoutEndTime = mLockoutEndTimeCache.query(userId);
+        if (!lockoutEndTime.isZero()
+                && lockoutEndTime.compareTo(mTimeSinceBootSupplier.get()) <= 0) {
+            return mLockoutEndTimeCache.recompute(userId);
+        }
+        return lockoutEndTime;
+    }
+
+    /**
+     * @return The elapsed time in millis since boot when the user is allowed to attempt to enter
+     *     their lock pattern, or 0 if the user is welcome to enter a pattern.
      */
     public long getLockoutAttemptDeadline(int userId) {
+        if (android.security.Flags.softwareRatelimiter()
+                && android.security.Flags.manageLockoutEndTimeInService()) {
+            return getLockoutEndTime(userId).toMillis();
+        }
         final long deadline = mLockoutDeadlines.get(userId, 0L);
-        final long now = SystemClock.elapsedRealtime();
+        final long now = mTimeSinceBootSupplier.get().toMillis();
         if (deadline < now && deadline != 0) {
             // timeout expired
             mLockoutDeadlines.put(userId, 0);
@@ -1547,7 +1600,10 @@ public class LockPatternUtils {
                         STRONG_AUTH_REQUIRED_AFTER_NON_STRONG_BIOMETRICS_TIMEOUT,
                         SOME_AUTH_REQUIRED_AFTER_TRUSTAGENT_EXPIRED,
                         SOME_AUTH_REQUIRED_AFTER_ADAPTIVE_AUTH_REQUEST,
-                        SOME_AUTH_REQUIRED_AFTER_WATCH_DISCONNECTED})
+                        SOME_AUTH_REQUIRED_AFTER_WATCH_DISCONNECTED,
+                        PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE,
+                        STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE
+                })
         @Retention(RetentionPolicy.SOURCE)
         public @interface StrongAuthFlags {}
 
@@ -1623,6 +1679,19 @@ public class LockPatternUtils {
         public static final int SOME_AUTH_REQUIRED_AFTER_WATCH_DISCONNECTED = 0x400;
 
         /**
+         * Primary authentication is required as the first factor in Secure Lock Device
+         * authentication - all biometric authentication is disabled.
+         */
+        public static final int PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE = 0x800;
+
+        /**
+         * Class 3 biometric-only authentication is required as the second factor
+         * in Secure Lock Device authentication - primary authentication and non strong biometric
+         * authentication are disabled.
+         */
+        public static final int STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE = 0x1000;
+
+        /**
          * Strong auth flags that do not prevent biometric methods from being accepted as auth.
          * If any other flags are set, biometric authentication is disabled.
          */
@@ -1630,7 +1699,8 @@ public class LockPatternUtils {
                 | SOME_AUTH_REQUIRED_AFTER_USER_REQUEST
                 | SOME_AUTH_REQUIRED_AFTER_TRUSTAGENT_EXPIRED
                 | SOME_AUTH_REQUIRED_AFTER_ADAPTIVE_AUTH_REQUEST
-                | SOME_AUTH_REQUIRED_AFTER_WATCH_DISCONNECTED;
+                | SOME_AUTH_REQUIRED_AFTER_WATCH_DISCONNECTED
+                | STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE;
 
         private final SparseIntArray mStrongAuthRequiredForUser = new SparseIntArray();
         private final H mHandler;

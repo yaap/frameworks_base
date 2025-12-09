@@ -460,7 +460,7 @@ public class Notifier {
             int ownerUid, int ownerPid, WorkSource workSource, String historyTag,
             IWakeLockCallback callback) {
         onWakeLockReleased(flags, tag, packageName, ownerUid, ownerPid, workSource, historyTag,
-                callback, ScreenTimeoutOverridePolicy.RELEASE_REASON_UNKNOWN);
+                callback, ScreenTimeoutOverridePolicy.RELEASE_REASON_NOT_ACQUIRED);
     }
 
     /**
@@ -510,6 +510,7 @@ public class Notifier {
     private int getBatteryStatsWakeLockMonitorType(int flags) {
         switch (flags & PowerManager.WAKE_LOCK_LEVEL_MASK) {
             case PowerManager.PARTIAL_WAKE_LOCK:
+            case PowerManager.PARTIAL_SLEEP_WAKE_LOCK:
                 return BatteryStats.WAKE_TYPE_PARTIAL;
 
             case PowerManager.FULL_WAKE_LOCK:
@@ -552,6 +553,8 @@ public class Notifier {
                 return PowerManager.PARTIAL_WAKE_LOCK;
             case PowerManager.PARTIAL_WAKE_LOCK:
                 return PowerManager.PARTIAL_WAKE_LOCK;
+            case PowerManager.PARTIAL_SLEEP_WAKE_LOCK:
+                return PowerManager.PARTIAL_SLEEP_WAKE_LOCK;
             case PowerManager.DOZE_WAKE_LOCK:
                 // Doze wake locks are an internal implementation detail of the
                 // communication between dream manager service and power manager

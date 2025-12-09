@@ -16,7 +16,10 @@
 
 package com.android.systemui.qs.footer.ui.viewmodel
 
+import android.app.supervision.flags.Flags
+import android.content.pm.UserInfo
 import android.graphics.drawable.Drawable
+import android.os.UserHandle
 import android.os.UserManager
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
@@ -28,18 +31,16 @@ import androidx.test.filters.SmallTest
 import com.android.internal.logging.testing.UiEventLoggerFake
 import com.android.settingslib.Utils
 import com.android.settingslib.drawable.UserIconDrawable
+import com.android.systemui.Flags as SysUiFlags
 import com.android.systemui.InstanceIdSequenceFake
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.broadcast.BroadcastDispatcher
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.coroutines.collectLastValue
-import com.android.systemui.flags.DisableSceneContainer
-import com.android.systemui.flags.EnableSceneContainer
 import com.android.systemui.qs.FakeFgsManagerController
 import com.android.systemui.qs.QSSecurityFooterUtils
 import com.android.systemui.qs.QsEventLoggerFake
-import com.android.systemui.qs.flags.QSComposeFragment
 import com.android.systemui.qs.footer.FooterActionsTestUtils
 import com.android.systemui.qs.footer.domain.model.SecurityButtonConfig
 import com.android.systemui.qs.panels.ui.viewmodel.TextFeedbackViewModel
@@ -53,6 +54,9 @@ import com.android.systemui.statusbar.policy.FakeSecurityController
 import com.android.systemui.statusbar.policy.FakeUserInfoController
 import com.android.systemui.statusbar.policy.FakeUserInfoController.FakeInfo
 import com.android.systemui.statusbar.policy.MockUserSwitcherControllerWrapper
+import com.android.systemui.user.data.repository.FakeUserRepository
+import com.android.systemui.user.domain.interactor.HeadlessSystemUserModeFake
+import com.android.systemui.user.domain.interactor.SelectedUserInteractor
 import com.android.systemui.util.mockito.mock
 import com.android.systemui.util.mockito.nullable
 import com.android.systemui.util.settings.FakeGlobalSettings
@@ -60,6 +64,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -70,6 +75,7 @@ import org.junit.runner.RunWith
 import org.mockito.Mockito.anyInt
 import org.mockito.Mockito.`when` as whenever
 import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @SmallTest
@@ -78,6 +84,8 @@ import org.mockito.kotlin.any
 class FooterActionsViewModelTest : SysuiTestCase() {
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
+    private val userRepository = FakeUserRepository()
+    private val selectedUserInteractor = SelectedUserInteractor(userRepository)
     private lateinit var utils: FooterActionsTestUtils
 
     private val themedContext = ContextThemeWrapper(context, R.style.Theme_SystemUI_QuickSettings)
@@ -85,6 +93,7 @@ class FooterActionsViewModelTest : SysuiTestCase() {
     @Before
     fun setUp() {
         utils = FooterActionsTestUtils(context, TestableLooper.get(this), testScope.testScheduler)
+        userRepository.setUserInfos(USER_INFOS)
     }
 
     private fun runTest(block: suspend TestScope.() -> Unit) {
@@ -92,20 +101,64 @@ class FooterActionsViewModelTest : SysuiTestCase() {
     }
 
     @Test
+    @DisableFlags(SysUiFlags.FLAG_HSU_QS_CHANGES)
     fun settingsButton() = runTest {
-        val underTest = utils.footerActionsViewModel(showPowerButton = false)
-        val settings = underTest.settings
+        val underTest =
+            utils.footerActionsViewModel(
+                showPowerButton = false,
+                selectedUserInteractor = selectedUserInteractor,
+            )
+        runBlocking { userRepository.setSelectedUserInfo(USER) }
 
-        assertThat(settings.icon)
+        val settings by collectLastValue(underTest.settings)
+
+        assertThat(settings).isNotNull()
+        assertThat(settings?.icon)
             .isEqualTo(
                 Icon.Resource(
                     R.drawable.ic_qs_footer_settings,
                     ContentDescription.Resource(R.string.accessibility_quick_settings_settings),
                 )
             )
-        assertThat(settings.backgroundColorFallback).isEqualTo(R.attr.shadeInactive)
-        assertThat(settings.iconTintFallback)
+        assertThat(settings?.backgroundColorFallback).isEqualTo(R.attr.shadeInactive)
+        assertThat(settings?.iconTintFallback)
             .isEqualTo(Utils.getColorAttrDefaultColor(themedContext, R.attr.onShadeInactiveVariant))
+    }
+
+    @Test
+    @EnableFlags(SysUiFlags.FLAG_HSU_QS_CHANGES)
+    fun settingsButton_hideForHeadlessSystemUser() = runTest {
+        val fakeHsum = HeadlessSystemUserModeFake()
+        fakeHsum.setIsHeadlessSystemUser(true)
+        val underTest =
+            utils.footerActionsViewModel(
+                showPowerButton = false,
+                hsum = fakeHsum,
+                selectedUserInteractor = selectedUserInteractor,
+            )
+        runBlocking { userRepository.setSelectedUserInfo(USER) }
+
+        val settings by collectLastValue(underTest.settings)
+
+        assertThat(settings).isNull()
+    }
+
+    @Test
+    @EnableFlags(SysUiFlags.FLAG_HSU_QS_CHANGES)
+    fun settingsButton_showWhenNotHeadlessSystemUser() = runTest {
+        val fakeHsum = HeadlessSystemUserModeFake()
+        fakeHsum.setIsHeadlessSystemUser(false)
+        val underTest =
+            utils.footerActionsViewModel(
+                showPowerButton = false,
+                hsum = fakeHsum,
+                selectedUserInteractor = selectedUserInteractor,
+            )
+        runBlocking { userRepository.setSelectedUserInfo(USER) }
+
+        val settings by collectLastValue(underTest.settings)
+
+        assertThat(settings).isNotNull()
     }
 
     @Test
@@ -210,10 +263,7 @@ class FooterActionsViewModelTest : SysuiTestCase() {
 
         // Mock QSSecurityFooter to map a SecurityModel into a SecurityButtonConfig using the
         // logic in securityToConfig.
-        var securityToConfig: (SecurityModel) -> SecurityButtonConfig? = { null }
-        whenever(qsSecurityFooterUtils.getButtonConfig(any(), any())).thenAnswer {
-            securityToConfig(it.arguments.first() as SecurityModel)
-        }
+        mockButtonConfig(qsSecurityFooterUtils, securityToConfig = { null })
 
         val underTest =
             utils.footerActionsViewModel(
@@ -234,11 +284,11 @@ class FooterActionsViewModelTest : SysuiTestCase() {
         // Map any SecurityModel into a non-null SecurityButtonConfig.
         val buttonConfig =
             SecurityButtonConfig(
-                icon = Icon.Resource(res = 0, contentDescription = null),
+                icon = Icon.Resource(resId = 0, contentDescription = null),
                 text = "foo",
                 isClickable = true,
             )
-        securityToConfig = { buttonConfig }
+        mockButtonConfig(qsSecurityFooterUtils, securityToConfig = { buttonConfig })
 
         // There was no change of the security info yet, so the mapper was not called yet.
         assertThat(currentSecurity()).isNull()
@@ -252,7 +302,10 @@ class FooterActionsViewModelTest : SysuiTestCase() {
         assertThat(security.onClick).isNotNull()
 
         // If the config.clickable = false, then onClick should be null.
-        securityToConfig = { buttonConfig.copy(isClickable = false) }
+        mockButtonConfig(
+            qsSecurityFooterUtils,
+            securityToConfig = { buttonConfig.copy(isClickable = false) },
+        )
         securityController.updateState {}
         security = currentSecurity()
         assertThat(security).isNotNull()
@@ -268,10 +321,7 @@ class FooterActionsViewModelTest : SysuiTestCase() {
 
         // Mock QSSecurityFooter to map a SecurityModel into a SecurityButtonConfig using the
         // logic in securityToConfig.
-        var securityToConfig: (SecurityModel) -> SecurityButtonConfig? = { null }
-        whenever(qsSecurityFooterUtils.getButtonConfig(any(), any())).thenAnswer {
-            securityToConfig(it.arguments.first() as SecurityModel)
-        }
+        mockButtonConfig(qsSecurityFooterUtils, securityToConfig = { null })
 
         val underTest =
             utils.footerActionsViewModel(
@@ -318,13 +368,16 @@ class FooterActionsViewModelTest : SysuiTestCase() {
 
         // Showing the security button will make this show as a simple button without text.
         assertThat(foregroundServices.displayText).isTrue()
-        securityToConfig = {
-            SecurityButtonConfig(
-                icon = Icon.Resource(res = 0, contentDescription = null),
-                text = "foo",
-                isClickable = true,
-            )
-        }
+        mockButtonConfig(
+            qsSecurityFooterUtils,
+            securityToConfig = {
+                SecurityButtonConfig(
+                    icon = Icon.Resource(resId = 0, contentDescription = null),
+                    text = "foo",
+                    isClickable = true,
+                )
+            },
+        )
         securityController.updateState {}
         assertThat(currentForegroundServices()?.displayText).isFalse()
     }
@@ -446,33 +499,7 @@ class FooterActionsViewModelTest : SysuiTestCase() {
     }
 
     @Test
-    @DisableFlags(QSComposeFragment.FLAG_NAME)
-    @DisableSceneContainer
-    fun textFeedback_neverFeedback() = runTest {
-        val qsTileConfigProvider = createAndPopulateQsTileConfigProvider()
-        val textFeedbackInteractor =
-            utils.textFeedbackInteractor(qsTileConfigProvider = qsTileConfigProvider)
-        val underTest =
-            utils.footerActionsViewModel(textFeedbackInteractor = textFeedbackInteractor)
-
-        val textFeedback by collectLastValue(underTest.textFeedback)
-
-        assertThat(textFeedback).isEqualTo(TextFeedbackViewModel.NoFeedback)
-
-        textFeedbackInteractor.requestShowFeedback(AIRPLANE_MODE_TILE_SPEC)
-
-        assertThat(textFeedback).isEqualTo(TextFeedbackViewModel.NoFeedback)
-    }
-
-    @Test
-    @EnableFlags(QSComposeFragment.FLAG_NAME)
-    fun textFeedback_composeFragmentEnabled() = runTest { textFeedback_newComposeUI() }
-
-    @Test
-    @EnableSceneContainer
-    fun textFeedback_sceneContainerEnabled() = runTest { textFeedback_newComposeUI() }
-
-    private fun TestScope.textFeedback_newComposeUI() {
+    fun textFeedback() = runTest {
         val qsTileConfigProvider = createAndPopulateQsTileConfigProvider()
         val textFeedbackInteractor =
             utils.textFeedbackInteractor(qsTileConfigProvider = qsTileConfigProvider)
@@ -483,10 +510,7 @@ class FooterActionsViewModelTest : SysuiTestCase() {
 
         // Mock QSSecurityFooter to map a SecurityModel into a SecurityButtonConfig using the
         // logic in securityToConfig.
-        val securityToConfig: (SecurityModel) -> SecurityButtonConfig? = { null }
-        whenever(qsSecurityFooterUtils.getButtonConfig(any(), any())).thenAnswer {
-            securityToConfig(it.arguments.first() as SecurityModel)
-        }
+        mockButtonConfig(qsSecurityFooterUtils, securityToConfig = { null })
         val fgsManagerController =
             FakeFgsManagerController(showFooterDot = false, numRunningPackages = 1)
 
@@ -519,15 +543,33 @@ class FooterActionsViewModelTest : SysuiTestCase() {
                         Icon.Loaded(
                             drawable = context.getDrawable(config.uiConfig.iconRes)!!,
                             contentDescription = null,
-                            res = config.uiConfig.iconRes,
+                            resId = config.uiConfig.iconRes,
                         ),
                 )
             )
         assertThat(foregroundServices!!.displayText).isFalse()
     }
 
+    private fun mockButtonConfig(
+        qsSecurityFooterUtils: QSSecurityFooterUtils,
+        securityToConfig: (SecurityModel) -> SecurityButtonConfig?,
+    ) {
+        if (Flags.enableSupervisionAppService()) {
+            whenever(qsSecurityFooterUtils.getButtonConfig(any(), any())).thenAnswer {
+                securityToConfig(it.arguments.first() as SecurityModel)
+            }
+        } else {
+            whenever(qsSecurityFooterUtils.getButtonConfig(any(), eq(null))).thenAnswer {
+                securityToConfig(it.arguments.first() as SecurityModel)
+            }
+        }
+    }
+
     companion object {
         val AIRPLANE_MODE_TILE_SPEC = TileSpec.create(ConnectivityModule.AIRPLANE_MODE_TILE_SPEC)
+
+        private val USER = UserInfo(UserHandle.USER_SYSTEM, "system_user", 0)
+        private val USER_INFOS = listOf(USER)
 
         private fun createAndPopulateQsTileConfigProvider(): QSTileConfigProvider {
             val logger =

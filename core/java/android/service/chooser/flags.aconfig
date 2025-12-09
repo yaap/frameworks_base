@@ -10,16 +10,6 @@ flag {
 }
 
 flag {
-  name: "do_not_delay_chooser_adapter_notify_data_change"
-  namespace: "intentresolver"
-  description: "Do not delay ChooserAdapter notifyDataSetChanged call."
-  bug: "406397494"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
   name: "enable_sharesheet_metadata_extra"
   is_exported: true
   namespace: "intentresolver"
@@ -41,16 +31,6 @@ flag {
   namespace: "intentresolver"
   description: "Provides additional callbacks with information about user actions in ChooserResult"
   bug: "263474465"
-}
-
-flag {
-  name: "notify_single_item_change_on_icon_load"
-  namespace: "intentresolver"
-  description: "ChooserGridAdapter to notify specific items change when the target icon is loaded (instead of all-item change)."
-  bug: "298193161"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
 }
 
 flag {

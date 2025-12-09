@@ -142,11 +142,10 @@ import com.android.internal.util.Preconditions;
 import com.android.modules.utils.TypedXmlSerializer;
 import com.android.server.LocalManagerRegistry;
 import com.android.server.ondeviceintelligence.OnDeviceIntelligenceManagerLocal;
-import com.android.server.pm.dex.DexManager;
-import com.android.server.pm.dex.PackageDexUsage;
 import com.android.server.pm.parsing.PackageInfoUtils;
 import com.android.server.pm.parsing.pkg.AndroidPackageUtils;
 import com.android.server.pm.permission.PermissionManagerServiceInternal;
+import com.android.server.pm.permission.PermissionManagerServiceInternal.HotwordDetectionServiceProvider;
 import com.android.server.pm.pkg.AndroidPackage;
 import com.android.server.pm.pkg.PackageState;
 import com.android.server.pm.pkg.PackageStateInternal;
@@ -155,6 +154,7 @@ import com.android.server.pm.pkg.PackageUserStateInternal;
 import com.android.server.pm.pkg.PackageUserStateUtils;
 import com.android.server.pm.pkg.SharedUserApi;
 import com.android.server.pm.resolution.ComponentResolverApi;
+import com.android.server.pm.verify.developer.DeveloperVerificationStatusInternal;
 import com.android.server.pm.verify.domain.DomainVerificationManagerInternal;
 import com.android.server.uri.UriGrantsManagerInternal;
 import com.android.server.utils.WatchedArrayMap;
@@ -174,7 +174,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -422,9 +421,6 @@ public class ComputerEngine implements Computer {
     private final InstantAppResolverConnection mInstantAppResolverConnection;
     private final DefaultAppProvider mDefaultAppProvider;
     private final DomainVerificationManagerInternal mDomainVerificationManager;
-    private final PackageDexOptimizer mPackageDexOptimizer;
-    private final DexManager mDexManager;
-    private final CompilerStats mCompilerStats;
     private final PackageManagerInternal.ExternalSourcesPolicy mExternalSourcesPolicy;
     private final CrossProfileIntentResolverEngine mCrossProfileIntentResolverEngine;
 
@@ -482,9 +478,6 @@ public class ComputerEngine implements Computer {
         mInstantAppResolverConnection = args.service.mInstantAppResolverConnection;
         mDefaultAppProvider = args.service.getDefaultAppProvider();
         mDomainVerificationManager = args.service.mDomainVerificationManager;
-        mPackageDexOptimizer = args.service.mPackageDexOptimizer;
-        mDexManager = args.service.getDexManager();
-        mCompilerStats = args.service.mCompilerStats;
         mExternalSourcesPolicy = args.service.mExternalSourcesPolicy;
         mCrossProfileIntentResolverEngine = new CrossProfileIntentResolverEngine(
                 mUserManager, mDomainVerificationManager, mDefaultAppProvider, mContext);
@@ -1585,6 +1578,15 @@ public class ComputerEngine implements Computer {
                 if (apexModuleName != null) {
                     packageInfo.setApexPackageName(
                             mApexManager.getActivePackageNameForApexModuleName(apexModuleName));
+                }
+            }
+
+            if (Flags.verificationService()) {
+                final DeveloperVerificationStatusInternal developerVerificationStatusInternal =
+                        ps.getDeveloperVerificationStatusInternal();
+                if (developerVerificationStatusInternal != null) {
+                    packageInfo.setIsAppMetadataVerified(
+                            developerVerificationStatusInternal.isAppMetadataVerified());
                 }
             }
 
@@ -3184,44 +3186,8 @@ public class ComputerEngine implements Computer {
                 }
                 ipw.println("Dexopt state:");
                 ipw.increaseIndent();
-                DexOptHelper.dumpDexoptState(ipw, packageName);
+                DexOptHelper.dumpDexoptState(ipw, this, packageName);
                 ipw.decreaseIndent();
-                break;
-            }
-
-            case DumpState.DUMP_COMPILER_STATS:
-            {
-                final IndentingPrintWriter ipw = new IndentingPrintWriter(pw, "  ");
-                if (dumpState.onTitlePrinted()) {
-                    pw.println();
-                }
-                ipw.println("Compiler stats:");
-                ipw.increaseIndent();
-                Collection<? extends PackageStateInternal> pkgSettings;
-                if (setting != null) {
-                    pkgSettings = Collections.singletonList(setting);
-                } else {
-                    pkgSettings = mSettings.getPackages().values();
-                }
-
-                for (PackageStateInternal pkgSetting : pkgSettings) {
-                    final AndroidPackage pkg = pkgSetting.getPkg();
-                    if (pkg == null) {
-                        continue;
-                    }
-                    final String pkgName = pkg.getPackageName();
-                    ipw.println("[" + pkgName + "]");
-                    ipw.increaseIndent();
-
-                    final CompilerStats.PackageStats stats =
-                            mCompilerStats.getPackageStats(pkgName);
-                    if (stats == null) {
-                        ipw.println("(No recorded stats)");
-                    } else {
-                        stats.dump(ipw);
-                    }
-                    ipw.decreaseIndent();
-                }
                 break;
             }
 
@@ -5039,26 +5005,6 @@ public class ComputerEngine implements Computer {
         return new ParceledListSlice<>(finalList);
     }
 
-    @NonNull
-    @Override
-    public List<PackageStateInternal> findSharedNonSystemLibraries(
-            @NonNull PackageStateInternal pkgSetting) {
-        List<SharedLibraryInfo> deps = SharedLibraryUtils.findSharedLibraries(pkgSetting);
-        if (!deps.isEmpty()) {
-            List<PackageStateInternal> retValue = new ArrayList<>();
-            for (SharedLibraryInfo info : deps) {
-                PackageStateInternal depPackageSetting =
-                        getPackageStateInternal(info.getPackageName());
-                if (depPackageSetting != null && depPackageSetting.getPkg() != null) {
-                    retValue.add(depPackageSetting);
-                }
-            }
-            return retValue;
-        } else {
-            return Collections.emptyList();
-        }
-    }
-
     /**
      * Returns true if application is not found or there was an error. Otherwise it returns
      * the hidden state of the package for the given user.
@@ -5766,32 +5712,6 @@ public class ComputerEngine implements Computer {
         return res != null ? res : EmptyArray.STRING;
     }
 
-
-    @NonNull
-    @Override
-    public Set<String> getUnusedPackages(long downgradeTimeThresholdMillis) {
-        Set<String> unusedPackages = new ArraySet<>();
-        long currentTimeInMillis = System.currentTimeMillis();
-        final ArrayMap<String, ? extends PackageStateInternal> packageStates =
-                mSettings.getPackages();
-        for (int index = 0; index < packageStates.size(); index++) {
-            final PackageStateInternal packageState = packageStates.valueAt(index);
-            if (packageState.getPkg() == null) {
-                continue;
-            }
-            PackageDexUsage.PackageUseInfo packageUseInfo =
-                    mDexManager.getPackageUseInfoOrDefault(packageState.getPackageName());
-            if (PackageManagerServiceUtils.isUnusedSinceTimeInMillis(
-                    PackageStateUtils.getEarliestFirstInstallTime(packageState.getUserStates()),
-                    currentTimeInMillis, downgradeTimeThresholdMillis, packageUseInfo,
-                    packageState.getTransientState().getLatestPackageUseTimeInMills(),
-                    packageState.getTransientState().getLatestForegroundPackageUseTimeInMills())) {
-                unusedPackages.add(packageState.getPackageName());
-            }
-        }
-        return unusedPackages;
-    }
-
     @Nullable
     @Override
     public CharSequence getHarmfulAppWarning(@NonNull String packageName, @UserIdInt int userId) {
@@ -5948,10 +5868,11 @@ public class ComputerEngine implements Computer {
         if (!Process.isIsolatedUid(uid)) {
             return false;
         }
+        final HotwordDetectionServiceProvider hotwordDetectionServiceProvider =
+                mPermissionManager.getHotwordDetectionServiceProvider();
         final boolean isHotword =
-                mPermissionManager.getHotwordDetectionServiceProvider() != null
-                        && uid
-                        == mPermissionManager.getHotwordDetectionServiceProvider().getUid();
+                 hotwordDetectionServiceProvider != null
+                        && uid == hotwordDetectionServiceProvider.getUid();
         if (isHotword) {
             return true;
         }

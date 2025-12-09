@@ -16,10 +16,9 @@
 
 package com.android.systemui.media.remedia.data
 
-import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
-import com.android.systemui.media.controls.data.repository.MediaFilterRepository
 import com.android.systemui.media.remedia.data.repository.MediaPipelineRepository
+import com.android.systemui.media.remedia.data.repository.MediaRepository
 import com.android.systemui.media.remedia.data.repository.MediaRepositoryImpl
 import dagger.Module
 import dagger.Provides
@@ -33,14 +32,15 @@ interface MediaDataModule {
         @Provides
         @SysUISingleton
         fun providesMediaPipelineRepository(
-            oldProvider: Provider<MediaFilterRepository>,
-            newProvider: Provider<MediaRepositoryImpl>,
+            repository: Provider<MediaRepositoryImpl>
         ): MediaPipelineRepository {
-            return if (Flags.mediaControlsInCompose()) {
-                newProvider.get()
-            } else {
-                oldProvider.get()
-            }
+            return repository.get()
+        }
+
+        @Provides
+        @SysUISingleton
+        fun providesMediaRepository(mediaRepository: MediaRepositoryImpl): MediaRepository {
+            return mediaRepository
         }
     }
 }

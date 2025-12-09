@@ -38,7 +38,6 @@ import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class EthernetIconViewModelTest : SysuiTestCase() {
 
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
@@ -108,7 +107,7 @@ class EthernetIconViewModelTest : SysuiTestCase() {
         }
 
     @Test
-    fun icon_updatesWhenConnectivityChanges() =
+    fun icon_connectivityChanges_updates() =
         kosmos.runTest {
             // Start default and validated
             fakeConnectivityRepository.setEthernetConnected(default = true, validated = true)

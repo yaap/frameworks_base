@@ -2,15 +2,15 @@ package: "com.android.server.power.hint"
 container: "system"
 
 flag {
-    name: "adpf_session_tag"
-    namespace: "game"
-    description: "Feature flag for adding session tag to hint session atom"
-    bug: "345011125"
-}
-
-flag {
     name: "reset_on_fork_enabled"
     namespace: "game"
     description: "Set reset_on_fork flag."
     bug: "370988407"
+}
+
+flag {
+    name: "use_sysui_session_tag"
+    namespace: "window_surfaces"
+    description: "Use SessionTag.SYSUI for system ui and launcher processes."
+    bug: "359965565"
 }

@@ -86,22 +86,6 @@ class WallpaperWindowToken extends WindowToken {
         t.setVisibility(mSurfaceControl, isVisible());
     }
 
-    @Override
-    public void prepareSurfaces() {
-        super.prepareSurfaces();
-
-        if (mWmService.mFlags.mEnsureSurfaceVisibility) {
-            return;
-        }
-        // Similar to Task.prepareSurfaces, outside of transitions we need to apply visibility
-        // changes directly. In transitions the transition player will take care of applying the
-        // visibility change.
-        if (!mTransitionController.isCollecting(this)
-                && !mTransitionController.isPlayingTarget(this)) {
-            getPendingTransaction().setVisibility(mSurfaceControl, isVisible());
-        }
-    }
-
     /**
      * Controls whether this wallpaper shows underneath the keyguard or is hidden and only
      * revealed once keyguard is dismissed.
@@ -144,27 +128,20 @@ class WallpaperWindowToken extends WindowToken {
     }
 
     void sendWindowWallpaperCommand(
-            String action, int x, int y, int z, Bundle extras, boolean sync) {
+            String action, int x, int y, int z, Bundle extras) {
         for (int wallpaperNdx = mChildren.size() - 1; wallpaperNdx >= 0; wallpaperNdx--) {
             final WindowState wallpaper = mChildren.get(wallpaperNdx);
             try {
-                wallpaper.mClient.dispatchWallpaperCommand(action, x, y, z, extras, sync);
-                // We only want to be synchronous with one wallpaper.
-                sync = false;
+                wallpaper.mClient.dispatchWallpaperCommand(action, x, y, z, extras);
             } catch (RemoteException e) {
             }
         }
     }
 
-    void updateWallpaperOffset(boolean sync) {
+    void updateWallpaperOffset() {
         final WallpaperController wallpaperController = mDisplayContent.mWallpaperController;
-        for (int wallpaperNdx = mChildren.size() - 1; wallpaperNdx >= 0; wallpaperNdx--) {
-            final WindowState wallpaper = mChildren.get(wallpaperNdx);
-            if (wallpaperController.updateWallpaperOffset(wallpaper,
-                    sync && !mWmService.mFlags.mWallpaperOffsetAsync)) {
-                // We only want to be synchronous with one wallpaper.
-                sync = false;
-            }
+        for (int i = mChildren.size() - 1; i >= 0; i--) {
+            wallpaperController.updateWallpaperOffset(mChildren.get(i));
         }
     }
 

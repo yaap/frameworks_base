@@ -17,11 +17,14 @@
 package com.android.systemui.statusbar.dagger
 
 import android.content.Context
-import com.android.systemui.CameraProtectionLoader
+import android.view.Display
+import android.view.WindowManager.LayoutParams.TYPE_STATUS_BAR
+import com.android.app.displaylib.PerDisplayRepository
 import com.android.systemui.CoreStartable
-import com.android.systemui.SysUICutoutProvider
-import com.android.systemui.SysUICutoutProviderImpl
 import com.android.systemui.dagger.SysUISingleton
+import com.android.systemui.dagger.qualifiers.Main
+import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent
+import com.android.systemui.display.data.repository.DisplayWindowPropertiesRepositoryImpl
 import com.android.systemui.log.LogBuffer
 import com.android.systemui.log.LogBufferFactory
 import com.android.systemui.statusbar.chips.sharetoapp.ui.viewmodel.ShareToAppChipViewModel
@@ -177,23 +180,18 @@ interface StatusBarModule {
 
         @Provides
         @SysUISingleton
-        fun sysUiCutoutProvider(
-            factory: SysUICutoutProviderImpl.Factory,
-            context: Context,
-            cameraProtectionLoader: CameraProtectionLoader,
-        ): SysUICutoutProvider {
-            return factory.create(context, cameraProtectionLoader)
-        }
-
-        @Provides
-        @SysUISingleton
         fun contentInsetsProvider(
             factory: StatusBarContentInsetsProviderImpl.Factory,
             context: Context,
             configurationController: ConfigurationController,
-            sysUICutoutProvider: SysUICutoutProvider,
+            displaySubcomponentRepo: PerDisplayRepository<SystemUIDisplaySubcomponent>,
         ): StatusBarContentInsetsProvider {
-            return factory.create(context, configurationController, sysUICutoutProvider)
+            val displaySubcomponent = displaySubcomponentRepo[Display.DEFAULT_DISPLAY]!!
+            return factory.create(
+                context,
+                configurationController,
+                displaySubcomponent.sysUICutoutProvider,
+            )
         }
 
         @Provides
@@ -202,6 +200,20 @@ interface StatusBarModule {
             insetsProvider: StatusBarContentInsetsProvider
         ): StatusBarContentInsetsViewModel {
             return StatusBarContentInsetsViewModel(insetsProvider)
+        }
+
+        @Provides
+        @StatusBarMain
+        fun provideDefaultStatusBarContext(
+            repoLazy: Lazy<DisplayWindowPropertiesRepositoryImpl>,
+            @Main appContext: Context,
+        ): Context {
+            return if (StatusBarConnectedDisplays.isEnabled) {
+                return repoLazy.get().get(Display.DEFAULT_DISPLAY, TYPE_STATUS_BAR)?.context
+                    ?: appContext
+            } else {
+                appContext
+            }
         }
     }
 }

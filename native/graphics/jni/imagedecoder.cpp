@@ -214,6 +214,10 @@ static SkColorType getColorType(uint32_t format) {
             return kRGBA_1010102_SkColorType;
         case ANDROID_BITMAP_FORMAT_BGRA_8888:
             return kBGRA_8888_SkColorType;
+        case ANDROID_BITMAP_FORMAT_BGRA_1010102:
+            return kBGRA_1010102_SkColorType;
+        case ANDROID_BITMAP_FORMAT_BGRX_1010102:
+            return kBGR_101010x_SkColorType;
         default:
             return kUnknown_SkColorType;
     }

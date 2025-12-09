@@ -151,11 +151,6 @@ object Flags {
     @JvmField
     val ENABLE_NEW_QS_EDIT_MODE = unreleasedFlag("enable_new_qs_edit_mode", teamfood = false)
 
-    // 600- status bar
-
-    // TODO(b/291315866): Tracking Bug
-    @JvmField val SIGNAL_CALLBACK_DEPRECATION = releasedFlag("signal_callback_deprecation")
-
     // TODO(b/311222557): Tracking bug
     val ROAMING_INDICATOR_VIA_DISPLAY_INFO = releasedFlag("roaming_indicator_via_display_info")
 
@@ -199,12 +194,6 @@ object Flags {
     // TODO(b/273509374): Tracking Bug
     @JvmField
     val ALWAYS_SHOW_HOME_CONTROLS_ON_DREAMS = releasedFlag("always_show_home_controls_on_dreams")
-
-    // 1100 - windowing
-    @Keep
-    @JvmField
-    val WM_ENABLE_SHELL_TRANSITIONS =
-        sysPropBooleanFlag("persist.wm.debug.shell_transit", default = true)
 
     // TODO(b/293252410) : Tracking Bug
     @JvmField val LOCKSCREEN_ENABLE_LANDSCAPE = unreleasedFlag("lockscreen.enable_landscape")

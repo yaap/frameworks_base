@@ -107,6 +107,8 @@ public class PowerGroup {
     private final long mDimDuration;
     private final long mScreenOffTimeout;
 
+    private boolean mDreamManagerAttemptedDozing;
+
     PowerGroup(int groupId, PowerGroupListener wakefulnessListener, Notifier notifier,
             DisplayManagerInternal displayManagerInternal, int wakefulness, boolean ready,
             boolean supportsSandman, long eventTime, PowerManagerFlags featureFlags,
@@ -211,12 +213,45 @@ public class PowerGroup {
                     mLastSleepReason = reason;
                 }
             }
+
+            // Since the group is transitioning to interactive wakefulness, we should reset the
+            // previous attempt of doze made by DreamManager
+            if (isInteractive(newWakefulness)) {
+                setDreamManagerAttemptedDozingLocked(/* dreamManagerAttemptedDozing */ false);
+            }
             mWakefulness = newWakefulness;
             mWakefulnessListener.onWakefulnessChangedLocked(mGroupId, mWakefulness, eventTime,
                     reason, uid, opUid, opPackageName, details);
             return true;
         }
         return false;
+    }
+
+    /**
+     * Sets the dreamManagerAttemptedDozing status, indicating if the DreamManager attempted to
+     * put the group to doze. This being true doesn't necessarily mean that the group is dozing
+     * as it can fail in that attempt
+     */
+    public void setDreamManagerAttemptedDozingLocked(boolean dreamManagerAttemptedDozing) {
+        Slog.i(TAG, "dreamManagerAttemptedDozing status changed to "
+                + dreamManagerAttemptedDozing + " for group " + mGroupId);
+        mDreamManagerAttemptedDozing = dreamManagerAttemptedDozing;
+    }
+
+    public boolean isDefaultOrAdjacentGroup() {
+        return isDefaultGroupAdjacent() || getGroupId() == Display.DEFAULT_DISPLAY_GROUP;
+    }
+
+    /**
+     * A group can transition from sleep to doze
+     * 1. It is a default display
+     * 2. com.android.server.display.feature.flags.Flags.separateTimeouts() is enabled
+     * 3. Is non interactive
+     */
+    public boolean canTransitionBetweenNonInteractiveStates() {
+        return (com.android.server.display.feature.flags.Flags.separateTimeouts())
+                && (getGroupId() == Display.DEFAULT_DISPLAY_GROUP)
+                && !isInteractive(getWakefulnessLocked());
     }
 
     /**
@@ -258,8 +293,7 @@ public class PowerGroup {
         return mPoweringOn;
     }
 
-    @VisibleForTesting
-    boolean isDefaultGroupAdjacent() {
+    public boolean isDefaultGroupAdjacent() {
         return mIsDefaultGroupAdjacent;
     }
 
@@ -324,8 +358,26 @@ public class PowerGroup {
     }
 
     boolean dozeLocked(long eventTime, int uid, @PowerManager.GoToSleepReason int reason) {
-        if (eventTime < getLastWakeTimeLocked() || !isInteractive(mWakefulness)) {
+        return dozeLocked(eventTime, uid, reason, false);
+    }
+
+    boolean dozeLocked(long eventTime, int uid, @PowerManager.GoToSleepReason int reason,
+            boolean allowSleepToDozeTransition) {
+        if (!com.android.server.display.feature.flags.Flags.separateTimeouts()) {
+            allowSleepToDozeTransition = false;
+        }
+
+        if (eventTime < getLastWakeTimeLocked() || mWakefulness == WAKEFULNESS_DOZING) {
             return false;
+        }
+        if (mWakefulness == WAKEFULNESS_ASLEEP) {
+            if (!allowSleepToDozeTransition) {
+                return false;
+            }
+
+            if (mDreamManagerAttemptedDozing) {
+                return false;
+            }
         }
 
         Trace.traceBegin(Trace.TRACE_TAG_POWER, "powerOffDisplay");
@@ -478,7 +530,7 @@ public class PowerGroup {
     // interactivity state
     private void updateScreenPolicyLocked(boolean quiescent, boolean dozeAfterScreenOff,
             boolean bootCompleted, boolean screenBrightnessBoostInProgress,
-            boolean brightWhenDozing) {
+            boolean brightWhenDozing, boolean allAdjacentGroupsAreNonInteractive) {
         final int wakefulness = getWakefulnessLocked();
         final int wakeLockSummary = getWakeLockSummaryLocked();
         int policyReason = Display.STATE_REASON_DEFAULT_POLICY;
@@ -491,7 +543,12 @@ public class PowerGroup {
         } else if (wakefulness == WAKEFULNESS_DOZING) {
             if ((wakeLockSummary & WAKE_LOCK_DOZE) != 0) {
                 policy = DisplayPowerRequest.POLICY_DOZE;
-            } else if (dozeAfterScreenOff) {
+            } else if (dozeAfterScreenOff || (mFeatureFlags.isSeparateTimeoutsFlickerEnabled()
+                    && allAdjacentGroupsAreNonInteractive
+                    && mGroupId == Display.DEFAULT_DISPLAY_GROUP)) {
+                // If we force dozeAfterScreenOff or
+                // if we have adjacent groups, but they are all non-interactive now,
+                // then set policy to OFF instead to reduce flickers.
                 policy = DisplayPowerRequest.POLICY_OFF;
             } else if (brightWhenDozing) {
                 policy = DisplayPowerRequest.POLICY_BRIGHT;
@@ -533,9 +590,10 @@ public class PowerGroup {
             PowerSaveState powerSaverState, boolean quiescent,
             boolean dozeAfterScreenOff, boolean bootCompleted,
             boolean screenBrightnessBoostInProgress, boolean waitForNegativeProximity,
-            boolean brightWhenDozing) {
+            boolean brightWhenDozing, boolean allAdjacentGroupsAreNonInteractive) {
         updateScreenPolicyLocked(quiescent, dozeAfterScreenOff,
-                bootCompleted, screenBrightnessBoostInProgress, brightWhenDozing);
+                bootCompleted, screenBrightnessBoostInProgress, brightWhenDozing,
+                allAdjacentGroupsAreNonInteractive);
         mDisplayPowerRequest.screenBrightnessOverride = screenBrightnessOverride;
         mDisplayPowerRequest.screenBrightnessOverrideTag = overrideTag;
         mDisplayPowerRequest.useProximitySensor = useProximitySensor;
@@ -586,6 +644,9 @@ public class PowerGroup {
                 + "\nmDimDuration=" + mDimDuration
                 + "\nmWakefulness=" + mWakefulness
                 + "\nmIsDefaultGroupAdjacent=" + mIsDefaultGroupAdjacent
+                + "\nmSupportsSandman=" + mSupportsSandman
+                + "\nmDreamManagerAttemptedDozing="
+                + mDreamManagerAttemptedDozing
                 + "\nmScreenOffTimeout=" + mScreenOffTimeout;
     }
 

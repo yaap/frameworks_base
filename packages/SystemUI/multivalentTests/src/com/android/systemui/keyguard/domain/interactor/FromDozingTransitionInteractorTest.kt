@@ -153,21 +153,19 @@ class FromDozingTransitionInteractorTest(flags: FlagsParameterization?) : SysuiT
 
     @Test
     @EnableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR)
+    @DisableFlags(FLAG_GLANCEABLE_HUB_V2)
     @DisableSceneContainer // Specifically testing keyguard_wm_state_refactor enabled w/o flexi.
     fun testTransitionToLockscreen_onWake_canDream_ktfRefactor() =
         kosmos.runTest {
             setCommunalAvailable(true)
-            if (!glanceableHubV2()) {
-                whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(true)
-            }
+            whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(true)
 
             clearInvocations(fakeCommunalSceneRepository)
             powerInteractor.setAwakeForTest()
 
             // If dreaming is possible and communal is available, then we should transition to
             // GLANCEABLE_HUB when waking up due to power button press.
-            verify(fakeCommunalSceneRepository)
-                .instantlyTransitionTo(CommunalScenes.Communal, emptySet())
+            verify(fakeCommunalSceneRepository).instantlyTransitionTo(CommunalScenes.Communal, null)
         }
 
     @Test
@@ -187,7 +185,8 @@ class FromDozingTransitionInteractorTest(flags: FlagsParameterization?) : SysuiT
 
     @Test
     @EnableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR)
-    fun testTransitionToLockscreen_onWake_canNDream_glanceableHubNotAvailable() =
+    @DisableFlags(FLAG_GLANCEABLE_HUB_V2)
+    fun testTransitionToLockscreen_onWake_canDream_glanceableHubNotAvailable() =
         kosmos.runTest {
             whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(true)
             setCommunalAvailable(false)
@@ -201,7 +200,7 @@ class FromDozingTransitionInteractorTest(flags: FlagsParameterization?) : SysuiT
         }
 
     @Test
-    @DisableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR, FLAG_SCENE_CONTAINER)
+    @DisableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR, FLAG_SCENE_CONTAINER, FLAG_GLANCEABLE_HUB_V2)
     fun testTransitionToGlanceableHub_onWakeup_ifAvailable() =
         kosmos.runTest {
             setCommunalAvailable(true)
@@ -226,9 +225,7 @@ class FromDozingTransitionInteractorTest(flags: FlagsParameterization?) : SysuiT
     fun testTransitionToLockscreen_onWakeupFromLift() =
         kosmos.runTest {
             setCommunalAvailable(true)
-            if (!glanceableHubV2()) {
-                whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(true)
-            }
+            whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(true)
 
             // Device turns on.
             powerInteractor.setAwakeForTest(reason = PowerManager.WAKE_REASON_LIFT)
@@ -240,14 +237,12 @@ class FromDozingTransitionInteractorTest(flags: FlagsParameterization?) : SysuiT
         }
 
     @Test
-    @DisableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR, FLAG_SCENE_CONTAINER)
+    @DisableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR, FLAG_SCENE_CONTAINER, FLAG_GLANCEABLE_HUB_V2)
     fun testTransitionOccluded_onWakeup_ifGlanceableHubAvailableAndOccluded() =
         kosmos.runTest {
             setCommunalAvailable(true)
             fakeKeyguardRepository.setKeyguardOccluded(true)
-            if (!glanceableHubV2()) {
-                whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(true)
-            }
+            whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(true)
 
             // Device turns on.
             powerInteractor.setAwakeForTest()
@@ -259,6 +254,20 @@ class FromDozingTransitionInteractorTest(flags: FlagsParameterization?) : SysuiT
             // No transitions are directly started by this interactor.
             assertThat(transitionRepository)
                 .startedTransition(from = KeyguardState.DOZING, to = KeyguardState.OCCLUDED)
+        }
+
+    @Test
+    @EnableFlags(FLAG_KEYGUARD_WM_STATE_REFACTOR, FLAG_GLANCEABLE_HUB_V2)
+    fun testTransitionToLockscreen_onWake_glanceableHubAvailable_glanceableHubV2Enabled() =
+        kosmos.runTest {
+            whenever(dreamManager.canStartDreaming(anyBoolean())).thenReturn(false)
+            setCommunalAvailable(true)
+            powerInteractor.setAwakeForTest()
+
+            // Even if communal is available (and we can't dream), in hub_v2 we should transition to
+            // LOCKSCREEN when waking up due to power button press.
+            assertThat(transitionRepository)
+                .startedTransition(from = KeyguardState.DOZING, to = KeyguardState.LOCKSCREEN)
         }
 
     @Test

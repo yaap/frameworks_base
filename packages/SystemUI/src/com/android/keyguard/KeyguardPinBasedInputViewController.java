@@ -19,7 +19,6 @@ package com.android.keyguard;
 import static android.view.accessibility.AccessibilityEvent.TYPE_VIEW_FOCUSED;
 
 import static com.android.internal.widget.flags.Flags.hideLastCharWithPhysicalInput;
-import static com.android.systemui.Flags.bouncerLifecycleFix;
 import static com.android.systemui.Flags.pinInputFieldStyledFocusState;
 import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
 
@@ -36,6 +35,7 @@ import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 
 import com.android.internal.util.LatencyTracker;
+import com.android.internal.widget.LockPatternChecker;
 import com.android.internal.widget.LockPatternUtils;
 import com.android.keyguard.KeyguardSecurityModel.SecurityMode;
 import com.android.keyguard.domain.interactor.KeyguardKeyboardInteractor;
@@ -44,11 +44,12 @@ import com.android.systemui.classifier.FalsingCollector;
 import com.android.systemui.flags.FeatureFlags;
 import com.android.systemui.res.R;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
+import com.android.systemui.util.wrapper.LockPatternCheckerWrapper;
 
 public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinBasedInputView>
         extends KeyguardAbsKeyInputViewController<T> implements InputManager.InputDeviceListener {
 
-    private final FalsingCollector mFalsingCollector;
+    private FalsingCollector mFalsingCollector = null;
     private final KeyguardKeyboardInteractor mKeyguardKeyboardInteractor;
     protected PasswordTextView mPasswordEntry;
     private Boolean mShowAnimations;
@@ -66,6 +67,9 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
 
     private final OnTouchListener mActionButtonTouchListener = (v, event) -> {
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            if (mFalsingCollector != null) {
+                mFalsingCollector.avoidGesture();
+            }
             mView.doHapticKeyClick();
         }
         return false;
@@ -85,11 +89,12 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
             KeyguardKeyboardInteractor keyguardKeyboardInteractor,
             BouncerHapticPlayer bouncerHapticPlayer,
             UserActivityNotifier userActivityNotifier,
-            InputManager inputManager) {
+            InputManager inputManager,
+            LockPatternCheckerWrapper lockPatternCheckerWrapper) {
         super(view, keyguardUpdateMonitor, securityMode, lockPatternUtils, keyguardSecurityCallback,
                 messageAreaControllerFactory, latencyTracker, falsingCollector,
                 emergencyButtonController, featureFlags, selectedUserInteractor,
-                bouncerHapticPlayer, userActivityNotifier);
+                bouncerHapticPlayer, userActivityNotifier, lockPatternCheckerWrapper);
         mFalsingCollector = falsingCollector;
         mKeyguardKeyboardInteractor = keyguardKeyboardInteractor;
         mPasswordEntry = mView.findViewById(mView.getPasswordTextViewId());
@@ -172,6 +177,7 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
         if (mBouncerHapticPlayer.isEnabled()) {
             deleteButton.setOnTouchListener((View view, MotionEvent event) -> {
                 if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    mFalsingCollector.avoidGesture();
                     mBouncerHapticPlayer.playDeleteKeyPressFeedback();
                 }
                 return false;
@@ -263,12 +269,6 @@ public abstract class KeyguardPinBasedInputViewController<T extends KeyguardPinB
     @Override
     public void onResume(int reason) {
         super.onResume(reason);
-
-        if (bouncerLifecycleFix() && !mView.isVisibleToUser()) {
-            // don't request focus if view isn't visible
-            return;
-        }
-
         // It's possible to reach a state here where mPasswordEntry believes it is focused
         // but it is not actually focused. This state will prevent the view from gaining focus,
         // as requestFocus will no-op since the focus flag is already set. By clearing focus first,

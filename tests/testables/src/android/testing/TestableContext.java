@@ -41,6 +41,7 @@ import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
 import java.util.ArrayList;
+import java.util.concurrent.Executor;
 
 /**
  * A ContextWrapper with utilities specifically designed to make Testing easier.
@@ -64,7 +65,7 @@ public class TestableContext extends ContextWrapper implements TestRule {
 
     private TestableContentResolver mTestableContentResolver;
     private TestableSettingsProvider mSettingsProvider;
-    private RuntimeException mSettingsProviderFailure;
+    private Throwable mSettingsProviderFailure;
 
     private ArrayList<MockServiceResolver> mMockServiceResolvers;
     private ArrayMap<String, Object> mMockSystemServices;
@@ -99,8 +100,7 @@ public class TestableContext extends ContextWrapper implements TestRule {
         } catch (Throwable t) {
             mTestableContentResolver = null;
             mSettingsProvider = null;
-            mSettingsProviderFailure = new RuntimeException(
-                    "Failed to initialize TestableSettingsProvider", t);
+            mSettingsProviderFailure = t;
         }
         mReceiver = check != null ? check.getTracker("receiver") : null;
         mService = check != null ? check.getTracker("service") : null;
@@ -185,7 +185,8 @@ public class TestableContext extends ContextWrapper implements TestRule {
 
     TestableSettingsProvider getSettingsProvider() {
         if (mSettingsProviderFailure != null) {
-            throw mSettingsProviderFailure;
+            throw new RuntimeException(
+                    "Failed to initialize TestableSettingsProvider", mSettingsProviderFailure);
         }
         return mSettingsProvider;
     }
@@ -193,7 +194,8 @@ public class TestableContext extends ContextWrapper implements TestRule {
     @Override
     public TestableContentResolver getContentResolver() {
         if (mSettingsProviderFailure != null) {
-            throw mSettingsProviderFailure;
+            throw new RuntimeException(
+                    "Failed to initialize TestableSettingsProvider", mSettingsProviderFailure);
         }
         return mTestableContentResolver;
     }
@@ -287,6 +289,12 @@ public class TestableContext extends ContextWrapper implements TestRule {
         if (mService != null) mService.getLeakInfo(conn).addAllocation(new Throwable());
         if (checkMocks(service, conn)) return true;
         return super.bindService(service, conn, flags);
+    }
+
+    @Override
+    public boolean bindService(Intent service, int flags, Executor executor,
+            ServiceConnection conn) {
+        return bindService(service, conn, flags);
     }
 
     /**

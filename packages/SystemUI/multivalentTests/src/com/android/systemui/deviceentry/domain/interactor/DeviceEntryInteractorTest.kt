@@ -51,6 +51,8 @@ import com.android.systemui.kosmos.runTest
 import com.android.systemui.kosmos.testScope
 import com.android.systemui.kosmos.useStandardTestDispatcher
 import com.android.systemui.kosmos.useUnconfinedTestDispatcher
+import com.android.systemui.scene.data.model.asIterable
+import com.android.systemui.scene.domain.interactor.sceneBackInteractor
 import com.android.systemui.scene.domain.interactor.sceneInteractor
 import com.android.systemui.scene.domain.startable.sceneContainerStartable
 import com.android.systemui.scene.shared.model.Overlays
@@ -286,9 +288,31 @@ class DeviceEntryInteractorTest : SysuiTestCase() {
                 SuccessFingerprintAuthenticationStatus(0, true)
             )
 
-            underTest.attemptDeviceEntry()
+            underTest.attemptDeviceEntry("test")
 
             assertThat(currentScene).isEqualTo(Scenes.Gone)
+        }
+
+    @Test
+    fun showOrUnlockDevice_notLocked_replacesLockscreenWithGoneInTheBackStack() =
+        kosmos.runTest {
+            val currentScene by collectLastValue(sceneInteractor.currentScene)
+            val backStack by collectLastValue(sceneBackInteractor.backStack)
+            switchToScene(Scenes.Lockscreen)
+            assertThat(currentScene).isEqualTo(Scenes.Lockscreen)
+            switchToScene(Scenes.QuickSettings)
+            assertThat(currentScene).isEqualTo(Scenes.QuickSettings)
+            assertThat(backStack!!.asIterable().toList()).isEqualTo(listOf(Scenes.Lockscreen))
+
+            fakeAuthenticationRepository.setAuthenticationMethod(Pin)
+            fakeDeviceEntryFingerprintAuthRepository.setAuthenticationStatus(
+                SuccessFingerprintAuthenticationStatus(0, true)
+            )
+
+            underTest.attemptDeviceEntry("test")
+
+            assertThat(currentScene).isEqualTo(Scenes.QuickSettings)
+            assertThat(backStack!!.asIterable().toList()).isEqualTo(listOf(Scenes.Gone))
         }
 
     @Test
@@ -300,9 +324,28 @@ class DeviceEntryInteractorTest : SysuiTestCase() {
 
             fakeAuthenticationRepository.setAuthenticationMethod(None)
 
-            underTest.attemptDeviceEntry()
+            underTest.attemptDeviceEntry("test")
 
             assertThat(currentScene).isEqualTo(Scenes.Gone)
+        }
+
+    @Test
+    fun showOrUnlockDevice_authMethodNotSecure_replacesLockscreenWithGoneInTheBackStack() =
+        kosmos.runTest {
+            val currentScene by collectLastValue(sceneInteractor.currentScene)
+            val backStack by collectLastValue(sceneBackInteractor.backStack)
+            switchToScene(Scenes.Lockscreen)
+            assertThat(currentScene).isEqualTo(Scenes.Lockscreen)
+            switchToScene(Scenes.QuickSettings)
+            assertThat(currentScene).isEqualTo(Scenes.QuickSettings)
+            assertThat(backStack!!.asIterable().toList()).isEqualTo(listOf(Scenes.Lockscreen))
+
+            fakeAuthenticationRepository.setAuthenticationMethod(None)
+
+            underTest.attemptDeviceEntry("test")
+
+            assertThat(currentScene).isEqualTo(Scenes.QuickSettings)
+            assertThat(backStack!!.asIterable().toList()).isEqualTo(listOf(Scenes.Gone))
         }
 
     @Test
@@ -315,9 +358,29 @@ class DeviceEntryInteractorTest : SysuiTestCase() {
             fakeDeviceEntryRepository.setLockscreenEnabled(true)
             fakeAuthenticationRepository.setAuthenticationMethod(None)
 
-            underTest.attemptDeviceEntry()
+            underTest.attemptDeviceEntry("test")
 
             assertThat(currentScene).isEqualTo(Scenes.Gone)
+        }
+
+    @Test
+    fun showOrUnlockDevice_authMethodSwipe_replacesLockscreenWithGoneInTheBackStack() =
+        kosmos.runTest {
+            val currentScene by collectLastValue(sceneInteractor.currentScene)
+            val backStack by collectLastValue(sceneBackInteractor.backStack)
+            switchToScene(Scenes.Lockscreen)
+            assertThat(currentScene).isEqualTo(Scenes.Lockscreen)
+            switchToScene(Scenes.QuickSettings)
+            assertThat(currentScene).isEqualTo(Scenes.QuickSettings)
+            assertThat(backStack!!.asIterable().toList()).isEqualTo(listOf(Scenes.Lockscreen))
+
+            fakeDeviceEntryRepository.setLockscreenEnabled(true)
+            fakeAuthenticationRepository.setAuthenticationMethod(None)
+
+            underTest.attemptDeviceEntry("test")
+
+            assertThat(currentScene).isEqualTo(Scenes.QuickSettings)
+            assertThat(backStack!!.asIterable().toList()).isEqualTo(listOf(Scenes.Gone))
         }
 
     @Test
@@ -331,7 +394,7 @@ class DeviceEntryInteractorTest : SysuiTestCase() {
             fakeFingerprintPropertyRepository.supportsRearFps() // altBouncer unsupported
             fakeAuthenticationRepository.setAuthenticationMethod(Pin)
 
-            underTest.attemptDeviceEntry()
+            underTest.attemptDeviceEntry("test")
 
             assertThat(currentOverlays).contains(Overlays.Bouncer)
         }
@@ -346,7 +409,7 @@ class DeviceEntryInteractorTest : SysuiTestCase() {
             fakeAuthenticationRepository.setAuthenticationMethod(Pin)
             givenCanShowAlternateBouncer()
 
-            underTest.attemptDeviceEntry()
+            underTest.attemptDeviceEntry("test")
 
             assertThat(currentScene).isEqualTo(Scenes.Lockscreen)
         }

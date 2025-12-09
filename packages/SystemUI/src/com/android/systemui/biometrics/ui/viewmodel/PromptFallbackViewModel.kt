@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.systemui.biometrics.domain.interactor.PromptSelectorInteractor
 import com.android.systemui.biometrics.shared.model.FallbackOptionModel
 import com.android.systemui.biometrics.shared.model.PromptKind
+import com.android.systemui.biometrics.shared.model.WatchRangingState
 import com.android.systemui.res.R
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -43,6 +44,8 @@ constructor(val promptSelectorInteractor: PromptSelectorInteractor) {
         fun create(): PromptFallbackViewModel
     }
 
+    private val watchRangingState: Flow<WatchRangingState> =
+        promptSelectorInteractor.watchRangingState
     val fallbackOptions: Flow<List<FallbackOptionModel>> = promptSelectorInteractor.fallbackOptions
 
     private val identityCheckActive: Flow<Boolean> = promptSelectorInteractor.isIdentityCheckActive
@@ -51,35 +54,43 @@ constructor(val promptSelectorInteractor: PromptSelectorInteractor) {
 
     private val credentialKind: Flow<PromptKind> = promptSelectorInteractor.credentialKind
 
-    val showCredential: Flow<Boolean> =
-        combine(credentialAllowed, credentialKind, identityCheckActive) {
-            credentialAllowed,
-            credentialKind,
-            identityCheckActive ->
-            credentialAllowed && credentialKind.isCredential() && !identityCheckActive
+    /** Whether the credential button is enabled */
+    val icCredentialButtonEnabled: Flow<Boolean> =
+        watchRangingState.map { it == WatchRangingState.WATCH_RANGING_SUCCESSFUL }
+
+    /** The subtitle to display for the credential button */
+    val icCredentialSubtitle: Flow<Int?> =
+        watchRangingState.map { status ->
+            when (status) {
+                WatchRangingState.WATCH_RANGING_STARTED -> {
+                    R.string.biometric_dialog_identity_check_watch_ranging
+                }
+                WatchRangingState.WATCH_RANGING_STOPPED -> {
+                    R.string.biometric_dialog_unavailable
+                }
+                else -> {
+                    null
+                }
+            }
         }
 
+    /** Whether to show the identity check footer text */
+    val icShowFooter: Flow<Boolean> =
+        watchRangingState.map { status ->
+            status == WatchRangingState.WATCH_RANGING_STOPPED ||
+                status == WatchRangingState.WATCH_RANGING_IDLE
+        }
+
+    /** Whether the credential fallback button should be shown */
+    val showCredential: Flow<Boolean> =
+        combine(credentialAllowed, identityCheckActive) { credentialAllowed, identityCheckActive ->
+            credentialAllowed && !identityCheckActive
+        }
+
+    /** Whether to show the manage identity check button */
     val showManageIdentityCheck: Flow<Boolean> =
         combine(credentialAllowed, identityCheckActive) { credentialAllowed, identityCheckActive ->
             credentialAllowed && identityCheckActive
-        }
-
-    /**
-     * Total option count for the fallback view
-     *
-     * This includes all options added by prompt caller. If Credential is allowed, it counts as an
-     * option. If credential is allowed and identity Check is enabled, this counts as another option
-     */
-    val optionCount: Flow<Int> =
-        combine(credentialAllowed, identityCheckActive, fallbackOptions) {
-            credentialAllowed,
-            identityCheckEnabled,
-            fallbackOptions ->
-            var total = 0
-            if (credentialAllowed) total++
-            if (identityCheckEnabled && credentialAllowed) total++
-            total += fallbackOptions.size
-            total
         }
 
     /** Icon to be used for the credential kind */
@@ -103,7 +114,7 @@ constructor(val promptSelectorInteractor: PromptSelectorInteractor) {
                 PromptKind.Password -> R.string.biometric_dialog_use_password
                 PromptKind.Pattern -> R.string.biometric_dialog_use_pattern
                 else -> {
-                    -1
+                    R.string.biometric_dialog_use_password
                 }
             }
         }

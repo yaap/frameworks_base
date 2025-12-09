@@ -16,11 +16,7 @@
 
 package com.android.systemui.lowlight.dagger
 
-import android.hardware.Sensor
 import com.android.systemui.CoreStartable
-import com.android.systemui.lowlight.AmbientLightModeMonitor
-import com.android.systemui.lowlight.AmbientLightModeMonitor.DebounceAlgorithm
-import com.android.systemui.lowlight.AmbientLightModeMonitorImpl
 import com.android.systemui.lowlight.LowLightBehaviorCoreStartable
 import com.android.systemui.lowlight.data.repository.dagger.LowLightRepositoryModule
 import com.android.systemui.lowlight.data.repository.dagger.LowLightSettingsRepositoryModule
@@ -30,9 +26,11 @@ import dagger.BindsOptionalOf
 import dagger.Module
 import dagger.multibindings.ClassKey
 import dagger.multibindings.IntoMap
-import javax.inject.Named
 
-@Module(includes = [LowLightSettingsRepositoryModule::class, LowLightRepositoryModule::class])
+@Module(
+    includes = [LowLightSettingsRepositoryModule::class, LowLightRepositoryModule::class],
+    subcomponents = [AmbientLightModeComponent::class],
+)
 abstract class LowLightModule {
     @Binds
     @IntoMap
@@ -42,17 +40,4 @@ abstract class LowLightModule {
     ): CoreStartable
 
     @BindsOptionalOf abstract fun bindsLowLightDisplayController(): LowLightDisplayController
-
-    @BindsOptionalOf abstract fun bindsDebounceAlgorithm(): DebounceAlgorithm
-
-    @Binds
-    abstract fun bindAmbientLightModeMonitor(
-        impl: AmbientLightModeMonitorImpl
-    ): AmbientLightModeMonitor
-
-    @BindsOptionalOf @Named(LIGHT_SENSOR) abstract fun bindsLightSensor(): Sensor
-
-    companion object {
-        const val LIGHT_SENSOR: String = "low_light_monitor_light_sensor"
-    }
 }

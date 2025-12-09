@@ -553,11 +553,13 @@ public class LocationManagerService extends ILocationManager.Stub implements
             setLocationFudgerCache(new LocationFudgerCache(mPopulationDensityProvider));
         }
 
-        // bind to hardware activity recognition
-        HardwareActivityRecognitionProxy hardwareActivityRecognitionProxy =
-                HardwareActivityRecognitionProxy.createAndRegister(mContext);
-        if (hardwareActivityRecognitionProxy == null) {
-            Log.e(TAG, "unable to bind ActivityRecognitionProxy");
+        if (!Flags.disableHardwareAr()) {
+            // bind to hardware activity recognition
+            HardwareActivityRecognitionProxy hardwareActivityRecognitionProxy =
+                    HardwareActivityRecognitionProxy.createAndRegister(mContext);
+            if (hardwareActivityRecognitionProxy == null) {
+                Log.e(TAG, "unable to bind ActivityRecognitionProxy");
+            }
         }
 
         // bind to gnss geofence proxy
@@ -815,6 +817,9 @@ public class LocationManagerService extends ILocationManager.Stub implements
 
     @Override
     public PackageTagsList getAdasAllowlist() {
+        if (Flags.changeGetAdasAllowlistFromHiddenToSystem()) {
+            LocationPermissions.enforceCallingOrSelfAccessBypassAllowlistPermission(mContext);
+        }
         return mInjector.getSettingsHelper().getAdasAllowlist();
     }
 
@@ -1750,8 +1755,8 @@ public class LocationManagerService extends ILocationManager.Stub implements
                     builder.add(identity.getPackageName(), identity.getAttributionTag());
                 }
             }
-            builder.add(mInjector.getSettingsHelper().getIgnoreSettingsAllowlist());
-            builder.add(mInjector.getSettingsHelper().getAdasAllowlist());
+            builder.addAll(mInjector.getSettingsHelper().getIgnoreSettingsAllowlist());
+            builder.addAll(mInjector.getSettingsHelper().getAdasAllowlist());
             allowedPackages = builder.build();
         }
 

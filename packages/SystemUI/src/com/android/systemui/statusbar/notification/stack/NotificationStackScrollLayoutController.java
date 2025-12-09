@@ -117,7 +117,6 @@ import com.android.systemui.statusbar.notification.headsup.HeadsUpTouchHelper;
 import com.android.systemui.statusbar.notification.headsup.HeadsUpTouchHelper.HeadsUpNotificationViewController;
 import com.android.systemui.statusbar.notification.headsup.OnHeadsUpChangedListener;
 import com.android.systemui.statusbar.notification.init.NotificationsController;
-import com.android.systemui.statusbar.notification.logging.NotificationLogger;
 import com.android.systemui.statusbar.notification.promoted.PromotedNotificationUi;
 import com.android.systemui.statusbar.notification.row.ActivatableNotificationView;
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
@@ -374,6 +373,11 @@ public class NotificationStackScrollLayoutController implements Dumpable {
             mHistoryEnabled = null;
         }
     };
+
+    // Update sensitivity, because NotificationLockscreenUserManager.isAnyProfilePublicMode()
+    // might have changed.
+    private final NotificationLockscreenUserManager.NotificationStateChangedListener
+            mLockscreenModeChangedListener = () -> updateSensitivenessWithAnimation(false);
 
     /**
      * Recalculate sensitiveness without animation; called when waking up while keyguard occluded,
@@ -942,7 +946,6 @@ public class NotificationStackScrollLayoutController implements Dumpable {
         mTouchHandler = new TouchHandler();
         mView.setTouchHandler(mTouchHandler);
         mView.setResetUserExpandedStatesRunnable(mNotificationsController::resetUserExpandedStates);
-        mView.setActivityStarter(mActivityStarter);
         mView.setClearAllAnimationListener(this::onAnimationEnd);
         mView.setClearAllListener((selection) -> mUiEventLogger.log(
                 NotificationPanelEvent.fromSelection(selection)));
@@ -985,6 +988,10 @@ public class NotificationStackScrollLayoutController implements Dumpable {
         mLockscreenShadeTransitionController.setStackScroller(this);
 
         mLockscreenUserManager.addUserChangedListener(mLockscreenUserChangeListener);
+        if (SceneContainerFlag.isEnabled()) {
+            mLockscreenUserManager.addNotificationStateChangedListener(
+                    mLockscreenModeChangedListener);
+        }
 
         mVisibilityLocationProviderDelegator.setDelegate(this::isInVisibleLocation);
 
@@ -1028,6 +1035,10 @@ public class NotificationStackScrollLayoutController implements Dumpable {
                 (changedRow, expanded) -> mView.onGroupExpandChanged(changedRow, expanded));
 
         mViewBinder.bindWhileAttached(mView, this);
+    }
+
+    public void setApplyHunTranslation(boolean apply) {
+        mView.setApplyHunTranslation(apply);
     }
 
     private boolean isInVisibleLocation(NotificationEntry entry) {
@@ -1672,14 +1683,16 @@ public class NotificationStackScrollLayoutController implements Dumpable {
             public void setRemoteInputActive(RemoteInputEntryAdapter entry,
                     boolean remoteInputActive) {
                 if (SceneContainerFlag.isEnabled()) {
-                    sendRemoteInputRowBottomBound(entry, remoteInputActive);
+                    setRemoteInputActiveRow(entry, remoteInputActive);
                 }
                 entry.setRemoteInputActive(mHeadsUpManager, remoteInputActive);
                 entry.notifyHeightChanged(true /* needsAnimation */);
             }
 
             public void lockScrollTo(ExpandableNotificationRow row) {
-                mView.lockScrollTo(row);
+                if (!SceneContainerFlag.isEnabled()) {
+                    mView.lockScrollTo(row);
+                }
             }
 
             public void requestDisallowLongPressAndDismiss() {
@@ -1687,13 +1700,10 @@ public class NotificationStackScrollLayoutController implements Dumpable {
                 mView.requestDisallowDismiss();
             }
 
-            private void sendRemoteInputRowBottomBound(RemoteInputEntryAdapter entry,
+            private void setRemoteInputActiveRow(RemoteInputEntryAdapter entry,
                     boolean remoteInputActive) {
                 ExpandableNotificationRow row = entry.getRow();
-                float top = row.getTranslationY();
-                int height = row.getActualHeight();
-                float bottom = top + height + row.getRemoteInputActionsContainerExpandedOffset();
-                mView.sendRemoteInputRowBottomBound(remoteInputActive ? bottom : null);
+                mView.requestScrollToRemoteInput(remoteInputActive ? row : null);
             }
         };
     }
@@ -2084,12 +2094,6 @@ public class NotificationStackScrollLayoutController implements Dumpable {
         @Override
         public void cleanUpViewStateForEntry(NotificationEntry entry) {
             mView.cleanUpViewStateForEntry(entry);
-        }
-
-        @Override
-        public void setChildLocationsChangedListener(
-                NotificationLogger.OnChildLocationsChangedListener listener) {
-            mView.setChildLocationsChangedListener(listener);
         }
 
         public boolean hasPulsingNotifications() {

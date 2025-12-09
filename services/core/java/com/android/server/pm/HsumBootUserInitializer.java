@@ -18,22 +18,29 @@ package com.android.server.pm;
 import android.annotation.Nullable;
 import android.annotation.UserIdInt;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.pm.UserInfo;
 import android.database.ContentObserver;
 import android.multiuser.Flags;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
+import android.util.Dumpable;
 import android.util.Log;
 
+import com.android.internal.R;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.am.ActivityManagerService;
 import com.android.server.utils.Slogf;
 import com.android.server.utils.TimingsTraceAndSlog;
 
+import java.io.PrintWriter;
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 
 /**
@@ -49,25 +56,23 @@ public final class HsumBootUserInitializer {
     // calls grows too much, we should change it to false.
     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
+    /**
+     * Property used to override (for development purposes, on debuggable builds) the resource
+     * configs used by {@link #designateMainUserOnBoot(Context)}
+     */
+    @VisibleForTesting
+    static final String SYSPROP_DESIGNATE_MAIN_USER = "fw.designate_main_user_on_boot";
+
+    // Lazy-instantiated on createInstance()
+    private static @Nullable Dumpable sDumpable;
+
     private final UserManagerService mUms;
     private final ActivityManagerService mAms;
     private final PackageManagerService mPms;
     private final ContentResolver mContentResolver;
-
-    private final ContentObserver mDeviceProvisionedObserver =
-            new ContentObserver(new Handler(Looper.getMainLooper())) {
-                @Override
-                public void onChange(boolean selfChange) {
-                    // Set USER_SETUP_COMPLETE for the (headless) system user only when the device
-                    // has been set up at least once.
-                    if (isDeviceProvisioned()) {
-                        Slogf.i(TAG, "Marking USER_SETUP_COMPLETE for system user");
-                        Settings.Secure.putInt(mContentResolver,
-                                Settings.Secure.USER_SETUP_COMPLETE, 1);
-                        mContentResolver.unregisterContentObserver(mDeviceProvisionedObserver);
-                    }
-                }
-            };
+    // TODO(b/322150148): Change the type to HsuDeviceProvisioner and remove the cast once the flag
+    // is completely pushed.
+    private final ContentObserver mDeviceProvisionedObserver;
 
     /** Whether it should create a main user on first boot. */
     private final boolean mShouldDesignateMainUser;
@@ -78,13 +83,15 @@ public final class HsumBootUserInitializer {
     /** Static factory method for creating a {@link HsumBootUserInitializer} instance. */
     public static @Nullable HsumBootUserInitializer createInstance(UserManagerService ums,
             ActivityManagerService ams, PackageManagerService pms, ContentResolver contentResolver,
-            boolean shouldDesignateMainUser, boolean shouldCreateInitialUser) {
+            Context context) {
 
         if (!UserManager.isHeadlessSystemUserMode()) {
             return null;
         }
-        return new HsumBootUserInitializer(ums, ams, pms, contentResolver,
-                shouldDesignateMainUser, shouldCreateInitialUser);
+        var instance = new HsumBootUserInitializer(ums, ams, pms, contentResolver,
+                designateMainUserOnBoot(context), createInitialUserOnBoot(context));
+        setDumpable(instance, context);
+        return instance;
     }
 
     @VisibleForTesting
@@ -97,6 +104,31 @@ public final class HsumBootUserInitializer {
         mContentResolver = contentResolver;
         mShouldDesignateMainUser = shouldDesignateMainUser;
         mShouldCreateInitialUser = shouldCreateInitialUser;
+        mDeviceProvisionedObserver = (Flags.hsuDeviceProvisioner()
+                    ? new HsuDeviceProvisioner(new Handler(Looper.getMainLooper()), contentResolver)
+                    : new ContentObserver(new Handler(Looper.getMainLooper())) {
+                        @Override
+                        public void onChange(boolean selfChange) {
+                            boolean isDeviceProvisioned = isDeviceProvisioned();
+                            if (DEBUG) {
+                                Slogf.d(
+                                        TAG,
+                                        "onChange(%b): isDeviceProvisioned=%b",
+                                        selfChange,
+                                        isDeviceProvisioned);
+                            }
+                            // Set USER_SETUP_COMPLETE for the (headless) system user only when the
+                            // device
+                            // has been set up at least once.
+                            if (isDeviceProvisioned) {
+                                Slogf.i(TAG, "Marking USER_SETUP_COMPLETE for system user");
+                                Settings.Secure.putInt(
+                                        mContentResolver, Settings.Secure.USER_SETUP_COMPLETE, 1);
+                                mContentResolver.unregisterContentObserver(
+                                        mDeviceProvisionedObserver);
+                            }
+                        }
+                    });
     }
 
     // TODO(b/409650316): remove after flag's completely pushed
@@ -319,7 +351,83 @@ public final class HsumBootUserInitializer {
         }
     }
 
-    private void observeDeviceProvisioning() {
+
+    /**
+     * Creates a static / permanent reference to a {@code Dumpable}.
+     *
+     * <p>That {@code Dumpable} will never be GC'ed and will dump both the static state (which is
+     * inferred from config / system properties) and the effective state of the {@code instance}
+     * (but without keeping a reference to it, so it can be GC'ed after boot).
+     */
+    private static Dumpable setDumpable(HsumBootUserInitializer instance, Context context) {
+        if (sDumpable != null) {
+            Slogf.e(TAG, "setDumpable(%s): already set (as %s)", instance, sDumpable);
+            return sDumpable;
+        }
+        String name = instance.toString();
+        WeakReference<HsumBootUserInitializer> ref = new WeakReference<>(instance);
+        sDumpable = new Dumpable() {
+
+            @Override
+            public String getDumpableName() {
+                return HsumBootUserInitializer.class.getSimpleName();
+            }
+
+            @Override
+            public void dump(PrintWriter pw, String[] args) {
+                HsumBootUserInitializer.dump(pw, context);
+                var self = ref.get();
+                if (self == null) {
+                    pw.printf("Effective state not available (%s has been GC'ed already)\n", name);
+                    return;
+                }
+                self.dump(pw);
+            }
+
+        };
+        return sDumpable;
+    }
+
+    @Nullable
+    public static Dumpable getDumpable() {
+        return sDumpable;
+    }
+
+    // Dumps static static - will always be available
+    private static void dump(PrintWriter pw, Context context) {
+        var res = context.getResources();
+
+        pw.print("Designate main user on boot: ");
+        pw.println(designateMainUserOnBoot(context));
+        pw.print("  config_designateMainUser: ");
+        pw.print(res.getBoolean(R.bool.config_designateMainUser));
+        pw.print(" config_isMainUserPermanentAdmin: ");
+        pw.print(res.getBoolean(R.bool.config_isMainUserPermanentAdmin));
+        pw.print(" " + SYSPROP_DESIGNATE_MAIN_USER + ": ");
+        pw.print(SystemProperties.get(SYSPROP_DESIGNATE_MAIN_USER, "N/A"));
+        pw.print(" flag_demote_main_user: ");
+        pw.println(Flags.demoteMainUser());
+
+        pw.print("Create initial user on boot: ");
+        pw.println(createInitialUserOnBoot(context));
+        pw.print("  config_createInitialUser: ");
+        pw.println(res.getBoolean(R.bool.config_createInitialUser));
+    }
+
+    // Dumps internal static - will only be available until it's garbage collected
+    private void dump(PrintWriter pw) {
+        pw.println("Effective state:");
+        pw.print("  mDeviceProvisionedObserver="); pw.println(mDeviceProvisionedObserver);
+        pw.print("  mShouldDesignateMainUser="); pw.println(mShouldDesignateMainUser);
+        pw.print("  mShouldCreateInitialUser="); pw.println(mShouldCreateInitialUser);
+    }
+
+    @VisibleForTesting
+    void observeDeviceProvisioning() {
+        if (Flags.hsuDeviceProvisioner()) {
+            ((HsuDeviceProvisioner) mDeviceProvisionedObserver).init();
+            return;
+        }
         if (isDeviceProvisioned()) {
             return;
         }
@@ -370,10 +478,53 @@ public final class HsumBootUserInitializer {
 
     private void switchToBootUser(@UserIdInt int bootUserId) {
         Slogf.i(TAG, "Switching to boot user %d", bootUserId);
+        if (bootUserId == UserHandle.USER_SYSTEM) {
+            // System user is already the foreground user, so onUserSwitching() will not be called
+            // for the system user to record the last entered foreground time. Therefore explicitly
+            // set the time now.
+            mUms.setLastEnteredForegroundTimeToNow(bootUserId);
+        }
         final boolean started = mAms.startUserInForegroundWithListener(bootUserId,
                 /* unlockListener= */ null);
         if (!started) {
             Slogf.wtf(TAG, "Failed to start user %d in foreground", bootUserId);
         }
+    }
+
+    // Methods below are used to create the parameters used in the factory method and used to be
+    // defined on SystemServer, but were moved here so they can be unit tested, as SystemServer is
+    // not included on FrameworksMockingServicesTests (and besides, it makes more sense to define
+    // the logic here than on SystemServer itself).
+
+    @VisibleForTesting
+    static boolean designateMainUserOnBoot(Context context) {
+        var res = context.getResources();
+        boolean defaultValue = res.getBoolean(R.bool.config_designateMainUser)
+                || res.getBoolean(R.bool.config_isMainUserPermanentAdmin);
+        if (DEBUG) {
+            Slogf.d(TAG, "designateMainUserOnBoot(): defaultValue=%b (because "
+                    + "config_designateMainUser=%b and config_isMainUserPermanentAdmin=%b)",
+                    defaultValue,
+                    res.getBoolean(R.bool.config_designateMainUser),
+                    res.getBoolean(R.bool.config_isMainUserPermanentAdmin));
+        }
+        // Ignore devices that should not create a main user while flag is not ramped up yet
+        // TODO(b/402486365): remove this workaround after flag is ramped up
+        if (!Flags.demoteMainUser() && res.getBoolean(R.bool.config_createInitialUser)
+                && !defaultValue) {
+            Slogf.i(TAG, "designateMainUserOnBoot(): overriding defaultValue to true (because "
+                    + "Flags.demoteMainUser()=%b and config_createInitialUser=%b)",
+                    Flags.demoteMainUser(), res.getBoolean(R.bool.config_createInitialUser));
+            defaultValue = true;
+        }
+        if (!Build.isDebuggable()) {
+            return defaultValue;
+        }
+        return SystemProperties.getBoolean(SYSPROP_DESIGNATE_MAIN_USER, defaultValue);
+    }
+
+    @VisibleForTesting
+    static boolean createInitialUserOnBoot(Context context) {
+        return context.getResources().getBoolean(R.bool.config_createInitialUser);
     }
 }

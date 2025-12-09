@@ -22,7 +22,7 @@ import com.android.app.displaylib.PerDisplayRepository
 import com.android.systemui.CoreStartable
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Default
-import com.android.systemui.display.dagger.SystemUIPhoneDisplaySubcomponent
+import com.android.systemui.display.dagger.ReferenceSysUIDisplaySubcomponent
 import com.android.systemui.statusbar.CommandQueue
 import com.android.systemui.statusbar.core.CommandQueueInitializer
 import com.android.systemui.statusbar.core.MultiDisplayStatusBarInitializerStore
@@ -34,7 +34,6 @@ import com.android.systemui.statusbar.core.StatusBarInitializer
 import com.android.systemui.statusbar.core.StatusBarInitializerImpl
 import com.android.systemui.statusbar.core.StatusBarInitializerStore
 import com.android.systemui.statusbar.core.StatusBarRootModernization
-import com.android.systemui.statusbar.data.repository.DarkIconDispatcherStore
 import com.android.systemui.statusbar.data.repository.PrivacyDotViewControllerStoreModule
 import com.android.systemui.statusbar.data.repository.PrivacyDotWindowControllerStoreModule
 import com.android.systemui.statusbar.data.repository.StatusBarConfigurationControllerStore
@@ -114,16 +113,15 @@ interface StatusBarPhoneModule {
             statusBarWindowControllerStore: StatusBarWindowControllerStore,
             statusBarModeRepositoryStore: StatusBarModeRepositoryStore,
             statusBarConfigurationControllerStore: StatusBarConfigurationControllerStore,
-            darkIconDispatcherStore: DarkIconDispatcherStore,
-            displayComponentRepo: PerDisplayRepository<SystemUIPhoneDisplaySubcomponent>,
+            displayComponentRepo: PerDisplayRepository<ReferenceSysUIDisplaySubcomponent>,
         ): StatusBarInitializerImpl {
             val systemUIDisplaySubcomponent = displayComponentRepo[Display.DEFAULT_DISPLAY]!!
             return implFactory.create(
                 statusBarWindowControllerStore.defaultDisplay,
                 statusBarModeRepositoryStore.defaultDisplay,
                 statusBarConfigurationControllerStore.defaultDisplay,
-                darkIconDispatcherStore.defaultDisplay,
                 systemUIDisplaySubcomponent.statusBarFragmentProvider,
+                systemUIDisplaySubcomponent.statusBarRootFactory,
                 systemUIDisplaySubcomponent.homeStatusBarComponentFactory,
             )
         }

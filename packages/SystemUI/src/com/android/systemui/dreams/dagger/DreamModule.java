@@ -40,6 +40,8 @@ import com.android.systemui.dreams.homecontrols.HomeControlsDreamService;
 import com.android.systemui.dreams.homecontrols.dagger.HomeControlsDataSourceModule;
 import com.android.systemui.dreams.homecontrols.dagger.HomeControlsRemoteServiceComponent;
 import com.android.systemui.dreams.homecontrols.system.HomeControlsRemoteService;
+import com.android.systemui.dreams.suppression.dagger.DreamSuppressionStartableModule;
+import com.android.systemui.lowlightclock.LowLightClockDreamService;
 import com.android.systemui.qs.QsEventLogger;
 import com.android.systemui.qs.pipeline.shared.TileSpec;
 import com.android.systemui.qs.shared.model.TileCategory;
@@ -48,8 +50,6 @@ import com.android.systemui.qs.tiles.base.shared.model.QSTilePolicy;
 import com.android.systemui.qs.tiles.base.shared.model.QSTileUIConfig;
 import com.android.systemui.res.R;
 import com.android.systemui.touch.TouchInsetManager;
-
-import com.google.android.systemui.lowlightclock.LowLightClockDreamService;
 
 import dagger.Binds;
 import dagger.BindsOptionalOf;
@@ -73,6 +73,7 @@ import javax.inject.Named;
         ScrimModule.class,
         HomeControlsDataSourceModule.class,
         DreamSettingsRepositoryModule.class,
+        DreamSuppressionStartableModule.class,
 },
         subcomponents = {
                 DreamComplicationComponent.class,
@@ -249,6 +250,12 @@ public interface DreamModule {
     static ComponentName providesLowLightClockDream(Context context) {
         return new ComponentName(context, LowLightClockDreamService.class);
     }
+
+    /** Inject into LowLightClockDreamService. */
+    @Binds
+    @IntoMap
+    @ClassKey(LowLightClockDreamService.class)
+    Service bindLowLightClockDreamService(LowLightClockDreamService service);
 
     /**
      * Provides the component name of the low light dream, or null if not configured.

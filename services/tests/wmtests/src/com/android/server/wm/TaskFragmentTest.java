@@ -565,7 +565,7 @@ public class TaskFragmentTest extends WindowTestsBase {
         taskFragment0.setBounds(taskFragmentBounds);
         taskFragment0.setAdjacentTaskFragments(
                 new TaskFragment.AdjacentSet(taskFragment0, taskFragment1));
-        taskFragment0.setCompanionTaskFragment(taskFragment1);
+        taskFragment0.setCompanionTaskFragment(taskFragment1, null /* toBeFinishedActivity */);
         taskFragment0.setAnimationParams(new TaskFragmentAnimationParams.Builder()
                 .setAnimationBackgroundColor(Color.GREEN)
                 .build());
@@ -1036,6 +1036,7 @@ public class TaskFragmentTest extends WindowTestsBase {
         final TaskFragment tf = createTaskFragmentWithActivity(task);
         final ActivityRecord activity = tf.getTopMostActivity();
         tf.setVisibleRequested(true);
+        activity.visibleIgnoringKeyguard = true;
         tf.setOverrideOrientation(SCREEN_ORIENTATION_BEHIND);
 
         // Should report the override orientation
@@ -1128,9 +1129,14 @@ public class TaskFragmentTest extends WindowTestsBase {
         // Return Task bounds if dimming on parent Task.
         final Rect dimBounds = new Rect();
         mTaskFragment.setEmbeddedDimArea(EMBEDDED_DIM_AREA_PARENT_TASK);
-        final Dimmer dimmer = mTaskFragment.getDimmer();
-        spyOn(dimmer);
-        doReturn(taskBounds).when(dimmer).getDimBounds();
+        if (com.android.window.flags.Flags.removeGetDimmer()) {
+            task.setVisibleRequested(true);
+            task.mDimmer.adjustAppearance(mock(WindowState.class), 1, 0);
+        } else {
+            final Dimmer dimmer = mTaskFragment.getDimmer();
+            spyOn(dimmer);
+            doReturn(taskBounds).when(dimmer).getDimBounds();
+        }
         mTaskFragment.getDimBounds(dimBounds);
         assertEquals(taskBounds, dimBounds);
 
@@ -1167,7 +1173,9 @@ public class TaskFragmentTest extends WindowTestsBase {
         final ActivityRecord appLeftBottom = taskFragmentLeft.getBottomMostActivity();
         final ActivityRecord appRightTop = taskFragmentRight.getTopMostActivity();
         appLeftTop.setVisibleRequested(true);
+        appLeftTop.setVisible(true);
         appRightTop.setVisibleRequested(true);
+        appRightTop.setVisible(true);
         final WindowState winLeftTop = createAppWindow(appLeftTop, "winLeftTop");
         final WindowState winLeftBottom = createAppWindow(appLeftBottom, "winLeftBottom");
         final WindowState winRightTop = createAppWindow(appRightTop, "winRightTop");

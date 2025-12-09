@@ -979,13 +979,16 @@ public class BtHelper {
             Log.w(TAG, "onSetBtScoActiveDevice() failed to remove previous device "
                     + getAnonymizedAddress(previousActiveDevice));
         }
+        // mBluetoothHeadsetDevice must correspond to previous device until now and new device from
+        // now on for SCO activation/deactivation requests made by
+        // AudioDeviceBroker.onUpdateCommunicationRouteClient() to succeed.
+        mBluetoothHeadsetDevice = btDevice;
         if (!handleBtScoActiveDeviceChange(btDevice, true, false /*deviceSwitch*/)) {
             Log.e(TAG, "onSetBtScoActiveDevice() failed to add new device "
                     + getAnonymizedAddress(btDevice));
             // set mBluetoothHeadsetDevice to null when failing to add new device
-            btDevice = null;
+            mBluetoothHeadsetDevice = null;
         }
-        mBluetoothHeadsetDevice = btDevice;
         if (mBluetoothHeadsetDevice == null) {
             resetBluetoothSco();
         }
@@ -1234,11 +1237,15 @@ public class BtHelper {
         return result;
     }
 
-    /*package*/ synchronized int getLeAudioDeviceGroupId(BluetoothDevice device) {
+    /*package*/ synchronized int getLeAudioDeviceGroupId(BluetoothDevice device, int profile) {
         if (mLeAudio == null || device == null) {
             return BluetoothLeAudio.GROUP_ID_INVALID;
         }
-        return mLeAudio.getGroupId(device);
+        if (profile == BluetoothProfile.LE_AUDIO) {
+            return mLeAudio.getGroupId(device);
+        } else {
+            return mLeAudio.getBroadcastToUnicastFallbackGroup();
+        }
     }
 
     /**
@@ -1247,15 +1254,24 @@ public class BtHelper {
      * @return A List of Pair(String main_address, String identity_address). Note that the
      * addresses returned by BluetoothDevice can be null.
      */
-    /*package*/ synchronized List<Pair<String, String>> getLeAudioGroupAddresses(int groupId) {
+    /*package*/ synchronized List<Pair<String, String>> getLeAudioGroupAddresses(
+                int groupId, int profile) {
         List<Pair<String, String>> addresses = new ArrayList<>();
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null || mLeAudio == null) {
             return addresses;
         }
-        List<BluetoothDevice> activeDevices = adapter.getActiveDevices(BluetoothProfile.LE_AUDIO);
-        for (BluetoothDevice device : activeDevices) {
-            if (device != null && mLeAudio.getGroupId(device) == groupId) {
+        if (profile == BluetoothProfile.LE_AUDIO) {
+            List<BluetoothDevice> activeDevices = adapter.getActiveDevices(
+                    BluetoothProfile.LE_AUDIO);
+            for (BluetoothDevice device : activeDevices) {
+                if (device != null && mLeAudio.getGroupId(device) == groupId) {
+                    addresses.add(new Pair(device.getAddress(), device.getIdentityAddress()));
+                }
+            }
+        } else {
+            BluetoothDevice device = mLeAudio.getConnectedGroupLeadDevice(groupId);
+            if (device != null) {
                 addresses.add(new Pair(device.getAddress(), device.getIdentityAddress()));
             }
         }

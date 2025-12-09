@@ -87,6 +87,8 @@
     <string name="bluetooth_connecting" msgid="5871702668260192755">"Verbinding maken..."</string>
     <string name="bluetooth_connected" msgid="8065345572198502293">"Verbonden: <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_pairing" msgid="4269046942588193600">"Koppelen..."</string>
+    <string name="bluetooth_pairing_failure" msgid="6914444518793157913">"Kan niet koppelen"</string>
+    <string name="bluetooth_connection_failure" msgid="384203214661155324">"Kan niet verbinden"</string>
     <string name="bluetooth_connected_no_headset" msgid="2224101138659967604">"Verbonden: <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> (geen telefoon)"</string>
     <string name="bluetooth_connected_no_a2dp" msgid="8566874395813947092">"Verbonden: <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> (geen media)"</string>
     <string name="bluetooth_connected_no_headset_no_a2dp" msgid="2893204819854215433">"Verbonden: <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> (geen telefoon of media)"</string>
@@ -103,6 +105,11 @@
     <string name="bluetooth_battery_level_untethered" msgid="1616774716076301755">"L: batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, R: batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>."</string>
     <string name="bluetooth_battery_level_untethered_left" msgid="5725764679536058365">"Links: batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_battery_level_untethered_right" msgid="8377995536997790142">"Rechts: batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_case" msgid="6783758530890124772">"Case: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> batterij"</string>
+    <string name="bluetooth_battery_level_untethered_left_case" msgid="7676759299091682229">"Links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, case: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batterij"</string>
+    <string name="bluetooth_battery_level_untethered_right_case" msgid="1299184574560442389">"Rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, case: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batterij"</string>
+    <string name="bluetooth_battery_level_untethered_left_right" msgid="6953449613092012043">"Links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batterij"</string>
+    <string name="bluetooth_battery_level_untethered_left_case_right" msgid="5434524614259536880">"L: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, C: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>, R: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_2">%3$s</xliff:g> batterij"</string>
     <string name="tv_bluetooth_battery_level_untethered_left" msgid="337629670583744410">"Links <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_right" msgid="8610019317279155595">"Rechts <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_active_no_battery_level" msgid="4155462233006205630">"Actief"</string>
@@ -111,6 +118,8 @@
     <string name="bluetooth_hearing_aid_right_active" msgid="2244728507170385397">"Actief (alleen rechts)"</string>
     <string name="bluetooth_hearing_aid_left_and_right_active" msgid="4294571497939983181">"Actief (links en rechts)"</string>
     <string name="bluetooth_hearing_device_ambient_error" msgid="6035857289108813878">"Kan omgeving niet updaten"</string>
+    <string name="bluetooth_hearing_aids_presets_error" msgid="4523942574698610976">"Kan voorinstelling niet updaten"</string>
+    <string name="hearing_device_spinner_item_selected" msgid="3884049360428514878">"Geselecteerd"</string>
     <string name="bluetooth_active_media_only_battery_level" msgid="7772517511061834073">"Actief (alleen media). Batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>."</string>
     <string name="bluetooth_active_media_only_battery_level_untethered" msgid="7444753133664620926">"Actief (alleen media), L: batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, R: batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>."</string>
     <string name="bluetooth_guest_battery_level" msgid="2820003593899467676">"Gastapparaat. Batterijniveau <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>."</string>
@@ -340,7 +349,7 @@
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"Als dit aanstaat, kan het MAC-adres van dit apparaat veranderen telkens als het apparaat verbinding maakt met een netwerk waarvoor MAC-herschikking aanstaat"</string>
     <string name="wifi_metered_label" msgid="8737187690304098638">"Met datalimiet"</string>
     <string name="wifi_unmetered_label" msgid="6174142840934095093">"Gratis"</string>
-    <string name="select_logd_size_title" msgid="1604578195914595173">"Logger-buffergrootten"</string>
+    <string name="select_logd_size_title" msgid="4393502933789367691">"Logger-buffergrootte"</string>
     <string name="select_logd_size_dialog_title" msgid="2105401994681013578">"Kies Logger-grootten per logbuffer"</string>
     <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"Persistente loggeropslag wissen?"</string>
     <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"Wanneer we niet meer controleren met de persistente logger, zijn we verplicht de logger-gegevens op je apparaat te wissen."</string>
@@ -396,7 +405,7 @@
     <string name="show_key_presses" msgid="6360141722735900214">"Toetsaanslagen tonen"</string>
     <string name="show_key_presses_summary" msgid="725387457373015024">"Toon visuele feedback voor fysieke toetsaanslagen"</string>
     <string name="touchpad_visualizer" msgid="3707916068870825115">"Touchpadinvoer tonen"</string>
-    <string name="touchpad_visualizer_summary" msgid="4056080018119847449">"Schermoverlay die gegevens van touchpadinvoer en herkende gebaren weergeeft"</string>
+    <string name="touchpad_visualizer_summary" msgid="4056080018119847449">"Schermoverlay met gegevens van touchpadinvoer en herkende gebaren"</string>
     <string name="show_screen_updates" msgid="2078782895825535494">"Oppervlakupdates tonen"</string>
     <string name="show_screen_updates_summary" msgid="2126932969682087406">"Flash volledige vensteroppervlakken bij updates"</string>
     <string name="show_hw_screen_updates" msgid="2021286231267747506">"Weergave-updates tonen"</string>
@@ -417,7 +426,7 @@
     <string name="transparent_navigation_bar" msgid="1933192171384678484">"Doorzichtige navigatiebalk"</string>
     <string name="transparent_navigation_bar_summary" msgid="5454359021817330722">"Maak de achtergrondkleur van de navigatiebalk standaard doorzichtig"</string>
     <string name="window_blurs" msgid="6831008984828425106">"Vervagen op vensterniveau toestaan"</string>
-    <string name="force_msaa" msgid="4081288296137775550">"4x MSAA forceren"</string>
+    <string name="force_msaa" msgid="4081288296137775550">"4x MSAA afdwingen"</string>
     <string name="force_msaa_summary" msgid="9070437493586769500">"Zet 4x MSAA aan in OpenGL ES 2.0-apps"</string>
     <string name="show_non_rect_clip" msgid="7499758654867881817">"Foutopsporing niet-rechthoekig bijsnijden"</string>
     <string name="track_frame_time" msgid="522674651937771106">"HWUI-weergave van profiel"</string>
@@ -445,7 +454,7 @@
     <string name="show_notification_channel_warnings" msgid="3448282400127597331">"Kanaalwaarschuwingen voor meldingen tonen"</string>
     <string name="show_notification_channel_warnings_summary" msgid="68031143745094339">"Toont een waarschuwing op het scherm wanneer een app een melding post zonder geldig kanaal"</string>
     <string name="force_allow_on_external" msgid="9187902444231637880">"Toestaan van apps op externe opslag afdwingen"</string>
-    <string name="force_allow_on_external_summary" msgid="8525425782530728238">"Hiermee komt elke app in aanmerking voor schrijven naar externe opslag, ongeacht de manifestwaarden"</string>
+    <string name="force_allow_on_external_summary" msgid="8525425782530728238">"Elke app komt in aanmerking voor schrijven naar externe opslag, ongeacht de manifestwaarden"</string>
     <string name="force_resizable_activities" msgid="7143612144399959606">"Formaat activiteiten geforceerd aanpasbaar maken"</string>
     <string name="force_resizable_activities_summary" msgid="2490382056981583062">"Maak het formaat van alle activiteiten aanpasbaar, ongeacht de manifestwaarden"</string>
     <string name="enable_freeform_support" msgid="7599125687603914253">"Vensters met vrije vorm aanzetten"</string>
@@ -492,7 +501,7 @@
     <string name="daltonizer_mode_protanomaly" msgid="7805583306666608440">"Protanomalie (rood-groen)"</string>
     <string name="daltonizer_mode_tritanomaly" msgid="7135266249220732267">"Tritanomalie (blauw-geel)"</string>
     <string name="accessibility_display_daltonizer_preference_title" msgid="1810693571332381974">"Kleurcorrectie"</string>
-    <string name="accessibility_display_daltonizer_preference_subtitle" msgid="1522101114585266455">"Kleurcorrectie kan handig zijn in de volgende situaties:&lt;br/&gt; &lt;ol&gt; &lt;li&gt;&amp;nbsp;Je wilt kleuren nauwkeuriger zien.&lt;/li&gt; &lt;li&gt;&amp;nbsp;Je wilt kleuren verwijderen zodat je je beter kunt concentreren.&lt;/li&gt; &lt;/ol&gt;"</string>
+    <string name="accessibility_display_daltonizer_preference_subtitle" msgid="1522101114585266455">"Kleurcorrectie kan handig zijn als je het volgende wilt doen:&lt;br/&gt; &lt;ol&gt; &lt;li&gt;&amp;nbsp;Kleuren duidelijker zien&lt;/li&gt; &lt;li&gt;&amp;nbsp;Kleuren verwijderen om je beter te kunnen concentreren&lt;/li&gt; &lt;/ol&gt;"</string>
     <string name="daltonizer_type_overridden" msgid="4509604753672535721">"Overschreven door <xliff:g id="TITLE">%1$s</xliff:g>"</string>
     <string name="power_remaining_settings_home_page" msgid="4885165789445462557">"<xliff:g id="PERCENTAGE">%1$s</xliff:g> - <xliff:g id="TIME_STRING">%2$s</xliff:g>"</string>
     <string name="power_charging_on_hold_settings_home_page" msgid="7690464049464805856">"<xliff:g id="LEVEL">%1$s</xliff:g>: opladen is in de wacht gezet om de batterij te beschermen"</string>
@@ -569,7 +578,7 @@
     <string name="use_system_language_to_select_input_method_subtypes" msgid="4865195835541387040">"Gebruik systeemtalen"</string>
     <string name="failed_to_open_app_settings_toast" msgid="764897252657692092">"Instellingen openen voor <xliff:g id="SPELL_APPLICATION_NAME">%1$s</xliff:g> mislukt"</string>
     <string name="ime_security_warning" msgid="6547562217880551450">"Deze invoermethode verzamelt mogelijk alle tekst die je typt, inclusief persoonsgegevens zoals wachtwoorden en creditcardnummers. De methode is afkomstig uit de app <xliff:g id="IME_APPLICATION_NAME">%1$s</xliff:g>. Deze invoermethode aanzetten?"</string>
-    <string name="direct_boot_unaware_dialog_message" msgid="7845398276735021548">"Opmerking: Nadat je de telefoon opnieuw opstart, wordt deze app pas gestart nadat je de telefoon ontgrendelt"</string>
+    <string name="direct_boot_unaware_dialog_message" msgid="7845398276735021548">"Opmerking: Nadat je de telefoon opnieuw opstart, wordt deze app pas gestart als je de telefoon ontgrendelt"</string>
     <string name="ims_reg_title" msgid="8197592958123671062">"IMS-registratiestatus"</string>
     <string name="ims_reg_status_registered" msgid="884916398194885457">"Geregistreerd"</string>
     <string name="ims_reg_status_not_registered" msgid="2989287366045704694">"Niet geregistreerd"</string>

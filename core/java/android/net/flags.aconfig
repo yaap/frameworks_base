@@ -12,6 +12,13 @@ flag {
 }
 
 flag {
+    name: "powered_off_finding_message_new_product_name"
+    namespace: "nearby"
+    description: "Controls whether the Powered Off Finding message uses the new product name"
+    bug: "417428201"
+}
+
+flag {
   name: "register_nsd_offload_engine"
   is_exported: true
   namespace: "android_core_networking"
@@ -68,4 +75,23 @@ flag {
     is_exported: false
     description: "This flag controls VPN metrics collection."
     bug: "306313287"
+}
+
+flag {
+  name: "create_app_specific_network_permission"
+  namespace: "android_core_networking"
+  is_exported: false
+  description: "Flag for adding CREATE_APP_SPECIFIC_NETWORK permission"
+  bug: "435313135"
+}
+
+flag {
+  name: "delete_vpn_profile_when_app_uninstalled"
+  namespace: "android_core_networking"
+  is_exported: false
+  description: "Flag for deleting VPN profile when the provisioning app is uninstalled"
+  bug: "440083803"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }

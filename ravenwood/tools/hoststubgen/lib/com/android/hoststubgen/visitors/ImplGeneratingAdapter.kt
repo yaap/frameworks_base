@@ -16,32 +16,39 @@
 package com.android.hoststubgen.visitors
 
 import com.android.hoststubgen.HostStubGenErrors
+import com.android.hoststubgen.HostStubGenInternalException
 import com.android.hoststubgen.asm.CLASS_INITIALIZER_DESC
 import com.android.hoststubgen.asm.CLASS_INITIALIZER_NAME
 import com.android.hoststubgen.asm.CTOR_NAME
 import com.android.hoststubgen.asm.ClassNodes
 import com.android.hoststubgen.asm.UnifiedVisitor
+import com.android.hoststubgen.asm.UnifiedVisitor.Companion.addParams
 import com.android.hoststubgen.asm.adjustStackForConstructorRedirection
 import com.android.hoststubgen.asm.changeMethodDescriptorReturnType
 import com.android.hoststubgen.asm.getPackageNameFromFullClassName
 import com.android.hoststubgen.asm.isEnum
 import com.android.hoststubgen.asm.prependArgTypeToMethodDescriptor
+import com.android.hoststubgen.asm.reasonParam
 import com.android.hoststubgen.asm.toJvmClassName
 import com.android.hoststubgen.asm.writeByteCodeToPushArguments
 import com.android.hoststubgen.asm.writeByteCodeToReturn
+import com.android.hoststubgen.asm.writeByteCodeToReturnDefault
 import com.android.hoststubgen.filters.FilterPolicy
 import com.android.hoststubgen.filters.FilterPolicyWithReason
 import com.android.hoststubgen.filters.OutputFilter
+import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsExperimental
 import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsIgnore
 import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsKeep
-import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsKeep.CLASS_DESCRIPTOR
 import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsSubstitute
 import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsThrow
 import com.android.hoststubgen.hosthelper.HostStubGenProcessedAsThrowButSupported
 import com.android.hoststubgen.hosthelper.HostTestUtils
 import com.android.hoststubgen.log
+import com.android.hoststubgen.utils.ClassDescriptorSet
+import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.FieldVisitor
+import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Opcodes.INVOKEINTERFACE
@@ -49,6 +56,7 @@ import org.objectweb.asm.Opcodes.INVOKESPECIAL
 import org.objectweb.asm.Opcodes.INVOKESTATIC
 import org.objectweb.asm.Opcodes.INVOKEVIRTUAL
 import org.objectweb.asm.Type
+import java.lang.annotation.RetentionPolicy
 
 const val OPCODE_VERSION = Opcodes.ASM9
 
@@ -77,6 +85,11 @@ class ImplGeneratingAdapter(
         // val deleteFieldFinals: Boolean,
 
         val throwExceptionType: String,
+
+        // We make all annotations in this set "runtime-visible".
+        val annotationsToMakeVisible: ClassDescriptorSet,
+
+        val experimentalMethodCallHook: String?,
     )
 
     private lateinit var currentPackageName: String
@@ -130,7 +143,8 @@ class ImplGeneratingAdapter(
         log.v("Emitting class: %s", name)
         log.indent()
         // Inject annotations to generated classes.
-        UnifiedVisitor.on(this).visitAnnotation(CLASS_DESCRIPTOR, true)
+        UnifiedVisitor.on(this).visitAnnotation(
+            HostStubGenProcessedAsKeep.CLASS_DESCRIPTOR, true, reasonParam(classPolicy.reason))
 
         classLoadHooks = filter.getClassLoadHooks(currentClassName)
 
@@ -153,6 +167,32 @@ class ImplGeneratingAdapter(
         super.visitEnd()
     }
 
+    /**
+     * Tweak annotation "visibility" aka "retention policy".
+     */
+    override fun visitAnnotation(descriptor: String?, visible: Boolean): AnnotationVisitor? {
+        // If it's a "known" annotation -- i.e. any Ravenwood annotations -- we do the following:
+        // 1. For the annotation type itself, change the retention policy to "RUNTIME".
+        // 2. Make the annotation "runtime-visible" across the whole jar.
+
+        // For 1.
+        if (options.annotationsToMakeVisible.contains(currentClassName)) {
+            // This current type is a known annotation. We change the retention policy.
+
+            if ("Ljava/lang/annotation/Retention;" == descriptor) {
+                // If it is, we return our custom AnnotationVisitor to modify its value.
+                // We pass the original visitor from the superclass to maintain the chain.
+                return RetentionPolicyAnnotationVisitor(
+                    super.visitAnnotation(descriptor, visible))
+            }
+        }
+
+        // For 2. If the annotation we're processing now is "known" (i.e. RavenwoodKeep, etc),
+        // force it to be "runtime-visible" aka RUNTIME.
+        return super.visitAnnotation(descriptor,
+            visible || options.annotationsToMakeVisible.contains(descriptor))
+    }
+
     var skipMemberModificationNestCount = 0
 
     /**
@@ -165,6 +205,19 @@ class ImplGeneratingAdapter(
         } finally {
             skipMemberModificationNestCount--
         }
+    }
+
+    /**
+     * Split a class + method string into internal class name + method name
+     * e.g.: "com.example.MyClass.myMethod" -> ("com/example/MyClass", "myMethod")
+     */
+    private fun String.parseClassMethod(): Pair<String, String> {
+        val split = lastIndexOf('.')
+        if (split < 0) {
+            options.errors.onErrorFound(
+                "Unable to find class and method name: malformed string \"%s\"".format(this))
+        }
+        return substring(0, split).replace('.', '/') to substring(split + 1)
     }
 
     private fun injectClassLoadHook() {
@@ -197,17 +250,9 @@ class ImplGeneratingAdapter(
             // First argument: the class type.
             mv.visitLdcInsn(Type.getType("L$currentClassName;"))
 
-            // Second argument: method name
-            mv.visitLdcInsn(classLoadHook)
-
-            // Call HostTestUtils.onClassLoaded().
-            mv.visitMethodInsn(
-                INVOKESTATIC,
-                HostTestUtils.CLASS_INTERNAL_NAME,
-                "onClassLoaded",
-                "(Ljava/lang/Class;Ljava/lang/String;)V",
-                false
-            )
+            // Call classLoadHook
+            val (clazz, method) = classLoadHook.parseClassMethod()
+            mv.visitMethodInsn(INVOKESTATIC, clazz, method, "(Ljava/lang/Class;)V", false)
         }
     }
 
@@ -234,9 +279,9 @@ class ImplGeneratingAdapter(
             val ret = super.visitField(access, name, descriptor, signature, value)
 
             UnifiedVisitor.on(ret)
-                .visitAnnotation(HostStubGenProcessedAsKeep.CLASS_DESCRIPTOR, true)
+                .visitAnnotation(HostStubGenProcessedAsKeep.CLASS_DESCRIPTOR, true, reasonParam(policy.reason))
 
-            return ret
+            return ForceFieldAnnotationVisibilityVisitor(ret)
         }
     }
 
@@ -323,12 +368,7 @@ class ImplGeneratingAdapter(
                 super.visitMethod(newAccess, newName, descriptor, signature, exceptions)
             )
 
-            ret?.let {
-                UnifiedVisitor.on(ret)
-                    .visitAnnotation(HostStubGenProcessedAsKeep.CLASS_DESCRIPTOR, true)
-            }
-
-            return ret
+            return ForceMethodAnnotationVisibilityVisitor(ret)
         }
     }
 
@@ -364,8 +404,8 @@ class ImplGeneratingAdapter(
             innerVisitor = ClassLoadHookInjectingMethodAdapter(innerVisitor)
         }
 
-        fun MethodVisitor.withAnnotation(descriptor: String): MethodVisitor {
-            this.visitAnnotation(descriptor, true)
+        fun MethodVisitor.withAnnotation(descriptor: String, reason: String): MethodVisitor {
+            this.visitAnnotation(descriptor, true).addParams(reasonParam(reason))
             return this
         }
 
@@ -373,6 +413,7 @@ class ImplGeneratingAdapter(
             // When we encounter native methods, we want to forcefully
             // inject a method body. Also see [updateAccessFlags].
             val forceCreateBody = (access and Opcodes.ACC_NATIVE) != 0
+
             when (policy.policy) {
                 FilterPolicy.Throw -> {
                     log.v("Making method throw...")
@@ -385,30 +426,48 @@ class ImplGeneratingAdapter(
                         options.throwExceptionType.toJvmClassName(),
                         forceCreateBody,
                         innerVisitor
-                    ).withAnnotation(annot)
+                    ).withAnnotation(annot, policy.reason)
                 }
                 FilterPolicy.Ignore -> {
                     log.v("Making method ignored...")
                     return IgnoreMethodAdapter(descriptor, forceCreateBody, innerVisitor)
-                        .withAnnotation(HostStubGenProcessedAsIgnore.CLASS_DESCRIPTOR)
+                        .withAnnotation(HostStubGenProcessedAsIgnore.CLASS_DESCRIPTOR, policy.reason)
                 }
                 FilterPolicy.Redirect -> {
                     log.v("Redirecting method...")
                     return RedirectMethodAdapter(
                         access, name, descriptor,
                         forceCreateBody, innerVisitor
-                    )
-                        .withAnnotation(HostStubGenProcessedAsSubstitute.CLASS_DESCRIPTOR)
+                    ).withAnnotation(HostStubGenProcessedAsSubstitute.CLASS_DESCRIPTOR, policy.reason)
                 }
-                else -> {}
+                FilterPolicy.Experimental -> {
+                    if (options.experimentalMethodCallHook == null) {
+                        options.errors.onErrorFound(
+                            "Experimental policy used in $currentClassName#$name, but " +
+                                    "--experimental-method-call-hook is not set.")
+                    }
+                    log.v("Making method experimental...")
+                    innerVisitor = innerVisitor?.let {
+                        ReturnDecidingMethodCallHookInjectingAdapter(
+                            name,
+                            descriptor,
+                            listOf(options.experimentalMethodCallHook!!),
+                            it,
+                        ).withAnnotation(HostStubGenProcessedAsExperimental.CLASS_DESCRIPTOR, policy.reason)
+                    }
+                }
+                else -> {
+                    if (substituted) {
+                        innerVisitor?.withAnnotation(HostStubGenProcessedAsSubstitute.CLASS_DESCRIPTOR, policy.reason)
+                    } else {
+                        innerVisitor?.withAnnotation(HostStubGenProcessedAsKeep.CLASS_DESCRIPTOR, policy.reason)
+                    }
+                }
             }
         }
 
         if (filter.hasAnyMethodCallReplace()) {
             innerVisitor = MethodCallReplacingAdapter(name, innerVisitor)
-        }
-        if (substituted) {
-            innerVisitor?.withAnnotation(HostStubGenProcessedAsSubstitute.CLASS_DESCRIPTOR)
         }
 
         return innerVisitor
@@ -442,30 +501,7 @@ class ImplGeneratingAdapter(
         next: MethodVisitor?
     ) : BodyReplacingMethodVisitor(createBody, next) {
         override fun emitNewCode() {
-            when (Type.getReturnType(descriptor)) {
-                Type.VOID_TYPE -> visitInsn(Opcodes.RETURN)
-                Type.BOOLEAN_TYPE, Type.BYTE_TYPE, Type.CHAR_TYPE, Type.SHORT_TYPE,
-                Type.INT_TYPE -> {
-                    visitInsn(Opcodes.ICONST_0)
-                    visitInsn(Opcodes.IRETURN)
-                }
-                Type.LONG_TYPE -> {
-                    visitInsn(Opcodes.LCONST_0)
-                    visitInsn(Opcodes.LRETURN)
-                }
-                Type.FLOAT_TYPE -> {
-                    visitInsn(Opcodes.FCONST_0)
-                    visitInsn(Opcodes.FRETURN)
-                }
-                Type.DOUBLE_TYPE -> {
-                    visitInsn(Opcodes.DCONST_0)
-                    visitInsn(Opcodes.DRETURN)
-                }
-                else -> {
-                    visitInsn(Opcodes.ACONST_NULL)
-                    visitInsn(Opcodes.ARETURN)
-                }
-            }
+            writeByteCodeToReturnDefault(descriptor, this)
             visitMaxs(0, 0) // We let ASM figure them out.
         }
     }
@@ -524,7 +560,7 @@ class ImplGeneratingAdapter(
      * Inject calls to the method call hooks.
      *
      * Note, when the target method is a constructor, it may contain calls to `super(...)` or
-     * `this(...)`. The logging code will be injected *before* such calls.
+     * `this(...)`. The hook method call will be injected *before* such calls.
      */
     private inner class MethodCallHookInjectingAdapter(
         val name: String,
@@ -539,15 +575,83 @@ class ImplGeneratingAdapter(
                 mv.visitLdcInsn(Type.getType("L$currentClassName;"))
                 visitLdcInsn(name)
                 visitLdcInsn(descriptor)
-                visitLdcInsn(hook)
 
-                visitMethodInsn(
-                    INVOKESTATIC,
-                    HostTestUtils.CLASS_INTERNAL_NAME,
-                    "callMethodCallHook",
-                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+                val (clazz, method) = hook.parseClassMethod()
+                visitMethodInsn(INVOKESTATIC, clazz, method,
+                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)V",
                     false
                 )
+            }
+        }
+    }
+
+
+    /**
+     * Similar to [MethodCallHookInjectingAdapter], but the hook must return boolean.
+     *
+     * The hook must always return true, except in <clinit>, it can return false. If the hook
+     * returns false, we return from the method, without running any of the remaining code.
+     *
+     * Can we use false for other methods?
+     * - No, for <init>, beucase we always must call super's <init>. We can never return
+     *   early from <init.
+     * - For other methods, we could.
+     */
+    private inner class ReturnDecidingMethodCallHookInjectingAdapter(
+        val name: String,
+        val descriptor: String,
+        val hooks: List<String>,
+        next: MethodVisitor?,
+    ) : MethodVisitor(OPCODE_VERSION, next) {
+        /**
+         * Whether or not the hook can return false to skip the rest of the method body.
+         */
+        val allowReturn = name == "<clinit>"
+
+        override fun visitCode() {
+            super.visitCode() // Note it's possible nested visitor added code too
+
+            hooks.forEach { hook ->
+                mv.visitLdcInsn(Type.getType("L$currentClassName;"))
+                visitLdcInsn(name)
+                visitLdcInsn(descriptor)
+
+                val (clazz, method) = hook.parseClassMethod()
+                visitMethodInsn(INVOKESTATIC, clazz, method,
+                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)Z",
+                    false
+                )
+                if (!allowReturn) {
+                    // We don't allow "return". The hook must always return true.
+                    visitMethodInsn(INVOKESTATIC, HostTestUtils.CLASS_INTERNAL_NAME,
+                        HostTestUtils.ASSERT_THAT_HOOK_RETURNED_TRUE,
+                        "(Z)V",
+                        false
+                    )
+                } else {
+                    var label = Label()
+
+                    visitJumpInsn(Opcodes.IFNE, label)
+                    if (Type.getReturnType(descriptor) != Type.VOID_TYPE) {
+                        // If we ever want to use it for non-void method,
+                        // The below visitFrame() call needs to accommodate that.
+                        // (Need some investigation to implement it properly...)
+                        throw HostStubGenInternalException(
+                            "This feature for non-void method isn't implemented yet")
+                    }
+                    writeByteCodeToReturnDefault(descriptor, this)
+
+                    visitLabel(label)
+
+                    // We need to inject a frame.
+                    //
+                    // We assume our method cal is the first thing we do in this method
+                    // and the frame can be empty.
+                    // In reality, it's possible the "next" visitors created more with frames,
+                    // in super.visitCode(), in that case this would probably break...
+                    //
+                    super.visitFrame(Opcodes.F_NEW, 0, null, 0, null)
+                }
             }
         }
     }
@@ -653,6 +757,50 @@ class ImplGeneratingAdapter(
             if (!doReplace(opcode, owner, name, descriptor)) {
                 super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
             }
+        }
+    }
+
+
+
+    /**
+     * An AnnotationVisitor that specifically targets the `value` of a @Retention
+     * annotation and forces it to be `RUNTIME`.
+     */
+    class RetentionPolicyAnnotationVisitor(
+        next: AnnotationVisitor?,
+    ) : AnnotationVisitor(OPCODE_VERSION, next) {
+        override fun visitEnum(name: String?, descriptor: String?, value: String?) {
+            // We only care about the "value" property of the @Retention annotation.
+            if ("value" == name && "Ljava/lang/annotation/RetentionPolicy;" == descriptor) {
+                super.visitEnum(name, descriptor, RetentionPolicy.RUNTIME.name)
+            } else {
+                // For any other enum property, delegate to the default behavior.
+                super.visitEnum(name, descriptor, value)
+            }
+        }
+    }
+
+    /**
+     * Force a field's annotation to be runtime-visible if it's "known".
+     */
+    inner class ForceFieldAnnotationVisibilityVisitor(
+        next: FieldVisitor?,
+    ) : FieldVisitor(OPCODE_VERSION, next) {
+        override fun visitAnnotation(descriptor: String?, visible: Boolean): AnnotationVisitor? {
+            return super.visitAnnotation(descriptor,
+                visible || options.annotationsToMakeVisible.contains(descriptor))
+        }
+    }
+
+    /**
+     * Force a method's annotation to be runtime-visible if it's "known".
+     */
+    inner class ForceMethodAnnotationVisibilityVisitor(
+        next: MethodVisitor?,
+    ) : MethodVisitor(OPCODE_VERSION, next) {
+        override fun visitAnnotation(descriptor: String?, visible: Boolean): AnnotationVisitor? {
+            return super.visitAnnotation(descriptor,
+                visible || options.annotationsToMakeVisible.contains(descriptor))
         }
     }
 }

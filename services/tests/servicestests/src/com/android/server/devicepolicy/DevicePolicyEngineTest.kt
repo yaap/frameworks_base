@@ -34,6 +34,7 @@ import com.android.server.LocalManagerRegistry
 import com.android.server.LocalServices
 import com.android.server.pm.UserManagerInternal
 import com.google.common.truth.Truth.assertThat
+import java.util.List
 import org.junit.After
 import org.junit.Assert.assertThrows
 import org.junit.Before
@@ -160,6 +161,38 @@ class DevicePolicyEngineTest {
             devicePolicyEngine.getResolvedPolicy(PASSWORD_COMPLEXITY_POLICY, SYSTEM_USER_ID)
 
         assertThat(resolvedPolicy).isNull()
+    }
+
+    @Test
+    fun removeLocalPoliciesForSystemEntities_removesOnlySpecifiedSystemEntitiesPolicies() {
+        ensurePolicyIsSetLocally(
+            USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+            PACKAGE_SET_POLICY_VALUE_1,
+            SYSTEM_USER_ID,
+            DEVICE_OWNER_ADMIN,
+        )
+        ensurePolicyIsSetLocally(
+            USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+            PACKAGE_SET_POLICY_VALUE_2,
+            SYSTEM_USER_ID,
+            SYSTEM_ADMIN,
+        )
+
+        devicePolicyEngine.removeLocalPoliciesForSystemEntities(
+            SYSTEM_USER_ID,
+            // Specifically passing in a list type that will throw NPE if its #contains() method is
+            // called with a null argument.
+            List.of(SYSTEM_ADMIN.systemEntity!!),
+        )
+
+        val resolvedPolicy =
+            devicePolicyEngine.getResolvedPolicy(
+                USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+                SYSTEM_USER_ID,
+            )
+
+        // Only the policy set by the device owner admin remains.
+        assertThat(resolvedPolicy).isEqualTo(PACKAGE_SET_POLICY_VALUE_1.value)
     }
 
     @Test
@@ -291,6 +324,136 @@ class DevicePolicyEngineTest {
         assertThat(resolvedPolicy).isNull()
     }
 
+    @Test
+    fun getEnforcingAdminsForResolvedPolicy_oneAdminSetsPolicy_singleEnforcingAdmin() {
+        ensurePolicyIsSetLocally(
+            PASSWORD_COMPLEXITY_POLICY,
+            HIGH_PASSWORD_COMPLEXITY,
+            SYSTEM_USER_ID,
+            DEVICE_OWNER_ADMIN
+        )
+
+        val enforcingAdmins =
+            devicePolicyEngine.getEnforcingAdminsForResolvedPolicy(
+                PASSWORD_COMPLEXITY_POLICY,
+                SYSTEM_USER_ID
+            )
+
+        assertThat(enforcingAdmins).containsExactly(DEVICE_OWNER_ADMIN)
+    }
+
+    @Test
+    fun getEnforcingAdminsForResolvedPolicy_multipleAdminsSetPolicy_singleEnforcingAdminForResolvedValue() {
+        ensurePolicyIsSetLocally(
+            PASSWORD_COMPLEXITY_POLICY,
+            LOW_PASSWORD_COMPLEXITY,
+            SYSTEM_USER_ID,
+            SYSTEM_ADMIN
+        )
+        // Only this policy value set by this admin will take effect because of the resolution mechanism.
+        ensurePolicyIsSetLocally(
+            PASSWORD_COMPLEXITY_POLICY,
+            HIGH_PASSWORD_COMPLEXITY,
+            SYSTEM_USER_ID,
+            DEVICE_OWNER_ADMIN
+        )
+
+        val enforcingAdmins =
+            devicePolicyEngine.getEnforcingAdminsForResolvedPolicy(
+                PASSWORD_COMPLEXITY_POLICY,
+                SYSTEM_USER_ID
+            )
+
+        assertThat(enforcingAdmins).containsExactly(DEVICE_OWNER_ADMIN)
+    }
+
+    @Test
+    fun getEnforcingAdminsForResolvedPolicy_multipleAdminsSetPolicy_multipleEnforcingAdminsForResolvedValue() {
+        ensurePolicyIsSetLocally(
+            PASSWORD_COMPLEXITY_POLICY,
+            HIGH_PASSWORD_COMPLEXITY,
+            SYSTEM_USER_ID,
+            DEVICE_OWNER_ADMIN
+        )
+        ensurePolicyIsSetLocally(
+            PASSWORD_COMPLEXITY_POLICY,
+            HIGH_PASSWORD_COMPLEXITY,
+            SYSTEM_USER_ID,
+            SYSTEM_ADMIN
+        )
+
+        val enforcingAdmins =
+            devicePolicyEngine.getEnforcingAdminsForResolvedPolicy(
+                PASSWORD_COMPLEXITY_POLICY,
+                SYSTEM_USER_ID
+            )
+
+        assertThat(enforcingAdmins).containsExactly(DEVICE_OWNER_ADMIN, SYSTEM_ADMIN)
+    }
+
+    @Test
+    fun getEnforcingAdminsForResolvedPolicy_multipleAdminsSetPolicyLocallyAndGlobally_multipleEnforcingAdminsForResolvedValue() {
+        ensurePolicyIsSetLocally(
+            USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+            PACKAGE_SET_POLICY_VALUE_1,
+            SYSTEM_USER_ID,
+            DEVICE_OWNER_ADMIN
+        )
+        ensurePolicyIsSetGlobally(
+            USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+            PACKAGE_SET_POLICY_VALUE_2,
+            SYSTEM_ADMIN
+        )
+
+        val enforcingAdmins =
+            devicePolicyEngine.getEnforcingAdminsForResolvedPolicy(
+                USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+                SYSTEM_USER_ID
+            )
+
+        assertThat(enforcingAdmins).containsExactly(DEVICE_OWNER_ADMIN, SYSTEM_ADMIN)
+    }
+
+    @Test
+    fun getEnforcingAdminsForResolvedPolicy_multipleAdminsSetPolicyLocallyTwiceAndGlobally_multipleEnforcingAdminsForResolvedValue() {
+        ensurePolicyIsSetLocally(
+            USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+            PACKAGE_SET_POLICY_VALUE_1,
+            SYSTEM_USER_ID,
+            DEVICE_OWNER_ADMIN
+        )
+        ensurePolicyIsSetLocally(
+            USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+            PACKAGE_SET_POLICY_VALUE_1_SUBSET,
+            SYSTEM_USER_ID,
+            DEVICE_OWNER_ADMIN
+        )
+        ensurePolicyIsSetGlobally(
+            USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+            PACKAGE_SET_POLICY_VALUE_2,
+            SYSTEM_ADMIN
+        )
+
+        val enforcingAdmins =
+            devicePolicyEngine.getEnforcingAdminsForResolvedPolicy(
+                USER_CONTROLLED_DISABLED_PACKAGES_POLICY,
+                SYSTEM_USER_ID
+            )
+
+        assertThat(enforcingAdmins).containsExactly(DEVICE_OWNER_ADMIN, SYSTEM_ADMIN)
+    }
+
+    @Test
+    fun getEnforcingAdminsForResolvedPolicy_unsetPolicy_emptySet() {
+        val enforcingAdmins =
+            devicePolicyEngine.getEnforcingAdminsForResolvedPolicy(
+                PASSWORD_COMPLEXITY_POLICY,
+                SYSTEM_USER_ID
+            )
+
+        assertThat(enforcingAdmins).isEmpty()
+    }
+
     companion object {
         private const val POLICY_SET = PolicyUpdateResult.RESULT_POLICY_SET
         private const val FAILURE_UNKNOWN = PolicyUpdateResult.RESULT_FAILURE_UNKNOWN
@@ -305,6 +468,8 @@ class DevicePolicyEngineTest {
 
         private val HIGH_PASSWORD_COMPLEXITY =
             IntegerPolicyValue(DevicePolicyManager.PASSWORD_COMPLEXITY_HIGH)
+        private val LOW_PASSWORD_COMPLEXITY =
+            IntegerPolicyValue(DevicePolicyManager.PASSWORD_COMPLEXITY_LOW)
         private val AUTO_TIME_ZONE_ENABLED =
             IntegerPolicyValue(DevicePolicyManager.AUTO_TIME_ZONE_ENABLED)
         private val PACKAGE_SET_POLICY_VALUE_1 =

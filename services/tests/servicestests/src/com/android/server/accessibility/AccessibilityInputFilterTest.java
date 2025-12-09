@@ -27,15 +27,13 @@ import static com.android.server.accessibility.AccessibilityInputFilter.FLAG_FEA
 import static com.android.server.accessibility.AccessibilityInputFilter.FLAG_FEATURE_MAGNIFICATION_SINGLE_FINGER_TRIPLE_TAP;
 import static com.android.server.accessibility.AccessibilityInputFilter.FLAG_FEATURE_TOUCH_EXPLORATION;
 import static com.android.server.accessibility.AccessibilityInputFilter.FLAG_FEATURE_TRIGGERED_SCREEN_MAGNIFIER;
-import static com.android.server.accessibility.Flags.FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL;
-import static com.android.server.accessibility.Flags.FLAG_ONLY_RESET_MAGNIFICATION_IF_NEEDED_WHEN_DESTROY_HANDLER;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.notNull;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -52,7 +50,6 @@ import android.hardware.input.InputManager;
 import android.hardware.input.InputManagerGlobal;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.platform.test.annotations.RequiresFlagsDisabled;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
@@ -118,11 +115,6 @@ public class AccessibilityInputFilterTest {
     // The expected order of EventStreamTransformations.
     private final Class[] mExpectedEventHandlerTypes =
             {MagnificationKeyHandler.class, KeyboardInterceptor.class, MotionEventInjector.class,
-                    FullScreenMagnificationGestureHandler.class, TouchExplorer.class,
-                    AutoclickController.class, AccessibilityInputFilter.class};
-
-    private final Class[] mExpectedEventHandlerTypesWithoutMagKeyboard =
-            {KeyboardInterceptor.class, MotionEventInjector.class,
                     FullScreenMagnificationGestureHandler.class, TouchExplorer.class,
                     AutoclickController.class, AccessibilityInputFilter.class};
 
@@ -222,7 +214,6 @@ public class AccessibilityInputFilterTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL)
     public void testEventHandler_shouldIncreaseAndHaveCorrectOrderAfterOnDisplayAdded() {
         prepareLooper();
 
@@ -279,7 +270,6 @@ public class AccessibilityInputFilterTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL)
     public void testEventHandler_shouldHaveCorrectOrderForEventStreamTransformation() {
         prepareLooper();
 
@@ -300,32 +290,6 @@ public class AccessibilityInputFilterTest {
         // in EventHandler for DEFAULT_DISPLAY.
         for (int i = 2; next != null; i++) {
             assertEquals(next.getClass(), mExpectedEventHandlerTypes[i]);
-            next = next.getNext();
-        }
-    }
-
-    @Test
-    @RequiresFlagsDisabled(FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL)
-    public void testEventHandler_shouldHaveCorrectOrderForEventStreamTransformation_noMagKeys() {
-        prepareLooper();
-
-        setDisplayCount(2);
-        mA11yInputFilter.setUserAndEnabledFeatures(0, mFeatures);
-        assertEquals(2, mEventHandler.size());
-
-        // Check if mEventHandler for each display has correct order of the
-        // EventStreamTransformations.
-        EventStreamTransformation next = mEventHandler.get(DEFAULT_DISPLAY);
-        for (int i = 0; next != null; i++) {
-            assertEquals(next.getClass(), mExpectedEventHandlerTypesWithoutMagKeyboard[i]);
-            next = next.getNext();
-        }
-
-        next = mEventHandler.get(SECOND_DISPLAY);
-        // Start from index 1 because KeyboardInterceptor only exists in EventHandler for
-        // DEFAULT_DISPLAY.
-        for (int i = 1; next != null; i++) {
-            assertEquals(next.getClass(), mExpectedEventHandlerTypesWithoutMagKeyboard[i]);
             next = next.getNext();
         }
     }
@@ -444,26 +408,6 @@ public class AccessibilityInputFilterTest {
     }
 
     @Test
-    @RequiresFlagsDisabled(FLAG_ONLY_RESET_MAGNIFICATION_IF_NEEDED_WHEN_DESTROY_HANDLER)
-    public void testEnabledFeaturesChanged_magFeatureKeepsEnabled_flagOff_resetMagnification() {
-        prepareLooper();
-        doReturn(Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MODE_FULLSCREEN)
-                .when(mAms).getMagnificationMode(DEFAULT_DISPLAY);
-        // Create FullScreenMagnificationGestureHandler
-        mA11yInputFilter.setUserAndEnabledFeatures(0, mFeatures);
-
-        MagnificationGestureHandler handler = mock(MagnificationGestureHandler.class);
-        mMagnificationGestureHandler.put(DEFAULT_DISPLAY, handler);
-        // Any feature changes causes the AccessibilityInputFilter to destroy the gesture handler
-        // and recreate new one. The destroying of gesture handler causes the magnification reset
-        mA11yInputFilter.setUserAndEnabledFeatures(0,
-                mFeatures | FLAG_FEATURE_MAGNIFICATION_SINGLE_FINGER_TRIPLE_TAP);
-
-        verify(handler).onDestroy(/* resetMagnification= */ eq(true));
-    }
-
-    @Test
-    @RequiresFlagsEnabled(FLAG_ONLY_RESET_MAGNIFICATION_IF_NEEDED_WHEN_DESTROY_HANDLER)
     public void testEnabledFeaturesChanged_magFeatureKeepsEnabled_flagOn_doNotResetMagnification() {
         prepareLooper();
         doReturn(Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MODE_FULLSCREEN)
@@ -483,7 +427,6 @@ public class AccessibilityInputFilterTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_ONLY_RESET_MAGNIFICATION_IF_NEEDED_WHEN_DESTROY_HANDLER)
     public void testDisablingMagFeatures_magFeatureWasEnabled_flagOn_resetMagnification() {
         prepareLooper();
         doReturn(Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MODE_FULLSCREEN)
@@ -543,7 +486,6 @@ public class AccessibilityInputFilterTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL)
     public void testEnabledFeatures_windowMagnificationMode_expectedMagnificationKeyHandler() {
         prepareLooper();
         doReturn(Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MODE_WINDOW).when(
@@ -556,7 +498,6 @@ public class AccessibilityInputFilterTest {
     }
 
     @Test
-    @RequiresFlagsEnabled(FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL)
     public void testEnabledFeatures_fullscreenMagnificationMode_expectedMagnificationKeyHandler() {
         prepareLooper();
         doReturn(Settings.Secure.ACCESSIBILITY_MAGNIFICATION_MODE_FULLSCREEN).when(

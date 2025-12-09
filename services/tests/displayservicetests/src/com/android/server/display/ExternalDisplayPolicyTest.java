@@ -266,6 +266,16 @@ public class ExternalDisplayPolicyTest {
     }
 
     @Test
+    public void testExternalDisplayNoLongerAutoEnabledWithUpdatedDialogFlag() {
+        when(mMockedFlags.isDisplayContentModeManagementEnabled()).thenReturn(true);
+        when(mMockedFlags.isUpdatedDisplayConnectionDialogEnabled()).thenReturn(true);
+        when(mMockedLogicalDisplay.canHostTasksLocked()).thenReturn(true);
+        mExternalDisplayPolicy.handleExternalDisplayConnectedLocked(mMockedLogicalDisplay);
+        assertNotAskedToEnableDisplay();
+        verify(mMockedExternalDisplayStatsService, never()).onDisplayConnected(any());
+    }
+
+    @Test
     public void testOnCriticalTemperature_disallowAndAllowExternalDisplay() throws RemoteException {
         final var thermalListener = registerThermalListener();
 
@@ -280,14 +290,7 @@ public class ExternalDisplayPolicyTest {
     }
 
     @Test
-    public void testMirroringAlwaysConfirmedByUser_flagDisabled() {
-        when(mMockedFlags.isWaitingConfirmationBeforeMirroringEnabled()).thenReturn(false);
-        assertThat(mExternalDisplayPolicy.isDisplayReadyForMirroring(EXTERNAL_DISPLAY_ID)).isTrue();
-    }
-
-    @Test
     public void testMirroringConfirmed_afterBootForEnabledDisplay() {
-        when(mMockedFlags.isWaitingConfirmationBeforeMirroringEnabled()).thenReturn(true);
         mExternalDisplayPolicy.onBootCompleted();
         assertThat(mExternalDisplayPolicy.isDisplayReadyForMirroring(EXTERNAL_DISPLAY_ID))
                 .isTrue();
@@ -295,7 +298,6 @@ public class ExternalDisplayPolicyTest {
 
     @Test
     public void testMirroringNotConfirmed_afterBootForDisabledDisplay() {
-        when(mMockedFlags.isWaitingConfirmationBeforeMirroringEnabled()).thenReturn(true);
         mExternalDisplayPolicy.onBootCompleted();
         when(mMockedLogicalDisplay.isEnabledLocked()).thenReturn(false);
         assertThat(mExternalDisplayPolicy.isDisplayReadyForMirroring(EXTERNAL_DISPLAY_ID))
@@ -304,7 +306,6 @@ public class ExternalDisplayPolicyTest {
 
     @Test
     public void testMirroringNeverConfirmed_forNonExternalDisplays() {
-        when(mMockedFlags.isWaitingConfirmationBeforeMirroringEnabled()).thenReturn(true);
         mExternalDisplayPolicy.onBootCompleted();
         assertThat(mExternalDisplayPolicy.isDisplayReadyForMirroring(Display.DEFAULT_DISPLAY))
                 .isFalse();
@@ -312,7 +313,6 @@ public class ExternalDisplayPolicyTest {
 
     @Test
     public void testMirroringNeverConfirmed_forNonExistingDisplays() {
-        when(mMockedFlags.isWaitingConfirmationBeforeMirroringEnabled()).thenReturn(true);
         mExternalDisplayPolicy.onBootCompleted();
         assertThat(mExternalDisplayPolicy.isDisplayReadyForMirroring(Display.INVALID_DISPLAY))
                 .isFalse();
@@ -320,7 +320,6 @@ public class ExternalDisplayPolicyTest {
 
     @Test
     public void testMirroringNeverConfirmed_duringBoot() {
-        when(mMockedFlags.isWaitingConfirmationBeforeMirroringEnabled()).thenReturn(true);
         assertThat(mExternalDisplayPolicy.isDisplayReadyForMirroring(EXTERNAL_DISPLAY_ID))
                 .isFalse();
     }

@@ -38,6 +38,7 @@ import static com.android.server.wm.DisplayRotationReversionController.REVERSION
 import static com.android.server.wm.DisplayRotationReversionController.REVERSION_TYPE_NOSENSOR;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WITH_CLASS_NAME;
 import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
+import static com.android.settingslib.devicestate.DeviceStateAutoRotateSettingUtils.isDeviceStateRotationLockEnabled;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -763,7 +764,7 @@ public class DisplayRotation {
                 // setUserRotationSetting may be called.
                 mService.mRoot.mDeviceStateAutoRotateSettingController
                         .requestAccelerometerRotationSettingChange(accelerometerRotation == 1,
-                                userRotation);
+                                userRotation, caller);
             } else {
                 Settings.System.putIntForUser(res, Settings.System.ACCELEROMETER_ROTATION,
                         accelerometerRotation, UserHandle.USER_CURRENT);
@@ -1701,9 +1702,11 @@ public class DisplayRotation {
      */
     @Nullable
     static DeviceStateAutoRotateSettingController createDeviceStateAutoRotateDependencies(
-            @NonNull Context context, @NonNull  DeviceStateController deviceStateController,
+            @NonNull Context context, @NonNull DeviceStateController deviceStateController,
             @NonNull WindowManagerService wmService) {
-        if (!deviceStateController.isFoldable() || !isAutoRotateSupported(context)) return null;
+        if (!isDeviceStateRotationLockEnabled(context)) {
+            return null;
+        }
         if (!Flags.enableDeviceStateAutoRotateSettingLogging()
                 && !Flags.enableDeviceStateAutoRotateSettingRefactor()) {
             return null;
@@ -1720,8 +1723,10 @@ public class DisplayRotation {
         }
 
         if (Flags.enableDeviceStateAutoRotateSettingRefactor()) {
+            final DeviceStateManager deviceStateManager = context.getSystemService(
+                    DeviceStateManager.class);
             final PostureDeviceStateConverter postureDeviceStateController =
-                    new PostureDeviceStateConverter(context, new DeviceStateManager());
+                    new PostureDeviceStateConverter(context, deviceStateManager);
             final DeviceStateAutoRotateSettingManager deviceStateAutoRotateSettingManager =
                     new DeviceStateAutoRotateSettingManagerImpl(
                             context, BackgroundThread.getExecutor(), secureSettings, wmService.mH,

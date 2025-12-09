@@ -17,14 +17,27 @@
 package com.android.systemui.statusbar.systemstatusicons.ui.viewmodel
 
 import com.android.systemui.common.shared.model.Icon
+import com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.MobileIconsViewModel
+import com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.StackedMobileIconViewModel
 
 /** Common interface for all system status icon view models. */
-interface SystemStatusIconViewModel {
+sealed interface SystemStatusIconViewModel {
     /** The associated slot in the status bar that this icon should be displayed on. */
     val slotName: String
-    /**
-     * [Icon] to be displayed on the right side of the status bar. This should be implemented as a
-     * hydrated value by individual system status icon view models.
-     */
-    val icon: Icon?
+
+    /** Whether this icon should be visible in the status bar. */
+    val visible: Boolean
+
+    interface Default : SystemStatusIconViewModel {
+        /**
+         * [Icon] to be displayed on the right side of the status bar. This should be implemented as
+         * a hydrated value by individual system status icon view models.
+         */
+        val icon: Icon?
+    }
+
+    interface MobileIcons : SystemStatusIconViewModel {
+        val mobileIconsViewModel: MobileIconsViewModel
+        val stackedMobileIconViewModel: StackedMobileIconViewModel
+    }
 }

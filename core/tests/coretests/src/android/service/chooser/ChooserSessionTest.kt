@@ -30,6 +30,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import org.junit.Rule
+import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doReturn
@@ -56,7 +57,7 @@ class ChooserSessionTest {
                     assertThat(state).isEqualTo(ChooserSession.STATE_STARTED)
                 }
 
-                override fun onBoundsChanged(size: Rect) {}
+                override fun onBoundsChanged(bounds: Rect) {}
             }
         session.addStateListener(ImmediateExecutor(), stateListener)
 
@@ -89,7 +90,7 @@ class ChooserSessionTest {
 
         assertThat(session.state).isEqualTo(ChooserSession.STATE_INITIALIZED)
 
-        session.close()
+        session.endSession()
 
         controllerCallback.registerChooserController(chooserController)
 
@@ -98,28 +99,28 @@ class ChooserSessionTest {
 
     @EnableFlags(Flags.FLAG_INTERACTIVE_CHOOSER)
     @Test
-    fun test_chooserSizeChanged_sizeReported() {
+    fun test_chooserBoundsChanged_boundsReported() {
         val (session, controllerCallback) = prepareChooserSession()
-        val sizes = listOf(Rect(1, 2, 3, 4), Rect(5, 6, 7, 8))
-        val sizeUpdates = mutableListOf<Rect>()
+        val bounds = listOf(Rect(1, 2, 3, 4), Rect(5, 6, 7, 8))
+        val boundsUpdates = mutableListOf<Rect>()
         val stateListener =
             object : ChooserSession.StateListener {
                 override fun onStateChanged(state: Int) {}
 
-                override fun onBoundsChanged(size: Rect) {
-                    assertThat(session.size).isEqualTo(size)
-                    sizeUpdates.add(size)
+                override fun onBoundsChanged(bounds: Rect) {
+                    assertThat(session.bounds).isEqualTo(bounds)
+                    boundsUpdates.add(bounds)
                 }
             }
         session.addStateListener(ImmediateExecutor(), stateListener)
 
-        assertThat(session.size).isNull()
+        assertThat(session.bounds).isNull()
 
-        for (size in sizes) {
-            controllerCallback.onBoundsChanged(size)
+        for (b in bounds) {
+            controllerCallback.onBoundsChanged(b)
         }
 
-        assertThat(sizeUpdates).containsExactlyElementsIn(sizes).inOrder()
+        assertThat(boundsUpdates).containsExactlyElementsIn(bounds).inOrder()
     }
 
     @EnableFlags(Flags.FLAG_INTERACTIVE_CHOOSER)
@@ -142,7 +143,7 @@ class ChooserSessionTest {
                     assertThat(state).isEqualTo(ChooserSession.STATE_CLOSED)
                 }
 
-                override fun onBoundsChanged(size: Rect) {
+                override fun onBoundsChanged(bounds: Rect) {
                     invocationCounter.incrementAndGet()
                 }
             }
@@ -178,7 +179,7 @@ class ChooserSessionTest {
                     assertThat(state).isEqualTo(ChooserSession.STATE_CLOSED)
                 }
 
-                override fun onBoundsChanged(size: Rect) {
+                override fun onBoundsChanged(bounds: Rect) {
                     invocationCounter.incrementAndGet()
                 }
             }
@@ -201,11 +202,11 @@ class ChooserSessionTest {
         val updatedIntent = Intent(ACTION_CHOOSER)
 
         session.updateIntent(updatedIntent)
-        session.collapse()
+        session.setMinimized(true)
         session.setTargetsEnabled(false)
 
         verify(chooserController) { 1 * { updateIntent(updatedIntent) } }
-        verify(chooserController) { 1 * { collapse() } }
+        verify(chooserController) { 1 * { setMinimized(true) } }
         verify(chooserController) { 1 * { setTargetsEnabled(false) } }
     }
 
@@ -224,18 +225,18 @@ class ChooserSessionTest {
         session.removeStateListener(firstListener)
         controllerCallback.onBoundsChanged(secondSize)
 
-        var sizeCapture = argumentCaptor<Rect>()
-        verify(firstListener) { 1 * { onBoundsChanged(sizeCapture.capture()) } }
-        assertThat(sizeCapture.firstValue).isEqualTo(firstSize)
-        sizeCapture = argumentCaptor<Rect>()
-        verify(secondListener) { 1 * { onBoundsChanged(sizeCapture.capture()) } }
-        assertThat(sizeCapture.firstValue).isEqualTo(secondSize)
+        var boundsCapture = argumentCaptor<Rect>()
+        verify(firstListener) { 1 * { onBoundsChanged(boundsCapture.capture()) } }
+        assertThat(boundsCapture.firstValue).isEqualTo(firstSize)
+        boundsCapture = argumentCaptor<Rect>()
+        verify(secondListener) { 1 * { onBoundsChanged(boundsCapture.capture()) } }
+        assertThat(boundsCapture.firstValue).isEqualTo(secondSize)
     }
 
     @EnableFlags(Flags.FLAG_INTERACTIVE_CHOOSER)
     @Test
-    fun test_collapseThrowsDeadObjectException_sessionGetsClosed() {
-        testSessionClosedOnDeadObjectException { collapse() }
+    fun test_setMinimizedThrowsDeadObjectException_sessionGetsClosed() {
+        testSessionClosedOnDeadObjectException { setMinimized(true) }
     }
 
     @EnableFlags(Flags.FLAG_INTERACTIVE_CHOOSER)
@@ -249,7 +250,7 @@ class ChooserSessionTest {
     ) {
         val (session, controllerCallback) = prepareChooserSession()
         chooserController.stub {
-            on { collapse() } doThrow DeadObjectException("collapse")
+            on { setMinimized(anyBoolean()) } doThrow DeadObjectException("setMinimized")
             on { setTargetsEnabled(any()) } doThrow DeadObjectException("setTargetsEnabled")
         }
         controllerCallback.registerChooserController(chooserController)

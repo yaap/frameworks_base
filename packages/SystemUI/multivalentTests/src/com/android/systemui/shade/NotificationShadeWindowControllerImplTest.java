@@ -17,6 +17,7 @@
 package com.android.systemui.shade;
 
 import static android.service.dreams.Flags.FLAG_DREAMS_V2;
+import static com.android.window.flags.Flags.FLAG_ENSURE_WALLPAPER_DRAWN_ON_DISPLAY_SWITCH;
 import static android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
 import static android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
 import static android.view.WindowManager.LayoutParams.FLAG_SECURE;
@@ -53,7 +54,6 @@ import android.view.WindowManager;
 import androidx.test.filters.SmallTest;
 
 import com.android.internal.colorextraction.ColorExtractor;
-import com.android.systemui.Flags;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.biometrics.AuthController;
 import com.android.systemui.colorextraction.SysuiColorExtractor;
@@ -273,6 +273,31 @@ public class NotificationShadeWindowControllerImplTest extends SysuiTestCase {
 
         verify(mWindowManager).updateViewLayout(any(), mLayoutParameters.capture());
         assertThat((mLayoutParameters.getValue().flags & FLAG_SHOW_WALLPAPER) != 0).isTrue();
+    }
+
+    @EnableFlags(FLAG_ENSURE_WALLPAPER_DRAWN_ON_DISPLAY_SWITCH)
+    @Test
+    public void attach_pendingDisplayChange_wallpaperVisible() {
+        mNotificationShadeWindowController.attach();
+        clearInvocations(mWindowManager);
+
+        mNotificationShadeWindowController.setPendingDisplayChange(true);
+
+        verify(mWindowManager).updateViewLayout(any(), mLayoutParameters.capture());
+        assertThat((mLayoutParameters.getValue().flags & FLAG_SHOW_WALLPAPER) != 0).isTrue();
+    }
+
+    @EnableFlags(FLAG_ENSURE_WALLPAPER_DRAWN_ON_DISPLAY_SWITCH)
+    @Test
+    public void attach_pendingDisplayChangeFinished_wallpaperNotVisible() {
+        mNotificationShadeWindowController.attach();
+        mNotificationShadeWindowController.setPendingDisplayChange(true);
+        clearInvocations(mWindowManager);
+
+        mNotificationShadeWindowController.setPendingDisplayChange(false);
+
+        verify(mWindowManager).updateViewLayout(any(), mLayoutParameters.capture());
+        assertThat((mLayoutParameters.getValue().flags & FLAG_SHOW_WALLPAPER) != 0).isFalse();
     }
 
     @Test
@@ -547,7 +572,6 @@ public class NotificationShadeWindowControllerImplTest extends SysuiTestCase {
         assertThat(lp.preferredMinDisplayRefreshRate).isEqualTo(0);
     }
 
-    @EnableFlags(Flags.FLAG_INSTANT_HIDE_SHADE)
     @Test
     public void afterActivityLaunch_rootViewInvisible() {
         // GIVEN the panel is visible
@@ -562,7 +586,6 @@ public class NotificationShadeWindowControllerImplTest extends SysuiTestCase {
         verify(mNotificationShadeWindowView).setVisibility(eq(View.INVISIBLE));
     }
 
-    @EnableFlags(Flags.FLAG_INSTANT_HIDE_SHADE)
     @Test
     public void setKeyguardFadingAway_doesNothing_whenForceHidden() {
         // GIVEN the panel is visible force-hidden at the end of an activity launch

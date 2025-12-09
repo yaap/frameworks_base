@@ -71,6 +71,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * atest FrameworksServicesTests:SyntheticPasswordTests
@@ -136,6 +137,13 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
     private void initSpAndSetCredential(int userId, LockscreenCredential credential)
             throws RemoteException {
         mService.initializeSyntheticPassword(userId);
+        List<UserInfo> profiles = mUserManager.getProfiles(userId);
+        if (profiles != null) {
+            // Ensure that any managed profiles have initialized SPs.
+            profiles.stream()
+                    .filter(userInfo -> userInfo.isManagedProfile())
+                    .forEach(userInfo -> mService.initializeSyntheticPassword(userInfo.id));
+        }
         assertTrue(mService.setLockCredential(credential, nonePassword(), userId));
         assertEquals(credential.getType(), mService.getCredentialType(userId));
     }
@@ -179,8 +187,8 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         initSpAndSetCredential(PRIMARY_USER_ID, password);
         long sid = mGateKeeperService.getSecureUserId(PRIMARY_USER_ID);
         mService.setLockCredential(newPassword, password, PRIMARY_USER_ID);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                newPassword, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(
+                mService.verifyCredential(newPassword, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertEquals(sid, mGateKeeperService.getSecureUserId(PRIMARY_USER_ID));
     }
 
@@ -191,18 +199,18 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         LockscreenCredential badPassword = newPassword("badpassword");
 
         initSpAndSetCredential(PRIMARY_USER_ID, password);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         verify(mActivityManager).unlockUser2(eq(PRIMARY_USER_ID), any());
 
-        int expectedResponseCode =
-                mSpManager.isWeaverEnabled()
-                        ? VerifyCredentialResponse.RESPONSE_CRED_INCORRECT
-                        : VerifyCredentialResponse.RESPONSE_OTHER_ERROR;
-        assertEquals(
-                expectedResponseCode,
-                mService.verifyCredential(badPassword, PRIMARY_USER_ID, 0 /* flags */)
-                        .getResponseCode());
+        VerifyCredentialResponse response =
+                mService.verifyCredential(badPassword, PRIMARY_USER_ID, 0 /* flags */);
+        if (mSpManager.isWeaverEnabled()) {
+            assertTrue(response.isCredCertainlyIncorrect());
+            assertFalse(response.isCredTooShort());
+            assertFalse(response.isCredAlreadyTried());
+        } else {
+            assertTrue(response.isOtherError());
+        }
     }
 
     @Test
@@ -212,16 +220,12 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         LockscreenCredential badPassword = newPassword("badpassword");
 
         initSpAndSetCredential(PRIMARY_USER_ID, password);
-        assertEquals(
-                VerifyCredentialResponse.RESPONSE_OK,
-                mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */)
-                        .getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         verify(mActivityManager).unlockUser2(eq(PRIMARY_USER_ID), any());
 
-        assertEquals(
-                VerifyCredentialResponse.RESPONSE_OTHER_ERROR,
+        assertTrue(
                 mService.verifyCredential(badPassword, PRIMARY_USER_ID, 0 /* flags */)
-                        .getResponseCode());
+                        .isOtherError());
     }
 
     @Test
@@ -237,8 +241,8 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
 
         // set a new password
         mService.setLockCredential(badPassword, nonePassword(), PRIMARY_USER_ID);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                badPassword, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(
+                mService.verifyCredential(badPassword, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertNotEquals(sid, mGateKeeperService.getSecureUserId(PRIMARY_USER_ID));
     }
 
@@ -249,8 +253,8 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
 
         initSpAndSetCredential(PRIMARY_USER_ID, password);
         mService.setLockCredential(newPassword, password, PRIMARY_USER_ID);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                newPassword, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(
+                mService.verifyCredential(newPassword, PRIMARY_USER_ID, 0 /* flags */).isMatched());
 
         // Check the same secret was passed each time
         ArgumentCaptor<byte[]> secret = ArgumentCaptor.forClass(byte[].class);
@@ -266,8 +270,7 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
 
         initSpAndSetCredential(PRIMARY_USER_ID, password);
         reset(mAuthSecretService);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         verify(mAuthSecretService).setPrimaryUserCredential(any(byte[].class));
     }
 
@@ -276,8 +279,8 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         LockscreenCredential password = newPassword("password");
 
         initSpAndSetCredential(SECONDARY_USER_ID, password);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, SECONDARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(
+                mService.verifyCredential(password, SECONDARY_USER_ID, 0 /* flags */).isMatched());
         verify(mAuthSecretService, never()).setPrimaryUserCredential(any(byte[].class));
     }
 
@@ -368,8 +371,7 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         assertFalse(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
         assertTrue(mService.hasPendingEscrowToken(PRIMARY_USER_ID));
 
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertTrue(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
         assertFalse(mService.hasPendingEscrowToken(PRIMARY_USER_ID));
 
@@ -381,8 +383,7 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         assertEquals(metric, mService.getUserPasswordMetrics(PRIMARY_USER_ID));
         verify(mDevicePolicyManager).reportPasswordChanged(metric, PRIMARY_USER_ID);
 
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                pattern, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(pattern, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertArrayEquals(storageKey, mStorageManager.getUserUnlockToken(PRIMARY_USER_ID));
     }
 
@@ -436,8 +437,7 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         long handle = mLocalService.addEscrowToken(token, PRIMARY_USER_ID, null);
         assertFalse(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
 
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertTrue(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
 
         mLocalService.setLockCredentialWithToken(nonePassword(), handle, token, PRIMARY_USER_ID);
@@ -445,8 +445,7 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         mLocalService.setLockCredentialWithToken(pattern, handle, token,
                 PRIMARY_USER_ID);
 
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                pattern, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(pattern, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertArrayEquals(storageKey, mStorageManager.getUserUnlockToken(PRIMARY_USER_ID));
     }
 
@@ -462,16 +461,15 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         long handle = mLocalService.addEscrowToken(token, PRIMARY_USER_ID, null);
         assertFalse(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
 
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertTrue(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
 
         mService.setLockCredential(pattern, password, PRIMARY_USER_ID);
 
         mLocalService.setLockCredentialWithToken(newPassword, handle, token, PRIMARY_USER_ID);
 
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                newPassword, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(
+                mService.verifyCredential(newPassword, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertArrayEquals(storageKey, mStorageManager.getUserUnlockToken(PRIMARY_USER_ID));
     }
 
@@ -494,8 +492,7 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         // Token not activated immediately since user password exists
         assertFalse(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
         // Activate token
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         // Verify token is activated
         assertTrue(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
     }
@@ -528,8 +525,7 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         long handle2 = mLocalService.addEscrowToken(token2, PRIMARY_USER_ID, null);
 
         // Activate token
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
 
         // Verify tokens work
         assertTrue(mLocalService.isEscrowTokenActive(handle0, PRIMARY_USER_ID));
@@ -836,13 +832,11 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         LockscreenCredential password = newPassword("testGsiDisablesAuthSecret-password");
 
         initSpAndSetCredential(PRIMARY_USER_ID, password);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         verify(mAuthSecretService, never()).setPrimaryUserCredential(any(byte[].class));
     }
 
-    @Test
-    public void testUnlockUserWithToken() throws Exception {
+    private void testUnlockUserWithToken_helper() throws Exception {
         LockscreenCredential password = newPassword("password");
         byte[] token = "some-high-entropy-secure-token".getBytes();
         initSpAndSetCredential(PRIMARY_USER_ID, password);
@@ -851,16 +845,31 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
         reset(mDevicePolicyManager);
 
         long handle = mLocalService.addEscrowToken(token, PRIMARY_USER_ID, null);
-        assertEquals(VerifyCredentialResponse.RESPONSE_OK, mService.verifyCredential(
-                password, PRIMARY_USER_ID, 0 /* flags */).getResponseCode());
+        assertTrue(mService.verifyCredential(password, PRIMARY_USER_ID, 0 /* flags */).isMatched());
         assertTrue(mLocalService.isEscrowTokenActive(handle, PRIMARY_USER_ID));
 
-        mService.onUserStopped(PRIMARY_USER_ID);
+        if (android.security.Flags.resetAuthFlagsAndMetricsInLockUser()) {
+            mLocalService.lockUser(PRIMARY_USER_ID);
+        } else {
+            mService.onUserStopped(PRIMARY_USER_ID);
+        }
         assertNull(mLocalService.getUserPasswordMetrics(PRIMARY_USER_ID));
 
         assertTrue(mLocalService.unlockUserWithToken(handle, token, PRIMARY_USER_ID));
         assertEquals(PasswordMetrics.computeForCredential(password),
                 mLocalService.getUserPasswordMetrics(PRIMARY_USER_ID));
+    }
+
+    @Test
+    @DisableFlags(android.security.Flags.FLAG_RESET_AUTH_FLAGS_AND_METRICS_IN_LOCK_USER)
+    public void testUnlockUserWithToken_orig() throws Exception {
+        testUnlockUserWithToken_helper();
+    }
+
+    @Test
+    @EnableFlags(android.security.Flags.FLAG_RESET_AUTH_FLAGS_AND_METRICS_IN_LOCK_USER)
+    public void testUnlockUserWithToken() throws Exception {
+        testUnlockUserWithToken_helper();
     }
 
     @Test
@@ -968,6 +977,23 @@ public class SyntheticPasswordTests extends BaseLockSettingsServiceTests {
                     userId, protectorId, FAILURE_COUNTER_NAME, corruptedData);
             assertEquals(0, mSpManager.readFailureCounter(lskfId));
         }
+    }
+
+    @Test
+    public void testFailureCounterDeletedOnLskfChanged() throws Exception {
+        final int userId = PRIMARY_USER_ID;
+        final LockscreenCredential pin = newPin("1234");
+        initSpAndSetCredential(userId, pin);
+        final long oldProtectorId = mService.getCurrentLskfBasedProtectorId(userId);
+        final LskfIdentifier oldLskfId = new LskfIdentifier(userId, oldProtectorId);
+
+        mSpManager.writeFailureCounter(oldLskfId, 1);
+        assertEquals(1, mSpManager.readFailureCounter(oldLskfId));
+        assertTrue(mService.setLockCredential(nonePassword(), pin, userId));
+
+        final long newProtectorId = mService.getCurrentLskfBasedProtectorId(userId);
+        assertNotEquals(oldProtectorId, newProtectorId);
+        assertEquals(0, mSpManager.readFailureCounter(oldLskfId));
     }
 
     // b/62213311

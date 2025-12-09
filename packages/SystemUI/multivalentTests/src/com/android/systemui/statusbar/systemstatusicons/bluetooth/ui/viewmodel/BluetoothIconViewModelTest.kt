@@ -42,7 +42,6 @@ import org.mockito.kotlin.whenever
 @SmallTest
 @RunWith(AndroidJUnit4::class)
 @EnableFlags(SystemStatusIconsInCompose.FLAG_NAME)
-@android.platform.test.annotations.EnabledOnRavenwood
 class BluetoothIconViewModelTest : SysuiTestCase() {
 
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
@@ -57,36 +56,41 @@ class BluetoothIconViewModelTest : SysuiTestCase() {
         }
 
     @Test
-    fun icon_bluetoothNotConnected_outputsNull() =
-        kosmos.runTest { assertThat(underTest.icon).isNull() }
+    fun visible_isFalse_byDefault() = kosmos.runTest { assertThat(underTest.visible).isFalse() }
 
     @Test
-    fun icon_bluetoothConnected_outputsIcon() =
+    fun visible_deviceIsConnected_isTrue() =
         kosmos.runTest {
-            // Simulate device connecting
-            bluetoothRepository.setConnectedDevices(listOf(cachedDevice))
+            kosmos.bluetoothRepository.setConnectedDevices(listOf(cachedDevice))
 
-            assertThat(underTest.icon).isEqualTo(expectedBluetoothIcon)
+            assertThat(underTest.visible).isTrue()
         }
 
     @Test
-    fun icon_updatesWhenBluetoothConnectionChanges() =
+    fun visible_connectionStateChanges_flips() =
         kosmos.runTest {
-            assertThat(underTest.icon).isNull()
+            assertThat(underTest.visible).isFalse()
 
-            // Simulate device connecting
-            bluetoothRepository.setConnectedDevices(listOf(cachedDevice))
-            assertThat(underTest.icon).isEqualTo(expectedBluetoothIcon)
+            kosmos.bluetoothRepository.setConnectedDevices(listOf(cachedDevice))
+            assertThat(underTest.visible).isTrue()
 
-            // Simulate device disconnecting
-            bluetoothRepository.setConnectedDevices(emptyList())
-            assertThat(underTest.icon).isNull()
+            kosmos.bluetoothRepository.setConnectedDevices(emptyList())
+            assertThat(underTest.visible).isFalse()
         }
+
+    @Test
+    fun icon_visible_isCorrect() =
+        kosmos.runTest {
+            kosmos.bluetoothRepository.setConnectedDevices(listOf(cachedDevice))
+            assertThat(underTest.icon).isEqualTo(expectedBluetoothIcon)
+        }
+
+    @Test fun icon_notVisible_isNull() = kosmos.runTest { assertThat(underTest.icon).isNull() }
 
     companion object {
         private val expectedBluetoothIcon =
             Icon.Resource(
-                res = R.drawable.ic_bluetooth_connected,
+                resId = R.drawable.ic_bluetooth_connected,
                 contentDescription =
                     ContentDescription.Resource(R.string.accessibility_bluetooth_connected),
             )

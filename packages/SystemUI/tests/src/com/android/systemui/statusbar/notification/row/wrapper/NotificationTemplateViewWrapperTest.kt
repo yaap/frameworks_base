@@ -38,6 +38,7 @@ import com.android.systemui.statusbar.notification.row.wrapper.NotificationTempl
 import com.android.systemui.testKosmos
 import com.android.systemui.util.leak.ReferenceTestUtils.waitForCondition
 import com.google.common.truth.Truth.assertThat
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,8 +67,10 @@ class NotificationTemplateViewWrapperTest : SysuiTestCase() {
         // Use main thread instead of UI offload thread to fix flakes.
         mDependency.injectTestDependency(
             UiOffloadThread::class.java,
-            TestUiOffloadThread(looper.looper)
+            TestUiOffloadThread(looper.looper),
         )
+        // Clear statically-cached data, in case this class was used before.
+        ActionPendingIntentCancellationHandler.resetUiOffloadThread()
 
         row = kosmos.createRow()
         // Some code in the view iterates through parents so we need some extra containers around
@@ -80,6 +83,11 @@ class NotificationTemplateViewWrapperTest : SysuiTestCase() {
                 .inflate(R.layout.notification_template_material_big_text, root2) as ViewGroup)
         actions = view.findViewById(R.id.actions)!!
         ViewUtils.attachView(root)
+    }
+
+    @After
+    fun tearDown() {
+        ViewUtils.detachView(root)
     }
 
     @Test
@@ -171,27 +179,26 @@ class NotificationTemplateViewWrapperTest : SysuiTestCase() {
 
     @Test
     fun actionViewDetached_pendingIntentListenersDeregistered() {
-        ViewUtils.detachView(root)
         val pi =
-            PendingIntent.getActivity(
-                mContext,
-                System.currentTimeMillis().toInt(),
-                Intent(Intent.ACTION_VIEW),
-                PendingIntent.FLAG_IMMUTABLE
+            Mockito.spy(
+                PendingIntent.getActivity(
+                    mContext,
+                    System.currentTimeMillis().toInt(),
+                    Intent(Intent.ACTION_VIEW),
+                    PendingIntent.FLAG_IMMUTABLE,
+                )
             )
-        val spy = Mockito.spy(pi)
-        createActionWithPendingIntent(spy)
-        val wrapper = NotificationTemplateViewWrapper(mContext, view, row)
-        wrapper.onContentUpdated(row)
-        ViewUtils.attachView(root)
-        looper.processAllMessages()
+        val mockView = Mockito.mock(View::class.java)
+        val handler = ActionPendingIntentCancellationHandler(pi, mockView, null)
 
-        ViewUtils.detachView(root)
+        handler.onViewAttachedToWindow(mockView)
         looper.processAllMessages()
-
         val captor = ArgumentCaptor.forClass(CancelListener::class.java)
-        verify(spy, times(1)).registerCancelListener(captor.capture())
-        verify(spy, times(1)).unregisterCancelListener(captor.value)
+        verify(pi, times(1)).registerCancelListener(captor.capture())
+
+        handler.onViewDetachedFromWindow(mockView)
+        looper.processAllMessages()
+        verify(pi, times(1)).unregisterCancelListener(captor.value)
     }
 
     @Test
@@ -201,7 +208,7 @@ class NotificationTemplateViewWrapperTest : SysuiTestCase() {
                 mContext,
                 System.currentTimeMillis().toInt(),
                 Intent(Intent.ACTION_VIEW),
-                PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_IMMUTABLE,
             )
         val spy = Mockito.spy(pi)
         val action = createActionWithPendingIntent(spy)
@@ -221,7 +228,7 @@ class NotificationTemplateViewWrapperTest : SysuiTestCase() {
                 mContext,
                 System.currentTimeMillis().toInt(),
                 Intent(Intent.ACTION_ALARM_CHANGED),
-                PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_IMMUTABLE,
             )
         action.setTagInternal(R.id.pending_intent_tag, newPi)
         wrapper.onContentUpdated(row)
@@ -243,7 +250,7 @@ class NotificationTemplateViewWrapperTest : SysuiTestCase() {
                 mContext,
                 System.currentTimeMillis().toInt(),
                 Intent(Intent.ACTION_VIEW),
-                PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_IMMUTABLE,
             )
         return createActionWithPendingIntent(pi)
     }

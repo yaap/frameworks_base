@@ -34,6 +34,7 @@ import android.media.AudioDeviceAttributes;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.provider.DeviceConfig;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -81,9 +82,10 @@ public class BluetoothUtils {
             "bluetooth_le_audio_sharing_ui_preview_enabled";
     private static final int METADATA_FAST_PAIR_CUSTOMIZED_FIELDS = 25;
     private static final String KEY_HEARABLE_CONTROL_SLICE = "HEARABLE_CONTROL_SLICE_WITH_WIDTH";
+    private static final String KEY_BATTERY_ALL_THE_TIME = "BATT";
     private static final Set<Integer> SA_PROFILES =
             ImmutableSet.of(
-                    BluetoothProfile.A2DP, BluetoothProfile.LE_AUDIO, BluetoothProfile.HEARING_AID);
+                    BluetoothProfile.A2DP, BluetoothProfile.LE_AUDIO);
     private static final List<Integer> BLUETOOTH_DEVICE_CLASS_HEADSET =
             List.of(
                     BluetoothClass.Device.AUDIO_VIDEO_HEADPHONES,
@@ -91,6 +93,10 @@ public class BluetoothUtils {
 
     private static final String TEMP_BOND_TYPE = "TEMP_BOND_TYPE";
     private static final String TEMP_BOND_DEVICE_METADATA_VALUE = "le_audio_sharing";
+    private static final String BLUETOOTH_DIAGNOSIS_KEY = "cs_bt_diagnostics_enabled";
+
+    private static final int CAN_NOT_PAIR_TIME_OUT_MILLS = 60000;
+    private static final int CAN_NOT_CONNECT_TIME_OUT_MILLS = 60000;
 
     private static ErrorListener sErrorListener;
 
@@ -310,6 +316,8 @@ public class BluetoothUtils {
                 } catch (SecurityException e) {
                     Log.e(TAG, "Failed to get permission for: " + iconUri, e);
                 }
+            } else {
+                return new Pair<>(context.getDrawable(R.drawable.ic_earbuds_advanced), pair.second);
             }
         }
 
@@ -563,6 +571,18 @@ public class BluetoothUtils {
     }
 
     /**
+     * Check if battery all the time is supported for the given Bluetooth device.
+     *
+     * @param bluetoothDevice the BluetoothDevice to check
+     * @return true if battery all the time is supported, false otherwise
+     */
+    public static boolean isBatteryAllTheTimeSupported(@Nullable BluetoothDevice bluetoothDevice) {
+        String value = getFastPairCustomizedField(bluetoothDevice, KEY_BATTERY_ALL_THE_TIME);
+        Log.d(TAG, "Is BATT supported: " + value);
+        return Boolean.parseBoolean(value);
+    }
+
+    /**
      * Check if the Bluetooth device is an AvailableMediaBluetoothDevice, which means: 1) currently
      * connected 2) is Hearing Aid or LE Audio OR 3) connected profile matches currentAudioProfile
      *
@@ -808,17 +828,7 @@ public class BluetoothUtils {
             Log.d(TAG, "Skip check hasConnectedBroadcastSourceForBtDevice due to arg is null");
             return false;
         }
-        if (isAudioSharingHysteresisModeFixAvailable(localBtManager.getContext())) {
-            return hasActiveLocalBroadcastSourceForBtDevice(device, localBtManager);
-        }
-        LocalBluetoothLeBroadcastAssistant assistant =
-                localBtManager.getProfileManager().getLeAudioBroadcastAssistantProfile();
-        if (device == null || assistant == null) {
-            Log.d(TAG, "Skip check hasConnectedBroadcastSourceForBtDevice due to arg is null");
-            return false;
-        }
-        List<BluetoothLeBroadcastReceiveState> sourceList = assistant.getAllSources(device);
-        return !sourceList.isEmpty() && sourceList.stream().anyMatch(BluetoothUtils::isConnected);
+        return hasActiveLocalBroadcastSourceForBtDevice(device, localBtManager);
     }
 
     /**
@@ -1223,10 +1233,6 @@ public class BluetoothUtils {
      */
     public static void setTemporaryBondMetadata(@Nullable BluetoothDevice device) {
         if (device == null) return;
-        if (!Flags.enableTemporaryBondDevicesUi()) {
-            Log.d(TAG, "Skip setTemporaryBondMetadata, flag is disabled");
-            return;
-        }
         String fastPairCustomizedMeta = getStringMetaData(device,
                 METADATA_FAST_PAIR_CUSTOMIZED_FIELDS);
         String fullContentWithTag = generateExpressionWithTag(TEMP_BOND_TYPE,
@@ -1388,5 +1394,47 @@ public class BluetoothUtils {
         Log.d(TAG, "modifySelectedChannelIndex(): existedMetadata = " + original
                 + " updatedMetadata = " + updated);
         assistant.modifySource(sink, sourceId, updated);
+    }
+
+    /**
+     * Checks if the Bluetooth LE Audio Broadcast Assistant profile is available and at least one
+     * device is currently connected to it.
+     *
+     * @param bluetoothManager The {@link LocalBluetoothManager} instance to query.
+     * @return {@code true} if at least one device is connected to the LE Audio Broadcast Assistant
+     *     profile, {@code false} otherwise.
+     */
+    public static boolean hasConnectedBroadcastAssistantDevice(
+            @NonNull LocalBluetoothManager bluetoothManager) {
+        LocalBluetoothLeBroadcastAssistant assistantProfile =
+                bluetoothManager.getProfileManager().getLeAudioBroadcastAssistantProfile();
+
+        // assistantProfile can be null if the profile is not supported or available.
+        if (assistantProfile == null) {
+            return false;
+        }
+
+        return !assistantProfile.getAllConnectedDevices().isEmpty();
+    }
+
+    /** Checks if Bluetooth Diagnosis is available by reading from Settings Secure. */
+    public static boolean isBluetoothDiagnosisAvailable(@NonNull Context context) {
+        return Flags.enableBluetoothDiagnosis()
+                && Settings.Secure.getInt(context.getContentResolver(), BLUETOOTH_DIAGNOSIS_KEY, -1)
+                        > 0;
+    }
+
+    /** Checks if the device should show as pairing failure. */
+    public static boolean showPairingFailure(@NonNull CachedBluetoothDevice device) {
+        return device.getBondFailureTimeMillis() > 0
+                && SystemClock.elapsedRealtime() - device.getBondFailureTimeMillis()
+                        <= CAN_NOT_PAIR_TIME_OUT_MILLS;
+    }
+
+    /** Checks if the device should show as connection failure. */
+    public static boolean showConnectionFailure(@NonNull CachedBluetoothDevice device) {
+        return device.getConnectionFailureTimeMillis() > 0
+                && SystemClock.elapsedRealtime() - device.getConnectionFailureTimeMillis()
+                        <= CAN_NOT_CONNECT_TIME_OUT_MILLS;
     }
 }

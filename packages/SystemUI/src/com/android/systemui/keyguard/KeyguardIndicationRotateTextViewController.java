@@ -400,6 +400,7 @@ public class KeyguardIndicationRotateTextViewController extends
     public static final int INDICATION_IS_DISMISSIBLE = 13;
     public static final int INDICATION_TYPE_ADAPTIVE_AUTH = 14;
     public static final int INDICATION_TYPE_WATCH_DISCONNECTED = 15;
+    public static final int INDICATION_TYPE_SECURE_LOCK_DEVICE = 16;
 
     @IntDef({
             INDICATION_TYPE_NONE,
@@ -417,7 +418,8 @@ public class KeyguardIndicationRotateTextViewController extends
             INDICATION_TYPE_BIOMETRIC_MESSAGE_FOLLOW_UP,
             INDICATION_IS_DISMISSIBLE,
             INDICATION_TYPE_ADAPTIVE_AUTH,
-            INDICATION_TYPE_WATCH_DISCONNECTED
+            INDICATION_TYPE_WATCH_DISCONNECTED,
+            INDICATION_TYPE_SECURE_LOCK_DEVICE
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface IndicationType{}
@@ -457,6 +459,8 @@ public class KeyguardIndicationRotateTextViewController extends
                 return "adaptive_auth";
             case INDICATION_TYPE_WATCH_DISCONNECTED:
                 return "watch_disconnected";
+            case INDICATION_TYPE_SECURE_LOCK_DEVICE:
+                return "secure_lock_device";
             default:
                 return "unknown[" + type + "]";
         }

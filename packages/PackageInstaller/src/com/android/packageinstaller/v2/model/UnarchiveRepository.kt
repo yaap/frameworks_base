@@ -101,24 +101,13 @@ class UnarchiveRepository(private val context: Context) {
             return UnarchiveAborted(UnarchiveAborted.ABORT_REASON_GENERIC_ERROR)
         }
 
-        var installerTitle: String
-        try {
-            installerTitle = getAppTitle(installingPackageName, 0)
-        } catch (e: NameNotFoundException) {
-            Log.e(LOG_TAG, "Could not find installer", e)
+        val label = PackageUtil.getApplicationLabel(context, installingPackageName)
+        if (label == null) {
+            Log.e(LOG_TAG, "Could not find installer")
             return UnarchiveAborted(UnarchiveAborted.ABORT_REASON_GENERIC_ERROR)
         }
 
-        return UnarchiveUserActionRequired(appSnippet, installerTitle)
-    }
-
-    @Throws(NameNotFoundException::class)
-    private fun getAppTitle(packageName: String, flags: Long): String {
-        val appInfo = packageManager.getApplicationInfo(
-            packageName,
-            PackageManager.ApplicationInfoFlags.of(flags)
-        )
-        return appInfo.loadLabel(packageManager).toString()
+        return UnarchiveUserActionRequired(appSnippet, installingPackageName)
     }
 
     @SuppressLint("MissingPermission")
@@ -146,6 +135,21 @@ class UnarchiveRepository(private val context: Context) {
             Intent.EXTRA_INTENT,
             PendingIntent::class.java
         )
+
+        val appPackageName = intent.getStringExtra(PackageInstaller.EXTRA_PACKAGE_NAME)
+        var appSnippet: PackageUtil.AppSnippet? = null
+        if (appPackageName != null) {
+            try {
+                val applicationInfo = packageManager.getApplicationInfo(
+                    appPackageName,
+                    PackageManager.ApplicationInfoFlags.of(PackageManager.MATCH_ARCHIVED_PACKAGES)
+                )
+                appSnippet = getAppSnippet(context, applicationInfo)
+            } catch (e: NameNotFoundException) {
+                Log.e(LOG_TAG, "Invalid packageName $appPackageName: ", e)
+            }
+        }
+
         when (unarchivalStatus) {
             PackageInstaller.UNARCHIVAL_ERROR_USER_ACTION_NEEDED -> {
                 if (pendingIntent == null) {
@@ -196,7 +200,8 @@ class UnarchiveRepository(private val context: Context) {
             installerPackageName,
             installerAppTitle,
             requiredBytes,
-            pendingIntent
+            pendingIntent,
+            appSnippet
         )
     }
 

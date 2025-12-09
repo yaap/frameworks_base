@@ -37,7 +37,6 @@ import com.android.app.tracing.traceSection
 import com.android.internal.logging.InstanceId
 import com.android.keyguard.KeyguardUpdateMonitor
 import com.android.systemui.CoreStartable
-import com.android.systemui.Flags
 import com.android.systemui.broadcast.BroadcastDispatcher
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
@@ -50,6 +49,8 @@ import com.android.systemui.media.controls.domain.pipeline.MediaDataManager.Comp
 import com.android.systemui.media.controls.domain.pipeline.interactor.MediaCarouselInteractor
 import com.android.systemui.media.controls.domain.resume.ResumeMediaBrowser
 import com.android.systemui.media.controls.shared.MediaLogger
+import com.android.systemui.media.controls.shared.getActiveTimestamp
+import com.android.systemui.media.controls.shared.isSameMediaData
 import com.android.systemui.media.controls.shared.model.MediaAction
 import com.android.systemui.media.controls.shared.model.MediaButton
 import com.android.systemui.media.controls.shared.model.MediaData
@@ -57,6 +58,7 @@ import com.android.systemui.media.controls.ui.view.MediaViewHolder
 import com.android.systemui.media.controls.util.MediaControllerFactory
 import com.android.systemui.media.controls.util.MediaFlags
 import com.android.systemui.media.controls.util.MediaUiEventLogger
+import com.android.systemui.media.remedia.shared.flag.MediaControlsInComposeFlag
 import com.android.systemui.res.R
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.util.Assert
@@ -184,7 +186,7 @@ class MediaDataProcessor(
         }
 
     override fun start() {
-        if (!SceneContainerFlag.isEnabled) {
+        if (!SceneContainerFlag.isEnabled && !MediaControlsInComposeFlag.isEnabled) {
             return
         }
 
@@ -636,21 +638,12 @@ class MediaDataProcessor(
     }
 
     private fun getResumeMediaAction(action: Runnable): MediaAction {
-        val iconId =
-            if (Flags.mediaControlsUiUpdate()) {
-                R.drawable.ic_media_play_button
-            } else {
-                R.drawable.ic_media_play
-            }
+        val iconId = R.drawable.ic_media_play_button
         return MediaAction(
             Icon.createWithResource(context, iconId).setTint(themeText).loadDrawable(context),
             action,
             context.getString(R.string.controls_media_button_play),
-            if (Flags.mediaControlsUiUpdate()) {
-                context.getDrawable(R.drawable.ic_media_play_button_container)
-            } else {
-                context.getDrawable(R.drawable.ic_media_play_container)
-            },
+            context.getDrawable(R.drawable.ic_media_play_button_container),
         )
     }
 

@@ -18,10 +18,10 @@
 
 package com.android.systemui.statusbar.notification.row.domain.interactor
 
-import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.os.UserHandle
 import android.platform.test.annotations.EnableFlags
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MotionScheme
@@ -41,6 +41,8 @@ import com.android.systemui.statusbar.notification.row.icon.appIconProvider
 import com.android.systemui.statusbar.notification.row.icon.mockAppIconProvider
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi
 import com.android.systemui.testKosmos
+import com.android.systemui.util.time.FakeSystemClock
+import com.android.systemui.util.time.systemClock
 import com.google.common.truth.Truth.assertThat
 import kotlin.test.Test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,7 +57,6 @@ import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.junit.MockitoJUnit
 import org.mockito.junit.MockitoRule
-import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import platform.test.motion.compose.runMonotonicClockTest
@@ -70,9 +71,9 @@ class BundleInteractorTest : SysuiTestCase() {
 
     private val kosmos = testKosmos()
     private val testScope = kosmos.testScope
+    private val fakeSystemClock = FakeSystemClock()
 
     private val testBundleRepository: BundleRepository = kosmos.testBundleRepository
-
     private lateinit var underTest: BundleInteractor
 
     private val drawable1: Drawable = ColorDrawable(Color.RED)
@@ -82,6 +83,7 @@ class BundleInteractorTest : SysuiTestCase() {
     @Before
     fun setUp() {
         kosmos.appIconProvider = kosmos.mockAppIconProvider
+        kosmos.systemClock = fakeSystemClock
         underTest = kosmos.bundleInteractor
     }
 
@@ -101,9 +103,8 @@ class BundleInteractorTest : SysuiTestCase() {
             whenever(
                     kosmos.mockAppIconProvider.getOrFetchAppIcon(
                         any<String>(),
-                        any<Context>(),
-                        eq(false),
-                        eq(false),
+                        any<UserHandle>(),
+                        any<String>(),
                     )
                 )
                 .thenReturn(drawable1)
@@ -119,7 +120,7 @@ class BundleInteractorTest : SysuiTestCase() {
 
             // Assert
             verify(kosmos.mockAppIconProvider, times(4))
-                .getOrFetchAppIcon(any<String>(), any<Context>(), eq(false), eq(false))
+                .getOrFetchAppIcon(any<String>(), any<UserHandle>(), any<String>())
 
             assertThat(result).hasSize(3)
             assertThat(result).containsExactly(drawable1, drawable2, drawable3).inOrder()
@@ -144,18 +145,16 @@ class BundleInteractorTest : SysuiTestCase() {
             whenever(
                     kosmos.mockAppIconProvider.getOrFetchAppIcon(
                         eq("app1"),
-                        anyOrNull<Context>(),
-                        eq(false),
-                        eq(false),
+                        any<UserHandle>(),
+                        any<String>(),
                     )
                 )
                 .thenReturn(drawable1)
             whenever(
                     kosmos.mockAppIconProvider.getOrFetchAppIcon(
                         eq("app2"),
-                        anyOrNull<Context>(),
-                        eq(false),
-                        eq(false),
+                        any<UserHandle>(),
+                        any<String>(),
                     )
                 )
                 .thenReturn(drawable2)
@@ -170,13 +169,13 @@ class BundleInteractorTest : SysuiTestCase() {
             // Assert
             assertThat(result).containsExactly(drawable1, drawable2).inOrder()
             verify(kosmos.mockAppIconProvider)
-                .getOrFetchAppIcon(eq("app1"), anyOrNull<Context>(), eq(false), eq(false))
+                .getOrFetchAppIcon(eq("app1"), any<UserHandle>(), any<String>())
             verify(kosmos.mockAppIconProvider)
-                .getOrFetchAppIcon(eq("app2"), anyOrNull<Context>(), eq(false), eq(false))
+                .getOrFetchAppIcon(eq("app2"), any<UserHandle>(), any<String>())
         }
 
     @Test
-    fun previewIcons_collapseTimeNonZero_filterBytime() =
+    fun previewIcons_collapseTimeNonZero_stillFetchesAllIcons() =
         testScope.runTest {
             // Arrange
             val collapseTime = 100L
@@ -190,23 +189,12 @@ class BundleInteractorTest : SysuiTestCase() {
                     on { packageName }.thenReturn("new_app")
                     on { timeAddedToBundle }.thenReturn(150L) // Newer than collapseTime
                 }
-            val appDataAtCollapse =
-                mock<AppData> {
-                    on { packageName }.thenReturn("at_collapse_app")
-                    on { timeAddedToBundle }
-                        .thenReturn(collapseTime) // Equal to collapseTime (should be filtered out)
-                }
-            val appDataList = listOf(appDataOld, appDataNew, appDataAtCollapse)
+            val appDataList = listOf(appDataOld, appDataNew)
 
-            whenever(
-                    kosmos.mockAppIconProvider.getOrFetchAppIcon(
-                        eq("new_app"),
-                        anyOrNull<Context>(),
-                        eq(false),
-                        eq(false),
-                    )
-                )
-                .thenReturn(drawable3)
+            whenever(kosmos.mockAppIconProvider.getOrFetchAppIcon(eq("old_app"), any(), any()))
+                .thenReturn(drawable1)
+            whenever(kosmos.mockAppIconProvider.getOrFetchAppIcon(eq("new_app"), any(), any()))
+                .thenReturn(drawable2)
 
             testBundleRepository.lastCollapseTime = collapseTime
             testBundleRepository.appDataList.value = appDataList
@@ -216,22 +204,15 @@ class BundleInteractorTest : SysuiTestCase() {
             val result = underTest.previewIcons.first()
 
             // Assert
-            assertThat(result).containsExactly(drawable3)
-            verify(kosmos.mockAppIconProvider, times(0))
-                .getOrFetchAppIcon(eq("old_app"), anyOrNull<Context>(), eq(false), eq(false))
-            verify(kosmos.mockAppIconProvider, times(0))
-                .getOrFetchAppIcon(
-                    eq("at_collapse_app"),
-                    anyOrNull<Context>(),
-                    eq(false),
-                    eq(false),
-                )
-            verify(kosmos.mockAppIconProvider)
-                .getOrFetchAppIcon(eq("new_app"), anyOrNull<Context>(), eq(false), eq(false))
+            assertThat(result).hasSize(2)
+            assertThat(result).containsExactly(drawable1, drawable2).inOrder()
+
+            verify(kosmos.mockAppIconProvider).getOrFetchAppIcon(eq("old_app"), any(), any())
+            verify(kosmos.mockAppIconProvider).getOrFetchAppIcon(eq("new_app"), any(), any())
         }
 
     @Test
-    fun previewIcons_allAppDataOlderThanCollapseTime_emitsEmptyList() =
+    fun previewIcons_allAppDataOlderThanCollapseTime_emitsFullList() =
         testScope.runTest {
             // Arrange
             val collapseTime = 200L
@@ -243,6 +224,9 @@ class BundleInteractorTest : SysuiTestCase() {
                     }
                 }
 
+            whenever(kosmos.mockAppIconProvider.getOrFetchAppIcon(anyString(), any(), any()))
+                .thenReturn(drawable1, drawable2, drawable3)
+
             testBundleRepository.lastCollapseTime = collapseTime
             testBundleRepository.appDataList.value = appDataList
             runCurrent()
@@ -251,9 +235,9 @@ class BundleInteractorTest : SysuiTestCase() {
             val result = underTest.previewIcons.first()
 
             // Assert
-            assertThat(result).isEmpty()
-            verify(kosmos.mockAppIconProvider, times(0))
-                .getOrFetchAppIcon(anyString(), anyOrNull<Context>(), eq(false), eq(false))
+            assertThat(result).hasSize(3)
+            verify(kosmos.mockAppIconProvider, times(3))
+                .getOrFetchAppIcon(anyString(), any<UserHandle>(), any<String>())
         }
 
     @Test
@@ -302,5 +286,46 @@ class BundleInteractorTest : SysuiTestCase() {
 
         // Assert
         assertThat(underTest.state?.currentScene).isEqualTo(BundleHeader.Scenes.Collapsed)
+    }
+
+    @Test
+    fun setExpansionState_whenCollapsing_updatesLastCollapseTime() = runMonotonicClockTest {
+        // Arrange
+        val testTime = 20000L
+        fakeSystemClock.setUptimeMillis(testTime)
+        underTest.state =
+            MutableSceneTransitionLayoutState(
+                initialScene = BundleHeader.Scenes.Expanded,
+                motionScheme = MotionScheme.standard(),
+            )
+        underTest.composeScope = this
+
+        // Act
+        underTest.setExpansionState(isExpanded = false)
+        testScope.runCurrent()
+
+        // Assert
+        assertThat(testBundleRepository.lastCollapseTime).isEqualTo(testTime)
+    }
+
+    @Test
+    fun setExpansionState_whenExpanding_doesNotUpdateLastCollapseTime() = runMonotonicClockTest {
+        // Arrange
+        val initialTime = 11000L
+        testBundleRepository.lastCollapseTime = initialTime
+        fakeSystemClock.setUptimeMillis(20000L)
+        underTest.state =
+            MutableSceneTransitionLayoutState(
+                initialScene = BundleHeader.Scenes.Collapsed,
+                motionScheme = MotionScheme.standard(),
+            )
+        underTest.composeScope = this
+
+        // Act
+        underTest.setExpansionState(isExpanded = true)
+        testScope.runCurrent()
+
+        // Assert
+        assertThat(testBundleRepository.lastCollapseTime).isEqualTo(initialTime)
     }
 }

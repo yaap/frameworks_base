@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Launch
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DisabledByDefault
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -103,11 +104,18 @@ fun ActionButtons(actionButtons: List<ActionButton>) {
 @Composable
 private fun RowScope.ActionButton(actionButton: ActionButton) {
     if (isSpaExpressiveEnabled) {
+        // Make entire column clickable only if action button is enabled
+        val columnModifier = if (actionButton.enabled) {
+            Modifier.clickable(onClick = actionButton.onClick)
+        } else {
+            Modifier
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .weight(1f)
-                .clickable(onClick = actionButton.onClick)
+                .then(columnModifier)
         ) {
             IconButton(actionButton)
             Spacer(Modifier.height(SettingsSpace.extraSmall3))
@@ -116,6 +124,7 @@ private fun RowScope.ActionButton(actionButton: ActionButton) {
                 modifier = Modifier
                     .padding(horizontal = SettingsSpace.extraSmall4),
                 style = MaterialTheme.typography.titleSmallEmphasized,
+                textAlign = TextAlign.Center,
             )
         }
     } else {
@@ -209,6 +218,10 @@ private fun ActionButtonsPreview() {
                 ActionButton(text = "Open", imageVector = Icons.AutoMirrored.Outlined.Launch) {},
                 ActionButton(text = "Uninstall", imageVector = Icons.Outlined.Delete) {},
                 ActionButton(text = "Force stop", imageVector = Icons.Outlined.WarningAmber) {},
+                ActionButton(
+                    text = "long long long long text",
+                    imageVector = Icons.Outlined.DisabledByDefault
+                ) {},
             )
         )
     }

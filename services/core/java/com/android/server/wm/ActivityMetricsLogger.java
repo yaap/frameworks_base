@@ -300,6 +300,8 @@ class ActivityMetricsLogger {
         boolean mIsDrawn;
         /** The latest activity to have been launched. */
         @NonNull ActivityRecord mLastLaunchedActivity;
+        /** The next activity if the latest launched activity in the same task is finishing. */
+        @Nullable ActivityRecord mNextRunningActivity;
 
         /** The type of the source that triggers the launch event. */
         @SourceInfo.SourceType int mSourceType;
@@ -389,6 +391,7 @@ class ActivityMetricsLogger {
                 return;
             }
             if (mLastLaunchedActivity != null) {
+                mNextRunningActivity = null;
                 if (mLastLaunchedActivity.mLaunchCookie != null) {
                     ProtoLog.v(WM_DEBUG_WINDOW_TRANSITIONS,
                             "Transferring launch cookie=%s from=%s(%d) to=%s(%d)",
@@ -431,6 +434,10 @@ class ActivityMetricsLogger {
                     || mLastLaunchedActivity.getWindowingMode() != r.getWindowingMode()) {
                 return false;
             }
+            if (mLastLaunchedActivity.isUid(r.launchedFromUid)) {
+                return true;
+            }
+
             // The current task should be non-null because it is just launched. While the
             // last task can be cleared when starting activity with FLAG_ACTIVITY_CLEAR_TASK.
             final Task lastTask = mLastLaunchedActivity.getTask();
@@ -441,11 +448,15 @@ class ActivityMetricsLogger {
                 }
                 return lastTask.getBounds().equals(currentTask.getBounds());
             }
-            return mLastLaunchedActivity.isUid(r.launchedFromUid);
+
+            return false;
         }
 
         /** @return {@code true} if the activity matches a launched activity in this transition. */
         boolean contains(ActivityRecord r) {
+            if (mNextRunningActivity != null) {
+                return r == mNextRunningActivity;
+            }
             return r == mLastLaunchedActivity;
         }
 
@@ -470,7 +481,8 @@ class ActivityMetricsLogger {
         @Override
         public String toString() {
             return "TransitionInfo{" + Integer.toHexString(System.identityHashCode(this))
-                    + " a=" + mLastLaunchedActivity + " d=" + mIsDrawn + "}";
+                    + " a=" + mLastLaunchedActivity + " r=" + mNextRunningActivity
+                    + " d=" + mIsDrawn + "}";
         }
     }
 
@@ -552,6 +564,14 @@ class ActivityMetricsLogger {
         }
 
         PackageOptimizationInfo getPackageOptimizationInfo(ArtManagerInternal artManagerInternal) {
+            if (android.app.Flags.getOptimizationInfoFromAppProcess()
+                    && com.android.art.flags.Flags.updatableFilterAndReason()) {
+                if (processRecord == null) {
+                    return PackageOptimizationInfo.createWithNoInfo();
+                }
+                PackageOptimizationInfo info = processRecord.getOptimizationInfo();
+                return info != null ? info : PackageOptimizationInfo.createWithNoInfo();
+            }
             return artManagerInternal == null || launchedActivityAppRecordRequiredAbi == null
                     ? PackageOptimizationInfo.createWithNoInfo()
                     : artManagerInternal.getPackageOptimizationInfo(applicationInfo,
@@ -729,12 +749,6 @@ class ActivityMetricsLogger {
                     + " newActivityCreated=" + newActivityCreated + " info=" + info);
         }
 
-        if (launchedActivity.isReportedDrawn() && launchedActivity.isVisible()) {
-            // Launched activity is already visible. We cannot measure windows drawn delay.
-            abort(launchingState, "launched activity already visible");
-            return;
-        }
-
         // If the launched activity is started from an existing active transition, it will be put
         // into the transition info.
         if (info != null && info.canCoalesce(launchedActivity)) {
@@ -757,6 +771,11 @@ class ActivityMetricsLogger {
                 startLaunchTrace(info);
             }
             scheduleCheckActivityToBeDrawnIfSleeping(launchedActivity);
+            abortIfAlreadyVisible(launchedActivity, launchingState);
+            return;
+        }
+
+        if (abortIfAlreadyVisible(launchedActivity, launchingState)) {
             return;
         }
 
@@ -795,12 +814,26 @@ class ActivityMetricsLogger {
         // launch time when resuming from back stack. E.g. launch 2 independent tasks in a short
         // time, the transition info of the first task should not keep active until it becomes
         // visible such as after the top task is finished.
-        for (int i = mTransitionInfoList.size() - 2; i >= 0; i--) {
-            final TransitionInfo prevInfo = mTransitionInfoList.get(i);
+        final int index = mTransitionInfoList.size() - 2;
+        if (index >= 0) {
+            final TransitionInfo prevInfo = mTransitionInfoList.get(index);
             if (prevInfo.mIsDrawn || !prevInfo.mLastLaunchedActivity.isVisibleRequested()) {
                 scheduleCheckActivityToBeDrawn(prevInfo.mLastLaunchedActivity, 0 /* delay */);
             }
         }
+    }
+
+    /**
+     * Returns {@code true} if the launched activity is already visible, indicating that window
+     * draw delay cannot be measured and the operation should be aborted.
+     */
+    private boolean abortIfAlreadyVisible(@NonNull ActivityRecord launchedActivity,
+            @NonNull LaunchingState launchingState) {
+        if (launchedActivity.isReportedDrawn() && launchedActivity.isVisible()) {
+            abort(launchingState, "launched activity already visible");
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -870,15 +903,13 @@ class ActivityMetricsLogger {
             done(false /* abort */, info, "notifyWindowsDrawn", timestampNs);
         }
 
-        if (android.app.Flags.appStartInfoTimestamps()) {
-            final int pid = r.getPid();
-            // Log here to match StatsD for time to first frame.
-            mLoggerHandler.post(
-                    () -> mSupervisor.mService.mWindowManager.mAmInternal.addStartInfoTimestamp(
-                            ApplicationStartInfo.START_TIMESTAMP_FIRST_FRAME,
-                            timestampNs, infoSnapshot.applicationInfo.uid, pid,
-                            infoSnapshot.userId));
-        }
+        final int pid = r.getPid();
+        // Log here to match StatsD for time to first frame.
+        mLoggerHandler.post(
+                () -> mSupervisor.mService.mWindowManager.mAmInternal.addStartInfoTimestamp(
+                        ApplicationStartInfo.START_TIMESTAMP_FIRST_FRAME,
+                        timestampNs, infoSnapshot.applicationInfo.uid, pid,
+                        infoSnapshot.userId));
 
         return infoSnapshot;
     }
@@ -978,11 +1009,22 @@ class ActivityMetricsLogger {
             Slog.i(TAG, "notifyVisibilityChanged " + r + " visible=" + r.isVisibleRequested()
                     + " state=" + r.getState() + " finishing=" + r.finishing);
         }
-        if (r.isState(ActivityRecord.State.RESUMED) && r.mDisplayContent.isSleeping()) {
-            // The activity may be launching while keyguard is locked. The keyguard may be dismissed
-            // after the activity finished relayout, so skip the visibility check to avoid aborting
-            // the tracking of launch event.
-            return;
+        if (r.isState(ActivityRecord.State.RESUMED)) {
+            if (r.mDisplayContent.isSleeping()) {
+                // The activity may be launching while keyguard is locked. The keyguard may be
+                // dismissed after the activity finished relayout, so skip the visibility check
+                // to avoid aborting the tracking of launch event.
+                return;
+            }
+            if (r.finishing) {
+                // In case it is a trampoline activity that moves the existing task to front, then
+                // the next activity will report drawn.
+                final ActivityRecord next = r.getTask().getActivityBelow(r);
+                if (next != null && !next.finishing && !next.isVisible()) {
+                    info.mNextRunningActivity = next;
+                    return;
+                }
+            }
         }
         if (!r.isVisibleRequested() || r.finishing) {
             // Check if the tracker can be cancelled because the last launched activity may be
@@ -1108,6 +1150,10 @@ class ActivityMetricsLogger {
             mSupervisor.stopWaitingForActivityVisible(info.mLastLaunchedActivity);
             launchObserverNotifyActivityLaunchCancelled(info);
         } else {
+            if (info.mNextRunningActivity != null) {
+                // Report the running activity because the launched activity was finished.
+                info.mLastLaunchedActivity = info.mNextRunningActivity;
+            }
             if (info.isInterestingToLoggerAndObserver()) {
                 launchObserverNotifyActivityLaunchFinished(info, timestampNs);
             }
@@ -1768,7 +1814,8 @@ class ActivityMetricsLogger {
         // Beginning a launch is timing sensitive and so should be observed as soon as possible.
         mLaunchObserver.onActivityLaunched(info.mLaunchingState.mStartUptimeNs,
                 info.mLastLaunchedActivity.mActivityComponent, temperature,
-                info.mLastLaunchedActivity.mUserId);
+                info.mLastLaunchedActivity.processName,
+                info.mLastLaunchedActivity.getUid());
 
         Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
     }

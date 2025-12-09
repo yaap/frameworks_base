@@ -49,7 +49,6 @@ import com.android.systemui.animation.DialogTransitionAnimator
 import com.android.systemui.bluetooth.ui.viewModel.BluetoothDetailsContentViewModel
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.plugins.ActivityStarter
-import com.android.systemui.qs.flags.QsDetailedView
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.phone.SystemUIDialog
 import com.android.systemui.util.annotations.DeprecatedSysuiVisibleForTesting
@@ -192,13 +191,11 @@ constructor(
         audioSharingButton = contentView.requireViewById(R.id.audio_sharing_button)
         progressBarAnimation =
             contentView.requireViewById(R.id.bluetooth_tile_dialog_progress_animation)
-        progressBarBackground =
-            contentView.requireViewById(R.id.bluetooth_tile_dialog_progress_background)
         scrollViewContent = contentView.requireViewById(R.id.scroll_view)
 
         if (isInDialog) {
-            // If `QsDetailedView` is enabled, it should show the details view.
-            QsDetailedView.assertInLegacyMode()
+            progressBarBackground =
+                contentView.requireViewById(R.id.bluetooth_tile_dialog_progress_background)
 
             // If rendering with tile details view, the title and subtitle will be added in the
             // `TileDetails`
@@ -253,11 +250,16 @@ constructor(
                     }
                 }
         }
-        scrollViewContent.apply {
-            minimumHeight =
-                resources.getDimensionPixelSize(initialUiProperties.scrollViewMinHeightResId)
-            layoutParams.height = maxOf(cachedContentHeight, minimumHeight)
+        // If it's in the Compose-based detailed view, min and max height are set in the
+        // `TileDetails`.
+        if (isInDialog) {
+            scrollViewContent.apply {
+                minimumHeight =
+                    resources.getDimensionPixelSize(initialUiProperties.scrollViewMinHeightResId)
+                layoutParams.height = maxOf(cachedContentHeight, minimumHeight)
+            }
         }
+
         updateDetailsUI(dialog, detailsUIState)
     }
 
@@ -513,14 +515,18 @@ constructor(
     private fun showProgressBar() {
         if (progressBarAnimation.visibility != VISIBLE) {
             progressBarAnimation.visibility = VISIBLE
-            progressBarBackground.visibility = INVISIBLE
+            if (isInDialog) {
+                progressBarBackground.visibility = INVISIBLE
+            }
         }
     }
 
     private fun hideProgressBar() {
         if (progressBarAnimation.visibility != INVISIBLE) {
             progressBarAnimation.visibility = INVISIBLE
-            progressBarBackground.visibility = VISIBLE
+            if (isInDialog) {
+                progressBarBackground.visibility = VISIBLE
+            }
         }
     }
 

@@ -17,6 +17,7 @@ package com.android.systemui.keyguard.ui.transitions
 
 import com.android.systemui.keyguard.ui.viewmodel.AlternateBouncerToAodTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.AlternateBouncerToDozingTransitionViewModel
+import com.android.systemui.keyguard.ui.viewmodel.AlternateBouncerToDreamingTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.AlternateBouncerToGoneTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.AlternateBouncerToLockscreenTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.AlternateBouncerToOccludedTransitionViewModel
@@ -46,6 +47,7 @@ import com.android.systemui.keyguard.ui.viewmodel.GoneToLockscreenTransitionView
 import com.android.systemui.keyguard.ui.viewmodel.LockscreenToAodTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.LockscreenToDozingTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.LockscreenToDreamingTransitionViewModel
+import com.android.systemui.keyguard.ui.viewmodel.LockscreenToGlanceableHubTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.LockscreenToGoneTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.LockscreenToOccludedTransitionViewModel
 import com.android.systemui.keyguard.ui.viewmodel.LockscreenToPrimaryBouncerTransitionViewModel
@@ -74,6 +76,12 @@ abstract class DeviceEntryIconTransitionModule {
     @IntoSet
     abstract fun alternateBouncerToDozing(
         impl: AlternateBouncerToDozingTransitionViewModel
+    ): DeviceEntryIconTransition
+
+    @Binds
+    @IntoSet
+    abstract fun alternateBouncerToDreaming(
+        impl: AlternateBouncerToDreamingTransitionViewModel
     ): DeviceEntryIconTransition
 
     @Binds
@@ -282,6 +290,12 @@ abstract class DeviceEntryIconTransitionModule {
     @IntoSet
     abstract fun glanceableHubToLockscreen(
         impl: GlanceableHubToLockscreenTransitionViewModel
+    ): DeviceEntryIconTransition
+
+    @Binds
+    @IntoSet
+    abstract fun lockscreenToGlanceableHub(
+        impl: LockscreenToGlanceableHubTransitionViewModel
     ): DeviceEntryIconTransition
 
     @Binds

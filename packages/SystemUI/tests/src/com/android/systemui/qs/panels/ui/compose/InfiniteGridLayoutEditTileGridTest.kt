@@ -35,6 +35,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.compose.theme.PlatformTheme
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.compose.modifiers.resIdToTestTag
+import com.android.systemui.flags.DisableSceneContainer
+import com.android.systemui.flags.EnableSceneContainer
+import com.android.systemui.haptics.msdl.tileHapticsViewModelFactoryProvider
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.collectLastValue
 import com.android.systemui.kosmos.runTest
@@ -42,9 +46,13 @@ import com.android.systemui.kosmos.useUnconfinedTestDispatcher
 import com.android.systemui.qs.composefragment.dagger.usingMediaInComposeFragment
 import com.android.systemui.qs.panels.data.repository.defaultLargeTilesRepository
 import com.android.systemui.qs.panels.domain.interactor.iconTilesInteractor
-import com.android.systemui.qs.panels.ui.compose.infinitegrid.infiniteGridLayout
-import com.android.systemui.qs.panels.ui.viewmodel.dynamicIconTilesViewModel
+import com.android.systemui.qs.panels.ui.compose.infinitegrid.InfiniteGridLayout
+import com.android.systemui.qs.panels.ui.viewmodel.InfiniteGridViewModel
+import com.android.systemui.qs.panels.ui.viewmodel.detailsViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.editModeViewModel
+import com.android.systemui.qs.panels.ui.viewmodel.iconTilesViewModel
+import com.android.systemui.qs.panels.ui.viewmodel.infiniteGridViewModelFactory
+import com.android.systemui.qs.panels.ui.viewmodel.textFeedbackContentViewModelFactory
 import com.android.systemui.qs.pipeline.domain.interactor.currentTilesInteractor
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.testKosmos
@@ -57,22 +65,41 @@ import org.junit.runner.RunWith
 @SmallTest
 @RunWith(AndroidJUnit4::class)
 class InfiniteGridLayoutEditTileGridTest : SysuiTestCase() {
+
     @get:Rule val composeRule = createComposeRule()
 
-    private val kosmos =
-        testKosmos().useUnconfinedTestDispatcher().apply {
+    private val kosmos = testKosmos().useUnconfinedTestDispatcher()
+
+    private val Kosmos.viewModelUnderTest by
+        Kosmos.Fixture { infiniteGridViewModelFactory.create() }
+
+    private val Kosmos.underTest by
+        Kosmos.Fixture {
+            InfiniteGridLayout(
+                detailsViewModel,
+                iconTilesViewModel,
+                viewModelFactory =
+                    object : InfiniteGridViewModel.Factory {
+                        override fun create(): InfiniteGridViewModel {
+                            return viewModelUnderTest
+                        }
+                    },
+                textFeedbackContentViewModelFactory,
+                tileHapticsViewModelFactoryProvider,
+            )
+        }
+
+    @Before
+    fun setUp() {
+        kosmos.apply {
             currentTilesInteractor.setTiles(TestEditTiles)
             editModeViewModel.startEditing()
             usingMediaInComposeFragment = false
         }
-
-    private val Kosmos.underTest by Kosmos.Fixture { infiniteGridLayout }
-
-    @Before
-    fun setUp() =
         kosmos.run {
             iconTilesInteractor.setLargeTiles(defaultLargeTilesRepository.defaultLargeTiles)
         }
+    }
 
     @Composable
     private fun TestEditTileGrid() {
@@ -274,18 +301,42 @@ class InfiniteGridLayoutEditTileGridTest : SysuiTestCase() {
             // Perform second undo
             composeRule.onNodeWithContentDescription("Undo").performClick()
             assertLargeTiles(setOf("internet", "bt", "dnd", "cast"))
-            assertThat(dynamicIconTilesViewModel.largeTilesState.value.map { it.spec })
-                .containsExactly("internet", "bt", "dnd", "cast")
+        }
+
+    @Test
+    @DisableSceneContainer
+    fun bothFlagsDisabled_noExtraOptions() =
+        kosmos.runTest {
+            composeRule.setContent { TestEditTileGrid() }
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithContentDescription("Settings").assertDoesNotExist()
+            composeRule.onNodeWithContentDescription("Reset").assertDoesNotExist()
+            composeRule.onNodeWithContentDescription("Options").assertDoesNotExist()
+        }
+
+    @Test
+    @EnableSceneContainer
+    fun onlySceneContainer_onlySettingsOption() =
+        kosmos.runTest {
+            composeRule.setContent { TestEditTileGrid() }
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithContentDescription("Settings").assertExists()
+            composeRule.onNodeWithContentDescription("Reset").assertDoesNotExist()
+            composeRule.onNodeWithContentDescription("Options").assertDoesNotExist()
         }
 
     private fun assertLargeTiles(largeSpecs: Set<String>) =
         kosmos.run {
-            assertThat(dynamicIconTilesViewModel.largeTilesState.value.map { it.spec })
+            assertThat(viewModelUnderTest.iconTilesViewModel.largeTilesState.value.map { it.spec })
                 .containsExactlyElementsIn(largeSpecs)
         }
 
     companion object {
-        private const val AVAILABLE_TILES_GRID_TEST_TAG = "AvailableTilesGrid"
+
+        private val AVAILABLE_TILES_GRID_TEST_TAG = resIdToTestTag("AvailableTilesGrid")
+        private const val OPTIONS_DROP_DOWN_TEST_TAG = "OptionsDropdown"
         private val TestEditTiles =
             listOf(
                 TileSpec.create("internet"),

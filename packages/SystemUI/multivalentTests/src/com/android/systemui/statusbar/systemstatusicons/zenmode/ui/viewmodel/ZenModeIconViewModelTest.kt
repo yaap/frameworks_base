@@ -85,7 +85,7 @@ class ZenModeIconViewModelTest : SysuiTestCase() {
 
             val loadedIcon = underTest.icon as Icon.Loaded
             assertThat(loadedIcon.contentDescription).isEqualTo(ContentDescription.Loaded(modeName))
-            assertThat(loadedIcon.res).isEqualTo(R.drawable.ic_zen_mode_type_driving)
+            assertThat(loadedIcon.resId).isEqualTo(R.drawable.ic_zen_mode_type_driving)
         }
 
     @Test
@@ -125,13 +125,13 @@ class ZenModeIconViewModelTest : SysuiTestCase() {
 
             val loadedIcon = actualIcon as Icon.Loaded
 
-            assertThat(loadedIcon.res).isEqualTo(R.drawable.ic_zen_mode_type_bedtime)
+            assertThat(loadedIcon.resId).isEqualTo(R.drawable.ic_zen_mode_type_bedtime)
             assertThat(loadedIcon.contentDescription)
                 .isEqualTo(ContentDescription.Loaded(highPriModeName))
         }
 
     @Test
-    fun icon_updatesWhenActivationChanges() =
+    fun icon_activationChanges_updates() =
         kosmos.runTest {
             fakeZenModeRepository.clearModes()
             val modeId = "update_test"
@@ -152,7 +152,7 @@ class ZenModeIconViewModelTest : SysuiTestCase() {
             val actualIcon = underTest.icon
             assertThat(actualIcon).isInstanceOf(Icon.Loaded::class.java)
             val loadedIcon = actualIcon as Icon.Loaded
-            assertThat(loadedIcon.res).isEqualTo(R.drawable.ic_zen_mode_type_driving)
+            assertThat(loadedIcon.resId).isEqualTo(R.drawable.ic_zen_mode_type_driving)
             assertThat(loadedIcon.contentDescription).isEqualTo(ContentDescription.Loaded(modeName))
 
             fakeZenModeRepository.deactivateMode(modeId)
@@ -160,7 +160,7 @@ class ZenModeIconViewModelTest : SysuiTestCase() {
         }
 
     @Test
-    fun icon_multipleActiveModes_updatesToNextPriorityWhenHigherDeactivated_customIcon() =
+    fun icon_multipleActiveModes_updatesToNextPriorityOnDeactivation_customIcon() =
         kosmos.runTest {
             val highPriModeId = "high_pri_res"
             val highPriModeName = "High Priority Resource"
@@ -193,7 +193,7 @@ class ZenModeIconViewModelTest : SysuiTestCase() {
             var currentIcon = underTest.icon
             assertThat(currentIcon).isInstanceOf(Icon.Loaded::class.java)
             var loadedIcon = currentIcon as Icon.Loaded
-            assertThat(loadedIcon.res).isEqualTo(R.drawable.ic_zen_mode_type_bedtime)
+            assertThat(loadedIcon.resId).isEqualTo(R.drawable.ic_zen_mode_type_bedtime)
             assertThat(loadedIcon.contentDescription)
                 .isEqualTo(ContentDescription.Loaded(highPriModeName))
 
@@ -207,9 +207,26 @@ class ZenModeIconViewModelTest : SysuiTestCase() {
 
             assertThat(loadedIcon.contentDescription)
                 .isEqualTo(ContentDescription.Loaded(lowPriModeName))
-            // Resource ID should be null, but the drawable should be present.
-            assertThat(loadedIcon.res).isNull()
+            assertThat(loadedIcon.resId).isEqualTo(CUSTOM_ICON_RES_ID)
+            assertThat(loadedIcon.packageName).isEqualTo(CUSTOM_PACKAGE_NAME)
             assertThat(loadedIcon.drawable).isEqualTo(CUSTOM_DRAWABLE)
+        }
+
+    @Test
+    fun visible_activationChanges_flips() =
+        kosmos.runTest {
+            kosmos.fakeZenModeRepository.clearModes()
+            val modeId = "visibility_test_mode"
+            val mode = TestModeBuilder().setId(modeId).build()
+            kosmos.fakeZenModeRepository.addMode(mode)
+
+            assertThat(underTest.visible).isFalse()
+
+            kosmos.fakeZenModeRepository.activateMode(modeId)
+            assertThat(underTest.visible).isTrue()
+
+            kosmos.fakeZenModeRepository.deactivateMode(modeId)
+            assertThat(underTest.visible).isFalse()
         }
 
     private companion object {

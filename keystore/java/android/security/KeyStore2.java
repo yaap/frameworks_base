@@ -385,7 +385,8 @@ public class KeyStore2 {
      * @hide
      */
     public byte[] getSupplementaryAttestationInfo(int tag) throws KeyStoreException {
-        return KeyStore2HalVersion.getSupplementaryAttestationInfoHelper(tag, this);
+        return handleRemoteExceptionWithRetry(
+            (service) -> service.getSupplementaryAttestationInfo(tag));
     }
 
     static KeyStoreException getKeyStoreException(int errorCode, String serviceErrorMessage) {

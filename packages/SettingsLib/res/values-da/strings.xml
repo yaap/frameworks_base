@@ -87,6 +87,8 @@
     <string name="bluetooth_connecting" msgid="5871702668260192755">"Opretter forbindelse..."</string>
     <string name="bluetooth_connected" msgid="8065345572198502293">"Forbundet med <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_pairing" msgid="4269046942588193600">"Parrer..."</string>
+    <string name="bluetooth_pairing_failure" msgid="6914444518793157913">"Kan ikke parre"</string>
+    <string name="bluetooth_connection_failure" msgid="384203214661155324">"Kan ikke oprette forbindelse"</string>
     <string name="bluetooth_connected_no_headset" msgid="2224101138659967604">"Forbundet med <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> (ingen telefon)"</string>
     <string name="bluetooth_connected_no_a2dp" msgid="8566874395813947092">"Forbundet med <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> (ingen medier)"</string>
     <string name="bluetooth_connected_no_headset_no_a2dp" msgid="2893204819854215433">"Forbundet med <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> (ingen telefon eller medier)"</string>
@@ -103,6 +105,11 @@
     <string name="bluetooth_battery_level_untethered" msgid="1616774716076301755">"V: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, H: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batteri."</string>
     <string name="bluetooth_battery_level_untethered_left" msgid="5725764679536058365">"Venstre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> batteri"</string>
     <string name="bluetooth_battery_level_untethered_right" msgid="8377995536997790142">"Højre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> batteri"</string>
+    <string name="bluetooth_battery_level_untethered_case" msgid="6783758530890124772">"Etui: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> batteri"</string>
+    <string name="bluetooth_battery_level_untethered_left_case" msgid="7676759299091682229">"Venstre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, etui: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batteri"</string>
+    <string name="bluetooth_battery_level_untethered_right_case" msgid="1299184574560442389">"Højre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, etui: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batteri"</string>
+    <string name="bluetooth_battery_level_untethered_left_right" msgid="6953449613092012043">"Venstre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, højre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batteri"</string>
+    <string name="bluetooth_battery_level_untethered_left_case_right" msgid="5434524614259536880">"V: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, E: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>, H: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_2">%3$s</xliff:g> batteri"</string>
     <string name="tv_bluetooth_battery_level_untethered_left" msgid="337629670583744410">"Venstre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_right" msgid="8610019317279155595">"Højre: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_active_no_battery_level" msgid="4155462233006205630">"Aktiv"</string>
@@ -111,6 +118,8 @@
     <string name="bluetooth_hearing_aid_right_active" msgid="2244728507170385397">"Aktiveret (kun højre)"</string>
     <string name="bluetooth_hearing_aid_left_and_right_active" msgid="4294571497939983181">"Aktiveret (venstre og højre)"</string>
     <string name="bluetooth_hearing_device_ambient_error" msgid="6035857289108813878">"Omgivelserne kunne ikke opdateres"</string>
+    <string name="bluetooth_hearing_aids_presets_error" msgid="4523942574698610976">"Forindstillingen kunne ikke opdateres"</string>
+    <string name="hearing_device_spinner_item_selected" msgid="3884049360428514878">"Valgt"</string>
     <string name="bluetooth_active_media_only_battery_level" msgid="7772517511061834073">"Aktiveret (kun for medier). <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> batteri."</string>
     <string name="bluetooth_active_media_only_battery_level_untethered" msgid="7444753133664620926">"Aktiveret (kun for medier), V: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, H: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batteri."</string>
     <string name="bluetooth_guest_battery_level" msgid="2820003593899467676">"Gæsteenhed. <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> batteri."</string>
@@ -142,7 +151,7 @@
     <string name="bluetooth_profile_pbap_summary" msgid="402819589201138227">"Oplysningerne bruges til opkaldsmeddelelser m.m."</string>
     <string name="bluetooth_profile_pan_nap" msgid="7871974753822470050">"Deling af internetforbindelse"</string>
     <string name="bluetooth_profile_map" msgid="8907204701162107271">"Sms-beskeder"</string>
-    <string name="bluetooth_profile_sap" msgid="8304170950447934386">"Adgang til SIM-kort"</string>
+    <string name="bluetooth_profile_sap" msgid="8304170950447934386">"SIM-kortadgang"</string>
     <string name="bluetooth_profile_a2dp_high_quality" msgid="4739440941324792775">"HD-lyd: <xliff:g id="CODEC_NAME">%1$s</xliff:g>"</string>
     <string name="bluetooth_profile_a2dp_high_quality_unknown_codec" msgid="2477639096903834374">"HD-lyd"</string>
     <string name="bluetooth_profile_hearing_aid" msgid="2607867572569689732">"Høreapparater"</string>
@@ -160,7 +169,7 @@
     <string name="bluetooth_pan_nap_profile_summary_connected" msgid="3744773111299503493">"Deler lokal internetforbindelse med enhed"</string>
     <string name="bluetooth_pan_profile_summary_use_for" msgid="7422039765025340313">"Brug til internetadgang"</string>
     <string name="bluetooth_map_profile_summary_use_for" msgid="4453622103977592583">"Brug til kort"</string>
-    <string name="bluetooth_sap_profile_summary_use_for" msgid="6204902866176714046">"Brug til SIM-adgang"</string>
+    <string name="bluetooth_sap_profile_summary_use_for" msgid="6204902866176714046">"Brug til SIM-kortadgang"</string>
     <string name="bluetooth_a2dp_profile_summary_use_for" msgid="7324694226276491807">"Brug til medielyd"</string>
     <string name="bluetooth_headset_profile_summary_use_for" msgid="808970643123744170">"Brug til telefonlyd"</string>
     <string name="bluetooth_opp_profile_summary_use_for" msgid="461981154387015457">"Brug til filoverførsel"</string>
@@ -340,7 +349,7 @@
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"Når denne tilstand er aktiveret, skifter enhedens MAC-adresse muligvis, hver gang den opretter forbindelse til et netværk, hvor MAC-randomisering er aktiveret."</string>
     <string name="wifi_metered_label" msgid="8737187690304098638">"Forbrugsafregnet"</string>
     <string name="wifi_unmetered_label" msgid="6174142840934095093">"Ikke forbrugsafregnet"</string>
-    <string name="select_logd_size_title" msgid="1604578195914595173">"Størrelser for Logger-buffer"</string>
+    <string name="select_logd_size_title" msgid="4393502933789367691">"Logger-bufferstørrelse"</string>
     <string name="select_logd_size_dialog_title" msgid="2105401994681013578">"Vælg Logger-størrelser pr. logbuffer"</string>
     <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"Vil du rydde det permanente lager for logger?"</string>
     <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"Når vi ikke længere overvåger via den permanente logger, er vi nødt til at slette de logdata, der er gemt på din enhed."</string>

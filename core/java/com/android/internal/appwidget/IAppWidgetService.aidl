@@ -31,7 +31,7 @@ import android.widget.RemoteViews;
 import android.app.IApplicationThread;
 import android.app.IServiceConnection;
 
-/** {@hide} */
+/** @hide */
 interface IAppWidgetService {
 
     //
@@ -89,6 +89,8 @@ interface IAppWidgetService {
             in ComponentName providerComponent, in int profileId, in int widgetCategory);
     void removeWidgetPreview(in ComponentName providerComponent, in int widgetCategories);
     oneway void reportWidgetEvents(in String callingPackage, in AppWidgetEvent[] events);
+    ParceledListSlice queryAppWidgetEvents(in String callingPackage, in long beginTime,
+            in long endTime);
 
     // For legacy list migration
     boolean isFirstConfigActivityPending(in String callingPackage, in int appWidgetId);

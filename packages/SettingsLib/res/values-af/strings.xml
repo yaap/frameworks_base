@@ -87,6 +87,8 @@
     <string name="bluetooth_connecting" msgid="5871702668260192755">"Verbind tans …"</string>
     <string name="bluetooth_connected" msgid="8065345572198502293">"Gekoppel<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_pairing" msgid="4269046942588193600">"Verbind tans…"</string>
+    <string name="bluetooth_pairing_failure" msgid="6914444518793157913">"Kan nie saambind nie"</string>
+    <string name="bluetooth_connection_failure" msgid="384203214661155324">"Kan nie verbind nie"</string>
     <string name="bluetooth_connected_no_headset" msgid="2224101138659967604">"Gekoppel (geen foon nie)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_a2dp" msgid="8566874395813947092">"Gekoppel (geen media nie)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_headset_no_a2dp" msgid="2893204819854215433">"Gekoppel (geen foon of media nie)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
@@ -103,6 +105,11 @@
     <string name="bluetooth_battery_level_untethered" msgid="1616774716076301755">"L: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, R: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> battery."</string>
     <string name="bluetooth_battery_level_untethered_left" msgid="5725764679536058365">"Links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> battery"</string>
     <string name="bluetooth_battery_level_untethered_right" msgid="8377995536997790142">"Regs: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> battery"</string>
+    <string name="bluetooth_battery_level_untethered_case" msgid="6783758530890124772">"Houer: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> batterykrag"</string>
+    <string name="bluetooth_battery_level_untethered_left_case" msgid="7676759299091682229">"Links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Houer: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batterykrag"</string>
+    <string name="bluetooth_battery_level_untethered_right_case" msgid="1299184574560442389">"Regs: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Houer: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batterykrag"</string>
+    <string name="bluetooth_battery_level_untethered_left_right" msgid="6953449613092012043">"Links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Regs: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> batterykrag"</string>
+    <string name="bluetooth_battery_level_untethered_left_case_right" msgid="5434524614259536880">"L: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, C: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>, R: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_2">%3$s</xliff:g> batterykrag"</string>
     <string name="tv_bluetooth_battery_level_untethered_left" msgid="337629670583744410">"Links <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_right" msgid="8610019317279155595">"Regs <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_active_no_battery_level" msgid="4155462233006205630">"Aktief"</string>
@@ -111,6 +118,8 @@
     <string name="bluetooth_hearing_aid_right_active" msgid="2244728507170385397">"Aktief (net regs)"</string>
     <string name="bluetooth_hearing_aid_left_and_right_active" msgid="4294571497939983181">"Aktief (links en regs)"</string>
     <string name="bluetooth_hearing_device_ambient_error" msgid="6035857289108813878">"Kon nie omgewing opdateer nie"</string>
+    <string name="bluetooth_hearing_aids_presets_error" msgid="4523942574698610976">"Kon nie voorafstelling opdateer nie"</string>
+    <string name="hearing_device_spinner_item_selected" msgid="3884049360428514878">"Gekies"</string>
     <string name="bluetooth_active_media_only_battery_level" msgid="7772517511061834073">"Aktief (net media). <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> battery."</string>
     <string name="bluetooth_active_media_only_battery_level_untethered" msgid="7444753133664620926">"Aktiewe (net media). L: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, R: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> battery"</string>
     <string name="bluetooth_guest_battery_level" msgid="2820003593899467676">"Gastetoestel. <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> battery."</string>
@@ -277,7 +286,7 @@
     <string name="adb_wireless_connection_failed_title" msgid="664211177427438438">"Kon nie koppel nie"</string>
     <string name="adb_wireless_connection_failed_message" msgid="9213896700171602073">"Maak seker dat <xliff:g id="DEVICE_NAME">%1$s</xliff:g> aan die regte netwerk gekoppel is"</string>
     <string name="adb_pairing_device_dialog_title" msgid="7141739231018530210">"Bind met toestel saam"</string>
-    <string name="adb_pairing_device_dialog_pairing_code_label" msgid="3639239786669722731">"Wi‑Fi-saambindkode"</string>
+    <string name="adb_pairing_device_dialog_pairing_code_label" msgid="3639239786669722731">"Wi‑fi-saambindkode"</string>
     <string name="adb_pairing_device_dialog_failed_title" msgid="3426758947882091735">"Kon nie saambind nie"</string>
     <string name="adb_pairing_device_dialog_failed_msg" msgid="6611097519661997148">"Maak seker dat die toestel aan dieselfde netwerk gekoppel is."</string>
     <string name="adb_wireless_qrcode_summary" msgid="8051414549011801917">"Bind toestel oor Wi-Fi saam deur \'n QR-kode te skandeer"</string>
@@ -285,7 +294,7 @@
     <string name="adb_qrcode_pairing_device_failed_msg" msgid="6936292092592914132">"Kon nie die toestel saambind nie. Óf die QR-kode is verkeerd, óf die toestel is nie aan dieselfde netwerk gekoppel nie."</string>
     <string name="adb_wireless_ip_addr_preference_title" msgid="8335132107715311730">"IP-adres en -poort"</string>
     <string name="adb_wireless_qrcode_pairing_title" msgid="1906409667944674707">"Skandeer QR-kode"</string>
-    <string name="adb_wireless_qrcode_pairing_description" msgid="6014121407143607851">"Bind toestel oor Wi-Fi saam deur \'n QR-kode te skandeer"</string>
+    <string name="adb_wireless_qrcode_pairing_description" msgid="6014121407143607851">"Bind toestel oor wi-fi saam deur ’n QR-kode te skandeer"</string>
     <string name="adb_wireless_no_network_msg" msgid="2365795244718494658">"Koppel asseblief aan \'n Wi-Fi-netwerk"</string>
     <string name="keywords_adb_wireless" msgid="6507505581882171240">"adb, debug, dev"</string>
     <string name="bugreport_in_power" msgid="8664089072534638709">"Kortpad na foutverslag"</string>
@@ -301,9 +310,9 @@
     <string name="mock_location_app" msgid="6269380172542248304">"Kies skynliggingapp"</string>
     <string name="mock_location_app_not_set" msgid="6972032787262831155">"Geen skynliggingapp gestel nie"</string>
     <string name="mock_location_app_set" msgid="4706722469342913843">"Skynliggingapp: <xliff:g id="APP_NAME">%1$s</xliff:g>"</string>
-    <string name="debug_networking_category" msgid="6829757985772659599">"Inligtingruiling"</string>
+    <string name="debug_networking_category" msgid="6829757985772659599">"Netwerke"</string>
     <string name="wifi_display_certification" msgid="1805579519992520381">"Draadlose skermsertifisering"</string>
-    <string name="wifi_verbose_logging" msgid="1785910450009679371">"Aktiveer Wi-Fi-woordryke aanmelding"</string>
+    <string name="wifi_verbose_logging" msgid="1785910450009679371">"Aktiveer gedetailleerde aanmelding vir wi-fi"</string>
     <string name="wifi_scan_throttling" msgid="2985624788509913617">"Regulering van Wi-fi-opsporing"</string>
     <string name="wifi_non_persistent_mac_randomization" msgid="7482769677894247316">"Nie-aanhoudende MAC-verewekansiging vir wi-fi"</string>
     <string name="mobile_data_always_on" msgid="8275958101875563572">"Mobiele data is altyd aktief"</string>
@@ -340,11 +349,11 @@
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"Wanneer hierdie modus geaktiveer is, kan hierdie toestel se MAC-adres verander elke keer wanneer dit aan \'n netwerk koppel waarvoor MAC-verewekansiging geaktiveer is."</string>
     <string name="wifi_metered_label" msgid="8737187690304098638">"Beperk"</string>
     <string name="wifi_unmetered_label" msgid="6174142840934095093">"Onbeperk"</string>
-    <string name="select_logd_size_title" msgid="1604578195914595173">"Logskepperbuffer se groottes"</string>
+    <string name="select_logd_size_title" msgid="4393502933789367691">"Loglêer se buffergrootte"</string>
     <string name="select_logd_size_dialog_title" msgid="2105401994681013578">"Kies logskeppergroottes per logbuffer"</string>
-    <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"Maak logskrywer se aanhoudende berging skoon?"</string>
-    <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"Wanneer ons nie meer monitering met die aanhoudende logskrywer uitvoer nie, word ons vereis om die logskrywerdata wat op jou toestel is, uit te vee."</string>
-    <string name="select_logpersist_title" msgid="447071974007104196">"Berg logskrywerdata aanhoudend op toestel"</string>
+    <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"Maak logskepper se aanhoudende berging skoon?"</string>
+    <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"Wanneer ons nie meer monitering met die aanhoudende logskepper uitvoer nie, word ons vereis om die logskepperdata wat op jou toestel is, uit te vee."</string>
+    <string name="select_logpersist_title" msgid="447071974007104196">"Berg logskepperdata aanhoudend op toestel"</string>
     <string name="select_logpersist_dialog_title" msgid="7745193591195485594">"Kies loglêerbuffers om aanhoudend op toestel te stoor"</string>
     <string name="select_usb_configuration_title" msgid="6339801314922294586">"Kies USB-opstelling"</string>
     <string name="select_usb_configuration_dialog_title" msgid="3579567144722589237">"Kies USB-opstelling"</string>
@@ -492,7 +501,7 @@
     <string name="daltonizer_mode_protanomaly" msgid="7805583306666608440">"Protanomalie (rooi-groen)"</string>
     <string name="daltonizer_mode_tritanomaly" msgid="7135266249220732267">"Tritanomalie (blou-geel)"</string>
     <string name="accessibility_display_daltonizer_preference_title" msgid="1810693571332381974">"Kleurregstelling"</string>
-    <string name="accessibility_display_daltonizer_preference_subtitle" msgid="1522101114585266455">"Kleurregstelling kan nuttig wees wanneer jy die volgende wil doen:&lt;br/&gt; &lt;ol&gt; &lt;li&gt;&amp;nbsp;Om kleure meer akkuraat te sien&lt;/li&gt; &lt;li&gt;&amp;nbsp;Om kleure te verwyder om jou te help fokus&lt;/li&gt; &lt;/ol&gt;"</string>
+    <string name="accessibility_display_daltonizer_preference_subtitle" msgid="1522101114585266455">"Kleurregstelling kan nuttig wees wanneer jy:&lt;br/&gt; &lt;ol&gt; &lt;li&gt;&amp;nbsp;Kleure meer akkuraat wil sien&lt;/li&gt; &lt;li&gt;&amp;nbsp;Kleure wil verwyder om jou te help fokus&lt;/li&gt; &lt;/ol&gt;"</string>
     <string name="daltonizer_type_overridden" msgid="4509604753672535721">"Geneutraliseer deur <xliff:g id="TITLE">%1$s</xliff:g>"</string>
     <string name="power_remaining_settings_home_page" msgid="4885165789445462557">"<xliff:g id="PERCENTAGE">%1$s</xliff:g> – <xliff:g id="TIME_STRING">%2$s</xliff:g>"</string>
     <string name="power_charging_on_hold_settings_home_page" msgid="7690464049464805856">"<xliff:g id="LEVEL">%1$s</xliff:g> – Laaiproses is onderbreek om battery te beskerm"</string>

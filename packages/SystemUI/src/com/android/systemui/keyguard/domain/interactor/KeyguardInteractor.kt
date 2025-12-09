@@ -47,11 +47,12 @@ import com.android.systemui.log.table.logDiffsForTable
 import com.android.systemui.res.R
 import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
+import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.shade.data.repository.ShadeRepository
 import com.android.systemui.util.kotlin.sample
-import com.android.systemui.wallpapers.data.repository.WallpaperFocalAreaRepository
+import com.android.systemui.wallpapers.domain.interactor.WallpaperFocalAreaInteractor
 import javax.inject.Inject
 import javax.inject.Provider
 import kotlinx.coroutines.CoroutineScope
@@ -88,7 +89,7 @@ class KeyguardInteractor
 constructor(
     private val repository: KeyguardRepository,
     bouncerRepository: KeyguardBouncerRepository,
-    private val wallpaperFocalAreaRepository: WallpaperFocalAreaRepository,
+    private val wallpaperFocalAreaInteractor: WallpaperFocalAreaInteractor,
     @ShadeDisplayAware configurationInteractor: ConfigurationInteractor,
     shadeRepository: ShadeRepository,
     private val keyguardTransitionInteractor: KeyguardTransitionInteractor,
@@ -112,7 +113,7 @@ constructor(
                 keyguardTransitionInteractor.isInTransition(
                     edge = Edge.create(from = LOCKSCREEN, to = AOD)
                 ),
-                shadeRepository.isShadeLayoutWide,
+                shadeRepository.legacyUseSplitShade,
                 configurationInteractor.dimensionPixelSize(R.dimen.keyguard_split_shade_top_margin),
             ) { bounds, isTransitioningToAod, useSplitShade, keyguardSplitShadeTopMargin ->
                 if (isTransitioningToAod) {
@@ -224,7 +225,7 @@ constructor(
             }
             .stateIn(
                 scope = applicationScope,
-                started = SharingStarted.WhileSubscribed(),
+                started = SharingStarted.Eagerly,
                 initialValue = false,
             )
 
@@ -275,8 +276,26 @@ constructor(
     /** Is the ambient indication area visible? */
     val ambientIndicationVisible: Flow<Boolean> = repository.ambientIndicationVisible.asStateFlow()
 
-    /** Whether the primary bouncer is showing or not. */
-    @JvmField val primaryBouncerShowing: StateFlow<Boolean> = bouncerRepository.primaryBouncerShow
+    /** Whether the primary bouncer is showing or about to show soon. */
+    @JvmField
+    val primaryBouncerShowing: StateFlow<Boolean> =
+        if (SceneContainerFlag.isEnabled) {
+                sceneInteractorProvider.get().transitionState.map {
+                    it.isIdle(Overlays.Bouncer) || it.isTransitioning(to = Overlays.Bouncer)
+                }
+            } else {
+                combine(
+                    bouncerRepository.primaryBouncerShow,
+                    bouncerRepository.primaryBouncerShowingSoon,
+                ) { showing, showingSoon ->
+                    showing || showingSoon
+                }
+            }
+            .stateIn(
+                scope = applicationScope,
+                started = SharingStarted.WhileSubscribed(),
+                initialValue = false,
+            )
 
     /** Whether the alternate bouncer is showing or not. */
     val alternateBouncerShowing: StateFlow<Boolean> = bouncerRepository.alternateBouncerVisible
@@ -370,6 +389,7 @@ constructor(
                 val currentKeyguardState = keyguardTransitionInteractor.currentKeyguardState.value
                 val isKeyguardDismissible = isKeyguardDismissible.value
 
+                if (shadeRepository.qsExpansion.value > 0f) return@transform
                 if (
                     statusBarState.value == StatusBarState.KEYGUARD &&
                         isKeyguardDismissible &&
@@ -393,6 +413,8 @@ constructor(
         configurationInteractor
             .dimensionPixelSize(R.dimen.keyguard_translate_distance_on_swipe_up)
             .flatMapLatest { translationDistance ->
+                // TODO: b/441274212 - Update this to use the correct signals when SceneContainer is
+                //  turned on.
                 combineTransform(
                     shadeRepository.legacyShadeExpansion.onStart { emit(0f) },
                     keyguardTransitionInteractor.transitionValue(GONE).onStart { emit(0f) },
@@ -449,6 +471,10 @@ constructor(
      * encryption after reboot.
      */
     val isEncryptedOrLockdown: Flow<Boolean> = repository.isEncryptedOrLockdown
+
+    /** Whether to enable "Sign out" button on keyguard's status bar */
+    val isSignOutButtonOnStatusBarEnabled: Boolean
+        get() = repository.isSignOutButtonOnStatusBarEnabledInConfig
 
     fun dozeTransitionTo(vararg states: DozeStateModel): Flow<DozeTransitionModel> {
         return dozeTransitionModel.filter { states.contains(it.to) }
@@ -536,7 +562,7 @@ constructor(
     }
 
     fun setShortcutAbsoluteTop(top: Float) {
-        wallpaperFocalAreaRepository.setShortcutAbsoluteTop(top)
+        wallpaperFocalAreaInteractor.setShortcutTop(top)
     }
 
     fun setIsKeyguardGoingAway(isGoingAway: Boolean) {
@@ -544,7 +570,7 @@ constructor(
     }
 
     fun setNotificationStackAbsoluteBottom(bottom: Float) {
-        wallpaperFocalAreaRepository.setNotificationStackAbsoluteBottom(bottom)
+        wallpaperFocalAreaInteractor.setNotificationStackAbsoluteBottom(bottom)
     }
 
     fun notifyWatchDisconnected() {

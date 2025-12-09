@@ -17,10 +17,10 @@
 package com.android.systemui.statusbar.notification.stack.ui.viewmodel
 
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.compose.animation.scene.ContentKey
 import com.android.compose.animation.scene.ObservableTransitionState
-import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.dump.DumpManager
 import com.android.systemui.flags.FeatureFlagsClassic
 import com.android.systemui.flags.Flags
@@ -42,10 +42,10 @@ import com.android.systemui.statusbar.notification.stack.shared.model.ShadeScrim
 import com.android.systemui.statusbar.notification.stack.shared.model.ShadeScrollState
 import com.android.systemui.util.kotlin.ActivatableFlowDumper
 import com.android.systemui.util.kotlin.ActivatableFlowDumperImpl
+import com.android.systemui.wallpapers.domain.interactor.WallpaperFocalAreaInteractor
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import java.util.function.Consumer
-import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -60,13 +60,13 @@ class NotificationsPlaceholderViewModel
 constructor(
     private val interactor: NotificationStackAppearanceInteractor,
     private val sceneInteractor: SceneInteractor,
-    private val shadeInteractor: ShadeInteractor,
+    shadeInteractor: ShadeInteractor,
     shadeModeInteractor: ShadeModeInteractor,
     private val headsUpNotificationInteractor: HeadsUpNotificationInteractor,
     remoteInputInteractor: RemoteInputInteractor,
     featureFlags: FeatureFlagsClassic,
     dumpManager: DumpManager,
-    @Main private val mainContext: CoroutineContext,
+    private val wallpaperFocalAreaInteractor: WallpaperFocalAreaInteractor,
 ) :
     ExclusiveActivatable(),
     ActivatableFlowDumper by ActivatableFlowDumperImpl(
@@ -92,6 +92,13 @@ constructor(
             source = shadeModeInteractor.shadeMode.map { getQuickSettingsShadeContentKey(it) },
         )
 
+    /** @see NotificationStackAppearanceInteractor.notificationStackHorizontalAlignment */
+    val horizontalAlignment: Alignment.Horizontal by
+        hydrator.hydratedStateOf(
+            traceName = "horizontalAlignment",
+            source = interactor.notificationStackHorizontalAlignment,
+        )
+
     /**
      * Whether the current gesture is expanding a Notification. If true, the NSSL has already
      * consumed the swipe amount to increase the Notification's size.
@@ -112,12 +119,6 @@ constructor(
     override suspend fun onActivated(): Nothing {
         coroutineScope {
             launch { hydrator.activate() }
-
-            launch(context = mainContext) {
-                shadeInteractor.isAnyExpanded
-                    .filter { it }
-                    .collect { headsUpNotificationInteractor.unpinAll(true) }
-            }
 
             launch {
                 sceneInteractor.transitionState
@@ -195,6 +196,10 @@ constructor(
     /** Set a consumer for accessibility events to be handled by the placeholder. */
     fun setAccessibilityScrollEventConsumer(consumer: Consumer<AccessibilityScrollEvent>?) {
         interactor.setAccessibilityScrollEventConsumer(consumer)
+    }
+
+    fun onLockScreenStackBottomChanged(bottom: Float) {
+        wallpaperFocalAreaInteractor.setNotificationStackAbsoluteBottom(bottom)
     }
 
     private fun getNotificationsShadeContentKey(shadeMode: ShadeMode): ContentKey {

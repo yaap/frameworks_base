@@ -17,11 +17,11 @@
 package android.service.dreams;
 
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.service.dreams.Flags.allowDreamAttachFailure;
 import static android.service.dreams.Flags.dreamHandlesBeingObscured;
 import static android.service.dreams.Flags.dreamHandlesConfirmKeys;
 import static android.service.dreams.Flags.startAndStopDozingInBackground;
 
-import android.Manifest;
 import android.annotation.FlaggedApi;
 import android.annotation.IdRes;
 import android.annotation.IntDef;
@@ -46,6 +46,7 @@ import android.content.res.TypedArray;
 import android.graphics.drawable.Drawable;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.IRemoteCallback;
@@ -251,7 +252,15 @@ public class DreamService extends Service implements Window.Callback {
     static final String EXTRA_DREAM_OVERLAY_COMPONENT =
             "android.service.dream.DreamService.dream_overlay_component";
 
+    /**
+     * The name of the extra that indicates an error during attach.
+     * @hide
+     */
+    public static final String BUNDLE_KEY_ATTACH_ERROR =
+            "android.service.dream.DreamService.attach_error";
+
     private final IDreamManager mDreamManager;
+    private final Handler mHandler;
     private IBinder mDreamToken;
     private Window mWindow;
     private Activity mActivity;
@@ -267,8 +276,7 @@ public class DreamService extends Service implements Window.Callback {
     private boolean mPreviewMode;
     private int mDozeScreenState = Display.STATE_UNKNOWN;
     private @Display.StateReason int mDozeScreenStateReason = Display.STATE_REASON_UNKNOWN;
-    private int mDozeScreenBrightness = PowerManager.BRIGHTNESS_DEFAULT;
-    private float mDozeScreenBrightnessFloat = PowerManager.BRIGHTNESS_INVALID_FLOAT;
+    private float mDozeScreenBrightness = PowerManager.BRIGHTNESS_INVALID_FLOAT;
 
     // This variable being true means dozing device expecting normal(non-doze) brightness.
     private boolean mUseNormalBrightnessForDoze;
@@ -320,89 +328,19 @@ public class DreamService extends Service implements Window.Callback {
         /** Returns the associated service info */
         ServiceInfo getServiceInfo();
 
+        /** Returns the handler to be used for any posted operation */
+        Handler getHandler();
+
         /** Returns the package manager */
         PackageManager getPackageManager();
 
         /** Returns the resources */
         Resources getResources();
-
-        /** Returns a specialized handler to ensure Runnables are not suspended */
-        WakefulHandler getWakefulHandler();
-    }
-
-    /**
-     * {@link WakefulHandler} is an interface for defining an object that helps post work without
-     * being interrupted by doze state.
-     *
-     * @hide
-     */
-    public interface WakefulHandler {
-        /** Posts a {@link Runnable} to be ran on the underlying {@link Handler}. */
-        void postIfNeeded(Runnable r);
-
-        /**
-         * Returns the underlying {@link Handler}. Should only be used for passing the handler into
-         * a function and not for directly calling methods on it.
-         */
-        Handler getHandler();
-    }
-
-    /**
-     * {@link WakefulHandlerImpl} ensures work on a handler is not suspended by wrapping the call
-     * with a partial wakelock. Note that this is only needed for Doze DreamService implementations.
-     * In this case, the component should have wake lock permissions. When such permission is not
-     * available, this class behaves like an ordinary handler.
-     */
-    private static final class WakefulHandlerImpl implements WakefulHandler {
-        private static final String SERVICE_HANDLER_WAKE_LOCK_TAG = "dream:service:handler";
-        private Context mContext;
-        private Handler mHandler;
-
-        private PowerManager.WakeLock mWakeLock;
-
-        private PowerManager.WakeLock getWakeLock() {
-            if (mContext.checkCallingOrSelfPermission(Manifest.permission.WAKE_LOCK)
-                    != PERMISSION_GRANTED) {
-                return null;
-            }
-
-            final PowerManager powerManager = mContext.getSystemService(PowerManager.class);
-
-            if (powerManager == null) {
-                return null;
-            }
-
-            return powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
-                    SERVICE_HANDLER_WAKE_LOCK_TAG);
-        }
-
-        WakefulHandlerImpl(Context context) {
-            mContext = context;
-            mHandler = new Handler(Looper.getMainLooper());
-            mWakeLock = getWakeLock();
-        }
-
-        @Override
-        public void postIfNeeded(Runnable r) {
-            if (mHandler.getLooper().isCurrentThread()) {
-                r.run();
-            } else if (mWakeLock != null) {
-                mHandler.post(mWakeLock.wrap(r));
-            } else {
-                mHandler.post(r);
-            }
-        }
-
-        @Override
-        public Handler getHandler() {
-            return mHandler;
-        }
     }
 
     private static final class DefaultInjector implements Injector {
         private Context mContext;
         private Class<?> mClassName;
-        private WakefulHandler mWakefulHandler;
 
         public void init(Context context) {
             mContext = context;
@@ -446,14 +384,8 @@ public class DreamService extends Service implements Window.Callback {
         }
 
         @Override
-        public WakefulHandler getWakefulHandler() {
-            synchronized (this) {
-                if (mWakefulHandler == null) {
-                    mWakefulHandler = new WakefulHandlerImpl(mContext);
-                }
-            }
-
-            return mWakefulHandler;
+        public Handler getHandler() {
+            return new Handler(Looper.getMainLooper());
         }
 
         @Override
@@ -482,6 +414,7 @@ public class DreamService extends Service implements Window.Callback {
         mInjector = injector;
         mInjector.init(this);
         mDreamManager = mInjector.getDreamManager();
+        mHandler = mInjector.getHandler();
     }
 
     /**
@@ -994,45 +927,31 @@ public class DreamService extends Service implements Window.Callback {
         }
     }
 
-    private void postIfNeeded(Runnable runnable) {
-        // The handler is based on the populated context is not ready at construction time.
-        // therefore we fetch on demand.
-        mInjector.getWakefulHandler().postIfNeeded(runnable);
-    }
+    private synchronized void updateDoze() {
+        final IBinder dreamToken = mDreamToken;
 
-    /**
-     * Updates doze state. Note that this must be called on the mHandler.
-     */
-    private void updateDoze() {
-        postIfNeeded(() -> {
-            if (mDreamToken == null) {
-                Slog.w(mTag, "Updating doze without a dream token.");
-                return;
-            }
+        if (dreamToken == null) {
+            Slog.w(mTag, "Updating doze without a dream token.");
+            return;
+        }
 
-            if (mDozing) {
-                try {
-                    final IBinder dreamToken = mDreamToken;
-
-                    Slog.v(mTag, "UpdateDoze mDozeScreenState=" + mDozeScreenState
-                            + " mDozeScreenBrightness=" + mDozeScreenBrightness
-                            + " mDozeScreenBrightnessFloat=" + mDozeScreenBrightnessFloat);
-                    if (startAndStopDozingInBackground()) {
-                        mDreamManager.startDozingOneway(
-                                dreamToken, mDozeScreenState, mDozeScreenStateReason,
-                                mDozeScreenBrightnessFloat, mDozeScreenBrightness,
-                                mUseNormalBrightnessForDoze);
-                    } else {
-                        mDreamManager.startDozing(
-                                dreamToken, mDozeScreenState, mDozeScreenStateReason,
-                                mDozeScreenBrightnessFloat, mDozeScreenBrightness,
-                                mUseNormalBrightnessForDoze);
-                    }
-                } catch (RemoteException ex) {
-                    // system server died
+        if (mDozing) {
+            try {
+                Slog.v(mTag, "UpdateDoze mDozeScreenState=" + mDozeScreenState
+                        + " mDozeScreenBrightness=" + mDozeScreenBrightness);
+                if (startAndStopDozingInBackground()) {
+                    mDreamManager.startDozingOneway(
+                            dreamToken, mDozeScreenState, mDozeScreenStateReason,
+                            mDozeScreenBrightness, mUseNormalBrightnessForDoze);
+                } else {
+                    mDreamManager.startDozing(
+                            dreamToken, mDozeScreenState, mDozeScreenStateReason,
+                            mDozeScreenBrightness, mUseNormalBrightnessForDoze);
                 }
+            } catch (RemoteException ex) {
+                // system server died
             }
-        });
+        }
     }
 
     /**
@@ -1048,20 +967,18 @@ public class DreamService extends Service implements Window.Callback {
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P, trackingBug = 115609023)
     public void stopDozing() {
-        postIfNeeded(() -> {
-            if (mDozing) {
-                mDozing = false;
-                try {
-                    final IBinder dreamToken = mDreamToken;
+        if (mDozing) {
+            mDozing = false;
+            try {
+                final IBinder dreamToken = mDreamToken;
 
-                    if (dreamToken != null) {
-                        mDreamManager.stopDozing(dreamToken);
-                    }
-                } catch (RemoteException ex) {
-                    // system server died
+                if (dreamToken != null) {
+                    mDreamManager.stopDozing(dreamToken);
                 }
+            } catch (RemoteException ex) {
+                // system server died
             }
-        });
+        }
     }
 
     /**
@@ -1182,56 +1099,16 @@ public class DreamService extends Service implements Window.Callback {
      * Gets the screen brightness to use while dozing.
      *
      * @return The screen brightness while dozing as a value between
-     * {@link PowerManager#BRIGHTNESS_OFF + 1} (1) and {@link PowerManager#BRIGHTNESS_ON} (255),
-     * or {@link PowerManager#BRIGHTNESS_DEFAULT} (-1) to ask the system to apply
+     * {@link PowerManager#BRIGHTNESS_MIN} (0) and {@link PowerManager#BRIGHTNESS_MAX} (1),
+     * or {@link PowerManager#BRIGHTNESS_INVALID_FLOAT} (Float.NaN) to ask the system to apply
      * its default policy based on the screen state.
      *
      * @see #setDozeScreenBrightness
      * @hide For use by system UI components only.
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
-    public int getDozeScreenBrightness() {
+    public float getDozeScreenBrightness() {
         return mDozeScreenBrightness;
-    }
-
-    /**
-     * Sets the screen brightness to use while dozing.
-     * <p>
-     * The value of this property determines the power state of the primary display
-     * once {@link #startDozing} has been called. The default value is
-     * {@link PowerManager#BRIGHTNESS_DEFAULT} which lets the system decide.
-     * The dream may set a different brightness before starting to doze and may adjust
-     * the brightness while dozing to conserve power and achieve various effects.
-     * </p><p>
-     * Note that dream may specify any brightness in the full 1-255 range, including
-     * values that are less than the minimum value for manual screen brightness
-     * adjustments by the user. In particular, the value may be set to
-     * {@link PowerManager.BRIGHTNESS_OFF} which may turn off the backlight entirely while still
-     * leaving the screen on although this behavior is device dependent and not guaranteed.
-     * </p><p>
-     * The available range of display brightness values and their behavior while dozing is
-     * hardware dependent and may vary across devices. The dream may therefore
-     * need to be modified or configured to correctly support the hardware.
-     * </p>
-     *
-     * @param brightness The screen brightness while dozing as a value between
-     * {@link PowerManager#BRIGHTNESS_OFF + 1} (1) and {@link PowerManager#BRIGHTNESS_ON} (255),
-     * or {@link PowerManager#BRIGHTNESS_DEFAULT} (-1) to ask the system to apply
-     * its default policy based on the screen state.
-     *
-     * @hide For use by system UI components only.
-     */
-    @UnsupportedAppUsage
-    public void setDozeScreenBrightness(int brightness) {
-        if (brightness != PowerManager.BRIGHTNESS_DEFAULT) {
-            brightness = clampAbsoluteBrightness(brightness);
-        }
-        synchronized (this) {
-            if (mDozeScreenBrightness != brightness) {
-                mDozeScreenBrightness = brightness;
-                updateDoze();
-            }
-        }
     }
 
     /**
@@ -1283,14 +1160,14 @@ public class DreamService extends Service implements Window.Callback {
      * @hide For use by system UI components only.
      */
     @UnsupportedAppUsage
-    public void setDozeScreenBrightnessFloat(float brightness) {
+    public void setDozeScreenBrightness(float brightness) {
         if (!Float.isNaN(brightness)) {
-            brightness = clampAbsoluteBrightnessFloat(brightness);
+            brightness = clampAbsoluteBrightness(brightness);
         }
 
         synchronized (this) {
-            if (!BrightnessSynchronizer.floatEquals(mDozeScreenBrightnessFloat, brightness)) {
-                mDozeScreenBrightnessFloat = brightness;
+            if (!BrightnessSynchronizer.floatEquals(mDozeScreenBrightness, brightness)) {
+                mDozeScreenBrightness = brightness;
                 updateDoze();
             }
         }
@@ -1312,7 +1189,7 @@ public class DreamService extends Service implements Window.Callback {
                 final long token = Binder.clearCallingIdentity();
                 try {
                     // Simply finish dream when exit is requested.
-                    postIfNeeded(() -> finishInternal());
+                    mHandler.post(() -> finish());
                 } finally {
                     Binder.restoreCallingIdentity(token);
                 }
@@ -1418,10 +1295,6 @@ public class DreamService extends Service implements Window.Callback {
      * </p>
      */
     public final void finish() {
-        postIfNeeded(this::finishInternal);
-    }
-
-    private void finishInternal() {
         // If there is an active overlay connection, signal that the dream is ending before
         // continuing. Note that the overlay cannot rely on the unbound state, since another dream
         // might have bound to it in the meantime.
@@ -1481,7 +1354,7 @@ public class DreamService extends Service implements Window.Callback {
      * </p>
      */
     public final void wakeUp() {
-        postIfNeeded(()-> wakeUp(false));
+        wakeUp(false);
     }
 
     /**
@@ -1707,6 +1580,15 @@ public class DreamService extends Service implements Window.Callback {
         if (mDreamToken != null) {
             Slog.e(mTag, "attach() called when dream with token=" + mDreamToken
                     + " already attached");
+            if (allowDreamAttachFailure()) {
+                try {
+                    final Bundle result = new Bundle();
+                    result.putBoolean(BUNDLE_KEY_ATTACH_ERROR, true);
+                    started.sendResult(result);
+                } catch (RemoteException e) {
+                    // The dream controller is dead, so there is nothing to do.
+                }
+            }
             return;
         }
         if (mFinished || mWaking) {
@@ -1934,8 +1816,7 @@ public class DreamService extends Service implements Window.Callback {
 
     @Override
     protected void dump(final FileDescriptor fd, PrintWriter pw, final String[] args) {
-        DumpUtils.dumpAsync(mInjector.getWakefulHandler().getHandler(),
-                (pw1, prefix) -> dumpOnHandler(fd, pw1, args), pw, "", 1000);
+        DumpUtils.dumpAsync(mHandler, (pw1, prefix) -> dumpOnHandler(fd, pw1, args), pw, "", 1000);
     }
 
     /** @hide */
@@ -1961,11 +1842,7 @@ public class DreamService extends Service implements Window.Callback {
         }
     }
 
-    private static int clampAbsoluteBrightness(int value) {
-        return MathUtils.constrain(value, PowerManager.BRIGHTNESS_OFF, PowerManager.BRIGHTNESS_ON);
-    }
-
-    private static float clampAbsoluteBrightnessFloat(float value) {
+    private static float clampAbsoluteBrightness(float value) {
         if (value == PowerManager.BRIGHTNESS_OFF_FLOAT) {
             return value;
         }
@@ -1991,7 +1868,7 @@ public class DreamService extends Service implements Window.Callback {
                 return;
             }
 
-            service.postIfNeeded(() -> consumer.accept(service));
+            service.mHandler.post(() -> consumer.accept(service));
         }
 
         @Override

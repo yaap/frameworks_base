@@ -25,8 +25,8 @@ import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertNotNull;
 import static junit.framework.Assert.assertNull;
 import static junit.framework.Assert.assertTrue;
-import static junit.framework.Assert.fail;
 
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -85,6 +85,7 @@ import java.io.File;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.io.Writer;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -97,7 +98,8 @@ public class BackupManagerServiceTest {
     private static final int NON_SYSTEM_USER = UserHandle.USER_SYSTEM + 1;
     private static final int NON_SYSTEM_NON_DEFAULT_USER = NON_SYSTEM_USER + 1;
 
-    @Rule public final Expect expect = Expect.create();
+    @Rule
+    public final Expect expect = Expect.create();
 
     @Rule
     public final SetFlagsRule flags =
@@ -331,6 +333,21 @@ public class BackupManagerServiceTest {
     }
 
     @Test
+    public void setBackupServiceActive_forPrivateProfile_throws() {
+        createBackupManagerServiceAndUnlockSystemUser();
+        simulateUserUnlocked(NON_SYSTEM_USER);
+        when(mUserInfoMock.isPrivateProfile()).thenReturn(true);
+        BackupManagerServiceTestable.sCallingUid = Process.SYSTEM_UID;
+
+        assertThat(
+                assertThrows(
+                        SecurityException.class,
+                        () -> mService.setBackupServiceActive(NON_SYSTEM_USER,
+                                true))).hasMessageThat().isEqualTo(
+                "Changing private profile backup activation not allowed");
+    }
+
+    @Test
     public void setBackupServiceActive_forSystemUserAndCallerSystemUid_createsService() {
         createBackupManagerServiceAndUnlockSystemUser();
         BackupManagerServiceTestable.sCallingUid = Process.SYSTEM_UID;
@@ -355,11 +372,13 @@ public class BackupManagerServiceTest {
         createBackupManagerServiceAndUnlockSystemUser();
         BackupManagerServiceTestable.sCallingUid = Process.FIRST_APPLICATION_UID;
 
-        try {
-            mService.setBackupServiceActive(UserHandle.USER_SYSTEM, true);
-            fail();
-        } catch (SecurityException expected) {
-        }
+
+        assertThat(
+                assertThrows(
+                        SecurityException.class,
+                        () -> mService.setBackupServiceActive(UserHandle.USER_SYSTEM,
+                                true))).hasMessageThat().isEqualTo(
+                "No permission to configure backup activity");
     }
 
     @Test
@@ -392,11 +411,12 @@ public class BackupManagerServiceTest {
         when(mUserInfoMock.isManagedProfile()).thenReturn(true);
         BackupManagerServiceTestable.sCallingUid = Process.FIRST_APPLICATION_UID;
 
-        try {
-            mService.setBackupServiceActive(NON_SYSTEM_USER, true);
-            fail();
-        } catch (SecurityException expected) {
-        }
+        assertThat(
+                assertThrows(
+                        SecurityException.class,
+                        () -> mService.setBackupServiceActive(NON_SYSTEM_USER,
+                                true))).hasMessageThat().isEqualTo(
+                "No permission to configure backup activity");
     }
 
     @Test
@@ -406,11 +426,10 @@ public class BackupManagerServiceTest {
                 .when(mContextMock)
                 .enforceCallingOrSelfPermission(eq(Manifest.permission.BACKUP), anyString());
 
-        try {
-            mService.setBackupServiceActive(NON_SYSTEM_USER, true);
-            fail();
-        } catch (SecurityException expected) {
-        }
+        assertThrows(
+                SecurityException.class,
+                () -> mService.setBackupServiceActive(NON_SYSTEM_USER,
+                        true));
     }
 
     @Test
@@ -421,11 +440,10 @@ public class BackupManagerServiceTest {
                 .enforceCallingOrSelfPermission(
                         eq(Manifest.permission.INTERACT_ACROSS_USERS_FULL), anyString());
 
-        try {
-            mService.setBackupServiceActive(NON_SYSTEM_USER, true);
-            fail();
-        } catch (SecurityException expected) {
-        }
+        assertThrows(
+                SecurityException.class,
+                () -> mService.setBackupServiceActive(NON_SYSTEM_USER,
+                        true));
     }
 
     @Test
@@ -559,6 +577,31 @@ public class BackupManagerServiceTest {
     }
 
     @Test
+    public void setBackupServiceActive_globallyToggled_restartsUserService() {
+        // Start with a non-system user's backup service running.
+        createBackupManagerServiceAndUnlockSystemUser();
+        mService.setBackupServiceActive(NON_SYSTEM_USER, true);
+        simulateUserUnlocked(NON_SYSTEM_USER);
+        assertTrue(mService.isUserReadyForBackup(NON_SYSTEM_USER));
+
+        // Mock the running users for the global toggle.
+        UserInfo systemUserInfo = new UserInfo(UserHandle.USER_SYSTEM, "system", 0);
+        UserInfo nonSystemUserInfo = new UserInfo(NON_SYSTEM_USER, "non-system", 0);
+        when(mUserManagerInternalMock.getUsers(true))
+                .thenReturn(Arrays.asList(systemUserInfo, nonSystemUserInfo));
+        when(mUserManagerInternalMock.isUserRunning(UserHandle.USER_SYSTEM)).thenReturn(true);
+        when(mUserManagerInternalMock.isUserRunning(NON_SYSTEM_USER)).thenReturn(true);
+
+        // Disable backup globally. This should stop the user's service.
+        mService.setBackupServiceActive(UserHandle.USER_SYSTEM, false);
+        assertFalse(mService.isUserReadyForBackup(NON_SYSTEM_USER));
+
+        // Re-enable backup globally. This should restart the user's service.
+        mService.setBackupServiceActive(UserHandle.USER_SYSTEM, true);
+        assertTrue(mService.isUserReadyForBackup(NON_SYSTEM_USER));
+    }
+
+    @Test
     public void setBackupServiceActive_forOneNonSystemUser_doesNotActivateForAllNonSystemUsers() {
         createBackupManagerServiceAndUnlockSystemUser();
         int otherUser = NON_SYSTEM_USER + 1;
@@ -642,7 +685,8 @@ public class BackupManagerServiceTest {
         ISelectBackupTransportCallback.Stub listener =
                 new ISelectBackupTransportCallback.Stub() {
                     @Override
-                    public void onSuccess(String transportName) {}
+                    public void onSuccess(String transportName) {
+                    }
 
                     @Override
                     public void onFailure(int reason) throws RemoteException {
@@ -680,7 +724,7 @@ public class BackupManagerServiceTest {
                 .enforceCallingOrSelfPermission(
                         eq(Manifest.permission.INTERACT_ACROSS_USERS_FULL), anyString());
 
-        String[] args = new String[] {"--user", Integer.toString(NON_SYSTEM_USER)};
+        String[] args = new String[]{"--user", Integer.toString(NON_SYSTEM_USER)};
         Assert.assertThrows(
                 SecurityException.class,
                 () -> mService.dump(mFileDescriptorStub, mFakePrintWriter, args));
@@ -695,7 +739,7 @@ public class BackupManagerServiceTest {
         mService.setBackupServiceActive(NON_SYSTEM_USER, true);
         simulateUserUnlocked(NON_SYSTEM_USER);
 
-        String[] args = new String[] {"--user", Integer.toString(UserHandle.USER_SYSTEM)};
+        String[] args = new String[]{"--user", Integer.toString(UserHandle.USER_SYSTEM)};
         mService.dump(mFileDescriptorStub, mFakePrintWriter, args);
 
         verify(mSystemUserBackupManagerService).dump(any(), any(), any());
@@ -708,7 +752,7 @@ public class BackupManagerServiceTest {
         mService.setBackupServiceActive(NON_SYSTEM_USER, true);
         simulateUserUnlocked(NON_SYSTEM_USER);
 
-        String[] args = new String[] {"users"};
+        String[] args = new String[]{"users"};
         mService.dump(mFileDescriptorStub, mFakePrintWriter, args);
 
         // Check that dump() invocations are not called on user's Backup service,
@@ -756,7 +800,7 @@ public class BackupManagerServiceTest {
         setMockMainUserAndCreateBackupManagerService(NON_SYSTEM_USER);
         simulateUserUnlocked(NON_SYSTEM_USER);
         when(mUserManagerInternalMock.getProfileIds(UserHandle.getCallingUserId(), false))
-                .thenReturn(new int[] {UserHandle.USER_SYSTEM, NON_SYSTEM_USER});
+                .thenReturn(new int[]{UserHandle.USER_SYSTEM, NON_SYSTEM_USER});
         when(mNonSystemUserBackupManagerService.getAncestralSerialNumber()).thenReturn(11L);
 
         UserHandle user = mService.getUserForAncestralSerialNumber(11L);

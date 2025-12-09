@@ -64,6 +64,7 @@ import com.android.systemui.res.R;
 import com.android.systemui.scene.shared.flag.SceneContainerFlag;
 import com.android.systemui.scene.ui.view.WindowRootViewComponent;
 import com.android.systemui.settings.UserTracker;
+import com.android.systemui.shade.display.EnsureWallpaperDrawnOnDisplaySwitch;
 import com.android.systemui.shade.domain.interactor.ShadeInteractor;
 import com.android.systemui.shade.ui.viewmodel.NotificationShadeWindowModel;
 import com.android.systemui.statusbar.NotificationShadeWindowController;
@@ -77,7 +78,6 @@ import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.ConfigurationController.ConfigurationListener;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
 import com.android.systemui.topui.TopUiController;
-import com.android.systemui.topui.TopUiControllerRefactor;
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor;
 
 import dagger.Lazy;
@@ -106,7 +106,7 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
 
     private final Context mContext;
     private final WindowRootViewComponent.Factory mWindowRootViewComponentFactory;
-    private WindowManager mWindowManager;
+    private final WindowManager mWindowManager;
     private final IActivityManager mActivityManager;
     private final DozeParameters mDozeParameters;
     private final KeyguardStateController mKeyguardStateController;
@@ -126,7 +126,6 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     private ViewGroup mWindowRootView;
     private LayoutParams mLp;
     private boolean mHasTopUi;
-    private boolean mHasTopUiChanged;
     private float mScreenBrightnessDoze;
     private final NotificationShadeWindowState mCurrentState = new NotificationShadeWindowState();
     private OtherwisedCollapsedListener mListener;
@@ -258,9 +257,8 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
             mCurrentState.shadeOrQsExpanded = isExpanded;
             apply(mCurrentState);
 
-            final IBinder token;
-            if (com.android.window.flags.Flags.schedulingForNotificationShade()
-                    && (token = mWindowRootView.getWindowToken()) != null) {
+            final IBinder token = mWindowRootView.getWindowToken();
+            if (token != null) {
                 mBackgroundExecutor.execute(() -> {
                     try {
                         WindowManagerGlobal.getWindowManagerService()
@@ -299,19 +297,18 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
         // Attach the notification shade window as the parent window to add attached dialogs.
         // It's essential because attached dialogs are sub-windows, which require a parent window
         // to attach.
-        if (windowContext != null && isWindowContextOverrideTypeEnabled()) {
+        if (windowContext != null) {
             windowContext.attachWindow(mWindowRootView);
         }
         mWindowManager.addView(mWindowRootView, mLp);
-        // After the notification shade window is attached, override the window type to attached
-        // dialog, which makes the following added windows will be attached dialogs regardless of
-        // the window type of attached dialogs.
+        // After the notification shade window is attached, set the fallback window type to attached
+        // dialog, which override the window type if the attached window is not a sub-window.
         // Note that while the window type override won't affect the attached windows, such as
         // the shade window we just attached, we should make sure the override window type is reset
         // (via windowContext.setWindowTypeOverride(INVALID_WINDOW_TYPE)) before adding the shade
         // window to prevent its type is overridden unexpectedly.
-        if (windowContext != null && isWindowContextOverrideTypeEnabled()) {
-            windowContext.setWindowTypeOverride(TYPE_APPLICATION_ATTACHED_DIALOG);
+        if (windowContext != null) {
+            windowContext.setFallbackWindowType(TYPE_APPLICATION_ATTACHED_DIALOG);
         }
 
 
@@ -335,10 +332,6 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     @Nullable
     private static WindowContext asWindowContext(@NonNull Context context) {
         return (context instanceof WindowContext windowContext) ? windowContext : null;
-    }
-
-    private static boolean isWindowContextOverrideTypeEnabled() {
-        return com.android.window.flags.Flags.enableWindowContextOverrideType();
     }
 
     @Override
@@ -389,12 +382,7 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     }
 
     @Override
-    public void setDozeScreenBrightness(int value) {
-        mScreenBrightnessDoze = value / 255f;
-    }
-
-    @Override
-    public void setDozeScreenBrightnessFloat(float value) {
+    public void setDozeScreenBrightness(float value) {
         mScreenBrightnessDoze = value;
     }
 
@@ -414,7 +402,9 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
         final boolean keyguardOrAod = state.keyguardShowing
                 || (state.dozing && mDozeParameters.getAlwaysOn());
         if ((keyguardOrAod && !state.mediaBackdropShowing && !state.lightRevealScrimOpaque)
-                || mKeyguardViewMediator.isAnimatingBetweenKeyguardAndSurfaceBehind()) {
+                || mKeyguardViewMediator.isAnimatingBetweenKeyguardAndSurfaceBehind()
+                || (EnsureWallpaperDrawnOnDisplaySwitch.isEnabled() && state.pendingDisplayChange)
+        ) {
             // Show the wallpaper if we're on keyguard/AOD and the wallpaper is not occluded by a
             // solid backdrop. Also, show it if we are currently animating between the
             // keyguard and the surface behind the keyguard - we want to use the wallpaper as a
@@ -476,9 +466,9 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     }
 
     private void adjustScreenOrientation(NotificationShadeWindowState state) {
-        boolean dreamShowingAndRotationAllowed = dreamsV2() ? mContext.getResources().getBoolean(
+        boolean dreamShowingAndRotationAllowed = dreamsV2() && mContext.getResources().getBoolean(
                 com.android.internal.R.bool.config_alwaysAllowDreamRotation)
-                && state.isOnOrGoingToDream : false;
+                && state.isOnOrGoingToDream;
         if (state.bouncerShowing || (state.isKeyguardShowingAndNotOccluded()
                 && !dreamShowingAndRotationAllowed) || state.dozing) {
             if (mKeyguardStateController.isKeyguardScreenRotationAllowed()) {
@@ -546,14 +536,15 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     }
 
     private boolean isExpanded(NotificationShadeWindowState state) {
+        boolean areScrimsNotTransparent = state.scrimsVisibility != ScrimController.TRANSPARENT;
+        boolean shouldScrimVisibilityKeepWindowVisible = !Flags.scrimFix();
         boolean isExpanded = !state.forceWindowCollapsed && (state.isKeyguardShowingAndNotOccluded()
                 || state.panelVisible || state.keyguardFadingAway || state.bouncerShowing
                 || state.headsUpNotificationShowing
-                || state.scrimsVisibility != ScrimController.TRANSPARENT)
+                || (shouldScrimVisibilityKeepWindowVisible && areScrimsNotTransparent))
                 || state.launchingActivityFromNotification;
 
-        if (Flags.instantHideShade() && state.launchingActivityFromNotification
-                && state.forceHideAfterActivityLaunch) {
+        if (state.launchingActivityFromNotification && state.forceHideAfterActivityLaunch) {
             // If we're at the end of a launch animation, we must force the window to be hidden to
             // avoid flickers caused by async state updates.
             isExpanded = false;
@@ -647,17 +638,6 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
         applyNotTouchable(state);
         applyStatusBarColorSpaceAgnosticFlag(state);
         applyWindowLayoutParams();
-
-        if (!TopUiControllerRefactor.isEnabled() && mHasTopUi != mHasTopUiChanged) {
-            mHasTopUi = mHasTopUiChanged;
-            mBackgroundExecutor.execute(() -> {
-                try {
-                    mActivityManager.setHasTopUi(mHasTopUiChanged);
-                } catch (RemoteException e) {
-                    Log.e(TAG, "Failed to call setHasTopUi", e);
-                }
-            });
-        }
         notifyStateChangedCallbacks();
     }
 
@@ -677,6 +657,7 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
                 state.qsExpanded,
                 state.headsUpNotificationShowing,
                 state.lightRevealScrimOpaque,
+                state.pendingDisplayChange,
                 state.isSwitchingUsers,
                 state.forceWindowCollapsed,
                 state.forceDozeBrightness,
@@ -684,7 +665,6 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
                 state.launchingActivityFromNotification,
                 state.mediaBackdropShowing,
                 state.windowNotTouchable,
-                state.componentsForcingTopUi,
                 state.forceOpenTokens,
                 state.statusBarState,
                 state.remoteInputActive,
@@ -733,15 +713,10 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     }
 
     private void applyHasTopUi(NotificationShadeWindowState state) {
-        if (TopUiControllerRefactor.isEnabled()) {
-            boolean shouldHaveTopUi = isExpanded(state) || state.isSwitchingUsers;
-            if (mHasTopUi != shouldHaveTopUi) {
-                mHasTopUi = shouldHaveTopUi;
-                mTopUiController.setRequestTopUi(mHasTopUi, TAG);
-            }
-        } else {
-            mHasTopUiChanged = !state.componentsForcingTopUi.isEmpty() || isExpanded(state)
-                    || state.isSwitchingUsers;
+        boolean shouldHaveTopUi = isExpanded(state) || state.isSwitchingUsers;
+        if (mHasTopUi != shouldHaveTopUi) {
+            mHasTopUi = shouldHaveTopUi;
+            mTopUiController.setRequestTopUi(mHasTopUi, TAG);
         }
     }
 
@@ -829,8 +804,7 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
 
     @Override
     public void setKeyguardFadingAway(boolean keyguardFadingAway) {
-        if (Flags.instantHideShade()
-                && keyguardFadingAway && mCurrentState.forceHideAfterActivityLaunch) {
+        if (keyguardFadingAway && mCurrentState.forceHideAfterActivityLaunch) {
             // If we're force-hiding the window at the end of an activity launch, we should not mark
             // it as fading away, or we might end up in the wrong state once the force-hiding flag
             // is reset.
@@ -922,6 +896,16 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
             return;
         }
         mCurrentState.lightRevealScrimOpaque = opaque;
+        apply(mCurrentState);
+    }
+
+    @Override
+    public void setPendingDisplayChange(boolean pendingDisplayChange) {
+        if (EnsureWallpaperDrawnOnDisplaySwitch.isUnexpectedlyInLegacyMode()
+                || mCurrentState.pendingDisplayChange == pendingDisplayChange) {
+            return;
+        }
+        mCurrentState.pendingDisplayChange = pendingDisplayChange;
         apply(mCurrentState);
     }
 
@@ -1105,22 +1089,6 @@ public class NotificationShadeWindowControllerImpl implements NotificationShadeW
     @Override
     public void setKeyguardGoingAway(boolean goingAway) {
         mCurrentState.keyguardGoingAway = goingAway;
-        apply(mCurrentState);
-    }
-
-    /**
-     * SystemUI may need top-ui to avoid jank when performing animations.  After the
-     * animation is performed, the component should remove itself from the list of features that
-     * are forcing SystemUI to be top-ui.
-     */
-    @Override
-    public void setRequestTopUi(boolean requestTopUi, String componentTag) {
-        TopUiControllerRefactor.assertInLegacyMode();
-        if (requestTopUi) {
-            mCurrentState.componentsForcingTopUi.add(componentTag);
-        } else {
-            mCurrentState.componentsForcingTopUi.remove(componentTag);
-        }
         apply(mCurrentState);
     }
 

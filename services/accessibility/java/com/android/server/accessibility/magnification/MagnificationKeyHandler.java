@@ -19,8 +19,8 @@ package com.android.server.accessibility.magnification;
 import android.view.Display;
 import android.view.KeyEvent;
 
+import com.android.server.accessibility.AccessibilityManagerService;
 import com.android.server.accessibility.BaseEventStreamTransformation;
-import com.android.server.accessibility.Flags;
 
 /*
  * A class that listens to key presses used to control magnification.
@@ -86,19 +86,16 @@ public class MagnificationKeyHandler extends BaseEventStreamTransformation {
     }
 
     protected final MagnificationKeyHandler.Callback mCallback;
+    private final AccessibilityManagerService mAms;
     private boolean mIsKeyboardInteracting = false;
 
-    public MagnificationKeyHandler(Callback callback) {
+    public MagnificationKeyHandler(Callback callback, AccessibilityManagerService ams) {
         mCallback = callback;
+        mAms = ams;
     }
 
     @Override
     public void onKeyEvent(KeyEvent event, int policyFlags) {
-        if (!Flags.enableMagnificationKeyboardControl()) {
-            // Send to the rest of the handlers.
-            super.onKeyEvent(event, policyFlags);
-            return;
-        }
         // Look for exactly Alt and Meta.
         boolean modifiersPressed = event.isAltPressed() && event.isMetaPressed()
                 && !event.isCtrlPressed() && !event.isShiftPressed();
@@ -166,6 +163,10 @@ public class MagnificationKeyHandler extends BaseEventStreamTransformation {
         // In that case, use the default display.
         if (event.getDisplayId() != Display.INVALID_DISPLAY) {
             return event.getDisplayId();
+        }
+        int topFocusedDisplayId = mAms.getTopFocusedDisplayId();
+        if (topFocusedDisplayId != Display.INVALID_DISPLAY) {
+            return topFocusedDisplayId;
         }
         return Display.DEFAULT_DISPLAY;
     }

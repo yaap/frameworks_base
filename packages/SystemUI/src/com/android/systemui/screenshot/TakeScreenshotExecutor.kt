@@ -16,6 +16,7 @@
 
 package com.android.systemui.screenshot
 
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Trace
 import android.util.Log
@@ -83,6 +84,7 @@ class TakeScreenshotExecutorImpl
 constructor(
     private val interactiveScreenshotHandlerFactory: InteractiveScreenshotHandler.Factory,
     private val displayRepository: DisplayRepository,
+    private val displayManager: DisplayManager,
     @Application private val mainScope: CoroutineScope,
     private val screenshotRequestProcessor: ScreenshotRequestProcessor,
     private val uiEventLogger: UiEventLogger,
@@ -209,25 +211,27 @@ constructor(
     // Return the single display to be screenshot based upon the request.
     private suspend fun getDisplayToScreenshot(screenshotRequest: ScreenshotRequest): Display {
         return when (screenshotRequest.source) {
-            ScreenshotSource.SCREENSHOT_OVERVIEW ->
-                // Show on the display where overview was shown if available.
-                displayRepository.getDisplay(screenshotRequest.displayId)
-                    ?: displayRepository.getDisplay(Display.DEFAULT_DISPLAY)
+            // For screenshots from Overview or the Screen Capture UI, use the display where the UI
+            // was shown, if available.
+            ScreenshotSource.SCREENSHOT_OVERVIEW,
+            ScreenshotSource.SCREENSHOT_SCREEN_CAPTURE_UI ->
+                displayManager.getDisplay(screenshotRequest.displayId)
+                    ?: displayManager.getDisplay(Display.DEFAULT_DISPLAY)
                     ?: error("Can't find default display")
 
             // Key chord and vendor gesture occur on the device itself, so screenshot the device's
             // display
             ScreenshotSource.SCREENSHOT_KEY_CHORD,
             ScreenshotSource.SCREENSHOT_VENDOR_GESTURE ->
-                displayRepository.getDisplay(Display.DEFAULT_DISPLAY)
+                displayManager.getDisplay(Display.DEFAULT_DISPLAY)
                     ?: error("Can't find default display")
 
             // All other invocations use the focused display
             else -> {
                 val focusedDisplay = getFocusedDisplay()
                 Log.i(TAG, "Focused display ID is $focusedDisplay")
-                displayRepository.getDisplay(focusedDisplay)
-                    ?: displayRepository.getDisplay(Display.DEFAULT_DISPLAY)
+                displayManager.getDisplay(focusedDisplay)
+                    ?: displayManager.getDisplay(Display.DEFAULT_DISPLAY)
                     ?: error("Can't find default display")
             }
         }

@@ -143,7 +143,7 @@ constructor(
                 if (ShadeWindowGoesAround.isEnabled) {
                     // ShadeDisplaysRepository is the source of truth for display id when
                     // ShadeWindowGoesAround.isEnabled
-                    shadeDisplaysRepositoryLazy.get().displayId.value
+                    shadeDisplaysRepositoryLazy.get().pendingDisplayId.value
                 } else {
                     context.displayId
                 }

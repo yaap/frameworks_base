@@ -36,19 +36,19 @@
     <string name="wifi_security_none" msgid="7392696451280611452">"Keine"</string>
     <string name="wifi_security_wep" msgid="1413627788581122366">"WEP"</string>
     <string name="wifi_security_wpa" msgid="1072450904799930636">"WPA-Personal"</string>
-    <string name="wifi_security_wpa2" msgid="4038267581230425543">"WPA2-Personal"</string>
-    <string name="wifi_security_wpa_wpa2" msgid="946853615482465986">"WPA/WPA2-Personal"</string>
-    <string name="wifi_security_eap" msgid="6179633834446852269">"WPA/WPA2/WPA3-Enterprise"</string>
+    <string name="wifi_security_wpa2" msgid="4038267581230425543">"WPA2 Personal"</string>
+    <string name="wifi_security_wpa_wpa2" msgid="946853615482465986">"WPA/WPA2 Personal"</string>
+    <string name="wifi_security_eap" msgid="6179633834446852269">"WPA/WPA2/WPA3 Enterprise"</string>
     <string name="wifi_security_eap_wpa" msgid="6189023812330549957">"WPA-Enterprise"</string>
-    <string name="wifi_security_eap_wpa_wpa2" msgid="1089879674896108216">"WPA/WPA2-Enterprise"</string>
-    <string name="wifi_security_eap_wpa2_wpa3" msgid="2952912020876252266">"WPA2/WPA3-Enterprise"</string>
-    <string name="wifi_security_eap_wpa3" msgid="7961135182909018796">"WPA3-Enterprise"</string>
+    <string name="wifi_security_eap_wpa_wpa2" msgid="1089879674896108216">"WPA/WPA2 Enterprise"</string>
+    <string name="wifi_security_eap_wpa2_wpa3" msgid="2952912020876252266">"WPA2/WPA3 Enterprise"</string>
+    <string name="wifi_security_eap_wpa3" msgid="7961135182909018796">"WPA3 Enterprise"</string>
     <string name="wifi_security_passpoint" msgid="2209078477216565387">"Passpoint"</string>
     <string name="wifi_security_sae" msgid="3644520541721422843">"WPA3-Personal"</string>
     <string name="wifi_security_psk_sae" msgid="8135104122179904684">"WPA2/WPA3-Personal"</string>
     <string name="wifi_security_none_owe" msgid="5241745828327404101">"Keinse/Enhanced Open"</string>
     <string name="wifi_security_owe" msgid="3343421403561657809">"Enhanced Open"</string>
-    <string name="wifi_security_eap_suiteb" msgid="415842785991698142">"WPA3-Enterprise 192 Bit"</string>
+    <string name="wifi_security_eap_suiteb" msgid="415842785991698142">"WPA3 Enterprise 192 Bit"</string>
     <string name="wifi_remembered" msgid="3266709779723179188">"Gespeichert"</string>
     <string name="wifi_disconnected" msgid="7054450256284661757">"Nicht verbunden"</string>
     <string name="wifi_disabled_generic" msgid="2651916945380294607">"Deaktiviert"</string>
@@ -87,6 +87,8 @@
     <string name="bluetooth_connecting" msgid="5871702668260192755">"Verbindung wird hergestellt..."</string>
     <string name="bluetooth_connected" msgid="8065345572198502293">"Mit <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> verbunden"</string>
     <string name="bluetooth_pairing" msgid="4269046942588193600">"Wird gekoppelt…"</string>
+    <string name="bluetooth_pairing_failure" msgid="6914444518793157913">"Koppeln nicht möglich"</string>
+    <string name="bluetooth_connection_failure" msgid="384203214661155324">"Verbindung nicht möglich"</string>
     <string name="bluetooth_connected_no_headset" msgid="2224101138659967604">"Mit <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> verbunden (kein Telefon-Audio)"</string>
     <string name="bluetooth_connected_no_a2dp" msgid="8566874395813947092">"Mit <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> verbunden (kein Medien-Audio)"</string>
     <string name="bluetooth_connected_no_headset_no_a2dp" msgid="2893204819854215433">"Mit <xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g> verbunden (weder Telefon- noch Medien-Audio)"</string>
@@ -103,6 +105,11 @@
     <string name="bluetooth_battery_level_untethered" msgid="1616774716076301755">"Akku links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Akku rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>."</string>
     <string name="bluetooth_battery_level_untethered_left" msgid="5725764679536058365">"Akku links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_battery_level_untethered_right" msgid="8377995536997790142">"Akku rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_case" msgid="6783758530890124772">"Akkustand des Case: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_left_case" msgid="7676759299091682229">"Akkustand links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Case: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_right_case" msgid="1299184574560442389">"Akkustand rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Case: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_left_right" msgid="6953449613092012043">"Akkustand links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_left_case_right" msgid="5434524614259536880">"Akkustand links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Case: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>, rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_2">%3$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_left" msgid="337629670583744410">"Links – <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_right" msgid="8610019317279155595">"Rechts – <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_active_no_battery_level" msgid="4155462233006205630">"Aktiv"</string>
@@ -111,6 +118,8 @@
     <string name="bluetooth_hearing_aid_right_active" msgid="2244728507170385397">"Aktiv (nur rechts)"</string>
     <string name="bluetooth_hearing_aid_left_and_right_active" msgid="4294571497939983181">"Aktiv (links und rechts)"</string>
     <string name="bluetooth_hearing_device_ambient_error" msgid="6035857289108813878">"Status der Umgebungsgeräusche konnte nicht aktualisiert werden"</string>
+    <string name="bluetooth_hearing_aids_presets_error" msgid="4523942574698610976">"Voreinstellung konnte nicht aktualisiert werden"</string>
+    <string name="hearing_device_spinner_item_selected" msgid="3884049360428514878">"Ausgewählt"</string>
     <string name="bluetooth_active_media_only_battery_level" msgid="7772517511061834073">"Aktiv (nur Medien). Akku: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>."</string>
     <string name="bluetooth_active_media_only_battery_level_untethered" msgid="7444753133664620926">"Aktiv (nur Medien). Akku links: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Akku rechts: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>."</string>
     <string name="bluetooth_guest_battery_level" msgid="2820003593899467676">"Gastgerät. Akku: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>."</string>
@@ -303,7 +312,7 @@
     <string name="mock_location_app_set" msgid="4706722469342913843">"App für simulierte Standorte: <xliff:g id="APP_NAME">%1$s</xliff:g>"</string>
     <string name="debug_networking_category" msgid="6829757985772659599">"Netzwerke"</string>
     <string name="wifi_display_certification" msgid="1805579519992520381">"Zertifizierung für kabellose Übertragung"</string>
-    <string name="wifi_verbose_logging" msgid="1785910450009679371">"Ausführliche WLAN-Protokollierung aktivieren"</string>
+    <string name="wifi_verbose_logging" msgid="1785910450009679371">"Ausführliches WLAN-Logging aktivieren"</string>
     <string name="wifi_scan_throttling" msgid="2985624788509913617">"Drosselung der WLAN-Suche"</string>
     <string name="wifi_non_persistent_mac_randomization" msgid="7482769677894247316">"Nicht persistente, zufällige Generierung von MAC-Adressen für WLAN"</string>
     <string name="mobile_data_always_on" msgid="8275958101875563572">"Mobile Datennutzung immer aktiviert"</string>
@@ -340,7 +349,7 @@
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"Wenn dieser Modus aktiviert ist, kann sich die MAC-Adresse dieses Geräts bei jeder Verbindung mit einem Netzwerk ändern, bei dem die MAC-Adressen zufällig generiert werden."</string>
     <string name="wifi_metered_label" msgid="8737187690304098638">"Kostenpflichtig"</string>
     <string name="wifi_unmetered_label" msgid="6174142840934095093">"Ohne Datenlimit"</string>
-    <string name="select_logd_size_title" msgid="1604578195914595173">"Logger-Puffergrößen"</string>
+    <string name="select_logd_size_title" msgid="4393502933789367691">"Logger-Zwischenspeichergröße"</string>
     <string name="select_logd_size_dialog_title" msgid="2105401994681013578">"Größe pro Protokollpuffer wählen"</string>
     <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"Speicher der dauerhaften Protokollierung löschen?"</string>
     <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"Wenn keine Überwachung über eine dauerhafte Protokollierung mehr stattfindet, sind wir dazu verpflichtet, die Protokolldaten auf deinem Gerät zu löschen."</string>
@@ -362,7 +371,7 @@
     <string name="dev_settings_warning_message" msgid="37741686486073668">"Diese Einstellungen sind ausschließlich für Entwicklungszwecke gedacht. Sie können dein Gerät und die darauf installierten Apps beschädigen oder zu unerwünschtem Verhalten führen."</string>
     <string name="verify_apps_over_usb_title" msgid="6031809675604442636">"Über USB installierte Apps prüfen"</string>
     <string name="verify_apps_over_usb_summary" msgid="1317933737581167839">"Über ADB/ADT installierte Apps werden auf schädliches Verhalten geprüft"</string>
-    <string name="bluetooth_show_devices_without_names_summary" msgid="780964354377854507">"Bluetooth-Geräte werden ohne Namen und nur mit ihren MAC-Adressen angezeigt"</string>
+    <string name="bluetooth_show_devices_without_names_summary" msgid="780964354377854507">"Bluetooth-Geräte werden ohne Namen und nur mit ihrer MAC-Adresse angezeigt"</string>
     <string name="bluetooth_disable_absolute_volume_summary" msgid="2006309932135547681">"Deaktiviert die Funktion „Absolute Lautstärkeregelung“ für Bluetooth-Geräte, falls auf Remote-Geräten Probleme mit der Lautstärke auftreten, wie beispielsweise übermäßig laute Wiedergabe oder fehlende Steuerungsmöglichkeiten."</string>
     <string name="bluetooth_enable_gabeldorsche_summary" msgid="2054730331770712629">"Aktiviert das Bluetooth-Gabeldorsche-Funktionspaket."</string>
     <string name="enhanced_connectivity_summary" msgid="1576414159820676330">"Aktiviert die Funktion \"Verbesserte Konnektivität\"."</string>
@@ -423,7 +432,7 @@
     <string name="track_frame_time" msgid="522674651937771106">"HWUI-Rendering-Profil"</string>
     <string name="enable_gpu_debug_layers" msgid="4986675516188740397">"GPU-Debug-Ebenen zulassen"</string>
     <string name="enable_gpu_debug_layers_summary" msgid="4921521407377170481">"Debug-Apps das Laden von GPU-Debug-Ebenen erlauben"</string>
-    <string name="enable_verbose_vendor_logging" msgid="1196698788267682072">"Ausführliche Protokollierung aktivieren"</string>
+    <string name="enable_verbose_vendor_logging" msgid="1196698788267682072">"Ausführliches Vendor-Logging aktivieren"</string>
     <string name="enable_verbose_vendor_logging_summary" msgid="5426292185780393708">"Nimmt zusätzliche gerätespezifische Vendor-Logs in Fehlerberichte auf, die private Informationen enthalten, den Akkuverbrauch erhöhen und/oder zusätzlichen Speicher benötigen können."</string>
     <string name="enable_verbose_vendor_logging_checkbox" msgid="3864578373293835530">"Nach einem Tag deaktivieren"</string>
     <string name="verbose_vendor_logging_notification_title" msgid="6811217272559843592">"Ausführliches Vendor-Logging beendet"</string>

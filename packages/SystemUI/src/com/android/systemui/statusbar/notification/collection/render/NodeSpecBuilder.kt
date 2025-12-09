@@ -16,6 +16,7 @@
 
 package com.android.systemui.statusbar.notification.collection.render
 
+import android.app.Notification
 import com.android.app.tracing.traceSection
 import com.android.systemui.statusbar.notification.Bundles
 import com.android.systemui.statusbar.notification.NotificationSectionsFeatureManager
@@ -67,12 +68,7 @@ class NodeSpecBuilder(
             val sectionHeaders = mutableMapOf<NotifSection?, NodeController?>()
             val sectionCounts = mutableMapOf<NotifSection?, Int>()
             var seenBundle = false
-
-            // If needed, the AI summaries onboarding affordance should be added above all
-            // notifications.
-            if (summaryOnboardingAffordanceManager.addAffordanceToStack) {
-                root.children.add(NodeSpecImpl(root, summaryOnboardingAffordanceManager.controller))
-            }
+            var seenMessage = false
 
             for (entry in notifList) {
                 val section = entry.section!!
@@ -99,13 +95,20 @@ class NodeSpecBuilder(
                     }
                 }
 
+                // If needed, the AI summaries onboarding affordance should be added above the first
+                // message notification. (It should not appear if there are no messages.)
+                if (!seenMessage && isMessage(entry)) {
+                    seenMessage = true
+                    summaryOnboardingAffordanceManager.nodeController?.let { controller ->
+                        root.children.add(NodeSpecImpl(root, controller))
+                    }
+                }
+
                 // Include onboarding affordance for bundles above the first bundle, if needed.
                 if (!seenBundle && entry is BundleEntry) {
                     seenBundle = true
-                    if (bundleOnboardingAffordanceManager.addAffordanceToStack) {
-                        root.children.add(
-                            NodeSpecImpl(root, bundleOnboardingAffordanceManager.controller)
-                        )
+                    bundleOnboardingAffordanceManager.nodeController?.let { controller ->
+                        root.children.add(NodeSpecImpl(root, controller))
                     }
                 }
 
@@ -136,4 +139,11 @@ class NodeSpecBuilder(
                 }
             else -> throw RuntimeException("Unexpected entry: $entry")
         }
+
+    private fun isMessage(entry: PipelineEntry): Boolean {
+        return (entry as? NotificationEntry)
+            ?.sbn
+            ?.notification
+            ?.isStyle(Notification.MessagingStyle::class.java) ?: false
+    }
 }

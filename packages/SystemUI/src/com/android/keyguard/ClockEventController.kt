@@ -15,6 +15,7 @@
  */
 package com.android.keyguard
 
+import android.R
 import android.app.NotificationManager.zenModeFromInterruptionFilter
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -25,7 +26,6 @@ import android.icu.util.TimeZone as IcuTimeZone
 import android.os.Trace
 import android.provider.Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS
 import android.provider.Settings.Global.ZEN_MODE_OFF
-import android.util.Log
 import android.util.TypedValue
 import android.view.View
 import android.view.View.OnAttachStateChangeListener
@@ -43,27 +43,28 @@ import com.android.systemui.dagger.qualifiers.DisplaySpecific
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.flags.FeatureFlagsClassic
 import com.android.systemui.flags.Flags.REGION_SAMPLING
-import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
 import com.android.systemui.keyguard.shared.model.Edge
 import com.android.systemui.keyguard.shared.model.KeyguardState.AOD
 import com.android.systemui.keyguard.shared.model.KeyguardState.DOZING
 import com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN
 import com.android.systemui.keyguard.shared.model.TransitionState
+import com.android.systemui.keyguard.ui.viewmodel.DozingToLockscreenTransitionViewModel
 import com.android.systemui.lifecycle.repeatWhenAttached
 import com.android.systemui.log.core.Logger
-import com.android.systemui.plugins.clocks.AlarmData
-import com.android.systemui.plugins.clocks.ClockController
-import com.android.systemui.plugins.clocks.ClockEventListener
-import com.android.systemui.plugins.clocks.ClockFaceController
-import com.android.systemui.plugins.clocks.ClockFaceController.Companion.updateTheme
-import com.android.systemui.plugins.clocks.ClockMessageBuffers
-import com.android.systemui.plugins.clocks.ClockTickRate
-import com.android.systemui.plugins.clocks.TimeFormatKind
-import com.android.systemui.plugins.clocks.VRectF
-import com.android.systemui.plugins.clocks.WeatherData
-import com.android.systemui.plugins.clocks.ZenData
-import com.android.systemui.plugins.clocks.ZenData.ZenMode
+import com.android.systemui.plugins.keyguard.VPointF
+import com.android.systemui.plugins.keyguard.VRectF
+import com.android.systemui.plugins.keyguard.data.model.AlarmData
+import com.android.systemui.plugins.keyguard.data.model.WeatherData
+import com.android.systemui.plugins.keyguard.data.model.ZenData
+import com.android.systemui.plugins.keyguard.data.model.ZenData.ZenMode
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockEventListener
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFaceController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFaceController.Companion.updateTheme
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockMessageBuffers
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockTickRate
+import com.android.systemui.plugins.keyguard.ui.clocks.TimeFormatKind
 import com.android.systemui.res.R as SysuiR
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.settings.UserTracker
@@ -75,6 +76,7 @@ import com.android.systemui.statusbar.policy.ZenModeController
 import com.android.systemui.statusbar.policy.domain.interactor.ZenModeInteractor
 import com.android.systemui.util.annotations.DeprecatedSysuiVisibleForTesting
 import com.android.systemui.util.concurrency.DelayableExecutor
+import dagger.Lazy
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.Executor
@@ -94,7 +96,6 @@ import kotlinx.coroutines.flow.merge
 open class ClockEventController
 @Inject
 constructor(
-    private val keyguardInteractor: KeyguardInteractor,
     private val keyguardTransitionInteractor: KeyguardTransitionInteractor,
     private val broadcastDispatcher: BroadcastDispatcher,
     private val batteryController: BatteryController,
@@ -110,14 +111,10 @@ constructor(
     private val zenModeController: ZenModeController,
     private val zenModeInteractor: ZenModeInteractor,
     private val userTracker: UserTracker,
+    private val dozingToLockscreenViewModel: Lazy<DozingToLockscreenTransitionViewModel>,
 ) {
-    var loggers =
-        listOf(
-                clockBuffers.infraMessageBuffer,
-                clockBuffers.smallClockMessageBuffer,
-                clockBuffers.largeClockMessageBuffer,
-            )
-            .map { Logger(it, TAG) }
+    val logger = Logger(clockBuffers.infraMessageBuffer, TAG)
+    var isPreview: Boolean = false
 
     var clock: ClockController? = null
         get() = field
@@ -149,7 +146,7 @@ constructor(
             return
         }
         val clockStr = clock.toString()
-        loggers.forEach { it.d({ "New Clock: $str1" }) { str1 = clockStr } }
+        logger.i({ "New Clock: $str1" }) { str1 = clockStr }
 
         clock.eventListeners.attach(clockListener)
         clock.initialize(isDarkTheme(), dozeAmount.value, 0f)
@@ -185,9 +182,7 @@ constructor(
         updateTimeListeners()
 
         weatherData?.let {
-            if (WeatherData.DEBUG) {
-                Log.i(TAG, "Pushing cached weather data to new clock: $it")
-            }
+            logger.i({ "Pushing cached weather data to new clock: $str1" }) { str1 = "$it" }
             clock.events.onWeatherDataChanged(it)
         }
         zenData?.let { clock.events.onZenDataChanged(it) }
@@ -248,16 +243,18 @@ constructor(
     private var isCharging = false
     private var isKeyguardVisible = false
     private var isRegistered = false
-    private var disposableHandle: DisposableHandle? = null
     private val regionSamplingEnabled = featureFlags.isEnabled(REGION_SAMPLING)
     private var largeClockOnSecondaryDisplay = false
 
     val dozeAmount = MutableStateFlow(0f)
-    val onClockBoundsChanged = MutableStateFlow<VRectF>(VRectF.ZERO)
+    val smallClockBounds = MutableStateFlow<VRectF>(VRectF.ZERO)
+    val largeClockBounds = MutableStateFlow<VRectF>(VRectF.ZERO)
+    val smallClockMaxSize = MutableStateFlow<VPointF>(VPointF.ZERO)
+    val largeClockMaxSize = MutableStateFlow<VPointF>(VPointF.ZERO)
 
     private fun isDarkTheme(): Boolean {
         val isLightTheme = TypedValue()
-        context.theme.resolveAttribute(android.R.attr.isLightTheme, isLightTheme, true)
+        context.theme.resolveAttribute(R.attr.isLightTheme, isLightTheme, true)
         return isLightTheme.data == 0
     }
 
@@ -276,7 +273,7 @@ constructor(
         }
 
         clock?.run {
-            Log.i(TAG, "isThemeDark: $isDarkTheme")
+            logger.i({ "updateColors(isThemeDark = $bool1)" }) { bool1 = isDarkTheme }
             smallClock.updateTheme { it.copy(isDarkTheme = isDarkTheme) }
             largeClock.updateTheme { it.copy(isDarkTheme = isDarkTheme) }
         }
@@ -310,7 +307,7 @@ constructor(
     var smallTimeListener: TimeListener? = null
     var largeTimeListener: TimeListener? = null
     val shouldTimeListenerRun: Boolean
-        get() = isKeyguardVisible && dozeAmount.value < DOZE_TICKRATE_THRESHOLD
+        get() = !isPreview && isKeyguardVisible && dozeAmount.value < DOZE_TICKRATE_THRESHOLD
 
     private var weatherData: WeatherData? = null
     private var zenData: ZenData? = null
@@ -320,18 +317,24 @@ constructor(
         object : ClockEventListener {
             override fun onChangeComplete() {}
 
-            override fun onBoundsChanged(bounds: VRectF) {
-                onClockBoundsChanged.value = bounds
+            override fun onBoundsChanged(currentBounds: VRectF, isLargeClock: Boolean) {
+                (if (isLargeClock) largeClockBounds else smallClockBounds).value = currentBounds
+            }
+
+            override fun onMaxSizeChanged(maxSize: VPointF, isLargeClock: Boolean) {
+                (if (isLargeClock) largeClockMaxSize else smallClockMaxSize).value = maxSize
             }
         }
 
     private val configListener =
         object : ConfigurationController.ConfigurationListener {
             override fun onThemeChanged() {
+                logger.i("onThemeChanged")
                 updateColors()
             }
 
             override fun onDensityOrFontScaleChanged() {
+                logger.i("onDensityOrFontScaleChanged")
                 updateFontSizes()
             }
         }
@@ -339,7 +342,7 @@ constructor(
     private val batteryCallback =
         object : BatteryStateChangeCallback {
             override fun onBatteryLevelChanged(level: Int, pluggedIn: Boolean, charging: Boolean) {
-                if (isKeyguardVisible && !isCharging && charging) {
+                if (!isPreview && isKeyguardVisible && !isCharging && charging) {
                     clock?.run {
                         smallClock.animations.charge()
                         largeClock.animations.charge()
@@ -352,7 +355,10 @@ constructor(
     private val localeBroadcastReceiver =
         object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                clock?.run { events.onLocaleChanged(Locale.getDefault()) }
+                clock?.run {
+                    events.onLocaleChanged(Locale.getDefault())
+                    events.onTimeFormatChanged(getTimeFormatKind())
+                }
             }
         }
 
@@ -433,7 +439,10 @@ constructor(
     private fun handleZenMode(zen: Int) {
         val mode = ZenMode.fromInt(zen)
         if (mode == null) {
-            Log.e(TAG, "Failed to get zen mode from int: $zen")
+            logger.e({ "Failed to get zen mode from int: $str1 ($int1)" }) {
+                str1 = "$mode"
+                int1 = zen
+            }
             return
         }
 
@@ -448,11 +457,27 @@ constructor(
                 }
     }
 
-    fun registerListeners(parent: View) {
-        if (isRegistered) {
-            return
+    fun bind(parent: View): DisposableHandle {
+        logger.i({ "bind($str1)" }) { str1 = "$parent" }
+        return parent.repeatWhenAttached {
+            repeatOnLifecycle(Lifecycle.State.CREATED) {
+                listenForDnd(this)
+                listenForDozeAmountTransition(this)
+                listenForAnyStateToAodTransition(this)
+                listenForAnyStateToLockscreenTransition(this)
+                listenForAnyStateToDozingTransition(this)
+                if (com.android.systemui.Flags.newDozingKeyguardStates()) {
+                    listenForDozingToLockscreen(this)
+                }
+            }
         }
+    }
+
+    fun registerListeners() {
+        if (isRegistered) return
         isRegistered = true
+        logger.i("registerListeners(isPreview = $isPreview)")
+
         broadcastDispatcher.registerReceiver(
             localeBroadcastReceiver,
             IntentFilter(Intent.ACTION_LOCALE_CHANGED),
@@ -472,16 +497,6 @@ constructor(
                 }
             )
         }
-        disposableHandle =
-            parent.repeatWhenAttached {
-                repeatOnLifecycle(Lifecycle.State.CREATED) {
-                    listenForDnd(this)
-                    listenForDozeAmountTransition(this)
-                    listenForAnyStateToAodTransition(this)
-                    listenForAnyStateToLockscreenTransition(this)
-                    listenForAnyStateToDozingTransition(this)
-                }
-            }
         smallTimeListener?.update(shouldTimeListenerRun)
         largeTimeListener?.update(shouldTimeListenerRun)
 
@@ -492,12 +507,10 @@ constructor(
     }
 
     fun unregisterListeners() {
-        if (!isRegistered) {
-            return
-        }
+        if (!isRegistered) return
         isRegistered = false
+        logger.i("unregisterListeners(isPreview = $isPreview)")
 
-        disposableHandle?.dispose()
         broadcastDispatcher.unregisterReceiver(localeBroadcastReceiver)
         configurationController.removeCallback(configListener)
         batteryController.removeCallback(batteryCallback)
@@ -568,6 +581,7 @@ constructor(
     }
 
     fun handleFidgetTap(x: Float, y: Float) {
+        if (isPreview) return
         clock?.run {
             smallClock.animations.onFidgetTap(x, y)
             largeClock.animations.onFidgetTap(x, y)
@@ -575,6 +589,11 @@ constructor(
     }
 
     private fun handleDoze(doze: Float) {
+        if (isPreview) {
+            dozeAmount.value = doze
+            return
+        }
+
         clock?.run {
             Trace.beginSection("$TAG#smallClock.animations.doze")
             smallClock.animations.doze(doze)
@@ -629,8 +648,17 @@ constructor(
             keyguardTransitionInteractor
                 .transition(Edge.create(to = LOCKSCREEN))
                 .filter { it.transitionState == TransitionState.STARTED }
-                .filter { it.from != AOD && it.from != DOZING }
+                .filter { it.from != AOD }
+                .filter {
+                    !com.android.systemui.Flags.newDozingKeyguardStates() || it.from != DOZING
+                }
                 .collect { handleDoze(0f) }
+        }
+    }
+
+    private fun listenForDozingToLockscreen(scope: CoroutineScope): Job {
+        return scope.launch {
+            dozingToLockscreenViewModel.get().clockDozeAmount.collect { handleDoze(it) }
         }
     }
 

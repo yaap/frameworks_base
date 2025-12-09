@@ -26,25 +26,26 @@ import java.io.IOException;
 /**
  * Deserialized version of the {@link RemoteTaskUpdatedMessage} proto.
  */
-public class RemoteTaskUpdatedMessage implements TaskContinuityMessageData {
+public record RemoteTaskUpdatedMessage(RemoteTaskInfo task) implements TaskContinuityMessage {
 
-    private RemoteTaskInfo mTask;
-
-    public RemoteTaskUpdatedMessage(RemoteTaskInfo task) {
-        mTask = task;
-    }
-
-    RemoteTaskUpdatedMessage(ProtoInputStream pis) throws IOException {
+    public static RemoteTaskUpdatedMessage readFromProto(ProtoInputStream pis) throws IOException {
+        RemoteTaskInfo task = null;
         while (pis.nextField() != ProtoInputStream.NO_MORE_FIELDS) {
             switch (pis.getFieldNumber()) {
                 case (int) android.companion.RemoteTaskUpdatedMessage.TASK:
                     final long taskToken = pis.start(
                         android.companion.RemoteTaskUpdatedMessage.TASK);
-                    mTask = new RemoteTaskInfo(pis);
+                    task = RemoteTaskInfo.fromProto(pis);
                     pis.end(taskToken);
                     break;
             }
         }
+
+        if (task == null) {
+            throw new IOException("RemoteTaskUpdatedMessage is missing task field");
+        }
+
+        return new RemoteTaskUpdatedMessage(task);
     }
 
     @Override
@@ -53,15 +54,9 @@ public class RemoteTaskUpdatedMessage implements TaskContinuityMessageData {
     }
 
     @Override
-    public void writeToProto(ProtoOutputStream pos) {
-        long taskToken = pos.start(
-            android.companion.RemoteTaskUpdatedMessage.TASK);
-
-        mTask.writeToProto(pos);
+    public void writeToProto(ProtoOutputStream pos) throws IOException {
+        long taskToken = pos.start(android.companion.RemoteTaskUpdatedMessage.TASK);
+        task().writeToProto(pos);
         pos.end(taskToken);
-    }
-
-    public RemoteTaskInfo getTask() {
-        return mTask;
     }
 }

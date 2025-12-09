@@ -18,6 +18,8 @@ package com.android.server.input;
 
 import static android.text.TextUtils.formatSimple;
 
+import static com.android.hardware.input.Flags.disableSettingsForVirtualDevices;
+
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.StringDef;
@@ -100,7 +102,7 @@ class VirtualInputDeviceController {
 
     VirtualInputDeviceController(@NonNull Handler handler, @NonNull InputManagerService service) {
         this(new NativeWrapper(), handler, service,
-                // Verify that virtual devices are not created on the handler thread.
+                // Verify that virtual input devices are not created on the handler thread.
                 () -> !handler.getLooper().isCurrentThread());
     }
 
@@ -227,6 +229,9 @@ class VirtualInputDeviceController {
         mNativeWrapper.closeUinput(inputDeviceDescriptor.getNativePointer());
         String phys = inputDeviceDescriptor.getPhys();
         mService.removeUniqueIdAssociationByPort(phys);
+        if (disableSettingsForVirtualDevices()) {
+            mService.removeVirtualDevice(phys);
+        }
         // Type associations are added in the case of navigation touchpads. Those should be removed
         // once the input device gets closed.
         if (inputDeviceDescriptor.getType() == InputDeviceDescriptor.TYPE_NAVIGATION_TOUCHPAD) {
@@ -353,7 +358,7 @@ class VirtualInputDeviceController {
         }
     }
 
-    public PointF getCursorPosition(@NonNull IBinder token) {
+    public PointF getCursorPositionInPhysicalDisplay(@NonNull IBinder token) {
         synchronized (mLock) {
             final InputDeviceDescriptor inputDeviceDescriptor = mInputDeviceDescriptors.get(
                     token);
@@ -362,8 +367,21 @@ class VirtualInputDeviceController {
                         "Could not get cursor position for input device for given token");
             }
             return Binder.withCleanCallingIdentity(
-                    () -> mService.getCursorPosition(
+                    () -> mService.getCursorPositionInPhysicalDisplay(
                             inputDeviceDescriptor.getAssociatedDisplayId()));
+        }
+    }
+
+    public PointF getCursorPositionInLogicalDisplay(@NonNull IBinder token) {
+        synchronized (mLock) {
+            final InputDeviceDescriptor inputDeviceDescriptor = mInputDeviceDescriptors.get(
+                    token);
+            if (inputDeviceDescriptor == null) {
+                throw new IllegalArgumentException(
+                        "Could not get cursor position for input device for given token");
+            }
+            return Binder.withCleanCallingIdentity(() -> mService.getCursorPositionInLogicalDisplay(
+                    inputDeviceDescriptor.getAssociatedDisplayId()));
         }
     }
 
@@ -708,8 +726,13 @@ class VirtualInputDeviceController {
         }
 
         @Override
-        public PointF getCursorPosition() {
-            return mController.getCursorPosition(mToken);
+        public PointF getCursorPositionInPhysicalDisplay() {
+            return mController.getCursorPositionInPhysicalDisplay(mToken);
+        }
+
+        @Override
+        public PointF getCursorPositionInLogicalDisplay() {
+            return mController.getCursorPositionInLogicalDisplay(mToken);
         }
 
         @Override
@@ -748,7 +771,8 @@ class VirtualInputDeviceController {
 
         private int mInputDeviceId = IInputConstants.INVALID_INPUT_DEVICE_ID;
 
-        WaitForDevice(String deviceName, int vendorId, int productId, int associatedDisplayId) {
+        WaitForDevice(@NonNull String phys, @NonNull String deviceName, int vendorId, int productId,
+                int associatedDisplayId) {
             mDeviceName = deviceName;
             mListener = new InputDeviceListener() {
                 @Override
@@ -776,11 +800,20 @@ class VirtualInputDeviceController {
                     if (!device.getName().equals(deviceName)) {
                         return false;
                     }
+                    if (!phys.equals(mService.getPhysicalLocationPath(deviceId))) {
+                        return false;
+                    }
                     final InputDeviceIdentifier id = device.getIdentifier();
                     if (id.getVendorId() != vendorId || id.getProductId() != productId) {
                         return false;
                     }
-                    return device.getAssociatedDisplayId() == associatedDisplayId;
+                    if (device.getAssociatedDisplayId() != associatedDisplayId) {
+                        return false;
+                    }
+                    if (disableSettingsForVirtualDevices() && device.isPhysicalDevice()) {
+                        return false;
+                    }
+                    return true;
                 }
             };
             // TODO(b/419493538): Switch to IInputDevicesChangedListener directly with mService
@@ -819,7 +852,10 @@ class VirtualInputDeviceController {
         }
     }
 
-    /** An internal exception that is thrown to indicate an error when opening a virtual device. */
+    /**
+     * An internal exception that is thrown to indicate an error when opening a virtual input
+     * device.
+     */
     static class DeviceCreationException extends Exception {
         DeviceCreationException(String message) {
             super(message);
@@ -847,8 +883,8 @@ class VirtualInputDeviceController {
             String phys, Supplier<Long> deviceOpener) throws DeviceCreationException {
         if (!mThreadVerifier.isValidThread()) {
             throw new IllegalStateException(
-                    "Virtual device creation should happen on an auxiliary thread (e.g. binder "
-                            + "thread) and not from the handler's thread.");
+                    "Virtual input device creation should happen on an auxiliary thread (e.g. "
+                            + "binder thread) and not from the handler's thread.");
         }
         validateDeviceName(deviceName);
 
@@ -858,7 +894,11 @@ class VirtualInputDeviceController {
         final int inputDeviceId;
 
         setUniqueIdAssociation(displayId, phys);
-        try (WaitForDevice waiter = new WaitForDevice(deviceName, vendorId, productId, displayId)) {
+        if (disableSettingsForVirtualDevices()) {
+            mService.addVirtualDevice(phys);
+        }
+        try (WaitForDevice waiter = new WaitForDevice(phys, deviceName, vendorId, productId,
+                displayId)) {
             ptr = deviceOpener.get();
             // See INVALID_PTR in libs/input/VirtualInputDevice.cpp.
             if (ptr == 0) {
@@ -876,24 +916,31 @@ class VirtualInputDeviceController {
                     deviceToken.linkToDeath(binderDeathRecipient, /* flags= */ 0);
                 } catch (RemoteException e) {
                     throw new DeviceCreationException(
-                            "Client died before virtual device could be created.", e);
+                            "Client died before virtual input device could be created.", e);
                 }
             } catch (DeviceCreationException e) {
                 mNativeWrapper.closeUinput(ptr);
                 throw e;
             }
+
+            InputDeviceDescriptor device = new InputDeviceDescriptor(this, ptr,
+                binderDeathRecipient, type, displayId, phys, deviceName, inputDeviceId,
+                deviceToken);
+            synchronized (mLock) {
+                if (mInputDeviceDescriptors.containsKey(deviceToken)) {
+                    throw new DeviceCreationException("Cannot create new virtual input device "
+                        + "with an existing token.");
+                }
+                mInputDeviceDescriptors.put(deviceToken, device);
+            }
+            return device;
         } catch (DeviceCreationException e) {
             mService.removeUniqueIdAssociationByPort(phys);
+            if (disableSettingsForVirtualDevices()) {
+                mService.removeVirtualDevice(phys);
+            }
             throw e;
         }
-
-        InputDeviceDescriptor device = new InputDeviceDescriptor(this, ptr, binderDeathRecipient,
-                type, displayId, phys, deviceName, inputDeviceId, deviceToken);
-        synchronized (mLock) {
-            mInputDeviceDescriptors.put(deviceToken, device);
-        }
-
-        return device;
     }
 
     @VisibleForTesting

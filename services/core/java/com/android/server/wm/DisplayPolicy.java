@@ -17,7 +17,6 @@
 package com.android.server.wm;
 
 import static android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM;
-import static android.view.Display.TYPE_INTERNAL;
 import static android.view.InsetsFrameProvider.SOURCE_ARBITRARY_RECTANGLE;
 import static android.view.InsetsFrameProvider.SOURCE_CONTAINER_BOUNDS;
 import static android.view.InsetsFrameProvider.SOURCE_DISPLAY;
@@ -88,6 +87,7 @@ import android.app.ResourcesManager;
 import android.app.WindowConfiguration;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Insets;
 import android.graphics.PixelFormat;
@@ -134,13 +134,13 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.os.BackgroundThread;
 import com.android.internal.policy.ForceShowNavBarSettingsObserver;
 import com.android.internal.policy.GestureNavigationSettingsObserver;
-import com.android.internal.policy.ScreenDecorationsUtils;
 import com.android.internal.protolog.ProtoLog;
 import com.android.internal.statusbar.LetterboxDetails;
 import com.android.internal.util.function.TriFunction;
 import com.android.internal.view.AppearanceRegion;
 import com.android.internal.widget.PointerLocationView;
 import com.android.server.LocalServices;
+import com.android.server.UiModeManagerInternal;
 import com.android.server.UiThread;
 import com.android.server.notification.NotificationManagerInternal;
 import com.android.server.policy.WindowManagerPolicy.ScreenOnListener;
@@ -205,6 +205,7 @@ public class DisplayPolicy {
     private long mPanicTime;
     private final long mPanicThresholdMs;
     private StatusBarManagerInternal mStatusBarManagerInternal;
+    private UiModeManagerInternal mUiModeManagerInternal;
 
     @Px
     private int mLeftGestureInset;
@@ -218,6 +219,7 @@ public class DisplayPolicy {
      */
     private boolean mRemoteInsetsControllerControlsSystemBars;
 
+    @Nullable
     StatusBarManagerInternal getStatusBarManagerInternal() {
         synchronized (mServiceAcquireLock) {
             if (mStatusBarManagerInternal == null) {
@@ -225,6 +227,15 @@ public class DisplayPolicy {
                         LocalServices.getService(StatusBarManagerInternal.class);
             }
             return mStatusBarManagerInternal;
+        }
+    }
+
+    UiModeManagerInternal getUiModeManagerInternal() {
+        synchronized (mServiceAcquireLock) {
+            if (mUiModeManagerInternal == null) {
+                mUiModeManagerInternal = LocalServices.getService(UiModeManagerInternal.class);
+            }
+            return mUiModeManagerInternal;
         }
     }
 
@@ -247,6 +258,9 @@ public class DisplayPolicy {
 
     // Written by vr manager thread, only read in this class.
     private volatile boolean mPersistentVrModeEnabled;
+
+    private volatile int mDisplayUiMode =
+            Configuration.UI_MODE_TYPE_UNDEFINED | Configuration.UI_MODE_NIGHT_UNDEFINED;
 
     private volatile boolean mAwake;
     private volatile boolean mScreenOnEarly;
@@ -816,9 +830,14 @@ public class DisplayPolicy {
             }
             if (awake) {
                 mService.mAtmService.mVisibleDozeUiProcess = null;
+                mService.mAtmService.mActivityStateUpdater.setVisibleDozeUiProcessAsync(null);
             } else if (mScreenOnFully && mNotificationShade != null) {
                 // Screen is still on, so it may be showing an always-on UI.
-                mService.mAtmService.mVisibleDozeUiProcess = mNotificationShade.getProcess();
+                final WindowProcessController visibleDozeUiProcess =
+                        mNotificationShade.getProcess();
+                mService.mAtmService.mVisibleDozeUiProcess = visibleDozeUiProcess;
+                mService.mAtmService.mActivityStateUpdater.setVisibleDozeUiProcessAsync(
+                        visibleDozeUiProcess);
             }
             mService.mAtmService.mKeyguardController.updateDeferTransitionForAod(
                     mAwake /* waiting */);
@@ -830,7 +849,7 @@ public class DisplayPolicy {
                 // acquire sleep token if screen is off.
                 if (!mScreenOnEarly && !mScreenOnFully && !mDisplayContent.isSleeping()) {
                     Slog.w(TAG, "Late acquire sleep token for " + mDisplayContent);
-                    mService.mRoot.mDisplayOffTokenAcquirer.acquire(mDisplayContent.mDisplayId);
+                    mDisplayContent.addSleepToken(DisplayContent.DISPLAY_OFF_SLEEP_TOKEN_TAG);
                 }
             }
         }
@@ -879,7 +898,7 @@ public class DisplayPolicy {
     public void screenTurningOn(ScreenOnListener screenOnListener) {
         WindowProcessController visibleDozeUiProcess = null;
         synchronized (mLock) {
-            mService.mRoot.mDisplayOffTokenAcquirer.release(mDisplayContent.mDisplayId);
+            mDisplayContent.removeSleepToken(DisplayContent.DISPLAY_OFF_SLEEP_TOKEN_TAG);
             mScreenOnEarly = true;
             mScreenOnFully = false;
             mKeyguardDrawComplete = false;
@@ -908,7 +927,7 @@ public class DisplayPolicy {
     public void screenTurnedOff(boolean acquireSleepToken) {
         synchronized (mLock) {
             if (acquireSleepToken) {
-                mService.mRoot.mDisplayOffTokenAcquirer.acquire(mDisplayContent.mDisplayId);
+                mDisplayContent.addSleepToken(DisplayContent.DISPLAY_OFF_SLEEP_TOKEN_TAG);
             }
             mScreenOnEarly = false;
             mScreenOnFully = false;
@@ -1073,7 +1092,7 @@ public class DisplayPolicy {
     /**
      * Check if a window can be added to the system.
      *
-     * Currently enforces that these window types are singletons per display:
+     * <p>Currently enforces that these window types are singletons per display:
      * <ul>
      * <li>{@link WindowManager.LayoutParams#TYPE_STATUS_BAR}</li>
      * <li>{@link WindowManager.LayoutParams#TYPE_NOTIFICATION_SHADE}</li>
@@ -1092,7 +1111,9 @@ public class DisplayPolicy {
                     "DisplayPolicy");
         }
         if ((attrs.privateFlags & PRIVATE_FLAG_INTERCEPT_GLOBAL_DRAG_AND_DROP) != 0) {
-            ActivityTaskManagerService.enforceTaskPermission("DisplayPolicy");
+            mContext.enforcePermission(
+                    android.Manifest.permission.MANAGE_ACTIVITY_TASKS, callingPid, callingUid,
+                    "DisplayPolicy");
         }
 
         final String systemUiPermission =
@@ -1400,7 +1421,7 @@ public class DisplayPolicy {
      * used to layout window. This method only changes the given display frames, insets state and
      * some temporal states, but doesn't change the window frames used to show on screen.
      */
-    void simulateLayoutDisplay(DisplayFrames displayFrames) {
+    void simulateLayoutDisplay(@NonNull DisplayFrames displayFrames) {
         sTmpClientFrames.attachedFrame = null;
         for (int i = mInsetsSourceWindowsExceptIme.size() - 1; i >= 0; i--) {
             final WindowState win = mInsetsSourceWindowsExceptIme.valueAt(i);
@@ -1435,7 +1456,8 @@ public class DisplayPolicy {
      *                 so you can use its Rect.  Otherwise null.
      * @param displayFrames The display frames.
      */
-    public void layoutWindowLw(WindowState win, WindowState attached, DisplayFrames displayFrames) {
+    void layoutWindowLw(@NonNull WindowState win, @Nullable WindowState attached,
+            @NonNull DisplayFrames displayFrames) {
         if (win.skipLayout()) {
             return;
         }
@@ -1913,7 +1935,7 @@ public class DisplayPolicy {
         return mCurrentUserResources;
     }
 
-    @VisibleForTesting
+    @NonNull
     Context getContext() {
         return mContext;
     }
@@ -2009,24 +2031,20 @@ public class DisplayPolicy {
                 });
     }
 
-    /**
-     * Return corner radius in pixels that should be used on windows in order to cover the display.
-     *
-     * The radius is only valid for internal displays, since the corner radius of external displays
-     * is not known at build time when window corners are configured.
-     */
-    float getWindowCornerRadius() {
-        return mDisplayContent.getDisplay().getType() == TYPE_INTERNAL
-                ? ScreenDecorationsUtils.getWindowCornerRadius(mContext) : 0f;
-    }
-
     boolean isShowingDreamLw() {
         return mShowingDream;
     }
 
     /** The latest insets and frames for screen configuration calculation. */
     static class DecorInsets {
+        static final int OVERRIDE_CONFIG_TYPES = WindowInsets.Type.displayCutout()
+                | WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars();
+        static final int OVERRIDE_DECOR_TYPES = WindowInsets.Type.displayCutout()
+                | WindowInsets.Type.navigationBars();
+
         static class Info {
+            // TODO(b/409608996):
+            //  Remove mNonDecorInsets, mConfigInsets -> always empty
             /**
              * The insets for the areas that could never be removed, i.e. display cutout and
              * navigation bar. Note that its meaning is actually "decor insets". The "non" is just
@@ -2050,67 +2068,42 @@ public class DisplayPolicy {
              */
             final Rect mOverrideNonDecorInsets = new Rect();
 
-            /** The display frame available after excluding {@link #mNonDecorInsets}. */
-            final Rect mNonDecorFrame = new Rect();
-
             /**
-             * The available (stable) screen size that we should report for the configuration.
-             * This must be no larger than {@link #mNonDecorFrame}; it may be smaller than that
-             * to account for more transient decoration like a status bar.
-             */
-            final Rect mConfigFrame = new Rect();
-
-            /**
-             * Override value of mConfigFrame for app compatibility purpose.
+             * Override available (stable) screen size for app compatibility purpose.
+             * This must be no larger than {@link #mOverrideNonDecorFrame}; it may be smaller than
+             * that to account for more transient decoration like a status bar.
              */
             final Rect mOverrideConfigFrame = new Rect();
 
             /**
-             * Override value of mNonDecorFrame for app compatibility purpose.
+             * Override display frame which excludes {@link #mOverrideNonDecorInsets} for app
+             * compatibility purpose.
              */
             final Rect mOverrideNonDecorFrame = new Rect();
 
             private boolean mNeedUpdate = true;
 
-            InsetsState update(DisplayContent dc, int rotation, int w, int h) {
+            void update(DisplayContent dc, int rotation, int w, int h) {
                 final DisplayFrames df = new DisplayFrames();
                 dc.updateDisplayFrames(df, rotation, w, h);
                 dc.getDisplayPolicy().simulateLayoutDisplay(df);
                 final InsetsState insetsState = df.mInsetsState;
                 final Rect displayFrame = insetsState.getDisplayFrame();
-                final Insets decor = insetsState.calculateInsets(displayFrame, displayFrame,
-                        dc.mWmService.mDecorTypes, true /* ignoreVisibility */);
-                final Insets configInsets = dc.mWmService.mConfigTypes == dc.mWmService.mDecorTypes
-                        ? decor
-                        : insetsState.calculateInsets(displayFrame, displayFrame,
-                                dc.mWmService.mConfigTypes, true /* ignoreVisibility */);
-                final Insets overrideConfigInsets = dc.mWmService.mConfigTypes
-                        == dc.mWmService.mOverrideConfigTypes
-                        ? configInsets
-                        : insetsState.calculateInsets(displayFrame, displayFrame,
-                                dc.mWmService.mOverrideConfigTypes, true /* ignoreVisibility */);
-                final Insets overrideDecorInsets = dc.mWmService.mDecorTypes
-                        == dc.mWmService.mOverrideDecorTypes
-                        ? decor
-                        : insetsState.calculateInsets(displayFrame, displayFrame,
-                                dc.mWmService.mOverrideDecorTypes, true /* ignoreVisibility */);
-                mNonDecorInsets.set(decor.left, decor.top, decor.right, decor.bottom);
-                mConfigInsets.set(configInsets.left, configInsets.top, configInsets.right,
-                        configInsets.bottom);
+                final Insets overrideConfigInsets =
+                        insetsState.calculateInsets(displayFrame, displayFrame,
+                                OVERRIDE_CONFIG_TYPES, true /* ignoreVisibility */);
+                final Insets overrideDecorInsets =
+                        insetsState.calculateInsets(displayFrame, displayFrame,
+                                OVERRIDE_DECOR_TYPES, true /* ignoreVisibility */);
                 mOverrideConfigInsets.set(overrideConfigInsets.left, overrideConfigInsets.top,
                         overrideConfigInsets.right, overrideConfigInsets.bottom);
                 mOverrideNonDecorInsets.set(overrideDecorInsets.left, overrideDecorInsets.top,
                         overrideDecorInsets.right, overrideDecorInsets.bottom);
-                mNonDecorFrame.set(displayFrame);
-                mNonDecorFrame.inset(mNonDecorInsets);
-                mConfigFrame.set(displayFrame);
-                mConfigFrame.inset(mConfigInsets);
                 mOverrideConfigFrame.set(displayFrame);
                 mOverrideConfigFrame.inset(mOverrideConfigInsets);
                 mOverrideNonDecorFrame.set(displayFrame);
                 mOverrideNonDecorFrame.inset(mOverrideNonDecorInsets);
                 mNeedUpdate = false;
-                return insetsState;
             }
 
             void set(Info other) {
@@ -2118,8 +2111,6 @@ public class DisplayPolicy {
                 mConfigInsets.set(other.mConfigInsets);
                 mOverrideConfigInsets.set(other.mOverrideConfigInsets);
                 mOverrideNonDecorInsets.set(other.mOverrideNonDecorInsets);
-                mNonDecorFrame.set(other.mNonDecorFrame);
-                mConfigFrame.set(other.mConfigFrame);
                 mOverrideConfigFrame.set(other.mOverrideConfigFrame);
                 mOverrideNonDecorFrame.set(other.mOverrideNonDecorFrame);
                 mNeedUpdate = false;
@@ -2132,9 +2123,7 @@ public class DisplayPolicy {
                         + ", overrideNonDecorInsets=" + mOverrideNonDecorInsets.toShortString(tmpSb)
                         + ", configInsets=" + mConfigInsets.toShortString(tmpSb)
                         + ", overrideConfigInsets=" + mOverrideConfigInsets.toShortString(tmpSb)
-                        + ", nonDecorFrame=" + mNonDecorFrame.toShortString(tmpSb)
                         + ", overrideNonDecorFrame=" + mOverrideNonDecorFrame.toShortString(tmpSb)
-                        + ", configFrame=" + mConfigFrame.toShortString(tmpSb)
                         + ", overrideConfigFrame=" + mOverrideConfigFrame.toShortString(tmpSb)
                         + '}';
             }
@@ -2177,29 +2166,6 @@ public class DisplayPolicy {
                 final DecorInsets.Info info = mInfoForRotation[rotation];
                 pw.println(prefix + Surface.rotationToString(rotation) + "=" + info);
             }
-        }
-
-        static boolean hasInsetsFrameDiff(InsetsState s1, InsetsState s2, int insetsTypes) {
-            int insetsCount1 = 0;
-            for (int i = s1.sourceSize() - 1; i >= 0; i--) {
-                final InsetsSource source1 = s1.sourceAt(i);
-                if ((source1.getType() & insetsTypes) == 0) {
-                    continue;
-                }
-                insetsCount1++;
-                final InsetsSource source2 = s2.peekSource(source1.getId());
-                if (source2 == null || !source2.getFrame().equals(source1.getFrame())) {
-                    return true;
-                }
-            }
-            int insetsCount2 = 0;
-            for (int i = s2.sourceSize() - 1; i >= 0; i--) {
-                final InsetsSource source2 = s2.sourceAt(i);
-                if ((source2.getType() & insetsTypes) != 0) {
-                    insetsCount2++;
-                }
-            }
-            return insetsCount1 != insetsCount2;
         }
 
         private static class Cache {
@@ -2258,26 +2224,9 @@ public class DisplayPolicy {
         final int dw = displayFrames.mWidth;
         final int dh = displayFrames.mHeight;
         final DecorInsets.Info newInfo = mDecorInsets.mTmpInfo;
-        final InsetsState newInsetsState = newInfo.update(mDisplayContent, rotation, dw, dh);
+        newInfo.update(mDisplayContent, rotation, dw, dh);
         final DecorInsets.Info currentInfo = getDecorInsetsInfo(rotation, dw, dh);
-        final boolean sameConfigFrame = newInfo.mConfigFrame.equals(currentInfo.mConfigFrame);
-        if (sameConfigFrame
-                && newInfo.mOverrideConfigFrame.equals(currentInfo.mOverrideConfigFrame)) {
-            // Even if the config frame is not changed in current rotation, it may change the
-            // insets in other rotations if the frame of insets source is changed.
-            final InsetsState currentInsetsState = mDisplayContent.mDisplayFrames.mInsetsState;
-            if (DecorInsets.hasInsetsFrameDiff(
-                    newInsetsState, currentInsetsState, mService.mConfigTypes)) {
-                for (int i = mDecorInsets.mInfoForRotation.length - 1; i >= 0; i--) {
-                    if (i != rotation) {
-                        final boolean flipSize = (i + rotation) % 2 == 1;
-                        final int w = flipSize ? dh : dw;
-                        final int h = flipSize ? dw : dh;
-                        mDecorInsets.mInfoForRotation[i].update(mDisplayContent, i, w, h);
-                    }
-                }
-                mDecorInsets.mInfoForRotation[rotation].set(newInfo);
-            }
+        if (newInfo.mOverrideConfigFrame.equals(currentInfo.mOverrideConfigFrame)) {
             return false;
         }
         if (mCachedDecorInsets != null && !mCachedDecorInsets.canPreserve() && mScreenOnFully) {
@@ -2290,7 +2239,7 @@ public class DisplayPolicy {
             // clients receive the new states earlier.
             return true;
         }
-        return !sameConfigFrame;
+        return false;
     }
 
     DecorInsets.Info getDecorInsetsInfo(int rotation, int w, int h) {
@@ -2332,16 +2281,11 @@ public class DisplayPolicy {
         mCachedDecorInsets.mPreserveId = DecorInsets.Cache.ID_UPDATING_CONFIG;
         // Cache the current insets.
         mCachedDecorInsets.mDecorInsets.setTo(mDecorInsets);
-        if (com.android.window.flags.Flags.useCachedInsetsForDisplaySwitch()) {
-            mCachedDecorInsets.mRegularBarsInsets = DecorInsets.Cache.copyRegularBarInsets(
-                    mDisplayContent.mDisplayFrames.mInsetsState);
-            mCachedDecorInsets.mRotation = mDisplayContent.mDisplayFrames.mRotation;
-            mCachedDecorInsets.mPrivacyIndicatorBounds =
-                    mDisplayContent.mCurrentPrivacyIndicatorBounds;
-        } else {
-            mCachedDecorInsets.mRegularBarsInsets = null;
-            mCachedDecorInsets.mPrivacyIndicatorBounds = null;
-        }
+        mCachedDecorInsets.mRegularBarsInsets = DecorInsets.Cache.copyRegularBarInsets(
+                mDisplayContent.mDisplayFrames.mInsetsState);
+        mCachedDecorInsets.mRotation = mDisplayContent.mDisplayFrames.mRotation;
+        mCachedDecorInsets.mPrivacyIndicatorBounds = mDisplayContent.mCurrentPrivacyIndicatorBounds;
+
         // Switch current to previous cache.
         if (prevCache != null) {
             mDecorInsets.setTo(prevCache);
@@ -2357,7 +2301,9 @@ public class DisplayPolicy {
      * display is switching (e.g. fold/unfold). Otherwise, it returns the original state. This is
      * to avoid dispatching old insets source before the insets providers update new insets.
      */
-    InsetsState replaceInsetsSourcesIfNeeded(InsetsState originalState, boolean copyState) {
+    @NonNull
+    InsetsState replaceInsetsSourcesIfNeeded(@NonNull InsetsState originalState,
+            boolean copyState) {
         if (mCachedDecorInsets == null || mCachedDecorInsets.mPreservedInsets == null
                 || !shouldKeepCurrentDecorInsets()) {
             return originalState;
@@ -2365,9 +2311,11 @@ public class DisplayPolicy {
         final ArrayList<InsetsSource> preservedSources = mCachedDecorInsets.mPreservedInsets;
         final InsetsState state = copyState ? new InsetsState(originalState) : originalState;
         for (int i = preservedSources.size() - 1; i >= 0; i--) {
-            final InsetsSource cacheSource = preservedSources.get(i);
-            if (state.peekSource(cacheSource.getId()) != null) {
-                state.addSource(new InsetsSource(cacheSource));
+            final InsetsSource cachedSource = preservedSources.get(i);
+            final InsetsSource originalSource = state.peekSource(cachedSource.getId());
+            if (originalSource != null) {
+                state.addSource(new InsetsSource(cachedSource)
+                        .setVisible(originalSource.isVisible()));
             }
         }
         return state;
@@ -2394,6 +2342,17 @@ public class DisplayPolicy {
     /** If this is called, expect that there will be an onDisplayChanged about unique id. */
     public void onDisplaySwitchStart() {
         mDisplayContent.mDisplayUpdater.onDisplaySwitching(true);
+    }
+
+    /**
+     * Returns 'true' if the physical display is currently in the process of switching, for example
+     * on foldable devices when folding or unfolding. The value becomes 'false' when the switching
+     * has been finished (the new display is fully turned on).
+     * It is guaranteed that this method will start returning 'true' before any callbacks related
+     * to this display switch from the DisplayManager like onScreenTurningOn or onDisplayChanged.
+     */
+    public boolean isDisplaySwitching() {
+        return mDisplayContent.mDisplayUpdater.isDisplaySwitching();
     }
 
     boolean hasBottomNavigationBar() {
@@ -2605,9 +2564,6 @@ public class DisplayPolicy {
     }
 
     private boolean fillsDisplayWindowingMode(@NonNull WindowState win) {
-        if (!com.android.window.flags.Flags.forceShowSystemBarForBubble()) {
-            return true;
-        }
         if (!WindowConfiguration.inMultiWindowMode(win.getWindowingMode())) {
             // Always accept the window not in multi-window mode.
             return true;
@@ -2632,12 +2588,14 @@ public class DisplayPolicy {
     }
 
     void updateSystemBarAttributes() {
+        // The focused window always needs to be sent to System UI regardless of filling
+        // display when the remote insets controller is controlling system bars.
+        final boolean isRemoteControlling = isRemoteInsetsControllerControllingSystemBars();
         // If there is no window focused, there will be nobody to handle the events
         // anyway, so just hang on in whatever state we're in until things settle down.
         WindowState winCandidate =
-                mFocusedWindow != null && fillsDisplayWindowingMode(mFocusedWindow)
-                        ? mFocusedWindow
-                        : mTopFullscreenOpaqueWindowState;
+                mFocusedWindow != null && (isRemoteControlling || fillsDisplayWindowingMode(
+                        mFocusedWindow)) ? mFocusedWindow : mTopFullscreenOpaqueWindowState;
 
         // Immersive mode confirmation should never affect the system bar visibility, otherwise
         // it will unhide the navigation bar and hide itself.
@@ -2647,7 +2605,7 @@ public class DisplayPolicy {
                 // Let notification shade control the system bar visibility.
                 winCandidate = mNotificationShade;
             } else if (mLastFocusedWindow != null && mLastFocusedWindow.canReceiveKeys()
-                    && fillsDisplayWindowingMode(mLastFocusedWindow)) {
+                    && (isRemoteControlling || fillsDisplayWindowingMode(mLastFocusedWindow))) {
                 // Immersive mode confirmation took the focus from mLastFocusedWindow which was
                 // controlling the system bar visibility. Let it keep controlling the visibility.
                 winCandidate = mLastFocusedWindow;
@@ -2656,12 +2614,9 @@ public class DisplayPolicy {
             }
         }
         if (winCandidate == null) {
-            if (!com.android.window.flags.Flags.forceShowSystemBarForBubble()) {
-                // Before this feature, this method early returns when winCandidate is null.
-                return;
-            }
             final ActivityRecord focusedApp = mDisplayContent.mFocusedApp;
-            if (focusedApp == null || fillsDisplayWindowingMode(focusedApp)) {
+            if (focusedApp == null
+                    || (isRemoteControlling || fillsDisplayWindowingMode(focusedApp))) {
                 // Don't change the system UI controlling window when the new one is not ready.
                 return;
             }
@@ -3361,5 +3316,23 @@ public class DisplayPolicy {
      */
     boolean shouldAttachNavBarToAppDuringTransition() {
         return mShouldAttachNavBarToAppDuringTransition && mNavigationBar != null;
+    }
+
+    /**
+     * @return the display's UI mode. If there's no override for this display, returns undefined,
+     *    which will be overridden by the global configuration.
+     */
+    int getDisplayUiMode() {
+        return mDisplayUiMode;
+    }
+
+    /**
+     * Updates this display's UI mode.
+     */
+    void onDisplayUiModeChanged() {
+        final UiModeManagerInternal uiModeManagerInternal = getUiModeManagerInternal();
+        mDisplayUiMode = uiModeManagerInternal != null
+                ? uiModeManagerInternal.getDisplayUiMode(getDisplayId())
+                : (Configuration.UI_MODE_TYPE_UNDEFINED | Configuration.UI_MODE_NIGHT_UNDEFINED);
     }
 }

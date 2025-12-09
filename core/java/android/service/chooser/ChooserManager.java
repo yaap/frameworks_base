@@ -40,6 +40,9 @@ import java.util.Objects;
  * <h3>Usage Example:</h3>
  * <pre>{@code
  * ChooserManager chooserManager = context.getSystemService(ChooserManager.class);
+ * if (chooserManager == null) {
+ *     // handle the case when the interactive chooser session functionality is not supported.
+ * }
  *
  * // Construct the sharing intent
  * Intent targetIntent = new Intent(Intent.ACTION_SEND);
@@ -114,6 +117,7 @@ public class ChooserManager {
                 | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 | Intent.FLAG_ACTIVITY_TASK_ON_HOME
                 | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
+        chooserIntent.setFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
         Bundle binderExtras = new Bundle();
         ChooserSession chooserSession = new ChooserSession();
         binderExtras.putBinder(ChooserSession.EXTRA_CHOOSER_SESSION, chooserSession.getBinder());

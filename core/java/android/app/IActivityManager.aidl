@@ -21,6 +21,7 @@ import android.app.ActivityTaskManager;
 import android.app.ApplicationStartInfo;
 import android.app.ApplicationErrorReport;
 import android.app.ApplicationExitInfo;
+import android.app.BindUpdateInfo;
 import android.app.ContentProviderHolder;
 import android.app.GrantedUriPermission;
 import android.app.IApplicationStartInfoCompleteListener;
@@ -86,7 +87,7 @@ import java.util.List;
  * System private API for talking with the activity manager service.  This
  * provides calls from the application back to the activity manager.
  *
- * {@hide}
+ * @hide
  */
 interface IActivityManager {
     // WARNING: when these transactions are updated, check if they are any callers on the native
@@ -96,6 +97,8 @@ interface IActivityManager {
 
     // Since these transactions are also called from native code, these must be kept in sync with
     // the ones in frameworks/native/libs/binder/include_activitymanager/binder/ActivityManager.h
+    // TODO(b/419409018): Remove this warning message after migrating all native API users to the
+    // activity_structured service.
     // =============== Beginning of transactions used on native side as well ======================
     ParcelFileDescriptor openContentUri(in String uriString);
     void registerUidObserver(in IUidObserver observer, int which, int cutpoint,
@@ -204,6 +207,7 @@ interface IActivityManager {
     oneway void finishReceiver(in IBinder who, int resultCode, in String resultData, in Bundle map,
             boolean abortBroadcast, int flags);
     void attachApplication(in IApplicationThread app, long startSeq);
+    void attachNativeApplication(in IBinder nativeThread, long startSeq);
     void finishAttachApplication(long startSeq, long timestampApplicationOnCreateNs);
     List<ActivityManager.RunningTaskInfo> getTasks(int maxNum);
     @UnsupportedAppUsage
@@ -218,6 +222,7 @@ interface IActivityManager {
             in List<ContentProviderHolder> providers);
     boolean refContentProvider(in IBinder connection, int stableDelta, int unstableDelta);
     PendingIntent getRunningServiceControlPanel(in ComponentName service);
+    List<ActivityManager.ConnectionInfo> getRunningServiceConnections(in ComponentName service);
     ComponentName startService(in IApplicationThread caller, in Intent service,
             in String resolvedType, boolean requireForeground, in String callingPackage,
             in String callingFeatureId, int userId);
@@ -233,6 +238,7 @@ interface IActivityManager {
             in String resolvedType, in IServiceConnection connection, long flags,
             in String instanceName, in String callingPackage, int userId);
     void updateServiceGroup(in IServiceConnection connection, int group, int importance);
+    void updateServiceBindings(in List<BindUpdateInfo> updates);
     @UnsupportedAppUsage
     boolean unbindService(in IServiceConnection connection);
     void publishService(in IBinder token, in IBinder bindToken, in IBinder service);
@@ -1044,6 +1050,12 @@ interface IActivityManager {
      */
     @EnforcePermission("INTERACT_ACROSS_USERS_FULL")
     IBinder refreshIntentCreatorToken(in Intent intent);
+
+    /**
+     * Reports ART optimization info.
+     */
+    oneway void reportOptimizationInfo(in IBinder app, in String compilerFilter,
+            in String compilationReason);
 
     /**
      *  Force full screen for devices with cutout

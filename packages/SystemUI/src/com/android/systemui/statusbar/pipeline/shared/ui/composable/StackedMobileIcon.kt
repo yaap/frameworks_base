@@ -35,8 +35,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.android.systemui.common.ui.compose.load
 import com.android.systemui.res.R
+import com.android.systemui.statusbar.pipeline.mobile.ui.compose.ActivityIndicators
 import com.android.systemui.statusbar.pipeline.mobile.ui.model.DualSim
 import com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.StackedMobileIconViewModel
 import com.android.systemui.statusbar.pipeline.shared.ui.composable.StackedMobileIconDimensions.BarBaseHeightFiveBarsSp
@@ -90,6 +93,14 @@ fun StackedMobileIcon(viewModel: StackedMobileIconViewModel, modifier: Modifier 
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier.padding(horizontal = padding),
     ) {
+        if (viewModel.activityContainerVisible) {
+            ActivityIndicators(
+                activityInVisible = viewModel.activityInVisible,
+                activityOutVisible = viewModel.activityOutVisible,
+                color = contentColor,
+            )
+        }
+
         viewModel.networkTypeIcon?.let {
             // Provide the RAT context needed for the resource overlays
             val ratContext = viewModel.mobileContext ?: LocalContext.current
@@ -97,7 +108,7 @@ fun StackedMobileIcon(viewModel: StackedMobileIconViewModel, modifier: Modifier 
                 val height = with(LocalDensity.current) { IconHeightSp.toDp() }
                 val paddingEnd = with(LocalDensity.current) { RatIndicatorPaddingSp.toDp() }
                 Image(
-                    painter = painterResource(it.res),
+                    painter = painterResource(it.resId),
                     contentDescription = it.contentDescription?.load(),
                     modifier = Modifier.height(height).padding(end = paddingEnd),
                     colorFilter = ColorFilter.tint(contentColor, BlendMode.SrcIn),
@@ -140,9 +151,11 @@ private fun StackedMobileIcon(
         with(LocalDensity.current) { dimensions.totalWidth.toDp() to IconHeightSp.toDp() }
 
     Canvas(
-        modifier.width(iconSize.first).height(iconSize.second).semantics {
-            contentDescription?.let { this.contentDescription = it }
-        }
+        modifier
+            .width(iconSize.first)
+            .height(iconSize.second)
+            .semantics { contentDescription?.let { this.contentDescription = it } }
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     ) {
         val rtl = layoutDirection == LayoutDirection.Rtl
         scale(if (rtl) -1f else 1f, 1f) {

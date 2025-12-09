@@ -22,6 +22,9 @@ import android.annotation.Nullable;
 import android.annotation.SystemApi;
 import android.annotation.TestApi;
 import android.compat.annotation.UnsupportedAppUsage;
+import android.ravenwood.annotation.RavenwoodKeepWholeClass;
+import android.ravenwood.annotation.RavenwoodRedirect;
+import android.ravenwood.annotation.RavenwoodRedirectionClass;
 import android.util.Log;
 import android.util.Printer;
 
@@ -65,8 +68,27 @@ import java.lang.reflect.Modifier;
  * the same <em>post</em> or <em>sendMessage</em> methods as before, but from
  * your new thread.  The given Runnable or Message will then be scheduled
  * in the Handler's message queue and processed when appropriate.
+ *
+ * <h2>Performance considerations when using {@code Handler}</h2>
+ *
+ * <p>Beware that the "has" and "remove" methods of {@code Handler} can be very
+ * slow because these operations scan the entire queue of pending messages.
+ * If the underlying {@link Looper}'s {@link MessageQueue} has many pending
+ * messages, this can be expensive.
+ *
+ * <ul>
+ * <li>Instead of removing a message or a callback to cancel a pending
+ * operation, consider setting a flag to indicate cancellation and having the
+ * operation check the flag before proceeding.
+ * <li>Instead of checking if the queue has a message or a callback to find if
+ * a pending operation has not yet occurred, consider having that operation set
+ * a flag to indicate that it has begun.
+ * </ul>
+ *
+ * See {@code java.util.concurrent} for standard concurrency primitives.
  */
-@android.ravenwood.annotation.RavenwoodKeepWholeClass
+@RavenwoodKeepWholeClass
+@RavenwoodRedirectionClass("Handler_ravenwood")
 public class Handler {
     /*
      * Set this flag to true to detect anonymous, local or member classes
@@ -324,7 +346,7 @@ public class Handler {
         return handler == null ? getMain() : handler;
     }
 
-    /** {@hide} */
+    /** @hide */
     @NonNull
     public String getTraceName(@NonNull Message message) {
         if (message.callback instanceof TraceNameSupplier) {
@@ -789,8 +811,15 @@ public class Handler {
         return sendMessage(msg);
     }
 
+    @RavenwoodRedirect
+    private static void onBeforeEnqueue(@NonNull MessageQueue queue, @NonNull Message msg,
+            long uptimeMillis) {
+        // Ravenwood will check for a pending exception, and throw it if any.
+    }
+
     private boolean enqueueMessage(@NonNull MessageQueue queue, @NonNull Message msg,
             long uptimeMillis) {
+        onBeforeEnqueue(queue, msg, uptimeMillis);
         msg.target = this;
         msg.workSourceUid = ThreadLocalWorkSource.getUid();
 

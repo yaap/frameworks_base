@@ -33,7 +33,6 @@ import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.flags.FeatureFlags
 import com.android.systemui.keyguard.ui.view.KeyguardRootView
 import com.android.systemui.privacy.OngoingPrivacyChip
-import com.android.systemui.qs.ui.adapter.QSSceneAdapter
 import com.android.systemui.res.R
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.scene.shared.model.SceneContainerConfig
@@ -55,6 +54,7 @@ import com.android.systemui.statusbar.notification.stack.ui.view.SharedNotificat
 import com.android.systemui.statusbar.phone.StatusBarLocation
 import com.android.systemui.statusbar.phone.StatusIconContainer
 import com.android.systemui.statusbar.phone.TapAgainView
+import com.android.systemui.statusbar.phone.ui.TintedIconManager
 import com.android.systemui.statusbar.policy.BatteryController
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.tuner.TunerService
@@ -92,13 +92,13 @@ abstract class ShadeViewProviderModule {
             overlaysProvider: Provider<Set<@JvmSuppressWildcards Overlay>>,
             layoutInsetController: NotificationInsetsController,
             sceneDataSourceDelegator: Provider<SceneDataSourceDelegator>,
-            qsSceneAdapter: Provider<QSSceneAdapter>,
             sceneJankMonitorFactory: SceneJankMonitor.Factory,
             windowRootViewKeyEventHandler: WindowRootViewKeyEventHandler,
             windowRootViewModelFactory: WindowRootViewModel.Factory,
             blurUtils: BlurUtils,
             choreographer: Choreographer?,
             @Main mainDispatcher: CoroutineDispatcher,
+            tintedIconManagerFactory: TintedIconManager.Factory,
         ): WindowRootView {
             return if (SceneContainerFlag.isEnabled) {
                 checkNoSceneDuplicates(scenesProvider.get())
@@ -120,9 +120,9 @@ abstract class ShadeViewProviderModule {
                     overlays = overlaysProvider.get(),
                     layoutInsetController = layoutInsetController,
                     sceneDataSourceDelegator = sceneDataSourceDelegator.get(),
-                    qsSceneAdapter = qsSceneAdapter,
                     sceneJankMonitorFactory = sceneJankMonitorFactory,
                     windowRootViewKeyEventHandler = windowRootViewKeyEventHandler,
+                    tintedIconManagerFactory = tintedIconManagerFactory,
                 )
                 sceneWindowRootView
             } else {

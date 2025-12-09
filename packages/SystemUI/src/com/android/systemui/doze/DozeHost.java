@@ -66,22 +66,22 @@ public interface DozeHost {
     void onSlpiTap(float x, float y);
 
     /**
-     * Artificially dim down the the display by changing scrim opacities.
+     * Artificially dim down the display by changing scrim opacities.
      * @param scrimOpacity opacity from 0 to 1.
      */
     default void setAodDimmingScrim(float scrimOpacity) {}
 
     /**
-     * Sets the actual display brightness.
-     * @param value from 1 to 255.
+     * Artificially dim down the wallpaper by changing scrim opacities.
+     * @param scrimOpacity opacity from 0 to 1.
      */
-    void setDozeScreenBrightness(int value);
+    default void setAodWallpaperDimmingScrim(float scrimOpacity) {}
 
     /**
      * Sets the actual display brightness.
      * @param value from {@link PowerManager#BRIGHTNESS_MIN} to {@link PowerManager#BRIGHTNESS_MAX}.
      */
-    void setDozeScreenBrightnessFloat(float value);
+    void setDozeScreenBrightness(float value);
 
     /**
      * Fade out screen before switching off the display power mode.
@@ -105,14 +105,6 @@ public interface DozeHost {
     /** Returns whether always-on-display is suppressed. This does not include suppressing
      * wake-up gestures. */
     boolean isAlwaysOnSuppressed();
-
-    /**
-     * Whether we are collecting the usudfps authentication pulse events.
-     * @return true if collecting the events, otherwise false.
-     */
-    default boolean isCollectingUsUdfpsScreenOffPulseEvents() {
-        return false;
-    }
 
     interface Callback {
         /**
@@ -146,9 +138,9 @@ public interface DozeHost {
         default void onSideFingerprintAcquisitionStarted() {}
 
         /**
-         * Called when ultrasonic fingerprint auth events want the screen on to show info.
+         * Called when fingerprint auth events want the screen on to show info.
          */
-        default void onUltrasonicUdfpsPulseWhileScreenOff(FingerprintAuthenticationStatus state) {}
+        default void onFingerprintPulseWhileScreenOff(FingerprintAuthenticationStatus state) {}
     }
 
     interface PulseCallback {

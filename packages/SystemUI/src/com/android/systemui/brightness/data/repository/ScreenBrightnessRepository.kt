@@ -27,7 +27,6 @@ import com.android.systemui.brightness.shared.model.LinearBrightness
 import com.android.systemui.brightness.shared.model.formatBrightness
 import com.android.systemui.brightness.shared.model.logDiffForTable
 import com.android.systemui.util.settings.SystemSettings
-import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Background
@@ -35,6 +34,7 @@ import com.android.systemui.dagger.qualifiers.DisplayId
 import com.android.systemui.log.LogBuffer
 import com.android.systemui.log.core.LogLevel
 import com.android.systemui.log.table.TableLogBuffer
+import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import javax.inject.Inject
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
@@ -140,8 +140,7 @@ constructor(
                 displayManager.registerDisplayListener(
                     listener,
                     null,
-                    /* eventFlags */ 0,
-                    DisplayManager.PRIVATE_EVENT_TYPE_DISPLAY_BRIGHTNESS,
+                    DisplayManager.EVENT_TYPE_DISPLAY_BRIGHTNESS,
                 )
 
                 awaitClose { displayManager.unregisterDisplayListener(listener) }

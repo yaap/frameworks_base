@@ -17,7 +17,6 @@
 package com.android.systemui.statusbar.systemstatusicons.ui.viewmodel
 
 import android.content.Context
-import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.getValue
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
@@ -26,11 +25,15 @@ import com.android.systemui.statusbar.systemstatusicons.airplane.ui.viewmodel.Ai
 import com.android.systemui.statusbar.systemstatusicons.alarm.ui.viewmodel.NextAlarmIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.bluetooth.ui.viewmodel.BluetoothIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.connecteddisplay.ui.viewmodel.ConnectedDisplayIconViewModel
+import com.android.systemui.statusbar.systemstatusicons.datasaver.ui.viewmodel.DataSaverIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.domain.interactor.OrderedIconSlotNamesInteractor
 import com.android.systemui.statusbar.systemstatusicons.ethernet.ui.viewmodel.EthernetIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.hotspot.ui.viewmodel.HotspotIconViewModel
+import com.android.systemui.statusbar.systemstatusicons.mobile.ui.viewmodel.MobileSystemStatusIconsViewModel
+import com.android.systemui.statusbar.systemstatusicons.profile.ui.viewmodel.ManagedProfileIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.ringer.ui.viewmodel.MuteIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.ringer.ui.viewmodel.VibrateIconViewModel
+import com.android.systemui.statusbar.systemstatusicons.vpn.ui.viewmodel.VpnIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.wifi.ui.viewmodel.WifiIconViewModel
 import com.android.systemui.statusbar.systemstatusicons.zenmode.ui.viewmodel.ZenModeIconViewModel
 import dagger.assisted.Assisted
@@ -55,11 +58,15 @@ constructor(
     airplaneModeIconViewModelFactory: AirplaneModeIconViewModel.Factory,
     bluetoothIconViewModelFactory: BluetoothIconViewModel.Factory,
     connectedDisplayIconViewModelFactory: ConnectedDisplayIconViewModel.Factory,
+    dataSaverIconViewModelFactory: DataSaverIconViewModel.Factory,
     ethernetIconViewModelFactory: EthernetIconViewModel.Factory,
     hotspotIconViewModelFactory: HotspotIconViewModel.Factory,
+    managedProfileIconViewModelFactory: ManagedProfileIconViewModel.Factory,
+    mobileSystemStatusIconsViewModelFactory: MobileSystemStatusIconsViewModel.Factory,
     muteIconViewModelFactory: MuteIconViewModel.Factory,
     nextAlarmIconViewModelFactory: NextAlarmIconViewModel.Factory,
     vibrateIconViewModelFactory: VibrateIconViewModel.Factory,
+    vpnIconViewModelFactory: VpnIconViewModel.Factory,
     wifiIconViewModelFactory: WifiIconViewModel.Factory,
     zenModeIconViewModelFactory: ZenModeIconViewModel.Factory,
 ) : ExclusiveActivatable() {
@@ -75,11 +82,15 @@ constructor(
     private val connectedDisplayIcon by lazy {
         connectedDisplayIconViewModelFactory.create(context)
     }
+    private val dataSaverIcon by lazy { dataSaverIconViewModelFactory.create(context) }
     private val ethernetIcon by lazy { ethernetIconViewModelFactory.create(context) }
     private val hotspotIcon by lazy { hotspotIconViewModelFactory.create(context) }
+    private val managedProfileIcon by lazy { managedProfileIconViewModelFactory.create(context) }
+    private val mobileIcons by lazy { mobileSystemStatusIconsViewModelFactory.create(context) }
     private val muteIcon by lazy { muteIconViewModelFactory.create(context) }
     private val nextAlarmIcon by lazy { nextAlarmIconViewModelFactory.create(context) }
     private val vibrateIcon by lazy { vibrateIconViewModelFactory.create(context) }
+    private val vpnIcon by lazy { vpnIconViewModelFactory.create(context) }
     private val wifiIcon by lazy { wifiIconViewModelFactory.create(context) }
     private val zenModeIcon by lazy { zenModeIconViewModelFactory.create(context) }
 
@@ -88,11 +99,15 @@ constructor(
             airplaneModeIcon,
             bluetoothIcon,
             connectedDisplayIcon,
+            dataSaverIcon,
             ethernetIcon,
             hotspotIcon,
+            managedProfileIcon,
+            mobileIcons,
             muteIcon,
             nextAlarmIcon,
             vibrateIcon,
+            vpnIcon,
             wifiIcon,
             zenModeIcon,
         )
@@ -102,7 +117,6 @@ constructor(
         unOrderedIconViewModels.associateBy { it.slotName }
     }
 
-    @VisibleForTesting
     val iconViewModels by
         hydrator.hydratedStateOf(
             traceName = "iconViewModels",
@@ -113,9 +127,6 @@ constructor(
                 },
         )
 
-    val icons
-        get() = iconViewModels.mapNotNull { it.icon }
-
     override suspend fun onActivated(): Nothing {
         coroutineScope {
             launch { hydrator.activate() }
@@ -123,11 +134,15 @@ constructor(
             launch { airplaneModeIcon.activate() }
             launch { bluetoothIcon.activate() }
             launch { connectedDisplayIcon.activate() }
+            launch { dataSaverIcon.activate() }
             launch { ethernetIcon.activate() }
             launch { hotspotIcon.activate() }
+            launch { managedProfileIcon.activate() }
+            launch { mobileIcons.activate() }
             launch { muteIcon.activate() }
             launch { nextAlarmIcon.activate() }
             launch { vibrateIcon.activate() }
+            launch { vpnIcon.activate() }
             launch { wifiIcon.activate() }
             launch { zenModeIcon.activate() }
         }

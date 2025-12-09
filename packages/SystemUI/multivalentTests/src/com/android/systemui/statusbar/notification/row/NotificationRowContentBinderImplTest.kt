@@ -26,6 +26,7 @@ import android.os.Build
 import android.os.CancellationSignal
 import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
+import android.platform.test.flag.junit.FlagsParameterization
 import android.testing.TestableLooper.RunWithLooper
 import android.util.TypedValue
 import android.util.TypedValue.COMPLEX_UNIT_SP
@@ -33,8 +34,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.RemoteViews
 import android.widget.TextView
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
+import com.android.server.notification.Flags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.NotificationLockscreenUserManager.REDACTION_TYPE_NONE
@@ -56,11 +57,10 @@ import com.android.systemui.statusbar.notification.row.NotificationRowContentBin
 import com.android.systemui.statusbar.notification.row.NotificationRowContentBinder.FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE
 import com.android.systemui.statusbar.notification.row.NotificationRowContentBinder.InflationCallback
 import com.android.systemui.statusbar.notification.row.NotificationRowContentBinder.InflationFlag
+import com.android.systemui.statusbar.notification.row.NotificationRowContentBinderImpl.InflationTaskTracker
 import com.android.systemui.statusbar.notification.row.shared.HeadsUpStatusBarModel
-import com.android.systemui.statusbar.notification.row.shared.LockscreenOtpRedaction
 import com.android.systemui.statusbar.notification.row.shared.NewRemoteViews
 import com.android.systemui.statusbar.notification.row.shared.NotificationContentModel
-import com.android.systemui.statusbar.notification.row.shared.NotificationRowContentBinderRefactor
 import com.android.systemui.statusbar.policy.InflatedSmartReplyState
 import com.android.systemui.statusbar.policy.InflatedSmartReplyViewHolder
 import com.android.systemui.statusbar.policy.SmartReplyStateInflater
@@ -80,12 +80,18 @@ import org.mockito.kotlin.spy
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import platform.test.runner.parameterized.ParameterizedAndroidJunit4
+import platform.test.runner.parameterized.Parameters
 
 @SmallTest
-@RunWith(AndroidJUnit4::class)
+@RunWith(ParameterizedAndroidJunit4::class)
 @RunWithLooper
-@EnableFlags(NotificationRowContentBinderRefactor.FLAG_NAME, LockscreenOtpRedaction.FLAG_NAME)
-class NotificationRowContentBinderImplTest : SysuiTestCase() {
+class NotificationRowContentBinderImplTest(flags: FlagsParameterization) : SysuiTestCase() {
+
+    init {
+        mSetFlagsRule.setFlagsParameterization(flags)
+    }
+
     private lateinit var notificationInflater: NotificationRowContentBinderImpl
     private lateinit var builder: Notification.Builder
     private lateinit var row: ExpandableNotificationRow
@@ -239,7 +245,7 @@ class NotificationRowContentBinderImplTest : SysuiTestCase() {
             parentLayout = row.privateLayout,
             existingView = null,
             existingWrapper = null,
-            runningInflations = HashMap(),
+            runningInflations = InflationTaskTracker(),
             applyCallback =
                 object : NotificationRowContentBinderImpl.ApplyCallback() {
                     override fun setResultView(v: View) {}
@@ -506,7 +512,6 @@ class NotificationRowContentBinderImplTest : SysuiTestCase() {
 
     @Test
     @Throws(java.lang.Exception::class)
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     fun testSensitiveContentPublicView_messageStyle() {
         val displayName = "Display Name"
         val messageText = "Message Text"
@@ -549,7 +554,6 @@ class NotificationRowContentBinderImplTest : SysuiTestCase() {
 
     @Test
     @Throws(java.lang.Exception::class)
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     fun testSensitiveContentPublicView_nonMessageStyle() {
         val contentTitle = "Content Title"
         val contentText = "Content Text"
@@ -657,6 +661,15 @@ class NotificationRowContentBinderImplTest : SysuiTestCase() {
     }
 
     companion object {
+
+        @JvmStatic
+        @Parameters(name = "{0}")
+        fun getParams(): List<FlagsParameterization> {
+            return FlagsParameterization.allCombinationsOf(
+                Flags.FLAG_NOTIFICATION_CUSTOM_VIEW_URI_RESTRICTION
+            )
+        }
+
         private fun inflateAndWait(
             inflater: NotificationRowContentBinderImpl,
             @InflationFlag contentToInflate: Int,

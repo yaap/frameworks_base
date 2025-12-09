@@ -16,6 +16,9 @@
 
 package com.android.systemui.flashlight.data.repository
 
+import android.content.packageManager
+import android.content.pm.PackageManager
+import android.content.pm.UserInfo
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager.TorchCallback
 import android.platform.test.annotations.EnableFlags
@@ -30,14 +33,15 @@ import com.android.systemui.kosmos.collectLastValue
 import com.android.systemui.kosmos.runCurrent
 import com.android.systemui.kosmos.runTest
 import com.android.systemui.testKosmos
+import com.android.systemui.user.data.repository.fakeUserRepository
 import com.google.common.truth.Truth.assertThat
 import java.util.concurrent.Executor
 import kotlin.time.Duration.Companion.seconds
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito
@@ -267,61 +271,69 @@ class FlashlightRepositoryTest : SysuiTestCase() {
             assertThat(state).isEqualTo(FlashlightModel.Unavailable.Temporarily.CameraInUse)
         }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun setLevel0_throwsException() =
-        kosmos.runTest {
-            injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
+    @Test
+    fun setLevel0_throwsException() {
+        assertThrows(IllegalArgumentException::class.java) {
+            kosmos.runTest {
+                injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
 
-            startFlashlightRepository(true)
+                startFlashlightRepository(true)
 
-            val state by collectLastValue(underTest.state)
+                val state by collectLastValue(underTest.state)
 
-            val disabledAtDefaultLevel =
-                FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
+                val disabledAtDefaultLevel =
+                    FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
 
-            assertThat(state).isEqualTo(disabledAtDefaultLevel)
+                assertThat(state).isEqualTo(disabledAtDefaultLevel)
 
-            underTest.setLevel(0)
-
-            assertThat(state).isEqualTo(disabledAtDefaultLevel)
+                underTest.setLevel(0)
+                assertThat(state).isEqualTo(disabledAtDefaultLevel)
+            }
         }
+    }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun setLevelNegative_throwsException() =
-        kosmos.runTest {
-            injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
+    @Test
+    fun setLevelNegative_throwsException() {
+        assertThrows(IllegalArgumentException::class.java) {
+            kosmos.runTest {
+                injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
 
-            startFlashlightRepository(true)
+                startFlashlightRepository(true)
 
-            val state by collectLastValue(underTest.state)
+                val state by collectLastValue(underTest.state)
 
-            val disabledAtDefaultLevel =
-                FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
+                val disabledAtDefaultLevel =
+                    FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
 
-            assertThat(state).isEqualTo(disabledAtDefaultLevel)
+                assertThat(state).isEqualTo(disabledAtDefaultLevel)
 
-            underTest.setLevel(-1) // exception thrown
+                underTest.setLevel(-1)
 
-            assertThat(state).isEqualTo(disabledAtDefaultLevel)
+                assertThat(state).isEqualTo(disabledAtDefaultLevel)
+            }
         }
+    }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun setLevelAboveMax_throwsException() =
-        kosmos.runTest {
-            injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
+    @Test
+    fun setLevelAboveMax_throwsException() {
+        assertThrows(IllegalArgumentException::class.java) {
+            kosmos.runTest {
+                injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
 
-            startFlashlightRepository(true)
+                startFlashlightRepository(true)
 
-            val state by collectLastValue(underTest.state)
+                val state by collectLastValue(underTest.state)
 
-            val disabledAtDefaultLevel =
-                FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
-            assertThat(state).isEqualTo(disabledAtDefaultLevel)
+                val disabledAtDefaultLevel =
+                    FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
+                assertThat(state).isEqualTo(disabledAtDefaultLevel)
 
-            underTest.setLevel(DEFAULT_MAX_LEVEL + 1)
+                underTest.setLevel(DEFAULT_MAX_LEVEL + 1)
 
-            assertThat(state).isEqualTo(disabledAtDefaultLevel)
+                assertThat(state).isEqualTo(disabledAtDefaultLevel)
+            }
         }
+    }
 
     @Test
     fun enableThenDisable_stateUpdates() =
@@ -353,7 +365,7 @@ class FlashlightRepositoryTest : SysuiTestCase() {
         }
 
     @Test
-    fun enableSetLevelDisable_stateUpdatesReturnsToDisabledAndDefaultLevel() =
+    fun enableSetLevelDisable_stateUpdatesSetsToDisabledAndLastLevel() =
         kosmos.runTest {
             injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
 
@@ -381,7 +393,7 @@ class FlashlightRepositoryTest : SysuiTestCase() {
             underTest.setEnabled(false)
             assertThat(state)
                 .isEqualTo(
-                    FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
+                    FlashlightModel.Available.Level(false, DEFAULT_MAX_LEVEL, DEFAULT_MAX_LEVEL)
                 )
         }
 
@@ -432,7 +444,7 @@ class FlashlightRepositoryTest : SysuiTestCase() {
             runCurrent()
             underTest.setEnabled(true)
 
-            verify(cameraManager, times(1)).setTorchMode(anyString(), anyBoolean())
+            verify(cameraManager, times(1)).turnOnTorchWithStrengthLevel(anyString(), anyInt())
         }
 
     @Test
@@ -459,6 +471,74 @@ class FlashlightRepositoryTest : SysuiTestCase() {
             underTest.setLevel(BASE_TORCH_LEVEL)
 
             verify(cameraManager, times(1)).turnOnTorchWithStrengthLevel(anyString(), anyInt())
+        }
+
+    @Test
+    fun setLevelTemporaryDisableEnable_forgetsTemporaryLevel() =
+        kosmos.runTest {
+            injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
+
+            val state by collectLastValue(underTest.state)
+            val tempLevel = 2
+            val permLevel = 3
+
+            startFlashlightRepository(true)
+
+            assertThat(state)
+                .isEqualTo(
+                    FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
+                )
+
+            underTest.setLevel(permLevel)
+
+            assertThat(state)
+                .isEqualTo(FlashlightModel.Available.Level(true, permLevel, DEFAULT_MAX_LEVEL))
+
+            underTest.setTemporaryLevel(tempLevel)
+
+            assertThat(state)
+                .isEqualTo(FlashlightModel.Available.Level(true, tempLevel, DEFAULT_MAX_LEVEL))
+
+            underTest.setEnabled(false)
+
+            assertThat(state)
+                .isEqualTo(FlashlightModel.Available.Level(false, permLevel, DEFAULT_MAX_LEVEL))
+
+            underTest.setEnabled(true)
+
+            assertThat(state)
+                .isEqualTo(FlashlightModel.Available.Level(true, permLevel, DEFAULT_MAX_LEVEL))
+        }
+
+    @Test
+    fun setLevelTemporaryDisableEnable_remembersLevel() =
+        kosmos.runTest {
+            injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
+
+            val state by collectLastValue(underTest.state)
+            val permLevel = 3
+
+            startFlashlightRepository(true)
+
+            assertThat(state)
+                .isEqualTo(
+                    FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
+                )
+
+            underTest.setLevel(permLevel)
+
+            assertThat(state)
+                .isEqualTo(FlashlightModel.Available.Level(true, permLevel, DEFAULT_MAX_LEVEL))
+
+            underTest.setEnabled(false)
+
+            assertThat(state)
+                .isEqualTo(FlashlightModel.Available.Level(false, permLevel, DEFAULT_MAX_LEVEL))
+
+            underTest.setEnabled(true)
+
+            assertThat(state)
+                .isEqualTo(FlashlightModel.Available.Level(true, permLevel, DEFAULT_MAX_LEVEL))
         }
 
     @Test
@@ -527,11 +607,81 @@ class FlashlightRepositoryTest : SysuiTestCase() {
             assertThat(state).isEqualTo(FlashlightModel.Unavailable.Temporarily.NotFound)
         }
 
+    @Test
+    fun deviceSupportsFlashlight_whenFalse_matchesPackageManager() =
+        kosmos.runTest {
+            startFlashlightRepository(false)
+
+            runCurrent()
+
+            assertThat(packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH))
+                .isFalse()
+            assertThat(underTest.deviceSupportsFlashlight).isFalse()
+        }
+
+    @Test
+    fun deviceSupportsFlashlight_whenTrue_matchesPackageManager() =
+        kosmos.runTest {
+            startFlashlightRepository(true)
+
+            runCurrent()
+
+            assertThat(packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH))
+                .isTrue()
+            assertThat(underTest.deviceSupportsFlashlight).isTrue()
+        }
+
+    @Test
+    fun setLevelDisableSwitchUser_secondUserHasItsOwnDefaultLevel() =
+        kosmos.runTest {
+            fakeUserRepository.setUserInfos(USER_INFOS)
+            fakeUserRepository.setSelectedUserInfo(USER_INFOS[0])
+            injectCameraCharacteristics(true, CameraCharacteristics.LENS_FACING_BACK)
+
+            val state by collectLastValue(underTest.state)
+            val permLevelForUser1 = 3
+
+            startFlashlightRepository(true)
+
+            assertThat(state)
+                .isEqualTo(
+                    FlashlightModel.Available.Level(false, DEFAULT_DEFAULT_LEVEL, DEFAULT_MAX_LEVEL)
+                )
+
+            underTest.setLevel(permLevelForUser1)
+
+            assertThat(state)
+                .isEqualTo(
+                    FlashlightModel.Available.Level(true, permLevelForUser1, DEFAULT_MAX_LEVEL)
+                )
+
+            underTest.setEnabled(false)
+
+            assertThat(state)
+                .isEqualTo(
+                    FlashlightModel.Available.Level(false, permLevelForUser1, DEFAULT_MAX_LEVEL)
+                )
+
+            fakeUserRepository.setSelectedUserInfo(USER_INFOS[1])
+
+            underTest.setEnabled(true)
+
+            assertThat(state)
+                .isNotEqualTo(
+                    FlashlightModel.Available.Level(true, permLevelForUser1, DEFAULT_MAX_LEVEL)
+                )
+        }
+
     companion object {
         private const val BASE_TORCH_LEVEL = 1
         private const val DEFAULT_DEFAULT_LEVEL = 21
         private const val DEFAULT_MAX_LEVEL = 45
         private const val DEFAULT_ID = "ID"
         private val RECONNECT_COOLDOWN = 30.seconds
+        private val USER_INFOS =
+            listOf(
+                UserInfo(/* id= */ 100, /* name= */ "First user", /* flags= */ 0),
+                UserInfo(/* id= */ 101, /* name= */ "Second user", /* flags= */ 0),
+            )
     }
 }

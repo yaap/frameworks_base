@@ -218,20 +218,6 @@ public class VirtualDeviceInternal {
                 mSoundEffectListener);
     }
 
-    @RequiresPermission(Manifest.permission.ACCESS_COMPUTER_CONTROL)
-    VirtualDeviceInternal(
-            IVirtualDeviceManager service,
-            Context context,
-            VirtualDeviceParams params) throws RemoteException {
-        mContext = context.getApplicationContext();
-        mVirtualDevice = service.createLocalVirtualDevice(
-                new Binder(),
-                mContext.getAttributionSource(),
-                params,
-                mActivityListenerBinder,
-                mSoundEffectListener);
-    }
-
     VirtualDeviceInternal(Context context, IVirtualDevice virtualDevice) {
         mContext = context.getApplicationContext();
         mVirtualDevice = virtualDevice;
@@ -533,6 +519,13 @@ public class VirtualDeviceInternal {
         }
     }
 
+    void setDisplayUiMode(int displayId, int uiMode) {
+        try {
+            mVirtualDevice.setDisplayUiMode(displayId, uiMode);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
     void addActivityListener(
             @CallbackExecutor @NonNull Executor executor,
             @NonNull VirtualDeviceManager.ActivityListener listener) {

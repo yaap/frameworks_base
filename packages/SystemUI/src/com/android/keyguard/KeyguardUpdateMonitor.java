@@ -36,6 +36,7 @@ import static android.hardware.biometrics.BiometricSourceType.FACE;
 import static android.hardware.biometrics.BiometricSourceType.FINGERPRINT;
 import static android.os.BatteryManager.BATTERY_STATUS_UNKNOWN;
 import static android.os.BatteryManager.CHARGING_POLICY_DEFAULT;
+import static android.security.Flags.secureLockDevice;
 import static android.telephony.SubscriptionManager.PROFILE_CLASS_PROVISIONING;
 import static android.telephony.SubscriptionManager.SUBSCRIPTION_TYPE_REMOTE_SIM;
 
@@ -44,6 +45,7 @@ import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STR
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_DPM_LOCK_NOW;
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_LOCKOUT;
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_AUTH_REQUIRED_AFTER_USER_LOCKDOWN;
+import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE;
 import static com.android.systemui.Flags.glanceableHubV2;
 import static com.android.systemui.Flags.simPinBouncerReset;
 import static com.android.systemui.statusbar.policy.DevicePostureController.DEVICE_POSTURE_OPENED;
@@ -125,6 +127,7 @@ import com.android.settingslib.WirelessUtils;
 import com.android.settingslib.fuelgauge.BatteryStatus;
 import com.android.systemui.CoreStartable;
 import com.android.systemui.Flags;
+import com.android.systemui.ambient.statusbar.shared.flag.OngoingActivityChipsOnDream;
 import com.android.systemui.biometrics.AuthController;
 import com.android.systemui.biometrics.FingerprintInteractiveToAuthProvider;
 import com.android.systemui.bouncer.domain.interactor.AlternateBouncerInteractor;
@@ -143,6 +146,7 @@ import com.android.systemui.deviceentry.shared.model.FaceDetectionStatus;
 import com.android.systemui.deviceentry.shared.model.FailedFaceAuthenticationStatus;
 import com.android.systemui.deviceentry.shared.model.HelpFaceAuthenticationStatus;
 import com.android.systemui.deviceentry.shared.model.SuccessFaceAuthenticationStatus;
+import com.android.systemui.dreams.DreamOverlayCallbackController;
 import com.android.systemui.dump.DumpManager;
 import com.android.systemui.dump.DumpsysTableLogger;
 import com.android.systemui.keyguard.KeyguardWmStateRefactor;
@@ -150,12 +154,13 @@ import com.android.systemui.keyguard.domain.interactor.KeyguardServiceShowLocksc
 import com.android.systemui.keyguard.domain.interactor.ShowWhileAwakeReason;
 import com.android.systemui.keyguard.shared.constants.TrustAgentUiEvent;
 import com.android.systemui.log.SessionTracker;
-import com.android.systemui.plugins.clocks.WeatherData;
+import com.android.systemui.plugins.keyguard.data.model.WeatherData;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.res.R;
 import com.android.systemui.scene.domain.interactor.SceneInteractor;
 import com.android.systemui.scene.shared.flag.SceneContainerFlag;
 import com.android.systemui.scene.shared.model.Overlays;
+import com.android.systemui.securelockdevice.domain.interactor.SecureLockDeviceInteractor;
 import com.android.systemui.settings.UserTracker;
 import com.android.systemui.shade.ShadeDisplayAware;
 import com.android.systemui.shared.system.TaskStackChangeListener;
@@ -295,6 +300,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private final Provider<JavaAdapter> mJavaAdapter;
     private final Provider<SceneInteractor> mSceneInteractor;
     private final Provider<AlternateBouncerInteractor> mAlternateBouncerInteractor;
+    private final Provider<SecureLockDeviceInteractor> mSecureLockDeviceInteractor;
     private final Provider<CommunalSceneInteractor> mCommunalSceneInteractor;
     private final Provider<KeyguardServiceShowLockscreenInteractor>
             mKeyguardServiceShowLockscreenInteractor;
@@ -331,6 +337,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private boolean mKeyguardOccluded;
     private boolean mCredentialAttempted;
     private boolean mKeyguardGoingAway;
+
     /**
      * Whether the keyguard is forced into a dismissible state.
      */
@@ -345,6 +352,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private boolean mOccludingAppRequestingFp;
     private boolean mSecureCameraLaunched;
     private boolean mBiometricPromptShowing;
+    private boolean mIsSecureLockDeviceEnabled;
+    private boolean mSecureLockDeviceListeningForBiometrics;
+
     @VisibleForTesting
     protected boolean mTelephonyCapable;
     private boolean mAllowFingerprintOnCurrentOccludingActivity;
@@ -382,6 +392,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private final SensorPrivacyManager mSensorPrivacyManager;
     private final ActiveUnlockConfig mActiveUnlockConfig;
     private final IDreamManager mDreamManager;
+    private final DreamOverlayCallbackController mDreamOverlayCallbackController;
     private final TelephonyManager mTelephonyManager;
     @Nullable
     private final FingerprintManager mFpm;
@@ -410,6 +421,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     protected int mFingerprintRunningState = BIOMETRIC_STATE_STOPPED;
     private boolean mFingerprintDetectRunning;
     private boolean mIsDreaming;
+    private boolean mIsDreamingWithOverlay = false;
     private boolean mCommunalShowing;
     private int mActiveMobileDataSubscription = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
     private final FingerprintInteractiveToAuthProvider mFingerprintInteractiveToAuthProvider;
@@ -884,6 +896,13 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     }
 
     /**
+     * @return whether the device is currently dreaming with overlay (not doze).
+     */
+    public boolean isDreamingWithOverlay() {
+        return mIsDreamingWithOverlay;
+    }
+
+    /**
      * If the device is dreaming, awakens the device
      */
     public void awakenFromDream() {
@@ -909,38 +928,65 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         Trace.endSection();
     }
 
+    /**
+     * Indicates if STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE flag is set for a given
+     * userId.
+     *
+     * Returns false if FLAG_SECURE_LOCK_DEVICE is disabled.
+     */
+    private boolean isSecureLockDeviceStrongBiometricAuthFlagSet(int userId) {
+        if (!secureLockDevice()) {
+            return false;
+        }
+
+        return containsFlag(mStrongAuthTracker.getStrongAuthForUser(userId),
+                STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE);
+    }
+
+
     @VisibleForTesting
     public void onFingerprintAuthenticated(int userId, boolean isStrongBiometric) {
-        Assert.isMainThread();
-        Trace.beginSection("KeyGuardUpdateMonitor#onFingerPrintAuthenticated");
-        mUserFingerprintAuthenticated.put(userId,
-                new BiometricAuthenticated(true, isStrongBiometric));
-        // Update/refresh trust state only if user can skip bouncer
-        if (getUserCanSkipBouncer(userId)) {
-            mTrustManager.unlockedByBiometricForUser(userId, FINGERPRINT);
-        }
-        // Don't send cancel if authentication succeeds
-        mFingerprintCancelSignal = null;
-        mLogger.logFingerprintSuccess(userId, isStrongBiometric);
-        updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE);
-        for (int i = 0; i < mCallbacks.size(); i++) {
-            KeyguardUpdateMonitorCallback cb = mCallbacks.get(i).get();
-            if (cb != null) {
-                cb.onBiometricAuthenticated(userId, FINGERPRINT,
-                        isStrongBiometric);
+        try {
+            Assert.isMainThread();
+            Trace.beginSection("KeyguardUpdateMonitor#onFingerprintAuthenticated");
+            mUserFingerprintAuthenticated.put(userId,
+                    new BiometricAuthenticated(true, isStrongBiometric));
+            // Update/refresh trust state only if user can skip bouncer
+            if (getUserCanSkipBouncer(userId)) {
+                mTrustManager.unlockedByBiometricForUser(userId, FINGERPRINT);
             }
+            // Don't send cancel if authentication succeeds
+            mFingerprintCancelSignal = null;
+            mLogger.logFingerprintSuccess(userId, isStrongBiometric);
+            updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE);
+            for (int i = 0; i < mCallbacks.size(); i++) {
+                KeyguardUpdateMonitorCallback cb = mCallbacks.get(i).get();
+                if (cb != null) {
+                    cb.onBiometricAuthenticated(userId, FINGERPRINT,
+                            isStrongBiometric);
+                }
+            }
+
+            mHandler.sendMessageDelayed(
+                    mHandler.obtainMessage(MSG_BIOMETRIC_AUTHENTICATION_CONTINUE),
+                    FINGERPRINT_CONTINUE_DELAY_MS);
+
+            // Only authenticate fingerprint once when assistant is visible
+            mAssistantVisible = false;
+
+            if (secureLockDevice() && isSecureLockDeviceStrongBiometricAuthFlagSet(userId)) {
+                // Disabling secure lock device / unsetting strong auth flags is handled by
+                // SecureLockDeviceService.
+                Log.d(TAG, "onFingerprintAuthenticated(): secure lock device is enabled - unlock "
+                        + "is handled by SecureLockDeviceService.");
+                return;
+            }
+
+            // Report unlock with strong or non-strong biometric
+            reportSuccessfulBiometricUnlock(isStrongBiometric, userId);
+        } finally {
+            Trace.endSection();
         }
-
-        mHandler.sendMessageDelayed(mHandler.obtainMessage(MSG_BIOMETRIC_AUTHENTICATION_CONTINUE),
-                FINGERPRINT_CONTINUE_DELAY_MS);
-
-        // Only authenticate fingerprint once when assistant is visible
-        mAssistantVisible = false;
-
-        // Report unlock with strong or non-strong biometric
-        reportSuccessfulBiometricUnlock(isStrongBiometric, userId);
-
-        Trace.endSection();
     }
 
     private void reportSuccessfulBiometricUnlock(boolean isStrongBiometric, int userId) {
@@ -1208,8 +1254,16 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         // Only authenticate face once when assistant is visible
         mAssistantVisible = false;
 
-        // Report unlock with strong or non-strong biometric
-        reportSuccessfulBiometricUnlock(isStrongBiometric, userId);
+        if (secureLockDevice() && isSecureLockDeviceStrongBiometricAuthFlagSet(userId)) {
+            // Disabling secure lock device / unsetting strong auth flags is handled by
+            // SecureLockDeviceService.
+            Log.d(TAG, "onFaceAuthenticated(): secure lock device is enabled - skipping "
+                    + "unlock because face success requires user confirmation and is handled by "
+                    + "SecureLockDeviceService.");
+        } else {
+            // Report unlock with strong or non-strong biometric
+            reportSuccessfulBiometricUnlock(isStrongBiometric, userId);
+        }
 
         Trace.endSection();
     }
@@ -2220,6 +2274,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
             SubscriptionManager subscriptionManager,
             UserManager userManager,
             IDreamManager dreamManager,
+            DreamOverlayCallbackController dreamOverlayCallbackController,
             DevicePolicyManager devicePolicyManager,
             SensorPrivacyManager sensorPrivacyManager,
             TelephonyManager telephonyManager,
@@ -2232,6 +2287,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
             TaskStackChangeListeners taskStackChangeListeners,
             SelectedUserInteractor selectedUserInteractor,
             IActivityTaskManager activityTaskManagerService,
+            Provider<SecureLockDeviceInteractor> secureLockDeviceInteractor,
             Provider<AlternateBouncerInteractor> alternateBouncerInteractor,
             Provider<JavaAdapter> javaAdapter,
             Provider<SceneInteractor> sceneInteractor,
@@ -2264,6 +2320,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         mTrustManager = trustManager;
         mUserManager = userManager;
         mDreamManager = dreamManager;
+        mDreamOverlayCallbackController = dreamOverlayCallbackController;
         mTelephonyManager = telephonyManager;
         mDevicePolicyManager = devicePolicyManager;
         mPackageManager = packageManager;
@@ -2285,6 +2342,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         mFingerprintInteractiveToAuthProvider = interactiveToAuthProvider.orElse(null);
         mIsSystemUser = mUserManager.isSystemUser();
         mAlternateBouncerInteractor = alternateBouncerInteractor;
+        mSecureLockDeviceInteractor = secureLockDeviceInteractor;
         mJavaAdapter = javaAdapter;
         mSceneInteractor = sceneInteractor;
         mCommunalSceneInteractor = communalSceneInteractor;
@@ -2415,6 +2473,19 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
             }
         };
     }
+
+    private final DreamOverlayCallbackController.Callback mDreamOverlayCallback =
+            new DreamOverlayCallbackController.Callback() {
+                @Override
+                public void onWakeUp() {
+                    mIsDreamingWithOverlay = false;
+                }
+
+                @Override
+                public void onStartDream() {
+                    mIsDreamingWithOverlay = true;
+                }
+            };
 
     @Override
     public void start() {
@@ -2578,11 +2649,24 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
             );
         }
 
+        if (secureLockDevice()) {
+            mJavaAdapter.get().alwaysCollectFlow(
+                    mSecureLockDeviceInteractor.get().getShouldListenForBiometricAuth(),
+                    this::onBiometricAuthListeningStateForSecureLockDeviceUpdated);
+            mJavaAdapter.get().alwaysCollectFlow(
+                    mSecureLockDeviceInteractor.get().isSecureLockDeviceEnabled(),
+                    this::onSecureLockDeviceEnabledUpdated);
+        }
+
         if (KeyguardWmStateRefactor.isEnabled()) {
             mJavaAdapter.get().alwaysCollectFlow(
                     mKeyguardServiceShowLockscreenInteractor.get().getShowNowEvents(),
                     this::onKeyguardServiceShowLockscreenNowEvents
             );
+        }
+
+        if (OngoingActivityChipsOnDream.isEnabled()) {
+            mDreamOverlayCallbackController.addCallback(mDreamOverlayCallback);
         }
 
         if (glanceableHubV2()) {
@@ -2909,6 +2993,24 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     }
 
     /**
+     * Called on updates to whether secure lock device is requesting biometric auth.
+     */
+    @VisibleForTesting
+    void onBiometricAuthListeningStateForSecureLockDeviceUpdated(boolean listenForBiometrics) {
+        mSecureLockDeviceListeningForBiometrics = listenForBiometrics;
+        updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE);
+    }
+
+    /**
+     * Called on updates to whether secure lock device is enabled.
+     */
+    @VisibleForTesting
+    void onSecureLockDeviceEnabledUpdated(boolean isSecureLockDeviceEnabled) {
+        mIsSecureLockDeviceEnabled = isSecureLockDeviceEnabled;
+        updateFingerprintListeningState(BIOMETRIC_ACTION_UPDATE);
+    }
+
+    /**
      * Whether the alternate bouncer is showing.
      */
     public void setAlternateBouncerShowing(boolean showing) {
@@ -3085,9 +3187,12 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
                 || !mFingerprintInteractiveToAuthProvider.isEnabled(user)
                 || (isDeviceInteractive() && !mGoingToSleep);
 
-        boolean shouldListen = shouldListenKeyguardState && shouldListenUserState && !mIsDeviceInPocket
+        final boolean shouldListenSecureLockDeviceState = !secureLockDevice()
+                || !mIsSecureLockDeviceEnabled || mSecureLockDeviceListeningForBiometrics;
+
+        boolean shouldListen = shouldListenKeyguardState && shouldListenUserState
                 && shouldListenBouncerState && shouldListenUdfpsState && !mBiometricPromptShowing
-                && shouldListenFpsState;
+                && shouldListenSecureLockDeviceState && shouldListenFpsState;
         logListenerModelData(
                 new KeyguardFingerprintListenModel(
                     System.currentTimeMillis(),

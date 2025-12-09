@@ -32,6 +32,8 @@ import android.hardware.face.FaceManager
 import android.hardware.face.FaceSensorProperties
 import android.hardware.face.FaceSensorPropertiesInternal
 import android.os.CancellationSignal
+import android.platform.test.annotations.EnableFlags
+import android.security.Flags.FLAG_SECURE_LOCK_DEVICE
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.compose.animation.scene.ObservableTransitionState
@@ -41,6 +43,8 @@ import com.android.systemui.Flags as AConfigFlags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.bouncer.data.repository.fakeKeyguardBouncerRepository
 import com.android.systemui.bouncer.domain.interactor.alternateBouncerInteractor
+import com.android.systemui.bouncer.domain.interactor.bouncerIsNotShowing
+import com.android.systemui.bouncer.domain.interactor.bouncerIsShowing
 import com.android.systemui.concurrency.fakeExecutor
 import com.android.systemui.coroutines.FlowValue
 import com.android.systemui.coroutines.collectLastValue
@@ -531,6 +535,15 @@ class DeviceEntryFaceAuthRepositoryTest : SysuiTestCase() {
             testGatingCheckForFaceAuth { biometricSettingsRepository.setIsUserInLockdown(true) }
         }
 
+    @EnableFlags(FLAG_SECURE_LOCK_DEVICE)
+    @Test
+    fun authenticateDoesNotRunIfRequiringPrimaryAuthForSecureLockDevice() =
+        testScope.runTest {
+            testGatingCheckForFaceAuth {
+                biometricSettingsRepository.setIsSecureLockDeviceEnabled(true)
+            }
+        }
+
     @Test
     fun authenticateDoesNotRunIfUserSwitchingIsCurrentlyInProgress() =
         testScope.runTest {
@@ -668,6 +681,7 @@ class DeviceEntryFaceAuthRepositoryTest : SysuiTestCase() {
             allPreconditionsToRunFaceAuthAreTrue()
             bouncerRepository.setAlternateVisible(false)
             bouncerRepository.setPrimaryShow(false)
+            kosmos.bouncerIsNotShowing()
 
             assertThat(canFaceAuthRun()).isTrue()
 
@@ -682,6 +696,7 @@ class DeviceEntryFaceAuthRepositoryTest : SysuiTestCase() {
 
             // but bouncer is shown after that.
             bouncerRepository.setPrimaryShow(true)
+            kosmos.bouncerIsShowing()
             assertThat(canFaceAuthRun()).isTrue()
         }
 
@@ -1123,6 +1138,15 @@ class DeviceEntryFaceAuthRepositoryTest : SysuiTestCase() {
             testGatingCheckForDetect { biometricSettingsRepository.setIsUserInLockdown(true) }
         }
 
+    @EnableFlags(FLAG_SECURE_LOCK_DEVICE)
+    @Test
+    fun detectDoesNotRunWhenInSecureLockDevicePrimaryAuth() =
+        testScope.runTest {
+            testGatingCheckForDetect {
+                biometricSettingsRepository.setIsSecureLockDeviceEnabled(true)
+            }
+        }
+
     @Test
     fun detectDoesNotRunWhenBypassIsNotEnabled() =
         testScope.runTest {
@@ -1427,6 +1451,7 @@ class DeviceEntryFaceAuthRepositoryTest : SysuiTestCase() {
         biometricSettingsRepository.setIsFaceAuthSupportedInCurrentPosture(true)
         biometricSettingsRepository.setIsFaceAuthCurrentlyAllowed(true)
         biometricSettingsRepository.setIsUserInLockdown(false)
+        biometricSettingsRepository.setIsSecureLockDeviceEnabled(false)
         fakeUserRepository.setSelectedUserInfo(primaryUser, SelectionStatus.SELECTION_COMPLETE)
         faceLockoutResetCallback.value.onLockoutReset(0)
         bouncerRepository.setAlternateVisible(true)

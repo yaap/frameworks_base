@@ -48,16 +48,16 @@ interface IGlanceableHubWidgetManagerService {
     }
 
     // Mirrors [AppWidgetHost#AppWidgetHostListener].
-    oneway interface IAppWidgetHostListener {
-        void onUpdateProviderInfo(in @nullable AppWidgetProviderInfo appWidget);
+    interface IAppWidgetHostListener {
+        oneway void onUpdateProviderInfo(in @nullable AppWidgetProviderInfo appWidget);
 
-        void updateAppWidget(in @nullable RemoteViews views);
+        oneway void updateAppWidget(in @nullable RemoteViews views);
 
-        void updateAppWidgetDeferred(in String packageName, int appWidgetId);
+        oneway void updateAppWidgetDeferred(in String packageName, int appWidgetId);
 
-        void onViewDataChanged(int viewId);
+        oneway void onViewDataChanged(int viewId);
 
-        void collectWidgetEvent(IAppWidgetEventCallback callback);
+        @nullable AppWidgetEvent collectWidgetEvent();
     }
 
     oneway interface IConfigureWidgetCallback {
@@ -69,10 +69,5 @@ interface IGlanceableHubWidgetManagerService {
             // Called when the widget configuration operation returns a result.
             void onResult(boolean success);
         }
-    }
-
-    oneway interface IAppWidgetEventCallback {
-        // Called to return the AppWidgetEvent back to the host.
-        void onResult(in @nullable AppWidgetEvent event);
     }
 }

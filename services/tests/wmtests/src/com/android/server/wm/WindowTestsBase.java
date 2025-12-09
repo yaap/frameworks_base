@@ -600,6 +600,9 @@ public class WindowTestsBase extends SystemServiceTestsBase {
         w.fillClientWindowFramesAndConfiguration(new ClientWindowFrames(),
                 new MergedConfiguration(), new ActivityWindowInfo(), true /* useLatestConfig */,
                 visible);
+        if (w.mWmService.mAlwaysSeqId) {
+            w.setLastConfigReportedToClientForTest(true);
+        }
     }
 
     /**
@@ -770,7 +773,7 @@ public class WindowTestsBase extends SystemServiceTestsBase {
         return activity;
     }
 
-    private static void postCreateActivitySetup(ActivityRecord activity, DisplayContent dc) {
+    static void postCreateActivitySetup(ActivityRecord activity, DisplayContent dc) {
         activity.onDisplayChanged(dc);
         activity.setOccludesParent(true);
         activity.setVisible(true);

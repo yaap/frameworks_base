@@ -24,6 +24,7 @@ import android.content.res.Resources
 import android.os.UserHandle
 import android.provider.Settings
 import com.android.systemui.Flags.communalHub
+import com.android.systemui.Flags.glanceableHubEnabledByDefault
 import com.android.systemui.Flags.glanceableHubV2
 import com.android.systemui.broadcast.BroadcastDispatcher
 import com.android.systemui.communal.data.model.CommunalFeature
@@ -37,8 +38,8 @@ import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.flags.FeatureFlagsClassic
 import com.android.systemui.flags.Flags
+import com.android.systemui.shared.settings.data.repository.SecureSettingsRepository
 import com.android.systemui.util.kotlin.emitOnStart
-import com.android.systemui.util.settings.repository.UserAwareSecureSettingsRepository
 import javax.inject.Inject
 import javax.inject.Named
 import kotlinx.coroutines.CoroutineDispatcher
@@ -108,13 +109,28 @@ constructor(
     @Background private val bgDispatcher: CoroutineDispatcher,
     @Main private val resources: Resources,
     private val featureFlagsClassic: FeatureFlagsClassic,
-    private val userAwareSecureSettingsRepository: UserAwareSecureSettingsRepository,
+    private val secureSettingsRepository: SecureSettingsRepository,
     private val broadcastDispatcher: BroadcastDispatcher,
     private val devicePolicyManager: DevicePolicyManager,
     @Named(DEFAULT_BACKGROUND_TYPE) private val defaultBackgroundType: CommunalBackgroundType,
 ) : CommunalSettingsRepository {
     private val whenToStartHubByDefault by lazy {
         resources.getInteger(com.android.internal.R.integer.config_whenToStartHubModeDefault)
+    }
+
+    private val hubEnabledByUserDefault by lazy {
+        if (!glanceableHubV2()) {
+            ENABLED_SETTING_DEFAULT_PRE_HUB_V2
+        } else if (
+            glanceableHubEnabledByDefault() ||
+                resources.getBoolean(
+                    com.android.internal.R.bool.config_glanceableHubEnabledByDefault
+                )
+        ) {
+            1
+        } else {
+            0
+        }
     }
 
     private val _suppressionReasons =
@@ -149,7 +165,7 @@ constructor(
         if (!getV2FlagEnabled()) {
             return MutableStateFlow(WhenToStartHub.NEVER)
         }
-        return userAwareSecureSettingsRepository
+        return secureSettingsRepository
             .intSetting(Settings.Secure.WHEN_TO_START_GLANCEABLE_HUB, whenToStartHubByDefault)
             .map { it.toWhenToStartHub() }
             .flowOn(bgDispatcher)
@@ -169,14 +185,14 @@ constructor(
             .map { devicePolicyManager.areKeyguardWidgetsAllowed(user.id) }
 
     override fun getBackground(): Flow<CommunalBackgroundType> =
-        userAwareSecureSettingsRepository
+        secureSettingsRepository
             .intSetting(GLANCEABLE_HUB_BACKGROUND_SETTING, defaultBackgroundType.value)
             .map { it.toCommunalBackgroundType() }
             .flowOn(bgDispatcher)
 
     override fun getSettingEnabledByUser(): Flow<Boolean> =
-        userAwareSecureSettingsRepository
-            .intSetting(Settings.Secure.GLANCEABLE_HUB_ENABLED, ENABLED_SETTING_DEFAULT)
+        secureSettingsRepository
+            .intSetting(Settings.Secure.GLANCEABLE_HUB_ENABLED, hubEnabledByUserDefault)
             .map { it == 1 }
             .flowOn(bgDispatcher)
 
@@ -198,7 +214,7 @@ constructor(
 
     companion object {
         const val GLANCEABLE_HUB_BACKGROUND_SETTING = "glanceable_hub_background"
-        private const val ENABLED_SETTING_DEFAULT = 1
+        private const val ENABLED_SETTING_DEFAULT_PRE_HUB_V2 = 1
     }
 }
 

@@ -17,6 +17,7 @@
 package com.android.systemui.keyguard;
 
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.security.Flags.secureLockDevice;
 import static android.service.dreams.Flags.dismissDreamOnKeyguardDismiss;
 import static android.view.RemoteAnimationTarget.MODE_OPENING;
 import static android.view.WindowManager.TRANSIT_FLAG_KEYGUARD_APPEARING;
@@ -37,7 +38,6 @@ import static android.view.WindowManager.TransitionType;
 
 import android.annotation.NonNull;
 import android.app.ActivityManager;
-import android.app.ActivityTaskManager;
 import android.app.Service;
 import android.app.WindowConfiguration;
 import android.content.Intent;
@@ -55,8 +55,6 @@ import android.util.RotationUtils;
 import android.util.Slog;
 import android.view.IRemoteAnimationFinishedCallback;
 import android.view.IRemoteAnimationRunner;
-import android.view.RemoteAnimationAdapter;
-import android.view.RemoteAnimationDefinition;
 import android.view.RemoteAnimationTarget;
 import android.view.SurfaceControl;
 import android.view.WindowManagerPolicyConstants;
@@ -73,7 +71,7 @@ import com.android.internal.policy.IKeyguardService;
 import com.android.internal.policy.IKeyguardStateCallback;
 import com.android.keyguard.KeyguardUpdateMonitor;
 import com.android.keyguard.mediator.ScreenOnCoordinator;
-import com.android.systemui.SystemUIApplication;
+import com.android.systemui.application.SystemUIApplication;
 import com.android.systemui.dagger.qualifiers.Application;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryInteractor;
@@ -95,11 +93,11 @@ import com.android.systemui.scene.domain.interactor.SceneInteractor;
 import com.android.systemui.scene.domain.startable.KeyguardStateCallbackStartable;
 import com.android.systemui.scene.shared.flag.SceneContainerFlag;
 import com.android.systemui.scene.shared.model.Scenes;
+import com.android.systemui.securelockdevice.domain.interactor.SecureLockDeviceInteractor;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.wm.shell.shared.CounterRotator;
 import com.android.wm.shell.shared.ShellTransitions;
 import com.android.wm.shell.shared.TransitionUtil;
-import com.android.wm.shell.transition.Transitions;
 
 import dagger.Lazy;
 
@@ -130,6 +128,7 @@ public class KeyguardService extends Service {
     private final Executor mMainExecutor;
     private final Lazy<KeyguardStateCallbackStartable> mKeyguardStateCallbackStartableLazy;
     private final KeyguardStateCallbackInteractor mKeyguardStateCallbackInteractor;
+    private final Lazy<SecureLockDeviceInteractor> mSecureLockDeviceInteractor;
 
     private static RemoteAnimationTarget[] wrap(TransitionInfo info, boolean wallpapers,
             SurfaceControl.Transaction t, ArrayMap<SurfaceControl, SurfaceControl> leashMap,
@@ -277,6 +276,8 @@ public class KeyguardService extends Service {
                     SurfaceControl.Transaction candidateT, IBinder currentTransition,
                     IRemoteTransitionFinishedCallback candidateFinishCallback) {
                 if ((candidateInfo.getFlags() & TRANSIT_FLAG_KEYGUARD_APPEARING) != 0) {
+                    Log.i(TAG, "Transition merged with keyguard appearing, setPendingLock(true) "
+                            + " and call cancelKeyguardExitAnimation()");
                     keyguardViewMediator.setPendingLock(true);
                     keyguardViewMediator.cancelKeyguardExitAnimation();
                     return;
@@ -355,7 +356,8 @@ public class KeyguardService extends Service {
             KeyguardStateCallbackInteractor keyguardStateCallbackInteractor,
             KeyguardServiceShowLockscreenInteractor keyguardServiceShowLockscreenInteractor,
             KeyguardUpdateMonitor keyguardUpdateMonitor,
-            ActivityManager activityManager) {
+            ActivityManager activityManager,
+            Lazy<SecureLockDeviceInteractor> secureLockDeviceInteractor) {
         super();
         mKeyguardViewMediator = keyguardViewMediator;
         mKeyguardLifecyclesDispatcher = keyguardLifecyclesDispatcher;
@@ -390,6 +392,7 @@ public class KeyguardService extends Service {
         mKeyguardServiceShowLockscreenInteractor = keyguardServiceShowLockscreenInteractor;
         mKeyguardUpdateMonitor = keyguardUpdateMonitor;
         mActivityManager = activityManager;
+        mSecureLockDeviceInteractor = secureLockDeviceInteractor;
     }
 
     @Override
@@ -434,7 +437,9 @@ public class KeyguardService extends Service {
             checkPermission();
             if (SceneContainerFlag.isEnabled()) {
                 mKeyguardStateCallbackStartableLazy.get().addCallback(callback);
-            } else if (KeyguardWmStateRefactor.isEnabled()) {
+            }
+
+            if (KeyguardWmStateRefactor.isEnabled()) {
                 mKeyguardStateCallbackInteractor.addCallback(callback);
             } else {
                 mKeyguardViewMediator.addStateMonitorCallback(callback);
@@ -470,7 +475,8 @@ public class KeyguardService extends Service {
             trace("dismiss message=" + message);
             checkPermission();
             if (SceneContainerFlag.isEnabled()) {
-                mDeviceEntryInteractorLazy.get().attemptDeviceEntry(callback);
+                mDeviceEntryInteractorLazy.get().attemptDeviceEntry(
+                        "KeyguardService.dismiss", callback);
             } else if (KeyguardWmStateRefactor.isEnabled()) {
                 mKeyguardDismissInteractor.dismissKeyguardWithCallback(callback);
             } else {
@@ -549,7 +555,7 @@ public class KeyguardService extends Service {
         }
 
         @Override // Binder interface
-        public void onScreenTurningOn(IKeyguardDrawnCallback callback) {
+        public void onScreenTurningOn(int reason, IKeyguardDrawnCallback callback) {
             trace("onScreenTurningOn");
             Trace.beginSection("KeyguardService.mBinder#onScreenTurningOn");
             checkPermission();
@@ -563,7 +569,7 @@ public class KeyguardService extends Service {
             Trace.beginAsyncSection(onDrawWaitingTraceTag, traceCookie);
 
             // Ensure the drawn callback is only ever called once
-            mScreenOnCoordinator.onScreenTurningOn(new Runnable() {
+            mScreenOnCoordinator.onScreenTurningOn(reason, new Runnable() {
                 boolean mInvoked;
                 @Override
                 public void run() {
@@ -619,6 +625,14 @@ public class KeyguardService extends Service {
         public void setKeyguardEnabled(boolean enabled) {
             trace("setKeyguardEnabled enabled" + enabled);
             checkPermission();
+            // Ignore if secure lock device is enabled and authenticated but pending dismissal.
+            // This is needed because successful two-factor authentication in secure lock device
+            // updates device policy manager state, which is linked to a broadcast that otherwise
+            // re-enables keyguard.
+            if (secureLockDevice() && mSecureLockDeviceInteractor.get()
+                    .isAuthenticatedButPendingDismissal().getValue()) {
+                return;
+            }
             mKeyguardEnabledInteractor.notifyKeyguardEnabled(enabled);
             mKeyguardViewMediator.setKeyguardEnabled(enabled);
         }

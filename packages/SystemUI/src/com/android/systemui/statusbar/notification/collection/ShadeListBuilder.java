@@ -635,7 +635,7 @@ public class ShadeListBuilder implements Dumpable, PipelineDumpable {
             List<PipelineEntry> out,
             List<NotifFilter> filters) {
         Trace.beginSection("ShadeListBuilder.filterNotifs");
-        final long now = UseElapsedRealtimeForCreationTime.getCurrentTime(mSystemClock);
+        final long now = mSystemClock.elapsedRealtime();
         for (PipelineEntry pipelineEntry : entries) {
             if (pipelineEntry instanceof BundleEntry bundleEntry) {
                 applyFilterToBundle(bundleEntry, now, filters);
@@ -664,8 +664,7 @@ public class ShadeListBuilder implements Dumpable, PipelineDumpable {
                 final String topLevelKey = entry.getSbn().getGroupKey();
                 GroupEntry group = mGroups.get(topLevelKey);
                 if (group == null) {
-                    group = new GroupEntry(topLevelKey,
-                            UseElapsedRealtimeForCreationTime.getCurrentTime(mSystemClock));
+                    group = new GroupEntry(topLevelKey, mSystemClock.elapsedRealtime());
                     mGroups.put(topLevelKey, group);
                 }
                 if (group.getParent() == null) {
@@ -733,12 +732,16 @@ public class ShadeListBuilder implements Dumpable, PipelineDumpable {
     }
 
     @Nullable
-    private BundleEntry getBundleEntry(String id) {
+    BundleEntry getBundleEntry(String id) {
         BundleEntry be = mIdToBundleEntry.get(id);
         if (be == null) {
             debugBundleLog(TAG, () -> "BundleEntry not found for bundleId: " + id);
         }
         return be;
+    }
+
+    Collection<BundleEntry> getBundleEntries() {
+        return Collections.unmodifiableCollection(mIdToBundleEntry.values());
     }
 
     private void debugList(String s) {

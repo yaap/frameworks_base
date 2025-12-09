@@ -388,7 +388,6 @@
     <style name="SettingsLibEntityHeaderContent">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_centerHorizontal">true</item>
         <item name="android:orientation">vertical</item>
         <item name="android:gravity">center_horizontal</item>
     </style>
@@ -428,10 +427,7 @@
     </style>
 
     <style name="Widget.SettingsLib.ButtonBar" parent="@style/Widget.AppCompat.ButtonBar.AlertDialog">
-        <item name="android:paddingTop">28dp</item>
-        <item name="android:paddingBottom">@dimen/settingslib_expressive_space_extrasmall6</item>
-        <item name="android:minHeight">@dimen/settingslib_expressive_space_large2</item>
-        <item name="android:clipToPadding">false</item>
+        <item name="android:minHeight">88dp</item>
     </style>
 
     <style name="Widget.SettingsLib.DialogButton" parent="@android:style/Widget.DeviceDefault.Button">
@@ -451,12 +447,23 @@
     <style name="Widget.SettingsLib.DialogButton.Filled">
         <item name="android:layout_marginEnd">@dimen/settingslib_expressive_space_extrasmall6</item>
         <item name="android:background">@drawable/settingslib_expressive_button_background_filled</item>
+        <item name="backgroundTint">@color/settingslib_materialColorPrimary</item>
         <item name="android:textColor">@color/settingslib_materialColorOnPrimary</item>
     </style>
 
     <style name="Widget.SettingsLib.DialogButton.Outline">
         <item name="android:layout_marginEnd">@dimen/settingslib_expressive_space_extrasmall4</item>
         <item name="android:background">@drawable/settingslib_expressive_button_background_outline</item>
+        <item name="backgroundTint">@color/settingslib_materialColorOutlineVariant</item>
         <item name="android:textColor">@color/settingslib_materialColorPrimary</item>
+    </style>
+
+    <style name="SettingslibSliderStyle.Expressive" parent="">
+        <item name="trackColorActive">@color/settingslib_expressive_color_slider_track_active</item>
+        <item name="trackColorInactive">@color/settingslib_expressive_color_slider_track_inactive</item>
+        <item name="thumbColor">@color/settingslib_expressive_color_slider_thumb</item>
+        <item name="tickColorActive">@color/settingslib_expressive_color_slider_track_inactive</item>
+        <item name="tickColorInactive">@color/settingslib_expressive_color_slider_track_active</item>
+        <item name="haloColor">@color/settingslib_expressive_color_slider_halo</item>
     </style>
 </resources>

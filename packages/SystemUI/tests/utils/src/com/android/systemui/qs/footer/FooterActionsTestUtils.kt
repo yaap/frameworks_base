@@ -16,6 +16,7 @@
 
 package com.android.systemui.qs.footer
 
+import android.app.admin.DevicePolicyManager
 import android.app.role.RoleManager
 import android.app.supervision.SupervisionManager
 import android.content.Context
@@ -64,6 +65,8 @@ import com.android.systemui.user.data.repository.FakeUserRepository
 import com.android.systemui.user.data.repository.UserRepository
 import com.android.systemui.user.data.repository.UserSwitcherRepository
 import com.android.systemui.user.data.repository.UserSwitcherRepositoryImpl
+import com.android.systemui.user.domain.interactor.HeadlessSystemUserMode
+import com.android.systemui.user.domain.interactor.SelectedUserInteractor
 import com.android.systemui.user.domain.interactor.UserSwitcherInteractor
 import com.android.systemui.util.settings.FakeGlobalSettings
 import com.android.systemui.util.settings.GlobalSettings
@@ -100,6 +103,8 @@ class FooterActionsTestUtils(
         falsingManager: FalsingManager = FalsingManagerFake(),
         globalActionsDialogLite: GlobalActionsDialogLite = mock(),
         showPowerButton: Boolean = true,
+        selectedUserInteractor: SelectedUserInteractor = mock(),
+        hsum: HeadlessSystemUserMode = mock(),
     ): FooterActionsViewModel {
         return createFooterActionsViewModel(
             context,
@@ -109,6 +114,8 @@ class FooterActionsTestUtils(
             globalActionsDialogLite,
             mockActivityStarter,
             showPowerButton,
+            selectedUserInteractor,
+            hsum,
         )
     }
 
@@ -189,6 +196,7 @@ class FooterActionsTestUtils(
     private fun supervisionRepository(
         roleManager: RoleManager = mock(),
         supervisionManager: SupervisionManager = mock(),
+        devicePolicyManager: DevicePolicyManager = mock(),
         userRepository: UserRepository = FakeUserRepository(),
         @Application context: Context = this.context.applicationContext,
         bgDispatcher: CoroutineDispatcher = StandardTestDispatcher(scheduler),
@@ -197,6 +205,7 @@ class FooterActionsTestUtils(
             { supervisionManager },
             userRepository,
             roleManager,
+            devicePolicyManager,
             context,
             bgDispatcher,
         )

@@ -23,24 +23,17 @@ import static com.android.internal.util.Preconditions.checkArgumentPositive;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Binder;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
-import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.util.ArrayMap;
-import android.util.ArraySet;
 import android.util.Log;
 import android.util.SparseArray;
-import android.util.SparseBooleanArray;
 import android.util.SystemPropertySetter;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.os.ApplicationSharedMemory;
-import com.android.internal.os.BackgroundThread;
 
 import dalvik.annotation.optimization.CriticalNative;
 import dalvik.annotation.optimization.FastNative;
@@ -78,16 +71,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class PropertyInvalidatedCache<Query, Result> {
-    /**
-     * A method to report if the PermissionManager notifications can be separated from cache
-     * invalidation.  The feature relies on a series of flags; the dependency is captured in this
-     * method.
-     * @hide
-     */
-    public static boolean separatePermissionNotificationsEnabled() {
-        return isSharedMemoryAvailable()
-                && Flags.picSeparatePermissionNotifications();
-    }
 
     /**
      * This is a configuration class that customizes a cache instance.
@@ -496,25 +479,6 @@ public class PropertyInvalidatedCache<Query, Result> {
         // entries to be combined in a single hash map.
         private final boolean mIsolated;
 
-        // Collect statistics.
-        private final boolean mStatistics;
-
-        // An array of booleans to indicate if a UID has been involved in a map access.  A value
-        // exists for every UID that was ever involved during cache access. This is updated only
-        // if statistics are being collected.
-        private final SparseBooleanArray mUidSeen;
-
-        // A hash map that ignores the UID.  This is used in look-aside fashion just for hit/miss
-        // statistics.  This is updated only if statistics are being collected.
-        private final ArraySet<Query> mShadowCache;
-
-        // Shadow statistics.  Only hits and misses need to be recorded.  These are updated only
-        // if statistics are being collected.  The "SelfHits" records hits when the UID is the
-        // process uid.
-        private int mShadowHits;
-        private int mShadowMisses;
-        private int mShadowSelfHits;
-
         // The process UID.
         private final int mSelfUid;
 
@@ -526,15 +490,7 @@ public class PropertyInvalidatedCache<Query, Result> {
          * isolation feature is enabled.
          */
         CacheMap(boolean isolate, boolean testMode) {
-            mIsolated = Flags.picIsolateCacheByUid() && isolate;
-            mStatistics = Flags.picIsolatedCacheStatistics() && mIsolated;
-            if (mStatistics) {
-                mUidSeen = new SparseBooleanArray();
-                mShadowCache = new ArraySet<>();
-            } else {
-                mUidSeen = null;
-                mShadowCache = null;
-            }
+            mIsolated = isolate;
             mSelfUid = Process.myUid();
             mTestMode = testMode;
         }
@@ -556,19 +512,6 @@ public class PropertyInvalidatedCache<Query, Result> {
          */
         Result get(Query query) {
             final int uid = callerUid();
-
-            // Shadow statistics
-            if (mStatistics) {
-                if (mShadowCache.contains(query)) {
-                    mShadowHits++;
-                    if (uid == mSelfUid) {
-                        mShadowSelfHits++;
-                    }
-                } else {
-                    mShadowMisses++;
-                }
-            }
-
             var map = mCache.get(uid);
             if (map != null) {
                 return map.get(query);
@@ -595,10 +538,6 @@ public class PropertyInvalidatedCache<Query, Result> {
          */
         void remove(Query query) {
             final int uid = callerUid();
-            if (mStatistics) {
-                mShadowCache.remove(query);
-            }
-
             var map = mCache.get(uid);
             if (map != null) {
                 map.remove(query);
@@ -610,11 +549,6 @@ public class PropertyInvalidatedCache<Query, Result> {
          */
         void put(Query query, Result result) {
             final int uid = callerUid();
-            if (mStatistics) {
-                mShadowCache.add(query);
-                mUidSeen.put(uid, true);
-            }
-
             var map = mCache.get(uid);
             if (map == null) {
                 map = createMap();
@@ -639,21 +573,7 @@ public class PropertyInvalidatedCache<Query, Result> {
          * Clear the entries in the cache.  Update the shadow statistics.
          */
         void clear() {
-            if (mStatistics) {
-                mShadowCache.clear();
-            }
-
             mCache.clear();
-        }
-
-        // Dump basic statistics, if any are collected.  Do nothing if statistics are not enabled.
-        void dump(PrintWriter pw) {
-            if (mStatistics) {
-                pw.println(formatSimple("    ShadowHits: %d, ShadowMisses: %d, ShadowSize: %d",
-                                mShadowHits, mShadowMisses, mShadowCache.size()));
-                pw.println(formatSimple("    ShadowUids: %d, SelfUid: %d",
-                                mUidSeen.size(), mShadowSelfHits));
-            }
         }
 
         // Dump detailed statistics
@@ -1292,31 +1212,15 @@ public class PropertyInvalidatedCache<Query, Result> {
     private static final ConcurrentHashMap<CacheKey, NonceHandler> sHandlers =
             new ConcurrentHashMap<>();
 
-    // True if shared memory is flag-enabled, false otherwise.  Read the flags exactly once.
-    private static final boolean sSharedMemoryAvailable = isSharedMemoryAvailable();
-
+    // True if nonces are visible to processes outside this one.
     @android.ravenwood.annotation.RavenwoodReplace
-    private static boolean isSharedMemoryAvailable() {
+    private static boolean isMultiProcess() {
         return true;
     }
 
-    private static boolean isSharedMemoryAvailable$ravenwood() {
-        return false; // Always disable shared memory on Ravenwood. (for now)
-    }
-
-    /**
-     * Keys that cannot be put in shared memory yet.
-     */
-    private static boolean inSharedMemoryDenyList(@NonNull String name) {
-        final String pkginfo = PREFIX_SYSTEM + "package_info";
-        return name.equals(pkginfo);
-    }
-
-    // Return true if this cache can use shared memory for its nonce.  Shared memory may be used
-    // if the module is the system.
-    private static boolean sharedMemoryOkay(@NonNull CacheKey id) {
-        return sSharedMemoryAvailable && sNamespaceSystem.equals(id.namespace)
-                && !inSharedMemoryDenyList(id.key);
+    // Ravenwood processes are always stand-alone.
+    private static boolean isMultiProcess$ravenwood() {
+        return false;
     }
 
     /**
@@ -1330,7 +1234,9 @@ public class PropertyInvalidatedCache<Query, Result> {
             synchronized (sGlobalLock) {
                 h = sHandlers.get(id);
                 if (h == null) {
-                    if (sharedMemoryOkay(id)) {
+                    if (!isMultiProcess()) {
+                        h = new NonceLocal(id);
+                    } else if (sNamespaceSystem.equals(id.namespace)) {
                         h = new NonceSharedMem(id);
                     } else if (sNamespaceTest.equals(id.namespace)) {
                         h = new NonceLocal(id);
@@ -1535,30 +1441,15 @@ public class PropertyInvalidatedCache<Query, Result> {
     /**
      * Throw if the current process is not allowed to use test APIs.
      */
-    @android.ravenwood.annotation.RavenwoodReplace
     private static void throwIfNotTest() {
-        final ActivityThread activityThread = ActivityThread.currentActivityThread();
-        if (activityThread == null) {
-            // Only tests can reach here.
-            return;
+        try {
+            ActivityThread.throwIfNotInstrumenting();
+        } catch (IllegalStateException e) {
+            if (Flags.enforcePicTestmodeProtocol()) {
+                throw e;
+            }
+            // else swallow the exception
         }
-        final Instrumentation instrumentation = activityThread.getInstrumentation();
-        if (instrumentation == null) {
-            // Only tests can reach here.
-            return;
-        }
-        if (instrumentation.isInstrumenting()) {
-            return;
-        }
-        if (Flags.enforcePicTestmodeProtocol()) {
-            throw new IllegalStateException("Test-only API called not from a test.");
-        }
-    }
-
-    /**
-     * Do not throw if running under ravenwood.
-     */
-    private static void throwIfNotTest$ravenwood() {
     }
 
     /**
@@ -1937,137 +1828,6 @@ public class PropertyInvalidatedCache<Query, Result> {
     }
 
     /**
-     * Time-based automatic corking helper. This class allows providers of cached data to
-     * amortize the cost of cache invalidations by corking the cache immediately after a
-     * modification (instructing clients to bypass the cache temporarily) and automatically
-     * uncork after some period of time has elapsed.
-     *
-     * It's better to use explicit cork and uncork pairs that tighly surround big batches of
-     * invalidations, but it's not always practical to tell where these invalidation batches
-     * might occur. AutoCorker's time-based corking is a decent alternative.
-     *
-     * The auto-cork delay is configurable but it should not be too long.  The purpose of
-     * the delay is to minimize the number of times a server writes to the system property
-     * when invalidating the cache.  One write every 50ms does not hurt system performance.
-     * @hide
-     */
-    public static final class AutoCorker {
-        public static final int DEFAULT_AUTO_CORK_DELAY_MS = 50;
-
-        private final String mPropertyName;
-        private final int mAutoCorkDelayMs;
-        private final Object mLock = new Object();
-        @GuardedBy("mLock")
-        private long mUncorkDeadlineMs = -1;  // SystemClock.uptimeMillis()
-        @GuardedBy("mLock")
-        private Handler mHandler;
-
-        @GuardedBy("mLock")
-        private NonceHandler mNonce;
-
-        public AutoCorker(@NonNull String propertyName) {
-            this(propertyName, DEFAULT_AUTO_CORK_DELAY_MS);
-        }
-
-        public AutoCorker(@NonNull String propertyName, int autoCorkDelayMs) {
-            if (separatePermissionNotificationsEnabled()) {
-                throw new IllegalStateException("AutoCorking is unavailable");
-            }
-
-            mPropertyName = propertyName;
-            mAutoCorkDelayMs = autoCorkDelayMs;
-            // We can't initialize mHandler here: when we're created, the main loop might not
-            // be set up yet! Wait until we have a main loop to initialize our
-            // corking callback.
-        }
-
-        public void autoCork() {
-            synchronized (mLock) {
-                if (mNonce == null) {
-                    mNonce = getNonceHandler(mPropertyName);
-                }
-            }
-
-            if (getLooper() == null) {
-                // We're not ready to auto-cork yet, so just invalidate the cache immediately.
-                if (DEBUG) {
-                    Log.w(TAG, "invalidating instead of autocorking early in init: "
-                            + mPropertyName);
-                }
-                mNonce.invalidate();
-                return;
-            }
-            synchronized (mLock) {
-                boolean alreadyQueued = mUncorkDeadlineMs >= 0;
-                if (DEBUG) {
-                    Log.d(TAG, formatSimple(
-                            "autoCork %s mUncorkDeadlineMs=%s", mPropertyName,
-                            mUncorkDeadlineMs));
-                }
-                mUncorkDeadlineMs = SystemClock.uptimeMillis() + mAutoCorkDelayMs;
-                if (!alreadyQueued) {
-                    getHandlerLocked().sendEmptyMessageAtTime(0, mUncorkDeadlineMs);
-                    mNonce.cork();
-                } else {
-                    // Count this as a corked invalidation.
-                    mNonce.invalidate();
-                }
-            }
-        }
-
-        private void handleMessage(Message msg) {
-            synchronized (mLock) {
-                if (DEBUG) {
-                    Log.d(TAG, formatSimple(
-                            "handleMsesage %s mUncorkDeadlineMs=%s",
-                            mPropertyName, mUncorkDeadlineMs));
-                }
-
-                if (mUncorkDeadlineMs < 0) {
-                    return;  // ???
-                }
-                long nowMs = SystemClock.uptimeMillis();
-                if (mUncorkDeadlineMs > nowMs) {
-                    mUncorkDeadlineMs = nowMs + mAutoCorkDelayMs;
-                    if (DEBUG) {
-                        Log.d(TAG, formatSimple(
-                                        "scheduling uncork at %s",
-                                        mUncorkDeadlineMs));
-                    }
-                    getHandlerLocked().sendEmptyMessageAtTime(0, mUncorkDeadlineMs);
-                    return;
-                }
-                if (DEBUG) {
-                    Log.d(TAG, "automatic uncorking " + mPropertyName);
-                }
-                mUncorkDeadlineMs = -1;
-                mNonce.uncork();
-            }
-        }
-
-        @GuardedBy("mLock")
-        private Handler getHandlerLocked() {
-            if (mHandler == null) {
-                mHandler = new Handler(getLooper()) {
-                        @Override
-                        public void handleMessage(Message msg) {
-                            AutoCorker.this.handleMessage(msg);
-                        }
-                    };
-            }
-            return mHandler;
-        }
-
-        /**
-         * Return a looper for auto-uncork messages.  Messages should be processed on the
-         * background thread, not on the main thread.
-         */
-        private static Looper getLooper() {
-            return BackgroundThread.getHandler().getLooper();
-        }
-    }
-
-    /**
      * Return the name of the cache, to be used in debug messages.  This is exposed
      * primarily for testing.
      * @hide
@@ -2243,7 +2003,6 @@ public class PropertyInvalidatedCache<Query, Result> {
             pw.println(formatSimple(
                 "    Current Size: %d, Max Size: %d, HW Mark: %d, Overflows: %d",
                 mCache.size(), mMaxEntries, mHighWaterMark, mMissOverflow));
-            mCache.dump(pw);
 
             if (!brief) {
                 if (isReservedNonce(mLastSeenNonce)) {
@@ -2311,9 +2070,10 @@ public class PropertyInvalidatedCache<Query, Result> {
         // See if brief output is requested.
         final boolean brief = briefRequested(args);
 
-        if (sSharedMemoryAvailable) {
+        NonceStore store = NonceStore.maybeGetInstance();
+        if (store != null) {
             pw.println("  SharedMemory: enabled");
-            NonceStore.getInstance().dump(pw, "    ", detail);
+            store.dump(pw, "    ", detail);
         } else {
             pw.println("  SharedMemory: disabled");
          }
@@ -2452,6 +2212,14 @@ public class PropertyInvalidatedCache<Query, Result> {
                         // not yet mapped.  Swallow the exception and leave sInstance null.
                     }
                 }
+                return sInstance;
+            }
+        }
+
+        // Return the instance but only if it has been created already.  This is used for dump and
+        // debug.
+        static NonceStore maybeGetInstance() {
+            synchronized (sLock) {
                 return sInstance;
             }
         }

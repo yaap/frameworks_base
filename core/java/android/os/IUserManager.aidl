@@ -30,7 +30,7 @@ import android.graphics.Bitmap;
 import android.os.ParcelFileDescriptor;
 
 /**
- *  {@hide}
+ * @hide
  */
 interface IUserManager {
 
@@ -55,11 +55,13 @@ interface IUserManager {
     void evictCredentialEncryptionKey(int userId);
     boolean removeUser(int userId);
     boolean removeUserEvenWhenDisallowed(int userId);
+    int getUserRemovability(int userId);
     void setUserName(int userId, String name);
     void setUserIcon(int userId, in Bitmap icon);
     ParcelFileDescriptor getUserIcon(int userId);
     UserInfo getPrimaryUser();
     int getMainUserId();
+    boolean isMainUser(int userId);
     int getCommunalProfileId();
     int getPreviousUserToEnterForeground();
     List<UserInfo> getUsers(boolean excludeDying);

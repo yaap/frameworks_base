@@ -77,7 +77,7 @@ public class WindowlessWindowManager implements IWindowSession {
      * Used to store SurfaceControl we've built for clients to
      * reconfigure them if relayout is called.
      */
-    final HashMap<IBinder, State> mStateForWindow = new HashMap<IBinder, State>();
+    final HashMap<IBinder, State> mStateForWindow = new HashMap<>();
 
     public interface ResizeCompleteCallback {
         public void finished(SurfaceControl.Transaction completion);
@@ -243,17 +243,19 @@ public class WindowlessWindowManager implements IWindowSession {
                 WindowManager.LayoutParams.INPUT_FEATURE_NO_INPUT_CHANNEL) == 0)) {
             try {
                 if (mRealWm instanceof IWindowSession.Stub) {
-                    mRealWm.grantInputChannel(displayId,
+                    InputChannel inputChannel = mRealWm.grantInputChannel(
+                            displayId,
                             new SurfaceControl(sc, "WindowlessWindowManager.addToDisplay"),
                             window.asBinder(), mHostInputTransferToken, attrs.flags,
                             attrs.privateFlags, attrs.inputFeatures, attrs.type, attrs.token,
-                            state.mInputTransferToken, attrs.getTitle().toString(),
-                            outInputChannel);
+                            state.mInputTransferToken, attrs.getTitle().toString());
+                    inputChannel.copyTo(outInputChannel);
                 } else {
-                    mRealWm.grantInputChannel(displayId, sc, window.asBinder(),
-                            mHostInputTransferToken, attrs.flags, attrs.privateFlags,
-                            attrs.inputFeatures, attrs.type, attrs.token, state.mInputTransferToken,
-                            attrs.getTitle().toString(), outInputChannel);
+                    InputChannel inputChannel = mRealWm.grantInputChannel(displayId, sc,
+                            window.asBinder(), mHostInputTransferToken, attrs.flags,
+                            attrs.privateFlags, attrs.inputFeatures, attrs.type, attrs.token,
+                            state.mInputTransferToken, attrs.getTitle().toString());
+                    inputChannel.copyTo(outInputChannel);
                 }
                 state.mInputChannelToken =
                         outInputChannel != null ? outInputChannel.getToken() : null;
@@ -357,6 +359,31 @@ public class WindowlessWindowManager implements IWindowSession {
             return null;
         }
         return s.mSurfaceControl;
+    }
+
+    /**
+     * Requests input focus for the given embedded view root, to be used for cases where the
+     * embedded window is not rooted to any window (otherwise focus is managed by the hosting
+     * SurfaceView).
+     *
+     * WM will enforce that callers also hold the INTERNAL_SYSTEM_WINDOW permission.
+     * If `focused` is false, WM will resolve focus on the next window.
+     * @hide
+     */
+    boolean requestInputFocus(@NonNull ViewRootImpl viewRoot, boolean focused) {
+        final State s = mStateForWindow.get(viewRoot.mWindow.asBinder());
+        if (s == null) {
+            Log.w(TAG, "Invalid view root specified, not an embedded window");
+            return false;
+        }
+        try {
+            mRealWm.grantEmbeddedWindowFocus(null /* callingWin */, s.mInputTransferToken,
+                    focused);
+            return true;
+        } catch (RemoteException e) {
+            Log.e(TAG, "Failed to request input focus on embedded window", e);
+            return false;
+        }
     }
 
     @Override
@@ -551,20 +578,12 @@ public class WindowlessWindowManager implements IWindowSession {
     }
 
     @Override
-    public void wallpaperOffsetsComplete(android.os.IBinder window) {
-    }
-
-    @Override
     public void setWallpaperDisplayOffset(android.os.IBinder windowToken, int x, int y) {
     }
 
     @Override
     public void sendWallpaperCommand(android.os.IBinder window,
-            java.lang.String action, int x, int y, int z, android.os.Bundle extras, boolean sync) {
-    }
-
-    @Override
-    public void wallpaperCommandComplete(android.os.IBinder window, android.os.Bundle result) {
+            java.lang.String action, int x, int y, int z, android.os.Bundle extras) {
     }
 
     @Override
@@ -626,10 +645,11 @@ public class WindowlessWindowManager implements IWindowSession {
             List<Rect> unrestrictedRects) {}
 
     @Override
-    public void grantInputChannel(int displayId, SurfaceControl surface, IBinder clientToken,
-            InputTransferToken hostInputToken, int flags, int privateFlags, int inputFeatures,
-            int type, IBinder windowToken, InputTransferToken embeddedInputTransferToken,
-            String inputHandleName, InputChannel outInputChannel) {
+    public InputChannel grantInputChannel(int displayId, SurfaceControl surface,
+            IBinder clientToken, InputTransferToken hostInputToken, int flags, int privateFlags,
+            int inputFeatures, int type, IBinder windowToken,
+            InputTransferToken embeddedInputTransferToken, String inputHandleName) {
+        return null;
     }
 
     @Override

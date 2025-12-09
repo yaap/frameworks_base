@@ -244,10 +244,16 @@ public class TelecomManager {
             "android.telecom.extra.DEFAULT_CALL_SCREENING_APP_COMPONENT_NAME";
 
     /**
-     * Optional extra to indicate a call should not be added to the call log.
+     * When placing a new outgoing call via {@link #placeCall(Uri, Bundle)} or adding a new
+     * incoming call via {@link #addNewIncomingCall(PhoneAccountHandle, Bundle)}, this extra can be
+     * included in the extras {@link android.os.Bundle} and set to {@code true} to prevent the call
+     * from being logged.
      *
      * @hide
      */
+    @SystemApi
+    @FlaggedApi(Flags.FLAG_PROMOTE_EXTRA_DO_NOT_LOG_CALL_TO_SYSTEM_API)
+    @RequiresPermission(android.Manifest.permission.MODIFY_PHONE_STATE)
     public static final String EXTRA_DO_NOT_LOG_CALL =
             "android.telecom.extra.DO_NOT_LOG_CALL";
 
@@ -2054,6 +2060,28 @@ public class TelecomManager {
     }
 
     /**
+     * Returns whether there is an ongoing phone call (can be in dialing, ringing, active or holding
+     * states) that is an external call.
+     *
+     * @return {@code true} if there is an ongoing call that is external, {@code false} otherwise.
+     */
+    @FlaggedApi(Flags.FLAG_IS_IN_EXTERNAL_CALL)
+    @RequiresPermission(android.Manifest.permission.READ_PHONE_STATE)
+    public boolean isInExternalCall() {
+        ITelecomService service = getTelecomService();
+        if (service != null) {
+            try {
+                return service.isInExternalCall(mContext.getOpPackageName(),
+                        mContext.getAttributionTag());
+            } catch (RemoteException e) {
+                Log.e(TAG, "RemoteException calling isInCall().", e);
+              e.rethrowFromSystemServer();
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns whether the caller has {@link android.Manifest.permission#MANAGE_ONGOING_CALLS}
      * permission. The permission can be obtained by associating with a physical wearable device
      * via the {@link android.companion.CompanionDeviceManager} API as a companion app. If the
@@ -2160,15 +2188,15 @@ public class TelecomManager {
     /**
      * Ends the foreground call on the device.
      * <p>
-     * If there is a ringing call, calling this method rejects the ringing call. Otherwise, the
-     * foreground call is ended.
+     * If there is a single call and it is ringing, calling this method rejects the ringing call.
+     * Otherwise, the foreground (active) call is ended preferentially.
      * <p>
      * Note: this method CANNOT be used to end ongoing emergency calls and will return {@code false}
      * if an attempt is made to end an emergency call.
      * <p>
-     * Note: If the foreground call on this device is self-managed, this method will only end
-     * the call if the caller of this method is privileged (i.e. system, shell, or root) or system
-     * UI.
+     * Note: If the foreground call on this device is self-managed or transactional, this method
+     * will only end the call if the caller of this method is privileged (i.e. system, shell, or
+     * root) or system UI.
      *
      * @return {@code true} if there is a call which will be rejected or terminated, {@code false}
      * otherwise.

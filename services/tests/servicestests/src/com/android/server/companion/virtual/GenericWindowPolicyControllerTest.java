@@ -48,11 +48,10 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.RemoteException;
 import android.os.UserHandle;
-import android.platform.test.annotations.DisableFlags;
-import android.platform.test.annotations.EnableFlags;
 import android.platform.test.annotations.Presubmit;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.util.ArraySet;
+import android.util.Pair;
 import android.view.Display;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -96,9 +95,6 @@ public class GenericWindowPolicyControllerTest {
 
     @Mock
     private GenericWindowPolicyController.ActivityListener mActivityListener;
-    @Mock
-    private GenericWindowPolicyController.RunningAppsChangedListener mRunningAppsChangedListener;
-
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
@@ -121,7 +117,8 @@ public class GenericWindowPolicyControllerTest {
 
         assertThat(gwpc.containsUid(TEST_UID)).isFalse();
 
-        gwpc.onRunningAppsChanged(new ArraySet<>(Arrays.asList(TEST_UID)));
+        gwpc.onRunningAppsChanged(new ArraySet<>(Arrays.asList(
+                new Pair<>(TEST_UID, NONBLOCKED_APP_PACKAGE_NAME))));
         assertThat(gwpc.containsUid(TEST_UID)).isTrue();
 
         gwpc.onRunningAppsChanged(new ArraySet<>());
@@ -527,20 +524,6 @@ public class GenericWindowPolicyControllerTest {
                 WindowConfiguration.WINDOWING_MODE_FULLSCREEN, activityInfo);
     }
 
-    @DisableFlags(android.companion.virtualdevice.flags.Flags.FLAG_GWPC_AWARE_WINDOWING_MODE)
-    @Test
-    public void canActivityBeLaunched_unsupportedWindowingMode_isBlocked() {
-        GenericWindowPolicyController gwpc = createGwpc();
-        ActivityInfo activityInfo = getActivityInfo(
-                NONBLOCKED_APP_PACKAGE_NAME,
-                NONBLOCKED_APP_PACKAGE_NAME,
-                /* displayOnRemoteDevices */ true,
-                /* targetDisplayCategory */ null);
-        assertActivityIsBlocked(gwpc, DISPLAY_ID, true, WindowConfiguration.WINDOWING_MODE_PINNED,
-                activityInfo);
-    }
-
-    @EnableFlags(android.companion.virtualdevice.flags.Flags.FLAG_GWPC_AWARE_WINDOWING_MODE)
     @Test
     public void canActivityBeLaunched_unsupportedWindowingMode_isNotBlocked() {
         GenericWindowPolicyController gwpc = createGwpc();
@@ -553,50 +536,23 @@ public class GenericWindowPolicyControllerTest {
                 WindowConfiguration.WINDOWING_MODE_PINNED, activityInfo);
     }
 
-
     @Test
-    public void registerRunningAppsChangedListener_onRunningAppsChanged_listenersNotified() {
-        ArraySet<Integer> uids = new ArraySet<>(Arrays.asList(TEST_UID));
+    public void onRunningAppsChanged_listenerNotified() {
+        ArraySet<Pair<Integer, String>> runningUidPackagePairs = new ArraySet<>(Arrays.asList(
+                new Pair<>(TEST_UID, NONBLOCKED_APP_PACKAGE_NAME)));
         GenericWindowPolicyController gwpc = createGwpc();
-        gwpc.registerRunningAppsChangedListener(mRunningAppsChangedListener);
-        gwpc.onRunningAppsChanged(uids);
+        gwpc.onRunningAppsChanged(runningUidPackagePairs);
 
-        assertThat(gwpc.getRunningAppsChangedListenersSizeForTesting()).isEqualTo(1);
-        verify(mRunningAppsChangedListener, timeout(TIMEOUT_MILLIS)).onRunningAppsChanged(uids);
+        verify(mActivityListener, timeout(TIMEOUT_MILLIS))
+                .onRunningAppsChanged(DISPLAY_ID, runningUidPackagePairs);
     }
 
     @Test
     public void onRunningAppsChanged_empty_onDisplayEmpty() {
-        ArraySet<Integer> uids = new ArraySet<>();
         GenericWindowPolicyController gwpc = createGwpc();
-        gwpc.onRunningAppsChanged(uids);
+        gwpc.onRunningAppsChanged(new ArraySet<>());
 
-        assertThat(gwpc.getRunningAppsChangedListenersSizeForTesting()).isEqualTo(0);
         verify(mActivityListener, timeout(TIMEOUT_MILLIS)).onDisplayEmpty(DISPLAY_ID);
-    }
-
-    @Test
-    public void noRunningAppsChangedListener_onRunningAppsChanged_doesNotThrowException() {
-        ArraySet<Integer> uids = new ArraySet<>(Arrays.asList(TEST_UID));
-        GenericWindowPolicyController gwpc = createGwpc();
-        gwpc.onRunningAppsChanged(uids);
-
-        assertThat(gwpc.getRunningAppsChangedListenersSizeForTesting()).isEqualTo(0);
-        verify(mRunningAppsChangedListener, after(TIMEOUT_MILLIS).never())
-                .onRunningAppsChanged(uids);
-    }
-
-    @Test
-    public void registerUnregisterRunningAppsChangedListener_onRunningAppsChanged_doesNotThrowException() {
-        ArraySet<Integer> uids = new ArraySet<>(Arrays.asList(TEST_UID));
-        GenericWindowPolicyController gwpc = createGwpc();
-        gwpc.registerRunningAppsChangedListener(mRunningAppsChangedListener);
-        gwpc.unregisterRunningAppsChangedListener(mRunningAppsChangedListener);
-        gwpc.onRunningAppsChanged(uids);
-
-        assertThat(gwpc.getRunningAppsChangedListenersSizeForTesting()).isEqualTo(0);
-        verify(mRunningAppsChangedListener, after(TIMEOUT_MILLIS).never())
-                .onRunningAppsChanged(uids);
     }
 
     @Test

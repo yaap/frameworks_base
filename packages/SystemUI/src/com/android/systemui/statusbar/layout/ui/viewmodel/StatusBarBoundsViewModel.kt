@@ -20,25 +20,19 @@ import android.graphics.Rect
 import android.view.View
 import androidx.compose.runtime.getValue
 import com.android.systemui.dagger.qualifiers.Background
-import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
-import com.android.systemui.statusbar.layout.StatusBarAppHandleTracking
 import com.android.systemui.statusbar.policy.Clock
 import com.android.systemui.util.boundsOnScreen
 import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
-import com.android.wm.shell.windowdecor.viewholder.AppHandlePositionCallback
-import com.android.wm.shell.windowdecor.viewholder.AppHandles
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
-import java.util.Optional
-import java.util.concurrent.Executor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -49,12 +43,9 @@ import kotlinx.coroutines.flow.stateIn
 class StatusBarBoundsViewModel
 @AssistedInject
 constructor(
-    @Assisted thisDisplayId: Int,
     @Assisted private val startSideContainerView: View,
     @Assisted private val clockView: Clock,
-    appHandles: Optional<AppHandles>,
     @Background backgroundScope: CoroutineScope,
-    @Main sysuiMainExecutor: Executor,
 ) : ExclusiveActivatable() {
     private val hydrator = Hydrator(traceName = "StatusBarBoundsViewModel.hydrator")
 
@@ -80,6 +71,17 @@ constructor(
             source = _startSideContainerBounds,
         )
 
+    private val _dateBounds = MutableStateFlow(Rect())
+
+    /** The on-screen bounds of the status bar date. This is a hydrated value. */
+    // TODO(b/390204943): Re-implement this in Compose once the Clock is a Composable.
+    val dateBounds: Rect by
+        hydrator.hydratedStateOf(
+            traceName = "StatusBar.dateBounds",
+            initialValue = Rect(),
+            source = _dateBounds,
+        )
+
     private val _clockBounds: Flow<Rect> =
         conflatedCallbackFlow {
                 val layoutListener =
@@ -100,43 +102,16 @@ constructor(
             source = _clockBounds,
         )
 
-    private val _appHandleBounds: Flow<List<Rect>> =
-        if (StatusBarAppHandleTracking.isEnabled && appHandles.isPresent) {
-                conflatedCallbackFlow {
-                    val listener = AppHandlePositionCallback { handles ->
-                        trySend(
-                            handles.values.filter { it.displayId == thisDisplayId }.map { it.rect }
-                        )
-                    }
-                    appHandles.get().addListener(sysuiMainExecutor, listener)
-                    awaitClose { appHandles.get().removeListener(listener) }
-                }
-            } else {
-                flowOf(emptyList())
-            }
-            .stateIn(backgroundScope, SharingStarted.WhileSubscribed(), emptyList())
-
-    /**
-     * The on-screen bounds where app handles are showing. Used so that we can ensure clickable
-     * status bar content doesn't overlap with them. This is a hydrated value.
-     */
-    val appHandleBounds: List<Rect> by
-        hydrator.hydratedStateOf(
-            traceName = "StatusBar.appHandleBounds",
-            initialValue = emptyList(),
-            source = _appHandleBounds,
-        )
-
     override suspend fun onActivated(): Nothing {
         hydrator.activate()
     }
 
+    fun updateDateBounds(bounds: Rect) {
+        _dateBounds.value = bounds
+    }
+
     @AssistedFactory
     interface Factory {
-        fun create(
-            displayId: Int,
-            startSideContainerView: View,
-            clockView: Clock,
-        ): StatusBarBoundsViewModel
+        fun create(startSideContainerView: View, clockView: Clock): StatusBarBoundsViewModel
     }
 }

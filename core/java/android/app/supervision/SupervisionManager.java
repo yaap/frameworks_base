@@ -25,6 +25,8 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
+import android.annotation.SdkConstant;
+import android.annotation.SdkConstant.SdkConstantType;
 import android.annotation.SystemApi;
 import android.annotation.SystemService;
 import android.annotation.TestApi;
@@ -37,7 +39,7 @@ import android.content.Intent;
 import android.os.RemoteException;
 
 /**
- * Service for handling parental supervision.
+ * This class provides information about and manages supervision.
  *
  * @hide
  */
@@ -69,7 +71,7 @@ public class SupervisionManager {
          * @param userId Int ID of the user for whom supervision was enabled.
          * @hide
          */
-        public abstract void onSupervisionEnabled(@UserIdInt int userId);
+        public void onSupervisionEnabled(@UserIdInt int userId) {}
 
         /**
          * Called after supervision has been enabled for a given user.
@@ -77,15 +79,14 @@ public class SupervisionManager {
          * @param userId Int ID of the user for whom supervision was enabled.
          * @hide
          */
-        public abstract void onSupervisionDisabled(@UserIdInt int userId);
+        public void onSupervisionDisabled(@UserIdInt int userId) {}
     }
 
     private final Context mContext;
     @Nullable private final ISupervisionManager mService;
 
     /**
-     * Activity action: ask the human user to enable supervision for this user. Only the app that
-     * holds the {@code SYSTEM_SUPERVISION} role can launch this intent.
+     * Activity Action: Ask the user to confirm enabling supervision.
      *
      * <p>The intent must be invoked via {@link Activity#startActivityForResult} to receive the
      * result of whether or not the user approved the action. If approved, the result will be {@link
@@ -97,12 +98,12 @@ public class SupervisionManager {
      */
     @SystemApi
     @FlaggedApi(Flags.FLAG_SUPERVISION_MANAGER_APIS)
+    @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_ENABLE_SUPERVISION =
             "android.app.supervision.action.ENABLE_SUPERVISION";
 
     /**
-     * Activity action: ask the human user to disable supervision for this user. Only the app that
-     * holds the {@code SYSTEM_SUPERVISION} role can launch this intent.
+     * Activity Action: Ask the user to confirm disabling supervision.
      *
      * <p>The intent must be invoked via {@link Activity#startActivityForResult} to receive the
      * result of whether or not the user approved the action. If approved, the result will be {@link
@@ -114,8 +115,17 @@ public class SupervisionManager {
      */
     @SystemApi
     @FlaggedApi(Flags.FLAG_SUPERVISION_MANAGER_APIS)
+    @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_DISABLE_SUPERVISION =
             "android.app.supervision.action.DISABLE_SUPERVISION";
+
+    /**
+     * SupervisionService's identifier for setting policies or restrictions in
+     * {@link DevicePolicyManager}.
+     *
+     * @hide
+     */
+    public static final String SUPERVISION_SYSTEM_ENTITY = SupervisionManager.class.getName();
 
     /** @hide */
     @UnsupportedAppUsage
@@ -160,7 +170,7 @@ public class SupervisionManager {
     }
 
     /**
-     * Returns whether the device is supervised.
+     * Returns whether supervision is enabled for the current user.
      *
      * @hide
      */
@@ -173,7 +183,7 @@ public class SupervisionManager {
     }
 
     /**
-     * Returns whether the device is supervised.
+     * Returns whether supervision is enabled for the given user.
      *
      * @hide
      */
@@ -191,7 +201,7 @@ public class SupervisionManager {
     }
 
     /**
-     * Sets whether the device is supervised for the current user.
+     * Sets whether the supervision is enabled for the current user.
      *
      * @hide
      */
@@ -202,7 +212,7 @@ public class SupervisionManager {
     }
 
     /**
-     * Sets whether the device is supervised for a given user.
+     * Sets whether the supervision is enabled for the given user.
      *
      * @hide
      */
@@ -313,7 +323,7 @@ public class SupervisionManager {
     public void registerSupervisionListener(@NonNull SupervisionListener listener) {
         if (mService != null) {
             try {
-                mService.registerSupervisionListener(listener.mListener);
+                mService.registerSupervisionListener(mContext.getUserId(), listener.mListener);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
             }

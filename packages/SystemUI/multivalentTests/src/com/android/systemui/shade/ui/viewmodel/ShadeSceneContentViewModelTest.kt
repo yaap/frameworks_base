@@ -33,25 +33,29 @@ import com.android.systemui.keyguard.data.repository.fakeDeviceEntryFingerprintA
 import com.android.systemui.keyguard.shared.model.SuccessFingerprintAuthenticationStatus
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.collectLastValue
+import com.android.systemui.kosmos.runCurrent
 import com.android.systemui.kosmos.runTest
 import com.android.systemui.kosmos.testScope
+import com.android.systemui.kosmos.useStandardTestDispatcher
 import com.android.systemui.kosmos.useUnconfinedTestDispatcher
 import com.android.systemui.lifecycle.activateIn
-import com.android.systemui.media.controls.data.repository.mediaFilterRepository
 import com.android.systemui.media.controls.shared.model.MediaData
+import com.android.systemui.media.remedia.data.repository.mediaPipelineRepository
+import com.android.systemui.qs.panels.domain.interactor.tileSquishinessInteractor
 import com.android.systemui.res.R
 import com.android.systemui.scene.domain.interactor.sceneInteractor
+import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.shade.domain.interactor.enableDualShade
 import com.android.systemui.shade.domain.interactor.enableSingleShade
 import com.android.systemui.shade.domain.interactor.enableSplitShade
+import com.android.systemui.shade.domain.interactor.shadeInteractor
 import com.android.systemui.shade.shared.model.ShadeMode
 import com.android.systemui.statusbar.disableflags.data.repository.fakeDisableFlagsRepository
 import com.android.systemui.testKosmos
 import com.android.systemui.unfold.fakeUnfoldTransitionProgressProvider
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -111,15 +115,15 @@ class ShadeSceneContentViewModelTest : SysuiTestCase() {
             enableSingleShade()
             val userMedia = MediaData(active = true)
 
-            assertThat(underTest.isMediaVisible).isFalse()
+            assertThat(underTest.showMedia).isFalse()
 
-            mediaFilterRepository.addCurrentUserMediaEntry(userMedia)
+            mediaPipelineRepository.addCurrentUserMediaEntry(userMedia)
 
-            assertThat(underTest.isMediaVisible).isTrue()
+            assertThat(underTest.showMedia).isTrue()
 
-            mediaFilterRepository.removeCurrentUserMediaEntry(userMedia.instanceId)
+            mediaPipelineRepository.removeCurrentUserMediaEntry(userMedia.instanceId)
 
-            assertThat(underTest.isMediaVisible).isFalse()
+            assertThat(underTest.showMedia).isFalse()
         }
 
     @Test
@@ -136,39 +140,74 @@ class ShadeSceneContentViewModelTest : SysuiTestCase() {
         }
 
     @Test
-    fun unfoldTransitionProgress() =
+    fun shadeModeChange_dualOnLockscreen_switchToOverlay() =
         kosmos.runTest {
+            setDeviceEntered(false)
+            val scene by collectLastValue(sceneInteractor.currentScene)
+            val overlays by collectLastValue(sceneInteractor.currentOverlays)
+
             enableSingleShade()
+
+            shadeInteractor.expandNotificationsShade("test")
+            assertThat(scene).isEqualTo(Scenes.Shade)
+            assertThat(overlays).isEmpty()
+
+            enableDualShade()
+
+            assertThat(scene).isEqualTo(Scenes.Lockscreen)
+            assertThat(overlays).containsExactly(Overlays.NotificationsShade)
+        }
+
+    @Test
+    fun shadeModeChange_dualOnGone_switchToOverlay() =
+        kosmos.runTest {
+            setDeviceEntered(true)
+            val scene by collectLastValue(sceneInteractor.currentScene)
+            val overlays by collectLastValue(sceneInteractor.currentOverlays)
+
+            enableSingleShade()
+
+            shadeInteractor.expandNotificationsShade("test")
+            assertThat(scene).isEqualTo(Scenes.Shade)
+            assertThat(overlays).isEmpty()
+
+            enableDualShade()
+
+            assertThat(scene).isEqualTo(Scenes.Gone)
+            assertThat(overlays).containsExactly(Overlays.NotificationsShade)
+        }
+
+    @Test
+    fun unfoldTransitionProgress() =
+        testKosmos().useStandardTestDispatcher().runTest {
+            // Set up and activate a new `underTest` which uses the StandardTestDispatcher.
+            val underTest = shadeSceneContentViewModel
+            underTest.activateIn(testScope)
+
+            enableSingleShade()
+            runCurrent()
             val maxTranslation = prepareConfiguration()
-            val translations by
-                collectLastValue(
-                    combine(
-                        underTest.unfoldTranslationX(isOnStartSide = true),
-                        underTest.unfoldTranslationX(isOnStartSide = false),
-                    ) { start, end ->
-                        Translations(start = start, end = end)
-                    }
-                )
 
             val unfoldProvider = fakeUnfoldTransitionProgressProvider
             unfoldProvider.onTransitionStarted()
-            assertThat(translations?.start).isEqualTo(0f)
-            assertThat(translations?.end).isEqualTo(-0f)
+            assertThat(underTest.unfoldTranslationXForStartSide).isEqualTo(0f)
 
             repeat(10) { repetition ->
                 val transitionProgress = 0.1f * (repetition + 1)
                 unfoldProvider.onTransitionProgress(transitionProgress)
-                assertThat(translations?.start).isEqualTo((1 - transitionProgress) * maxTranslation)
-                assertThat(translations?.end).isEqualTo(-(1 - transitionProgress) * maxTranslation)
+                runCurrent()
+
+                assertThat(underTest.unfoldTranslationXForStartSide)
+                    .isEqualTo((1 - transitionProgress) * maxTranslation)
             }
 
             unfoldProvider.onTransitionFinishing()
-            assertThat(translations?.start).isEqualTo(0f)
-            assertThat(translations?.end).isEqualTo(-0f)
+            runCurrent()
+            assertThat(underTest.unfoldTranslationXForStartSide).isEqualTo(0f)
 
             unfoldProvider.onTransitionFinished()
-            assertThat(translations?.start).isEqualTo(0f)
-            assertThat(translations?.end).isEqualTo(-0f)
+            runCurrent()
+            assertThat(underTest.unfoldTranslationXForStartSide).isEqualTo(0f)
         }
 
     @Test
@@ -181,6 +220,18 @@ class ShadeSceneContentViewModelTest : SysuiTestCase() {
             }
 
             assertThat(underTest.isQsEnabled).isFalse()
+        }
+
+    @Test
+    fun squishiness() =
+        kosmos.runTest {
+            val squishiness by collectLastValue(tileSquishinessInteractor.squishiness)
+
+            underTest.setTileSquishiness(0f)
+            assertThat(squishiness).isWithin(0.0001f).of(0.1f)
+
+            underTest.setTileSquishiness(1f)
+            assertThat(squishiness).isEqualTo(1f)
         }
 
     private fun Kosmos.prepareConfiguration(): Int {
@@ -213,6 +264,4 @@ class ShadeSceneContentViewModelTest : SysuiTestCase() {
         sceneInteractor.changeScene(key, "test")
         sceneInteractor.setTransitionState(flowOf(ObservableTransitionState.Idle(key)))
     }
-
-    private data class Translations(val start: Float, val end: Float)
 }

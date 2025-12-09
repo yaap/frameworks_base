@@ -19,7 +19,9 @@ package com.android.systemui.keyguard.ui.viewmodel
 
 import android.app.admin.DevicePolicyManager
 import android.content.Intent
+import android.graphics.drawable.Drawable
 import android.os.UserHandle
+import android.platform.test.annotations.DisableFlags
 import android.platform.test.annotations.EnableFlags
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
@@ -45,6 +47,7 @@ import com.android.systemui.keyguard.data.quickaffordance.KeyguardQuickAffordanc
 import com.android.systemui.keyguard.data.repository.FakeBiometricSettingsRepository
 import com.android.systemui.keyguard.data.repository.FakeKeyguardRepository
 import com.android.systemui.keyguard.data.repository.KeyguardQuickAffordanceRepository
+import com.android.systemui.keyguard.data.repository.biometricSettingsRepository
 import com.android.systemui.keyguard.data.repository.fakeKeyguardRepository
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardQuickAffordanceInteractor
@@ -65,6 +68,7 @@ import com.android.systemui.scene.data.repository.Idle
 import com.android.systemui.scene.data.repository.setTransition
 import com.android.systemui.scene.domain.interactor.sceneInteractor
 import com.android.systemui.scene.shared.model.Scenes
+import com.android.systemui.securelockdevice.domain.interactor.secureLockDeviceInteractor
 import com.android.systemui.settings.UserFileManager
 import com.android.systemui.settings.UserTracker
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
@@ -89,6 +93,9 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mock
 import org.mockito.Mockito
 import org.mockito.MockitoAnnotations
+import org.mockito.kotlin.isNull
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
@@ -189,7 +196,7 @@ class KeyguardQuickAffordancesCombinedViewModelTest : SysuiTestCase() {
         qrCodeScannerAffordanceConfig =
             FakeKeyguardQuickAffordanceConfig(BuiltInKeyguardQuickAffordanceKeys.QR_CODE_SCANNER)
         dockManager = DockManagerFake()
-        biometricSettingsRepository = FakeBiometricSettingsRepository()
+        biometricSettingsRepository = kosmos.biometricSettingsRepository
 
         keyguardInteractor = kosmos.keyguardInteractor
         repository = kosmos.fakeKeyguardRepository
@@ -287,6 +294,7 @@ class KeyguardQuickAffordancesCombinedViewModelTest : SysuiTestCase() {
                         launchAnimator = launchAnimator,
                         logger = logger,
                         metricsLogger = metricsLogger,
+                        secureLockDeviceInteractor = { kosmos.secureLockDeviceInteractor },
                         devicePolicyManager = devicePolicyManager,
                         dockManager = dockManager,
                         biometricSettingsRepository = biometricSettingsRepository,
@@ -348,6 +356,32 @@ class KeyguardQuickAffordancesCombinedViewModelTest : SysuiTestCase() {
                 testConfig = testConfig,
                 configKey = configKey,
             )
+        }
+
+    @Test
+    @EnableFlags(com.android.systemui.Flags.FLAG_CLEAR_SHORTCUT_ICON_TINT)
+    fun nonTintedIcon_clearsTintFromIcon() =
+        testScope.runTest {
+            val icon: Icon.Loaded = mock()
+            val drawable: Drawable = mock()
+            whenever(icon.drawable).thenReturn(drawable)
+
+            underTest.nonTintedIcon(icon)
+
+            verify(drawable).setTintList(isNull())
+        }
+
+    @Test
+    @DisableFlags(com.android.systemui.Flags.FLAG_CLEAR_SHORTCUT_ICON_TINT)
+    fun nonTintedIcon_noInteractionWithDrawable() =
+        testScope.runTest {
+            val icon: Icon.Loaded = mock()
+            val drawable: Drawable = mock()
+            whenever(icon.drawable).thenReturn(drawable)
+
+            underTest.nonTintedIcon(icon)
+
+            verifyNoInteractions(drawable)
         }
 
     @Test

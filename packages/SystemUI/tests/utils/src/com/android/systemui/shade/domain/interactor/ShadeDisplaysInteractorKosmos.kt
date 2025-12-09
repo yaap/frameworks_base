@@ -21,13 +21,13 @@ import android.window.WindowContext
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.testScope
 import com.android.systemui.log.logcatLogBuffer
-import com.android.systemui.shade.ShadeDisplayChangeLatencyTracker
+import com.android.systemui.shade.ShadeDisplayChangePerformanceTracker
 import com.android.systemui.shade.ShadeWindowLayoutParams
 import com.android.systemui.shade.data.repository.fakeShadeDisplaysRepository
 import com.android.systemui.shade.data.repository.shadeExpansionIntent
 import com.android.systemui.statusbar.notification.domain.interactor.activeNotificationsInteractor
 import com.android.systemui.statusbar.notification.stack.notificationStackRebindingHider
-import com.android.systemui.statusbar.phone.systemUIDialogManager
+import com.android.systemui.statusbar.phone.mockSystemUIDialogManager
 import com.android.systemui.statusbar.policy.configurationController
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
@@ -43,8 +43,8 @@ val Kosmos.mockedWindowContext by
             }
         }
     }
-val Kosmos.mockedShadeDisplayChangeLatencyTracker by
-    Kosmos.Fixture { mock<ShadeDisplayChangeLatencyTracker>() }
+val Kosmos.mockedShadeDisplayChangePerformanceTracker by
+    Kosmos.Fixture { mock<ShadeDisplayChangePerformanceTracker>() }
 val Kosmos.shadeDisplaysInteractor by
     Kosmos.Fixture {
         ShadeDisplaysInteractorImpl(
@@ -52,7 +52,7 @@ val Kosmos.shadeDisplaysInteractor by
             mockedWindowContext,
             testScope.backgroundScope,
             testScope.backgroundScope.coroutineContext,
-            mockedShadeDisplayChangeLatencyTracker,
+            mockedShadeDisplayChangePerformanceTracker,
             shadeExpandedStateInteractor,
             shadeExpansionIntent,
             activeNotificationsInteractor,
@@ -66,7 +66,7 @@ val Kosmos.shadeDisplaysInteractor by
 val Kosmos.shadeDisplayDialogInteractor by
     Kosmos.Fixture {
         ShadeDisplaysDialogInteractor(
-            systemUIDialogManager,
+            mockSystemUIDialogManager,
             fakeShadeDisplaysRepository,
             testScope.backgroundScope,
         )

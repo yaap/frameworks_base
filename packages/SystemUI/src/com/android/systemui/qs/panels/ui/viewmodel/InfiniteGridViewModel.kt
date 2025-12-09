@@ -16,7 +16,6 @@
 
 package com.android.systemui.qs.panels.ui.viewmodel
 
-import androidx.compose.runtime.getValue
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
 import com.android.systemui.media.controls.ui.controller.MediaHierarchyManager.Companion.LOCATION_QS
@@ -24,8 +23,7 @@ import com.android.systemui.qs.panels.shared.model.SizedTileImpl
 import com.android.systemui.qs.panels.ui.dialog.QSResetDialogDelegate
 import com.android.systemui.qs.panels.ui.viewmodel.PaginatableViewModel.Companion.splitInRows
 import com.android.systemui.qs.pipeline.shared.TileSpec
-import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
-import com.android.systemui.shade.shared.model.ShadeMode
+import com.android.systemui.qs.ui.viewmodel.QuickSettingsContainerViewModel
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.awaitCancellation
@@ -40,12 +38,16 @@ constructor(
     val squishinessViewModel: TileSquishinessViewModel,
     val snapshotViewModelFactory: InfiniteGridSnapshotViewModel.Factory,
     val resetDialogDelegateFactory: QSResetDialogDelegate.Factory,
-    val shadeModeInteractor: ShadeModeInteractor,
+    val editTopBarActionsViewModelFactory: EditTopBarActionsViewModel.Factory,
 ) : ExclusiveActivatable(), PaginatableViewModel {
     private val hydrator = Hydrator("InfiniteGridViewModel.hydrator")
 
     val iconTilesViewModel = dynamicIconTilesViewModelFactory.create()
-    val columnsWithMediaViewModel = columnsWithMediaViewModelFactory.create(LOCATION_QS)
+    val columnsWithMediaViewModel =
+        columnsWithMediaViewModelFactory.create(
+            LOCATION_QS,
+            QuickSettingsContainerViewModel.mediaUiBehavior,
+        )
 
     override val pageKeys: Array<Any>
         get() =
@@ -54,11 +56,6 @@ constructor(
                 columnsWithMediaViewModel.largeSpan,
                 iconTilesViewModel.largeTilesState.value,
             )
-
-    private val shadeMode by hydrator.hydratedStateOf("shadeMode", shadeModeInteractor.shadeMode)
-
-    val isDualShade: Boolean
-        get() = shadeMode == ShadeMode.Dual
 
     override fun splitIntoPages(tiles: List<TileViewModel>, rows: Int): List<List<TileViewModel>> {
         return splitInRows(

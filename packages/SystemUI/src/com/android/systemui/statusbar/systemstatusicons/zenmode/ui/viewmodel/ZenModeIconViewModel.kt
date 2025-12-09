@@ -17,9 +17,7 @@
 package com.android.systemui.statusbar.systemstatusicons.zenmode.ui.viewmodel
 
 import android.content.Context
-import android.graphics.drawable.Drawable
 import androidx.compose.runtime.getValue
-import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
@@ -29,7 +27,6 @@ import com.android.systemui.statusbar.systemstatusicons.ui.viewmodel.SystemStatu
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.flow.map
 
 /**
  * ViewModel for the Zen Mode system status icon. Observes the current Zen mode state and provides
@@ -38,41 +35,27 @@ import kotlinx.coroutines.flow.map
 class ZenModeIconViewModel
 @AssistedInject
 constructor(@Assisted private val context: Context, interactor: ZenModeInteractor) :
-    SystemStatusIconViewModel, ExclusiveActivatable() {
+    SystemStatusIconViewModel.Default, ExclusiveActivatable() {
 
     private val hydrator: Hydrator = Hydrator("ZenModeIconViewModel.hydrator")
 
     override val slotName = context.getString(com.android.internal.R.string.status_bar_zen)
 
-    override val icon: Icon? by
+    private val zenModeState: ZenModeInfo? by
         hydrator.hydratedStateOf(
-            traceName = "SystemStatus.zenModeIcon",
+            traceName = "SystemStatus.zenModeState",
             initialValue = null,
-            source = interactor.mainActiveMode.map { it?.toUiState() },
+            source = interactor.mainActiveMode,
         )
+
+    override val visible: Boolean
+        get() = zenModeState != null
+
+    override val icon: Icon?
+        get() = zenModeState?.icon
 
     override suspend fun onActivated(): Nothing {
         hydrator.activate()
-    }
-
-    private fun ZenModeInfo.toUiState(): Icon.Loaded {
-        // Make a copy of the drawable to ensure we can style it separately from the cached state.
-        val cached: Drawable.ConstantState? = this.icon.drawable.constantState
-        val drawable =
-            cached?.newDrawable(context.resources)?.mutate() ?: this.icon.drawable.mutate()
-
-        // ZenIconKey.resPackage is null if its resId is a system icon.
-        val res =
-            if (this.icon.key.resPackage == null) {
-                this.icon.key.resId
-            } else {
-                null
-            }
-        return Icon.Loaded(
-            drawable = drawable,
-            contentDescription = ContentDescription.Loaded(this.name),
-            res = res,
-        )
     }
 
     @AssistedFactory

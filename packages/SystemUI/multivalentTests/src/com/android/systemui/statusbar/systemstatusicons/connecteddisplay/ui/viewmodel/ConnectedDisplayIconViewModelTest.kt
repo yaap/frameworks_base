@@ -18,6 +18,7 @@ package com.android.systemui.statusbar.systemstatusicons.connecteddisplay.ui.vie
 
 import android.content.testableContext
 import android.platform.test.annotations.EnableFlags
+import android.view.Display
 import android.view.Display.FLAG_SECURE
 import android.view.Display.TYPE_EXTERNAL
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -27,7 +28,6 @@ import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.display.data.repository.display
 import com.android.systemui.display.data.repository.displayRepository
-import com.android.systemui.keyguard.data.repository.fakeKeyguardRepository
 import com.android.systemui.kosmos.runTest
 import com.android.systemui.kosmos.testScope
 import com.android.systemui.kosmos.useUnconfinedTestDispatcher
@@ -36,6 +36,8 @@ import com.android.systemui.res.R
 import com.android.systemui.statusbar.systemstatusicons.SystemStatusIconsInCompose
 import com.android.systemui.testKosmos
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.runBlocking
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -45,63 +47,60 @@ import org.junit.runner.RunWith
 class ConnectedDisplayIconViewModelTest : SysuiTestCase() {
 
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
-    private val keyguardRepository = kosmos.fakeKeyguardRepository
 
     private val underTest =
         kosmos.connectedDisplayIconViewModelFactory.create(kosmos.testableContext).apply {
             activateIn(kosmos.testScope)
         }
 
-    @Test
-    fun icon_displayDisconnected_outputsNull() =
-        kosmos.runTest { assertThat(underTest.icon).isNull() }
+    @Before
+    fun setUp() = runBlocking { kosmos.displayRepository.removeDisplay(Display.DEFAULT_DISPLAY) }
 
     @Test
-    fun icon_displayConnected_outputsIcon() =
+    fun icon_visible_isCorrect() =
         kosmos.runTest {
-            keyguardRepository.setKeyguardShowing(true)
-            displayRepository.setDefaultDisplayOff(false)
             displayRepository.addDisplay(display(type = TYPE_EXTERNAL, id = 1))
 
             assertThat(underTest.icon).isEqualTo(expectedConnectedDisplayIcon)
         }
 
+    @Test fun icon_notVisible_isNull() = kosmos.runTest { assertThat(underTest.icon).isNull() }
+
     @Test
-    fun icon_displayConnectedSecure_outputsIcon() =
+    fun visible_isFalse_byDefault() = kosmos.runTest { assertThat(underTest.visible).isFalse() }
+
+    @Test
+    fun visible_externalDisplayIsConnected_isTrue() =
         kosmos.runTest {
-            keyguardRepository.setKeyguardShowing(false)
-            displayRepository.setDefaultDisplayOff(false)
+            displayRepository.addDisplay(display(type = TYPE_EXTERNAL, id = 1))
+
+            assertThat(underTest.visible).isTrue()
+        }
+
+    @Test
+    fun visible_secureExternalDisplayIsConnected_isTrue() =
+        kosmos.runTest {
             displayRepository.addDisplay(display(type = TYPE_EXTERNAL, flags = FLAG_SECURE, id = 1))
 
-            assertThat(underTest.icon).isEqualTo(expectedConnectedDisplayIcon)
+            assertThat(underTest.visible).isTrue()
         }
 
     @Test
-    fun icon_updatesWhenDisplayConnectionChanges() =
+    fun visible_displayConnectionChanges_flips() =
         kosmos.runTest {
-            displayRepository.setDefaultDisplayOff(false)
-            assertThat(underTest.icon).isNull()
+            assertThat(underTest.visible).isFalse()
 
-            keyguardRepository.setKeyguardShowing(true)
             displayRepository.addDisplay(display(type = TYPE_EXTERNAL, id = 1))
-
-            assertThat(underTest.icon).isEqualTo(expectedConnectedDisplayIcon)
+            assertThat(underTest.visible).isTrue()
 
             displayRepository.removeDisplay(1)
-            assertThat(underTest.icon).isNull()
-
-            keyguardRepository.setKeyguardShowing(false)
-            displayRepository.addDisplay(display(type = TYPE_EXTERNAL, flags = FLAG_SECURE, id = 2))
-            assertThat(underTest.icon).isEqualTo(expectedConnectedDisplayIcon)
-
-            displayRepository.removeDisplay(2)
-            assertThat(underTest.icon).isNull()
+            assertThat(underTest.visible).isFalse()
         }
 
     companion object {
         private val expectedConnectedDisplayIcon =
             Icon.Resource(
-                res = R.drawable.stat_sys_connected_display,
+                resId = R.drawable.stat_sys_connected_display,
                 contentDescription =
                     ContentDescription.Resource(R.string.connected_display_icon_desc),
             )

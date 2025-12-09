@@ -38,7 +38,6 @@ import android.util.Log
 import android.view.View
 import android.view.ViewStub
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.CompoundButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -49,6 +48,7 @@ import androidx.annotation.WorkerThread
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -136,7 +136,8 @@ constructor(
     private lateinit var wifiToggle: CompoundButton
     private lateinit var shareWifiButton: LinearLayout
     private lateinit var addNetworkButton: LinearLayout
-    private lateinit var airplaneModeButton: Button
+    private lateinit var airplaneModeButton: LinearLayout
+    private lateinit var wifiButtonsContainer: ConstraintLayout
     private var alertDialog: AlertDialog? = null
     private var canChangeWifiState = false
     private var wifiNetworkHeight = 0
@@ -199,18 +200,21 @@ constructor(
     }
 
     /**
-     * Initializes the LifecycleRegistry if it hasn't been initialized yet. It sets the initial
-     * state of the LifecycleRegistry to Lifecycle.State.CREATED.
+     * Initializes the LifecycleRegistry. It sets the initial state of the LifecycleRegistry to
+     * Lifecycle.State.CREATED.
      */
     fun initializeLifecycle() {
-        if (!::lifecycleRegistry.isInitialized) {
-            lifecycleOwner =
-                object : LifecycleOwner {
-                    override val lifecycle: Lifecycle
-                        get() = lifecycleRegistry
-                }
-            lifecycleRegistry = LifecycleRegistry(lifecycleOwner!!)
+        // If a lifecycle already exists, destroy it before creating a new one.
+        if (::lifecycleRegistry.isInitialized) {
+            lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         }
+
+        lifecycleOwner =
+            object : LifecycleOwner {
+                override val lifecycle: Lifecycle
+                    get() = lifecycleRegistry
+            }
+        lifecycleRegistry = LifecycleRegistry(lifecycleOwner!!)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
     }
 
@@ -275,6 +279,7 @@ constructor(
             internetDetailsContentController.setAirplaneModeDisabled()
         }
         airplaneModeSummaryTextView = contentView.requireViewById(R.id.airplane_mode_summary)
+        wifiButtonsContainer = contentView.requireViewById(R.id.wifi_buttons_container)
     }
 
     private fun setWifiLayout() {
@@ -329,8 +334,9 @@ constructor(
                             when {
                                 itemCount == 1 -> entryBackgroundInactive
                                 adapterPosition == 0 -> entryBackgroundStart
-                                adapterPosition == itemCount - 1 && !hasMoreWifiEntries ->
-                                    entryBackgroundEnd
+                                adapterPosition == itemCount - 1 &&
+                                    !hasMoreWifiEntries &&
+                                    !QsWifiConfig.isEnabled -> entryBackgroundEnd
                                 else -> entryBackgroundMiddle
                             }
 
@@ -445,12 +451,10 @@ constructor(
             setProgressBarVisible(false)
         }
 
-        airplaneModeButton.visibility =
-            if (internetContent.isAirplaneModeEnabled) View.VISIBLE else View.GONE
-
         updateEthernetUI(internetContent)
         updateMobileUI(internetContent)
         updateWifiUI(internetContent)
+        updateButtonsLayout(internetContent)
     }
 
     private fun getStartingInternetContent(): InternetContent {
@@ -744,6 +748,35 @@ constructor(
     }
 
     @MainThread
+    private fun updateButtonsLayout(internetContent: InternetContent) {
+        airplaneModeButton.visibility =
+            if (internetContent.isAirplaneModeEnabled) View.VISIBLE else View.GONE
+
+        val apmVisible = airplaneModeButton.visibility == View.VISIBLE
+        val shareVisible = shareWifiButton.visibility == View.VISIBLE
+        if (!apmVisible && !shareVisible) return
+
+        val shareParams = shareWifiButton.layoutParams as ConstraintLayout.LayoutParams
+        shareWifiButton.minimumWidth = 0
+
+        if (apmVisible) {
+            shareParams.matchConstraintDefaultWidth =
+                ConstraintLayout.LayoutParams.MATCH_CONSTRAINT_WRAP
+        } else {
+            shareParams.matchConstraintDefaultWidth =
+                ConstraintLayout.LayoutParams.MATCH_CONSTRAINT_SPREAD
+
+            // By setting `MATCH_CONSTRAINT_SPREAD`, we ask ConstraintLayout to expand this
+            // `shareWifiButton`. However, due to layout timing, this change may not be reflected
+            // immediately. To force the button to occupy the full width on the very next layout
+            // pass, we set its minimumWidth to the exact current width of the parent container.
+            shareWifiButton.minimumWidth = wifiButtonsContainer.width
+        }
+
+        shareWifiButton.layoutParams = shareParams
+    }
+
+    @MainThread
     private fun updateConnectedWifi(internetContent: InternetContent) {
         if (
             !internetContent.isWifiEnabled ||
@@ -795,10 +828,12 @@ constructor(
             addNetworkButton.visibility = View.GONE
             return
         }
-        if (QsWifiConfig.isEnabled) {
+        val isAddNetworkVisible = QsWifiConfig.isEnabled
+
+        if (isAddNetworkVisible) {
             addNetworkButton.visibility = View.VISIBLE
         }
-        if (QsWifiConfig.isEnabled && internetContent.showAllWifiInList) {
+        if (isAddNetworkVisible && internetContent.showAllWifiInList) {
             hasMoreWifiEntries = false
             adapter.setShowAllWifi()
             seeAllLayout.visibility = View.GONE
@@ -815,6 +850,14 @@ constructor(
             seeAllLayout.visibility = if (hasMoreWifiEntries) View.VISIBLE else View.INVISIBLE
         }
         wifiRecyclerView.invalidateItemDecorations()
+
+        // Here using `View.setBackgroundResource` instead of setting the background directly. This
+        // is a deliberate choice to avoid issues where a shared Drawable's state can cause
+        // rendering problems (e.g., an empty background).
+        seeAllLayout.setBackgroundResource(
+            if (isAddNetworkVisible) R.drawable.settingslib_entry_bg_off_middle
+            else R.drawable.settingslib_entry_bg_off_end
+        )
         wifiRecyclerView.visibility = View.VISIBLE
     }
 

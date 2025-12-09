@@ -25,7 +25,6 @@ import static android.view.WindowManagerPolicyConstants.EXTRA_FROM_BRIGHTNESS_KE
 
 import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
 
-import android.app.Activity;
 import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.graphics.Insets;
@@ -48,14 +47,13 @@ import android.view.accessibility.AccessibilityManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
-import androidx.annotation.NonNull;
+import androidx.activity.ComponentActivity;
 import androidx.compose.ui.platform.ComposeView;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.systemui.brightness.ui.viewmodel.BrightnessSliderViewModel;
-import com.android.systemui.compose.ComposeInitializer;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.qs.flags.QsInCompose;
 import com.android.systemui.res.R;
@@ -67,8 +65,15 @@ import java.util.List;
 
 import javax.inject.Inject;
 
-/** A dialog that provides controls for adjusting the screen brightness. */
-public class BrightnessDialog extends Activity {
+/**
+ * A dialog that provides controls for adjusting the screen brightness.
+ *
+ * This class extends `ComponentActivity` instead of the base `android.app.Activity` to support
+ * hosting Jetpack Compose content. `ComponentActivity` provides the necessary
+ * `LifecycleOwner`and `SavedStateRegistryOwner` that Compose requires to function correctly,
+ * preventing crashes and simplifying lifecycle management. See b/417544544.
+ */
+public class BrightnessDialog extends ComponentActivity {
 
     @VisibleForTesting
     static final int DIALOG_TIMEOUT_MILLIS = 3000;
@@ -175,20 +180,6 @@ public class BrightnessDialog extends Activity {
         window.getDecorView();
         window.setLayout(WRAP_CONTENT, WRAP_CONTENT);
         getTheme().applyStyle(R.style.Theme_SystemUI_QuickSettings, false);
-        if (QsInCompose.isEnabled()) {
-            window.getDecorView().addOnAttachStateChangeListener(
-                    new View.OnAttachStateChangeListener() {
-                        @Override
-                        public void onViewAttachedToWindow(@NonNull View v) {
-                            ComposeInitializer.INSTANCE.onAttachedToWindow(v);
-                        }
-
-                        @Override
-                        public void onViewDetachedFromWindow(@NonNull View v) {
-                            ComposeInitializer.INSTANCE.onDetachedFromWindow(v);
-                        }
-                    });
-        }
     }
 
     void setBrightnessDialogViewAttributes(View container) {

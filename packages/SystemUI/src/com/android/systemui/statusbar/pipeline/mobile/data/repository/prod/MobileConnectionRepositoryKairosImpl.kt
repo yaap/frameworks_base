@@ -41,6 +41,7 @@ import android.telephony.TelephonyManager.ERI_ON
 import android.telephony.TelephonyManager.EXTRA_SUBSCRIPTION_ID
 import android.telephony.TelephonyManager.NETWORK_TYPE_UNKNOWN
 import android.telephony.TelephonyManager.UNKNOWN_CARRIER_ID
+import android.telephony.satellite.NtnSignalStrength
 import com.android.settingslib.Utils
 import com.android.systemui.KairosBuilder
 import com.android.systemui.broadcast.BroadcastDispatcher
@@ -196,6 +197,13 @@ constructor(
                     override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
                         logger.logOnSignalStrengthsChanged(signalStrength, subId)
                         emit(CallbackEvent.OnSignalStrengthChanged(signalStrength))
+                    }
+
+                    override fun onCarrierRoamingNtnSignalStrengthChanged(
+                        signalStrength: NtnSignalStrength
+                    ) {
+                        logger.logNtnSignalStrengthChanged(signalStrength, subId)
+                        emit(CallbackEvent.OnCarrierRoamingNtnSignalStrengthChanged(signalStrength))
                     }
 
                     override fun onCallbackModeStarted(
@@ -451,6 +459,10 @@ constructor(
                 telephonyManager.isDataConnectionAllowed,
                 nameTag("MobileConnectionRepositoryKairosImpl.dataEnabled"),
             )
+    }
+
+    override fun setDataEnabled(enabled: Boolean) {
+        telephonyManager.setDataEnabledForReason(TelephonyManager.DATA_ENABLED_REASON_USER, enabled)
     }
 
     override val isInEcmMode: State<Boolean> = buildState {

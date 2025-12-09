@@ -22,14 +22,20 @@ filegroup {
         ":framework-nfc-non-updatable-sources",
         ":messagequeue-gen",
         ":ranging_stack_mock_initializer",
+        ":anomaly_detector_mock_initializer",
         ":systemfeatures-gen-srcs",
+        ":framework-network-security-config-sources",
     ],
     // Exactly one MessageQueue.java will be added to srcs by messagequeue-gen
     exclude_srcs: [
-        "**/*_ravenwood.java",
+        ":framework-ravenwood-sources",
+        ":dropboxmanager_aidl_sources",
         ":dynamic_instrumentation_manager_aidl_sources",
         "android/os/*MessageQueue/**/*.java",
+        "android/os/DeliQueue/**/*.java",
+        "android/os/IProcessInfoService.aidl",
         "android/ranging/**/*.java",
+        "android/os/mock/*.java",
     ],
     visibility: ["//frameworks/base"],
 }
@@ -78,6 +84,43 @@ ranging_stack_framework_mock_init {
     },
 }
 
+// Mock to allow service registry for anomaly detector.
+// TODO(b/437406213): Remove this after RELEASE_ANOMALY_DETECTOR is ramped up to next.
+soong_config_module_type {
+    name: "anomaly_detector_framework_mock_init",
+    module_type: "genrule",
+    config_namespace: "bootclasspath",
+    bool_variables: [
+        "release_anomaly_detector",
+    ],
+    properties: [
+        "cmd",
+        "out",
+        "srcs",
+    ],
+}
+
+// The actual AnomalyDetectorFrameworkInitializer is present in
+// packages/modules/Profiling/anomaly-detector/framework.
+// Mock AnomalyDetectorFrameworkInitializer does nothing and allows to successfully build
+// SystemServiceRegistry after registering for system service in SystemServiceRegistry both with
+// and without build flag RELEASE_ANOMALY_DETECTOR enabled.
+anomaly_detector_framework_mock_init {
+    name: "anomaly_detector_mock_initializer",
+    soong_config_variables: {
+        release_anomaly_detector: {
+            cmd: "touch $(out)",
+            // Adding an empty file as out is mandatory.
+            out: ["android/os/empty_anomaly_detector.txt"],
+            conditions_default: {
+                srcs: ["android/os/mock/AnomalyDetectorFrameworkInitializer.java"],
+                cmd: "mkdir -p android/os/; cp $(in) $(out);",
+                out: ["android/os/AnomalyDetectorFrameworkInitializer.java"],
+            },
+        },
+    },
+}
+
 // Add selected MessageQueue.java implementation to srcs
 soong_config_module_type {
     name: "release_package_messagequeue_implementation_srcs",
@@ -104,14 +147,28 @@ release_package_messagequeue_implementation_srcs {
     out: ["android/os/MessageQueue.java"],
 }
 
-aidl_library {
-    name: "IDropBoxManagerService_aidl",
-    srcs: [
-        "com/android/internal/os/IDropBoxManagerService.aidl",
-    ],
-    hdrs: [
-        "android/os/DropBoxManager.aidl",
-    ],
+aidl_interface {
+    name: "dropboxmanager_aidl",
+    srcs: [":dropboxmanager_aidl_sources"],
+    unstable: true,
+    backend: {
+        java: {
+            additional_libs: ["unsupportedappusage"],
+            enabled: true,
+        },
+        rust: {
+            enabled: true,
+            apex_available: [
+                "//apex_available:platform",
+                "com.android.virt",
+            ],
+        },
+    },
+}
+
+filegroup {
+    name: "dropboxmanager_aidl_sources",
+    srcs: ["com/android/internal/os/IDropBoxManagerService.aidl"],
 }
 
 filegroup {
@@ -138,6 +195,15 @@ aidl_interface {
     name: "dynamic_instrumentation_manager_aidl",
     srcs: [":dynamic_instrumentation_manager_aidl_sources"],
     unstable: true,
+}
+
+aidl_interface {
+    name: "process_info_service_aidl",
+    srcs: [
+        "android/os/IProcessInfoService.aidl",
+    ],
+    unstable: true,
+    host_supported: true,
 }
 
 filegroup {
@@ -199,7 +265,12 @@ filegroup {
         "android/util/AndroidException.java",
         "android/view/DisplayAdjustments.java",
         "android/view/ViewDebug.java",
-    ],
+    ] + select(release_flag("RELEASE_NATIVE_FRAMEWORK_PROTOTYPE"), {
+        true: [
+            "android/app/INativeApplicationThread.aidl",
+        ],
+        default: [],
+    }),
     visibility: ["//frameworks/base/test-mock"],
 }
 
@@ -331,6 +402,26 @@ filegroup {
     ],
 }
 
+filegroup {
+    name: "xml-utils-shared-srcs",
+    visibility: ["//visibility:public"],
+    srcs: [
+        "android/util/EmptyArray.java",
+        "android/util/CharsetUtils.java",
+        "android/util/XmlPullAttributes.java",
+        "android/util/Xml.java",
+        "com/android/internal/util/ArrayUtils.java",
+        "com/android/internal/util/ArtFastDataInput.java",
+        "com/android/internal/util/ArtFastDataOutput.java",
+        "com/android/internal/util/ArtBinaryXmlPullParser.java",
+        "com/android/internal/util/ArtBinaryXmlSerializer.java",
+        "com/android/internal/util/HexDump.java",
+        "com/android/internal/util/XmlSerializerWrapper.java",
+        "com/android/internal/util/XmlPullParserWrapper.java",
+        "com/android/internal/util/XmlUtils.java",
+    ],
+}
+
 // keep these files in sync with the apex/jobscheduler/service jarjar-rules.txt for
 // the jobscheduler module.
 filegroup {
@@ -430,6 +521,13 @@ filegroup {
 }
 
 filegroup {
+    name: "activity_manager_iuidobserver_aidl",
+    srcs: [
+        "android/app/IUidObserver.aidl",
+    ],
+}
+
+filegroup {
     name: "activity_manager_runningappprocessinfo_aidl",
     srcs: [
         "android/app/RunningAppProcessInfo.aidl",
@@ -509,17 +607,6 @@ cc_library {
         "libdataloader_aidl-cpp",
         "libincremental_aidl-cpp",
     ],
-}
-
-cc_library {
-    name: "libactivity_manager_procstate_aidl-cpp",
-    host_supported: true,
-    srcs: [
-        ":activity_manager_procstate_aidl",
-    ],
-    aidl: {
-        export_aidl_headers: true,
-    },
 }
 
 // Build Rust bindings for PermissionController. Needed by keystore2.
@@ -729,4 +816,59 @@ java_system_features_srcs {
     name: "systemfeatures-gen-srcs",
     full_class_name: "com.android.internal.pm.RoSystemFeatures",
     visibility: ["//visibility:private"],
+}
+
+aidl_interface {
+    name: "activitymanager_structured_aidl",
+    unstable: true,
+    srcs: [
+        "android/app/IActivityManagerStructured.aidl",
+        ":activity_manager_iprocessobserver_aidl",
+        ":activity_manager_iuidobserver_aidl",
+        ":activity_manager_runningappprocessinfo_aidl",
+    ],
+    backend: {
+        java: {
+            // java code is generated through framework-core-sources.
+            enabled: false,
+        },
+        rust: {
+            enabled: true,
+        },
+    },
+}
+
+aidl_interface {
+    name: "native_application_thread_aidl",
+    srcs: [
+        "android/app/INativeApplicationThread.aidl",
+    ],
+    unstable: true,
+    backend: {
+        java: {
+            // java code is generated through framework-core-sources.
+            enabled: false,
+        },
+        rust: {
+            enabled: true,
+        },
+    },
+}
+
+aidl_interface {
+    name: "libactivity_manager_procstate_aidl",
+    srcs: [
+        ":activity_manager_procstate_aidl",
+    ],
+    host_supported: true,
+    unstable: true,
+    backend: {
+        java: {
+            // java code is generated through framework-core-sources.
+            enabled: false,
+        },
+        rust: {
+            enabled: true,
+        },
+    },
 }

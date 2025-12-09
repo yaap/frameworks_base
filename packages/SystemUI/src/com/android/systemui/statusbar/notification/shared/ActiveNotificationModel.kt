@@ -18,7 +18,6 @@ package com.android.systemui.statusbar.notification.shared
 import android.app.PendingIntent
 import android.graphics.drawable.Icon
 import android.util.Log
-import androidx.annotation.DrawableRes
 import com.android.internal.logging.InstanceId
 import com.android.systemui.statusbar.StatusBarIconView
 import com.android.systemui.statusbar.notification.promoted.shared.model.PromotedNotificationContentModel
@@ -35,7 +34,7 @@ sealed class ActivePipelineEntryModel
 /** Model for a bundle of notifications. */
 data class ActiveBundleModel(
     val key: String,
-    @DrawableRes val iconResId: Int,
+    val icon: Icon,
     val children: List<ActiveNotificationEntryModel>,
 ) : ActivePipelineEntryModel()
 
@@ -108,6 +107,8 @@ data class ActiveNotificationModel(
     val promotedContent: PromotedNotificationContentModels?,
     /** True if this notification set the "requested promotion?" extra and false otherwise. */
     val requestedPromotion: Boolean,
+    /** The visual style of the notification, containing additional data relevant to that style. */
+    val style: NotifStyle?,
 ) : ActiveNotificationEntryModel() {
     init {
         if (!PromotedNotificationContentModel.featureFlagEnabled()) {
@@ -142,4 +143,12 @@ enum class CallType {
     Screening,
     /** See [android.app.Notification.CallStyle.CALL_TYPE_UNKNOWN]. */
     Unknown,
+}
+
+/** Style-specific data for [ActiveNotificationModel] */
+sealed class NotifStyle {
+    /**
+     * Data pertaining to [messaging style][android.app.Notification.MessagingStyle] notifications.
+     */
+    class Messaging : NotifStyle()
 }

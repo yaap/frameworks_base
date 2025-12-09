@@ -366,6 +366,14 @@
           "exclude-annotation":"org.junit.Ignore"
         }
       ]
+    },
+    {
+      "name": "CtsPackageInstallerCUJDeveloperVerificationTestCases",
+      "file_patterns": [
+        "core/java/.*Install.*",
+        "services/core/.*Install.*",
+        "services/core/java/com/android/server/pm/.*"
+      ]
     }
   ],
   "presubmit-large":[
@@ -691,6 +699,24 @@
         {
           "exclude-annotation":"org.junit.Ignore"
         }
+      ]
+    },
+    {
+      "name": "CtsPackageInstallerCUJDeveloperVerificationTestCases",
+      "file_patterns": [
+        "core/java/.*Install.*",
+        "services/core/.*Install.*",
+        "services/core/java/com/android/server/pm/.*"
+      ]
+    }
+  ],
+  "desktop-presubmit": [
+    {
+      "name": "CtsPackageInstallTestCases",
+      "file_patterns": [
+        "core/java/.*Install.*",
+        "services/core/.*Install.*",
+        "services/core/java/com/android/server/pm/.*"
       ]
     }
   ],

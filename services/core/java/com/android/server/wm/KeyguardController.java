@@ -47,6 +47,7 @@ import static com.android.server.policy.WindowManagerPolicy.FINISH_LAYOUT_REDO_W
 import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_ATM;
 import static com.android.server.wm.ActivityTaskManagerDebugConfig.TAG_WITH_CLASS_NAME;
 
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.internal.perfetto.protos.Windowmanagerservice.KeyguardPerDisplayProto;
 import android.os.IBinder;
@@ -65,6 +66,7 @@ import com.android.server.policy.WindowManagerPolicy;
 import com.android.window.flags.Flags;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
 
 /**
  * Controls Keyguard occluding, dismissing and transitions depending on what kind of activities are
@@ -75,7 +77,10 @@ import java.io.PrintWriter;
 class KeyguardController {
 
     private static final boolean ENABLE_NEW_KEYGUARD_SHELL_TRANSITIONS =
-            Flags.ensureKeyguardDoesTransitionStarting();
+            Flags.ensureKeyguardDoesTransitionStartingBugFix();
+
+    private static final boolean REMOVE_DEFAULT_DISPLAY_USAGE =
+            Flags.keyguardRemoveDefaultDisplayUsage();
 
     private static final String TAG = TAG_WITH_CLASS_NAME ? "KeyguardController" : TAG_ATM;
 
@@ -91,7 +96,6 @@ class KeyguardController {
     private final SparseArray<KeyguardDisplayState> mDisplayStates = new SparseArray<>();
     private final ActivityTaskManagerService mService;
     private RootWindowContainer mRootWindowContainer;
-    private final ActivityTaskManagerService.SleepTokenAcquirer mSleepTokenAcquirer;
     private boolean mWaitingForWakeTransition;
     private Transition.ReadyCondition mWaitAodHide = null;
 
@@ -99,7 +103,6 @@ class KeyguardController {
             ActivityTaskSupervisor taskSupervisor) {
         mService = service;
         mTaskSupervisor = taskSupervisor;
-        mSleepTokenAcquirer = mService.new SleepTokenAcquirer(KEYGUARD_SLEEP_TOKEN_TAG);
     }
 
     void setWindowManager(WindowManagerService windowManager) {
@@ -298,21 +301,34 @@ class KeyguardController {
      * @param flags See {@link WindowManagerPolicy#KEYGUARD_GOING_AWAY_FLAG_TO_SHADE}
      *              etc.
      */
-    void keyguardGoingAway(int displayId, int flags) {
-        final KeyguardDisplayState state = getDisplayState(displayId);
-        if (!state.mKeyguardShowing || state.mKeyguardGoingAway) {
+    void keyguardGoingAway(int flags) {
+        Trace.traceBegin(TRACE_TAG_WINDOW_MANAGER, "keyguardGoingAway");
+
+        final ArrayList<DisplayContent> changedDisplays = new ArrayList<>();
+        for (int i = mRootWindowContainer.getChildCount() - 1; i >= 0; i--) {
+            final DisplayContent dc = mRootWindowContainer.getChildAt(i);
+            if (!dc.isRemoving() && !dc.isRemoved()) {
+                final var state = getDisplayState(dc.mDisplayId);
+                if (state.mKeyguardShowing && !state.mKeyguardGoingAway) {
+                    state.mKeyguardGoingAway = true;
+                    state.writeEventLog("keyguardGoingAway");
+                    scheduleGoingAwayTimeout(dc.mDisplayId);
+                    changedDisplays.add(dc);
+                }
+            }
+        }
+        if (changedDisplays.isEmpty()) {
+            Trace.traceEnd(TRACE_TAG_WINDOW_MANAGER);
             return;
         }
-        Trace.traceBegin(TRACE_TAG_WINDOW_MANAGER, "keyguardGoingAway");
+
         mService.deferWindowLayout();
-        state.mKeyguardGoingAway = true;
         final ActionChain chain = mService.mChainTracker.startTransit("kgGoAway");
         try {
-            state.writeEventLog("keyguardGoingAway");
             final int transitFlags = convertTransitFlags(flags);
             if (ENABLE_NEW_KEYGUARD_SHELL_TRANSITIONS) {
                 final Transition transition = chain.getTransition();
-                if (transition != null && displayId == DEFAULT_DISPLAY) {
+                if (transition != null) {
                     transition.addFlag(TRANSIT_FLAG_KEYGUARD_GOING_AWAY);
                 }
             } else {
@@ -329,9 +345,13 @@ class KeyguardController {
             mRootWindowContainer.resumeFocusedTasksTopActivities();
             mRootWindowContainer.ensureActivitiesVisible();
             mRootWindowContainer.addStartingWindowsForVisibleActivities();
-            mWindowManager.executeAppTransition();
-
-            scheduleGoingAwayTimeout(displayId);
+            if (REMOVE_DEFAULT_DISPLAY_USAGE) {
+                for (int i = changedDisplays.size() - 1; i >= 0; i--) {
+                    changedDisplays.get(i).executeAppTransition();
+                }
+            } else {
+                mWindowManager.executeAppTransition();
+            }
         } finally {
             mService.continueWindowLayout();
             mService.mChainTracker.endPartial();
@@ -452,19 +472,20 @@ class KeyguardController {
      * @param topActivity the activity that controls the state whether keyguard should
      *      be occluded. That is the activity to be shown on top of keyguard if it requests so.
      */
-    private void handleOccludedChanged(int displayId, @Nullable ActivityRecord topActivity) {
+    private void handleOccludedChanged(@NonNull DisplayContent dc,
+            @Nullable ActivityRecord topActivity) {
+        final int displayId = dc.mDisplayId;
         // TODO(b/113840485): Handle app transition for individual display, and apply occluded
         // state change to secondary displays.
         // For now, only default display fully supports occluded change. Other displays only
         // updates keyguard sleep token on that display.
         if (displayId != DEFAULT_DISPLAY) {
-            updateKeyguardSleepToken(displayId);
+            updateKeyguardSleepToken(dc);
             return;
         }
 
         final TransitionController tc = mRootWindowContainer.mTransitionController;
         final KeyguardDisplayState state = getDisplayState(displayId);
-        final DisplayContent dc = mRootWindowContainer.getDisplayContent(displayId);
 
         final boolean locked = isKeyguardLocked(displayId);
         final boolean executeTransition = !tc.isShellTransitionsEnabled();
@@ -506,7 +527,7 @@ class KeyguardController {
                     mWindowManager.mPolicy.applyKeyguardOcclusionChange();
                 }
             }
-            updateKeyguardSleepToken(displayId);
+            updateKeyguardSleepToken(dc);
             if (executeTransition) {
                 dc.executeAppTransition();
             }
@@ -529,7 +550,11 @@ class KeyguardController {
             dc.mAtmService.getTransitionController().requestTransitionIfNeeded(
                     TRANSIT_OPEN, TRANSIT_FLAG_KEYGUARD_GOING_AWAY, null /* trigger */, dc, chain);
             updateKeyguardSleepToken();
-            mWindowManager.executeAppTransition();
+            if (REMOVE_DEFAULT_DISPLAY_USAGE) {
+                dc.executeAppTransition();
+            } else {
+                mWindowManager.executeAppTransition();
+            }
         } finally {
             mService.continueWindowLayout();
             mService.mChainTracker.endPartial();
@@ -572,33 +597,39 @@ class KeyguardController {
         for (int displayNdx = mRootWindowContainer.getChildCount() - 1;
              displayNdx >= 0; displayNdx--) {
             final DisplayContent display = mRootWindowContainer.getChildAt(displayNdx);
-            updateKeyguardSleepToken(display.mDisplayId);
+            updateKeyguardSleepToken(display);
         }
     }
 
-    private void updateKeyguardSleepToken(int displayId) {
-        final KeyguardDisplayState state = getDisplayState(displayId);
-        if (isKeyguardUnoccludedOrAodShowing(displayId)) {
-            state.mSleepTokenAcquirer.acquire(displayId);
-        } else {
-            state.mSleepTokenAcquirer.release(displayId);
+    private void updateKeyguardSleepToken(DisplayContent display) {
+        if (isKeyguardUnoccludedOrAodShowing(display.mDisplayId)) {
+            display.addSleepToken(KEYGUARD_SLEEP_TOKEN_TAG);
+        } else if (display.hasSleepToken(KEYGUARD_SLEEP_TOKEN_TAG)) {
+            display.removeSleepToken(KEYGUARD_SLEEP_TOKEN_TAG);
         }
     }
 
     private KeyguardDisplayState getDisplayState(int displayId) {
         KeyguardDisplayState state = mDisplayStates.get(displayId);
         if (state == null) {
-            state = new KeyguardDisplayState(mService, displayId, mSleepTokenAcquirer);
+            final DisplayContent dc = mRootWindowContainer.getDisplayContent(displayId);
+
+            if (displayId == DEFAULT_DISPLAY || dc == null || dc.isKeyguardAlwaysUnlocked()) {
+                state = new KeyguardDisplayState(mService, displayId);
+            } else {
+                final KeyguardDisplayState defaultState = mDisplayStates.get(DEFAULT_DISPLAY);
+                state = new KeyguardDisplayState(mService, displayId, defaultState);
+            }
             mDisplayStates.append(displayId, state);
         }
         return state;
     }
 
-    void onDisplayRemoved(int displayId) {
-        final KeyguardDisplayState state = mDisplayStates.get(displayId);
+    void onDisplayRemoved(@NonNull DisplayContent dc) {
+        final KeyguardDisplayState state = mDisplayStates.get(dc.mDisplayId);
         if (state != null) {
-            state.onRemoved();
-            mDisplayStates.remove(displayId);
+            state.onRemoved(dc);
+            mDisplayStates.remove(dc.mDisplayId);
         }
     }
 
@@ -626,7 +657,8 @@ class KeyguardController {
         if (waiting && isAodShowing(DEFAULT_DISPLAY)) {
             mWaitingForWakeTransition = true;
             mWindowManager.mAtmService.getTransitionController().deferTransitionReady();
-            mWaitAodHide = new Transition.ReadyCondition("AOD hidden");
+            mWaitAodHide = new Transition.ReadyCondition("AOD hidden",
+                    !Flags.migrateBasicLegacyReady());
             mWindowManager.mAtmService.getTransitionController().waitFor(mWaitAodHide);
             mWindowManager.mH.postDelayed(mResetWaitTransition, DEFER_WAKE_TRANSITION_TIMEOUT_MS);
         } else if (!waiting) {
@@ -690,20 +722,29 @@ class KeyguardController {
 
         private boolean mRequestDismissKeyguard;
         private final ActivityTaskManagerService mService;
-        private final ActivityTaskManagerService.SleepTokenAcquirer mSleepTokenAcquirer;
 
-        KeyguardDisplayState(ActivityTaskManagerService service, int displayId,
-                ActivityTaskManagerService.SleepTokenAcquirer acquirer) {
+        KeyguardDisplayState(ActivityTaskManagerService service, int displayId) {
             mService = service;
             mDisplayId = displayId;
-            mSleepTokenAcquirer = acquirer;
         }
 
-        void onRemoved() {
+        KeyguardDisplayState(ActivityTaskManagerService service, int displayId,
+                @Nullable KeyguardDisplayState copyFrom) {
+            this(service, displayId);
+            if (copyFrom != null) {
+                mKeyguardShowing = copyFrom.mKeyguardShowing;
+                mAodShowing = copyFrom.mAodShowing;
+                mKeyguardGoingAway = copyFrom.mKeyguardGoingAway;
+            }
+        }
+
+        void onRemoved(@NonNull DisplayContent dc) {
             mTopOccludesActivity = null;
             mDismissingKeyguardActivity = null;
             mTopTurnScreenOnActivity = null;
-            mSleepTokenAcquirer.release(mDisplayId);
+            if (dc.hasSleepToken(KEYGUARD_SLEEP_TOKEN_TAG)) {
+                dc.removeSleepToken(KEYGUARD_SLEEP_TOKEN_TAG);
+            }
         }
 
         void writeEventLog(String reason) {
@@ -793,7 +834,7 @@ class KeyguardController {
                 controller.scheduleGoingAwayTimeout(mDisplayId);
             }
             if (occludedChanged) {
-                controller.handleOccludedChanged(mDisplayId, mTopOccludesActivity);
+                controller.handleOccludedChanged(display, mTopOccludesActivity);
             }
 
             // Collect the participants for shell transition, so that transition won't happen too

@@ -16,7 +16,10 @@
 
 package android.app.backup;
 
+import android.annotation.BytesLong;
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.IBackupAgent;
 import android.app.QueuedWork;
@@ -158,23 +161,25 @@ public abstract class BackupAgent extends ContextWrapper {
     /** @hide */
     public static final int TYPE_SYMLINK = 3;
 
+    /** @hide */
+    @IntDef(
+            prefix = {"TYPE_"},
+            value = {TYPE_EOF, TYPE_FILE, TYPE_DIRECTORY, TYPE_SYMLINK})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface BackupFileSystemObjectType {}
+
     /**
-     * Flag for {@link BackupDataOutput#getTransportFlags()} and {@link
-     * FullBackupDataOutput#getTransportFlags()} only.
-     *
-     * <p>The transport has client-side encryption enabled. i.e., the user's backup has been
-     * encrypted with a key known only to the device, and not to the remote storage solution. Even
-     * if an attacker had root access to the remote storage provider they should not be able to
-     * decrypt the user's backup data.
+     * Transport flag indicating that the transport has client-side encryption enabled. i.e., the
+     * user's backup has been encrypted with a key known only to the device, and not to the remote
+     * storage solution. Even if an attacker had root access to the remote storage provider they
+     * should not be able to decrypt the user's backup data.
      */
     public static final int FLAG_CLIENT_SIDE_ENCRYPTION_ENABLED = 1;
 
     /**
-     * Flag for {@link BackupDataOutput#getTransportFlags()} and {@link
-     * FullBackupDataOutput#getTransportFlags()} only.
-     *
-     * <p>The transport is for a device-to-device transfer. There is no third party or intermediate
-     * storage. The user's backup data is sent directly to another device over e.g., USB or WiFi.
+     * Transport flag indicating that the transport is used for a device-to-device transfer. There
+     * is no third party or intermediate storage. The user's backup data is sent directly to another
+     * device over e.g., USB or WiFi.
      */
     public static final int FLAG_DEVICE_TO_DEVICE_TRANSFER = 2;
 
@@ -185,6 +190,13 @@ public abstract class BackupAgent extends ContextWrapper {
      * @hide
      */
     public static final int FLAG_SKIP_RESTORE_FOR_LAUNCHED_APPS = 1 << 2;
+
+    /**
+     * Transport flag indicating that the transport is used for a cross-platform transfer to or from
+     * iOS. The user's backup data is sent directly to another device over e.g. USB or WiFi.
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_CROSS_PLATFORM_TRANSFER)
+    public static final int FLAG_CROSS_PLATFORM_DATA_TRANSFER_IOS = 1 << 3;
 
     /**
      * Flag for {@link BackupDataOutput#getTransportFlags()} and {@link
@@ -203,7 +215,8 @@ public abstract class BackupAgent extends ContextWrapper {
             value = {
                 FLAG_CLIENT_SIDE_ENCRYPTION_ENABLED,
                 FLAG_DEVICE_TO_DEVICE_TRANSFER,
-                FLAG_FAKE_CLIENT_SIDE_ENCRYPTION_ENABLED
+                FLAG_FAKE_CLIENT_SIDE_ENCRYPTION_ENABLED,
+                FLAG_CROSS_PLATFORM_DATA_TRANSFER_IOS
             })
     public @interface BackupTransportFlags {}
 
@@ -625,6 +638,27 @@ public abstract class BackupAgent extends ContextWrapper {
     }
 
     /**
+     * Estimate how much data in bytes a full backup will deliver. This is used during the preflight
+     * check to make sure the size doesn't exceed the backup quota.
+     *
+     * <p>By default, the backup size is measured by calling {@link
+     * #onFullBackup(FullBackupDataOutput)} and looking at the size of the backup it produces while
+     * discarding the data. This method can be overridden to provide an alternative, more efficient
+     * estimation if necessary.
+     *
+     * @param quotaBytes The maximum data size that the transport currently permits this application
+     *     to store as a backup.
+     * @param transportFlags flags with additional information about the backup transport.
+     * @return estimated size of the full backup. If the returned size is negative, the backup agent
+     *     will fallback to using {@link #onFullBackup(FullBackupDataOutput)} to measure the size.
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_CROSS_PLATFORM_TRANSFER)
+    @BytesLong
+    public long onEstimateFullBackupBytes(long quotaBytes, int transportFlags) throws IOException {
+        return -1;
+    }
+
+    /**
      * Notification that the application's current backup operation causes it to exceed the maximum
      * size permitted by the transport. The ongoing backup operation is halted and rolled back: any
      * data that had been stored by a previous backup operation is still intact. Typically the
@@ -952,6 +986,32 @@ public abstract class BackupAgent extends ContextWrapper {
      * the data from the file descriptor, then sets the file's access mode and modification time to
      * match the restore arguments.
      *
+     * @param data A structured wrapper containing the details of the file that's being restored and
+     *     additional metadata from the backup.
+     * @throws IOException
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_CROSS_PLATFORM_TRANSFER)
+    public void onRestoreFile(@NonNull FullRestoreDataInput data) throws IOException {
+        onRestoreFile(
+                data.getData(),
+                data.getSize(),
+                data.getDestination(),
+                data.getType(),
+                data.getMode(),
+                data.getModificationTimeSeconds());
+    }
+
+    /**
+     * Handle the data delivered via the given file descriptor during a full restore operation. The
+     * agent is given the path to the file's original location as well as its size and metadata.
+     *
+     * <p>The file descriptor can only be read for {@code size} bytes; attempting to read more data
+     * has undefined behavior.
+     *
+     * <p>The default implementation creates the destination file/directory and populates it with
+     * the data from the file descriptor, then sets the file's access mode and modification time to
+     * match the restore arguments.
+     *
      * @param data A read-only file descriptor from which the agent can read {@code size} bytes of
      *     file data.
      * @param size The number of bytes of file content to be restored to the given destination. If
@@ -1058,7 +1118,10 @@ public abstract class BackupAgent extends ContextWrapper {
             String domain,
             String path,
             long mode,
-            long mtime)
+            long mtime,
+            long appVersionCode,
+            int transportFlags,
+            String contentVersion)
             throws IOException {
         String basePath = null;
 
@@ -1076,7 +1139,13 @@ public abstract class BackupAgent extends ContextWrapper {
                             + " mode="
                             + mode
                             + " mtime="
-                            + mtime);
+                            + mtime
+                            + " appVersionCode="
+                            + appVersionCode
+                            + " transportFlags="
+                            + transportFlags
+                            + " contentVersion="
+                            + contentVersion);
         }
 
         basePath =
@@ -1092,7 +1161,21 @@ public abstract class BackupAgent extends ContextWrapper {
             String outPath = outFile.getCanonicalPath();
             if (outPath.startsWith(basePath + File.separatorChar)) {
                 if (DEBUG) Log.i(TAG, "[" + domain + " : " + path + "] mapped to " + outPath);
-                onRestoreFile(data, size, outFile, type, mode, mtime);
+                if (Flags.enableCrossPlatformTransfer()) {
+                    onRestoreFile(
+                            new FullRestoreDataInput(
+                                    data,
+                                    size,
+                                    outFile,
+                                    type,
+                                    mode,
+                                    mtime,
+                                    appVersionCode,
+                                    transportFlags,
+                                    contentVersion));
+                } else {
+                    onRestoreFile(data, size, outFile, type, mode, mtime);
+                }
                 return;
             } else {
                 // Attempt to restore to a path outside the file's nominal domain.
@@ -1339,6 +1422,7 @@ public abstract class BackupAgent extends ContextWrapper {
 
         public void doMeasureFullBackup(
                 long quotaBytes, int token, IBackupManager callbackBinder, int transportFlags) {
+            long estimatedBackupSize = -1;
             FullBackupDataOutput measureOutput =
                     new FullBackupDataOutput(quotaBytes, transportFlags);
 
@@ -1347,7 +1431,15 @@ public abstract class BackupAgent extends ContextWrapper {
             // Ensure that we're running with the app's normal permission level
             final long ident = Binder.clearCallingIdentity();
             try {
-                BackupAgent.this.onFullBackup(measureOutput);
+                if (Flags.enableCrossPlatformTransfer()) {
+                    estimatedBackupSize =
+                            BackupAgent.this.onEstimateFullBackupBytes(quotaBytes, transportFlags);
+                    if (estimatedBackupSize < 0) {
+                        BackupAgent.this.onFullBackup(measureOutput);
+                    }
+                } else {
+                    BackupAgent.this.onFullBackup(measureOutput);
+                }
             } catch (IOException ex) {
                 Log.d(
                         TAG,
@@ -1364,7 +1456,11 @@ public abstract class BackupAgent extends ContextWrapper {
                 Binder.restoreCallingIdentity(ident);
                 try {
                     callbackBinder.opCompleteForUser(
-                            getBackupUserId(), token, measureOutput.getSize());
+                            getBackupUserId(),
+                            token,
+                            estimatedBackupSize >= 0
+                                    ? estimatedBackupSize
+                                    : measureOutput.getSize());
                 } catch (RemoteException e) {
                     // timeout, so we're safe
                 }
@@ -1381,11 +1477,38 @@ public abstract class BackupAgent extends ContextWrapper {
                 long mode,
                 long mtime,
                 int token,
-                IBackupManager callbackBinder)
+                IBackupManager callbackBinder,
+                long appVersionCode,
+                int transportFlags,
+                String contentVersion)
                 throws RemoteException {
             final long ident = Binder.clearCallingIdentity();
             try {
-                BackupAgent.this.onRestoreFile(data, size, type, domain, path, mode, mtime);
+                if (Flags.enableCrossPlatformTransfer()) {
+                    BackupAgent.this.onRestoreFile(
+                            data,
+                            size,
+                            type,
+                            domain,
+                            path,
+                            mode,
+                            mtime,
+                            appVersionCode,
+                            transportFlags,
+                            contentVersion);
+                } else {
+                    BackupAgent.this.onRestoreFile(
+                            data,
+                            size,
+                            type,
+                            domain,
+                            path,
+                            mode,
+                            mtime,
+                            /* appVersionCode= */ 0,
+                            /* transportFlags= */ 0,
+                            /* contentVersion= */ "");
+                }
             } catch (IOException e) {
                 Log.d(
                         TAG,

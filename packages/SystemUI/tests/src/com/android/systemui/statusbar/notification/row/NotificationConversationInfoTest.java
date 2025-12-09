@@ -440,6 +440,7 @@ public class NotificationConversationInfoTest extends SysuiTestCase {
     @DisableFlags({
             Flags.FLAG_NM_SUMMARIZATION,
             Flags.FLAG_NM_SUMMARIZATION_UI,
+            Flags.FLAG_NOTIFICATION_CLASSIFICATION_UI,
             FLAG_NOTIFICATION_ANIMATED_ACTIONS_TREATMENT
     })
     public void testBindNotification_HidesFeedbackLink_flagOff() {
@@ -484,15 +485,41 @@ public class NotificationConversationInfoTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags({
-            Flags.FLAG_NM_SUMMARIZATION,
-            Flags.FLAG_NM_SUMMARIZATION_UI,
-            FLAG_NOTIFICATION_ANIMATED_ACTIONS_TREATMENT
-    })
-    public void testBindNotification_hidesFeedbackLink_ifSummaryNotInRanking() {
-        doStandardBind();
+    @EnableFlags({Flags.FLAG_NOTIFICATION_CLASSIFICATION_UI})
+    public void testBindNotification_SetsFeedbackLink_ifClassified() {
+        mEntry.setRanking(new RankingBuilder(mEntry.getRanking())
+                .setChannel(new NotificationChannel(
+                        NotificationChannel.SOCIAL_MEDIA_ID, "social", 2))
+                .build());
+        final CountDownLatch latch = new CountDownLatch(1);
+        mNotificationInfo.bindNotification(
+                mShortcutManager,
+                mMockPackageManager,
+                mUserManager,
+                mPeopleSpaceWidgetManager,
+                mMockINotificationManager,
+                mOnUserInteractionCallback,
+                TEST_PACKAGE_NAME,
+                mEntry,
+                mEntryAdapter,
+                mEntry.getRanking(),
+                mSbn,
+                null,
+                (View v, Intent intent) -> {
+                    latch.countDown();
+                },
+                mIconFactory,
+                mContext,
+                true,
+                mTestHandler,
+                mTestHandler, null, Optional.of(mBubblesManager),
+                mShadeController, true, null);
 
-        assertEquals(GONE, mNotificationInfo.findViewById(R.id.feedback).getVisibility());
+        final View feedback = mNotificationInfo.findViewById(R.id.feedback);
+        assertEquals(VISIBLE, feedback.getVisibility());
+        feedback.performClick();
+        // Verify that listener was triggered.
+        assertEquals(0, latch.getCount());
     }
 
     @Test

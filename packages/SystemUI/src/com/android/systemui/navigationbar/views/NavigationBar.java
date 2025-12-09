@@ -98,7 +98,6 @@ import android.view.WindowInsetsController.Behavior;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
-import android.view.inputmethod.Flags;
 import android.view.inputmethod.InputMethodManager;
 
 import androidx.annotation.Nullable;
@@ -132,6 +131,7 @@ import com.android.systemui.navigationbar.views.buttons.NavbarOrientationTrackin
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.recents.Recents;
 import com.android.systemui.res.R;
+import com.android.systemui.rotation.RotationPolicyWrapper;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.settings.UserContextProvider;
 import com.android.systemui.settings.UserTracker;
@@ -535,6 +535,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
             PanelExpansionInteractor panelExpansionInteractor,
             NotificationRemoteInputManager notificationRemoteInputManager,
             NotificationShadeDepthController notificationShadeDepthController,
+            RotationPolicyWrapper rotationPolicyWrapper,
             @Main Handler mainHandler,
             @Main Executor mainExecutor,
             @Background Executor bgExecutor,
@@ -647,6 +648,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         mView.setBackgroundExecutor(bgExecutor);
         mView.setEdgeBackGestureHandler(mEdgeBackGestureHandler);
         mView.setDisplayTracker(mDisplayTracker);
+        mView.setRotationPolicyWrapper(rotationPolicyWrapper);
         mNavBarMode = mNavigationModeController.addListener(mModeChangedListener);
     }
 
@@ -1185,9 +1187,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
 
         ButtonDispatcher imeSwitcherButton = mView.getImeSwitchButton();
         imeSwitcherButton.setOnClickListener(this::onImeSwitcherClick);
-        if (Flags.imeSwitcherRevamp()) {
-            imeSwitcherButton.setOnLongClickListener(this::onImeSwitcherLongClick);
-        }
+        imeSwitcherButton.setOnLongClickListener(this::onImeSwitcherLongClick);
 
         updateScreenPinningGestures();
     }
@@ -1226,10 +1226,14 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
                     } else if (mOverrideHomeButtonLongPressSlopMultiplier.isPresent()) {
                         // If override timeout doesn't exist but override touch slop exists, we use
                         // system default long press duration
-                        Log.d(TAG, "ACTION_DOWN default duration: "
-                                + ViewConfiguration.getLongPressTimeout());
+                        int longPressTimeoutMillis =
+                                android.companion.virtualdevice.flags.Flags.viewconfigurationApis()
+                                        ? ViewConfiguration.get(mContext)
+                                                .getLongPressTimeoutMillis()
+                                        : ViewConfiguration.getLongPressTimeout();
+                        Log.d(TAG, "ACTION_DOWN default duration: " + longPressTimeoutMillis);
                         mHandler.postDelayed(mOnVariableDurationHomeLongClick,
-                                ViewConfiguration.getLongPressTimeout());
+                                longPressTimeoutMillis);
                     } else {
                         mHomeButtonLongPressDurationMs.ifPresent(longPressDuration -> {
                             Log.d(TAG, "ACTION_DOWN original duration: " + longPressDuration);
@@ -1344,23 +1348,15 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     @VisibleForTesting
     void onImeSwitcherClick(View v) {
         mNavBarButtonClickLogger.logImeSwitcherClick();
-        if (Flags.imeSwitcherRevamp()) {
-            mInputMethodManager.onImeSwitchButtonClickFromSystem(mDisplayId);
-        } else {
-            mInputMethodManager.showInputMethodPickerFromSystem(
-                    true /* showAuxiliarySubtypes */, mDisplayId);
-        }
+        mInputMethodManager.onImeSwitchButtonClickFromSystem(mDisplayId);
         mUiEventLogger.log(KeyButtonView.NavBarButtonEvent.NAVBAR_IME_SWITCHER_BUTTON_TAP);
     }
 
     @VisibleForTesting
     boolean onImeSwitcherLongClick(View v) {
-        if (!Flags.imeSwitcherRevamp()) {
-            return false;
-        }
         mNavBarButtonClickLogger.logImeSwitcherClick();
-        mInputMethodManager.showInputMethodPickerFromSystem(
-                true /* showAuxiliarySubtypes */, mDisplayId);
+        mInputMethodManager.showInputMethodPickerFromSystem(true /* showAuxiliarySubtypes */,
+                mDisplayId);
         mUiEventLogger.log(KeyButtonView.NavBarButtonEvent.NAVBAR_IME_SWITCHER_BUTTON_LONGPRESS);
         return true;
     }

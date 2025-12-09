@@ -16,10 +16,12 @@
 
 package com.android.systemui.statusbar.notification.stack.ui.view
 
+import android.graphics.RectF
 import android.view.View
 import com.android.systemui.statusbar.notification.stack.shared.model.AccessibilityScrollEvent
 import com.android.systemui.statusbar.notification.stack.shared.model.ShadeScrimShape
 import com.android.systemui.statusbar.notification.stack.shared.model.ShadeScrollState
+import com.android.systemui.util.state.ObservableState
 import java.util.function.Consumer
 
 /**
@@ -46,6 +48,9 @@ interface NotificationScrollView {
      */
     fun asView(): View
 
+    /** An Observable State representing [View.getLeft] for this scroll view. */
+    val observableLeft: ObservableState<Int>
+
     /** Max alpha for this view */
     fun setMaxAlpha(alpha: Float)
 
@@ -68,14 +73,16 @@ interface NotificationScrollView {
      */
     fun setBlurRadius(radius: Float)
 
+    /** Set whether this view is active for touch, focus, and accessibility. */
+    fun setInteractive(blurredOut: Boolean)
+
+    fun setEnabled(enabled: Boolean)
+
     /** set the y position in px of the top of the stack in this view's coordinates */
     fun setStackTop(stackTop: Float)
 
-    /**
-     * set the bottom-most acceptable y-position of the bottom of the notification stack/ shelf /
-     * footer.
-     */
-    fun setStackCutoff(stackBottom: Float)
+    /** set the area where this can place its content */
+    fun updateDrawBounds(boundsInWindow: RectF)
 
     /** set the y position in px of the top of the HUN in this view's coordinates */
     fun setHeadsUpTop(headsUpTop: Float)

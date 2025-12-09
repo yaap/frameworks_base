@@ -16,6 +16,9 @@
 
 package android.companion.virtual.camera;
 
+import static android.graphics.ImageFormat.YUV_420_888;
+import static android.hardware.camera2.CameraMetadata.LENS_FACING_FRONT;
+
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.FlaggedApi;
@@ -29,20 +32,31 @@ import android.companion.virtual.VirtualDevice;
 import android.companion.virtualdevice.flags.Flags;
 import android.graphics.ImageFormat;
 import android.graphics.PixelFormat;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.impl.CameraMetadataNative;
+import android.hardware.camera2.params.StreamConfiguration;
+import android.hardware.camera2.params.StreamConfigurationDuration;
+import android.os.Binder;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.os.RemoteException;
 import android.util.ArraySet;
+import android.util.Range;
+import android.util.Rational;
+import android.util.Size;
+import android.util.SizeF;
 import android.view.Surface;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.function.ObjLongConsumer;
 
 /**
  * Configuration to create a new {@link VirtualCamera}.
@@ -86,6 +100,20 @@ public final class VirtualCameraConfig implements Parcelable {
     @Retention(RetentionPolicy.SOURCE)
     public @interface SensorOrientation {}
 
+    /**
+     * Default {@link CameraCharacteristics} for creating a Virtual Camera starting from a preset
+     * list of {@link CameraCharacteristics.Key}s and values that cover the mandatory keys from the
+     * <a href="https://android.googlesource.com/platform/hardware/libhardware/+/refs/heads/main/include_all/hardware/camera3.h">Camera HAL specification</a>.
+     * It can be used to create a functional {@link VirtualCamera} that can be queried and opened
+     * by camera apps.
+     * <p>
+     * It can be used as a start template in a {@link CameraCharacteristics.Builder} to further
+     * customize and overwrite the opinionated preset keys and values.
+     */
+    @FlaggedApi(Flags.FLAG_VIRTUAL_CAMERA_METADATA)
+    public static final CameraCharacteristics DEFAULT_VIRTUAL_CAMERA_CHARACTERISTICS =
+            getDefaultVirtualCameraCharacteristics();
+
     private final String mName;
     private final Set<VirtualCameraStreamConfig> mStreamConfigurations;
     private final IVirtualCameraCallback mCallback;
@@ -128,7 +156,8 @@ public final class VirtualCameraConfig implements Parcelable {
         mCallback =
                 new VirtualCameraCallbackInternal(
                         requireNonNull(callback, "Missing callback"),
-                        requireNonNull(executor, "Missing callback executor"));
+                        requireNonNull(executor, "Missing callback executor"),
+                        perFrameCameraMetadataEnabled);
         mSensorOrientation = sensorOrientation;
         mPerFrameCameraMetadataEnabled = perFrameCameraMetadataEnabled;
         mCameraCharacteristics = cameraCharacteristics;
@@ -383,24 +412,22 @@ public final class VirtualCameraConfig implements Parcelable {
             return this;
         }
 
-        // TODO: b/371167033 - update docs and add links to
-        //  onSessionConfigured, onProcessCaptureRequest, CaptureResultConsumer
         /**
-         * Declares that the virtual camera owner wants to receive and provide
-         * {@link CaptureRequest} and {@link CaptureResult} for every frame.
+         * Declares that the virtual camera owner wants to receive {@link CaptureRequest} and
+         * can provide {@link CaptureResult} for every frame.
          *
-         * <p>This changes what methods from the {@link VirtualCameraCallback} are called.
-         * When enabled,
+         * <p>This changes which {@link VirtualCameraCallback} methods are called. When enabled,
          * {@link VirtualCameraCallback#onProcessCaptureRequest(int, long, CaptureRequest)}
-         * is called and a non null {@link CaptureResultConsumer} is received in
-         * {@link VirtualCameraCallback#onSessionConfigured(SessionConfiguration, CaptureResultConsumer)}.
-         * When set, the virtual camera expects the {@link CaptureResult} to be passed for each
-         * frame.
+         * is called and a {@code Consumer} is received in
+         * {@link VirtualCameraCallback#onConfigureSession(VirtualCameraSessionConfig,
+         * ObjLongConsumer)}. The {@code Consumer} takes the {@link CaptureResult} and
+         * the timestamp (as {@code long}) for its parameters.
          *
-         * @param perFrameCameraMetadataEnabled if camera metadata is handled for each frame
-         * @see onSessionConfigured
-         * @see onProcessCaptureRequest
-         * @see CaptureResultConsumer
+         * @param perFrameCameraMetadataEnabled if set camera metadata is handled for each frame
+         * @see VirtualCameraCallback#onConfigureSession(VirtualCameraSessionConfig,
+         * ObjLongConsumer)
+         * @see VirtualCameraCallback#onProcessCaptureRequest(int, long)
+         * @see VirtualCameraCallback#onProcessCaptureRequest(int, long, CaptureRequest)
          */
         @FlaggedApi(Flags.FLAG_VIRTUAL_CAMERA_METADATA)
         @NonNull
@@ -415,11 +442,17 @@ public final class VirtualCameraConfig implements Parcelable {
         /**
          * Sets the {@link CameraCharacteristics} to expose for the configured virtual camera.
          * This field is optional and can be omitted.
-         * When set, this {@link CameraCharacteristics} becomes the source of truth and
-         * {@link #setLensFacing} and {@link #setSensorOrientation} are ignored.
          * <p>
-         * This also means that the corresponding key must be set in the
+         * When set, this {@link CameraCharacteristics} represents the static configuration of
+         * the {@link VirtualCamera}, except for the stream configurations which are still
+         * configured using the {@link #addStreamConfig}.
+         * The and {@link #setLensFacing} and {@link #setSensorOrientation} are ignored, but
+         * that also means that the corresponding key must be set in the
          * {@link CameraCharacteristics}.
+         * <p>
+         * The {@link CameraCharacteristics} needs to contain the set of mandatory
+         * {@link CameraCharacteristics.Key}s required by the
+         * <a href="https://android.googlesource.com/platform/hardware/libhardware/+/refs/heads/main/include_all/hardware/camera3.h">Camera HAL specification</a>
          *
          * @param cameraCharacteristics The instance of the {@link CameraCharacteristics}
          *                              to be associated with the virtual camera.
@@ -472,33 +505,79 @@ public final class VirtualCameraConfig implements Parcelable {
 
         private final VirtualCameraCallback mCallback;
         private final Executor mExecutor;
+        private final boolean mPerFrameCameraMetadataEnabled;
 
-        private VirtualCameraCallbackInternal(VirtualCameraCallback callback, Executor executor) {
+        private VirtualCameraCallbackInternal(VirtualCameraCallback callback, Executor executor,
+                boolean perFrameCameraMetadataEnabled) {
             mCallback = callback;
             mExecutor = executor;
+            mPerFrameCameraMetadataEnabled = perFrameCameraMetadataEnabled;
         }
 
+        @Override
         public void onOpenCamera() {
             if (Flags.virtualCameraOnOpen()) {
-                mExecutor.execute(mCallback::onOpenCamera);
+                Binder.withCleanCallingIdentity(() -> mExecutor.execute(mCallback::onOpenCamera));
+            }
+        }
+
+        @Override
+        public void onConfigureSession(CaptureRequest sessionParameters,
+                ICaptureResultConsumer captureResultConsumer) {
+            if (Flags.virtualCameraMetadata()) {
+                VirtualCameraSessionConfig virtualCameraSessionConfig =
+                        new VirtualCameraSessionConfig(sessionParameters);
+
+                Binder.withCleanCallingIdentity(() ->
+                        mExecutor.execute(() -> mCallback.onConfigureSession(
+                                virtualCameraSessionConfig,
+                                convertToFrameworkCaptureResultConsumer(captureResultConsumer))));
             }
         }
 
         @Override
         public void onStreamConfigured(int streamId, Surface surface, int width, int height,
                 int format) {
-            mExecutor.execute(() -> mCallback.onStreamConfigured(streamId, surface, width, height,
-                    format));
+            Binder.withCleanCallingIdentity(() ->
+                    mExecutor.execute(() -> mCallback.onStreamConfigured(
+                            streamId, surface, width, height, format)));
         }
 
         @Override
-        public void onProcessCaptureRequest(int streamId, long frameId) {
-            mExecutor.execute(() -> mCallback.onProcessCaptureRequest(streamId, frameId));
+        public void onProcessCaptureRequest(int streamId, long frameId,
+                CaptureRequest captureRequest) {
+            if (Flags.virtualCameraMetadata() && mPerFrameCameraMetadataEnabled) {
+                Binder.withCleanCallingIdentity(() ->
+                        mExecutor.execute(() -> mCallback.onProcessCaptureRequest(
+                                streamId, frameId, captureRequest)));
+            } else {
+                Binder.withCleanCallingIdentity(() ->
+                        mExecutor.execute(() -> mCallback.onProcessCaptureRequest(
+                                streamId, frameId)));
+            }
         }
 
         @Override
         public void onStreamClosed(int streamId) {
-            mExecutor.execute(() -> mCallback.onStreamClosed(streamId));
+            Binder.withCleanCallingIdentity(() ->
+                    mExecutor.execute(() -> mCallback.onStreamClosed(streamId)));
+        }
+
+        @Nullable
+        private ObjLongConsumer<CaptureResult> convertToFrameworkCaptureResultConsumer(
+                @Nullable ICaptureResultConsumer captureResultConsumer) {
+            if (!mPerFrameCameraMetadataEnabled || captureResultConsumer == null) {
+                return null;
+            }
+
+            return (captureResult, timestamp) -> {
+                try {
+                    captureResultConsumer.acceptCaptureResult(timestamp,
+                            captureResult.getNativeMetadata());
+                } catch (RemoteException e) {
+                    throw e.rethrowFromSystemServer();
+                }
+            };
         }
     }
 
@@ -521,5 +600,212 @@ public final class VirtualCameraConfig implements Parcelable {
             case ImageFormat.YUV_420_888, PixelFormat.RGBA_8888 -> true;
             default -> false;
         };
+    }
+
+    // Set the default keys and values necessary for a valid and usable CameraCharacteristics
+    @NonNull
+    private static CameraCharacteristics getDefaultVirtualCameraCharacteristics() {
+        if (!Flags.virtualCameraMetadata()) {
+          return new CameraCharacteristics(new CameraMetadataNative());
+        }
+
+        List<CameraCharacteristics.Key<?>> availableCharacteristicsKeys = List.of(
+                CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL,
+                CameraCharacteristics.FLASH_INFO_AVAILABLE, CameraCharacteristics.LENS_FACING,
+                CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS,
+                CameraCharacteristics.SENSOR_ORIENTATION,
+                CameraCharacteristics.SENSOR_READOUT_TIMESTAMP,
+                CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE,
+                CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE,
+                CameraCharacteristics.COLOR_CORRECTION_AVAILABLE_ABERRATION_MODES,
+                CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES,
+                CameraCharacteristics.STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES,
+                CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES,
+                CameraCharacteristics.SENSOR_AVAILABLE_TEST_PATTERN_MODES,
+                CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM,
+                CameraCharacteristics.CONTROL_AVAILABLE_MODES,
+                CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES,
+                CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES,
+                CameraCharacteristics.CONTROL_AVAILABLE_EFFECTS,
+                CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES,
+                CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES,
+                CameraCharacteristics.CONTROL_AE_AVAILABLE_ANTIBANDING_MODES,
+                CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,
+                CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE,
+                CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP,
+                CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE,
+                CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE,
+                CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES,
+                CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE,
+                CameraCharacteristics.SCALER_CROPPING_TYPE,
+                CameraCharacteristics.JPEG_AVAILABLE_THUMBNAIL_SIZES,
+                CameraCharacteristics.STATISTICS_INFO_MAX_FACE_COUNT,
+                CameraCharacteristics.SENSOR_INFO_MAX_FRAME_DURATION,
+                CameraCharacteristics.REQUEST_PARTIAL_RESULT_COUNT,
+                CameraCharacteristics.REQUEST_PIPELINE_MAX_DEPTH,
+                CameraCharacteristics.SYNC_MAX_LATENCY,
+                CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,
+                CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE,
+                CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+
+        List<CaptureRequest.Key<?>> availableCaptureRequestKeys = List.of(
+                CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE,
+                CaptureRequest.CONTROL_CAPTURE_INTENT,
+                CaptureRequest.CONTROL_AE_MODE,
+                CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION,
+                CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                CaptureRequest.CONTROL_AE_ANTIBANDING_MODE,
+                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                CaptureRequest.CONTROL_AF_TRIGGER,
+                CaptureRequest.CONTROL_AF_MODE,
+                CaptureRequest.CONTROL_AWB_MODE,
+                CaptureRequest.SCALER_CROP_REGION,
+                CaptureRequest.CONTROL_EFFECT_MODE,
+                CaptureRequest.CONTROL_MODE,
+                CaptureRequest.CONTROL_SCENE_MODE,
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                CaptureRequest.CONTROL_ZOOM_RATIO,
+                CaptureRequest.FLASH_MODE,
+                CaptureRequest.JPEG_THUMBNAIL_SIZE,
+                CaptureRequest.JPEG_ORIENTATION,
+                CaptureRequest.JPEG_QUALITY,
+                CaptureRequest.JPEG_THUMBNAIL_QUALITY,
+                CaptureRequest.JPEG_THUMBNAIL_SIZE,
+                CaptureRequest.NOISE_REDUCTION_MODE,
+                CaptureRequest.STATISTICS_FACE_DETECT_MODE);
+
+        List<CaptureResult.Key<?>> availableCaptureResultKeys = List.of(
+                CaptureResult.COLOR_CORRECTION_ABERRATION_MODE,
+                CaptureResult.CONTROL_AE_ANTIBANDING_MODE,
+                CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION,
+                CaptureResult.CONTROL_AE_LOCK,
+                CaptureResult.CONTROL_AE_MODE,
+                CaptureResult.CONTROL_AE_PRECAPTURE_TRIGGER,
+                CaptureResult.CONTROL_AE_STATE,
+                CaptureResult.CONTROL_AE_TARGET_FPS_RANGE,
+                CaptureResult.CONTROL_AF_MODE,
+                CaptureResult.CONTROL_AF_STATE,
+                CaptureResult.CONTROL_AF_TRIGGER,
+                CaptureResult.CONTROL_AWB_LOCK,
+                CaptureResult.CONTROL_AWB_MODE,
+                CaptureResult.CONTROL_AWB_STATE,
+                CaptureResult.CONTROL_CAPTURE_INTENT,
+                CaptureResult.CONTROL_EFFECT_MODE,
+                CaptureResult.CONTROL_MODE,
+                CaptureResult.CONTROL_SCENE_MODE,
+                CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE,
+                CaptureResult.STATISTICS_FACE_DETECT_MODE,
+                CaptureResult.FLASH_MODE,
+                CaptureResult.FLASH_STATE,
+                CaptureResult.JPEG_THUMBNAIL_SIZE,
+                CaptureResult.JPEG_QUALITY,
+                CaptureResult.JPEG_THUMBNAIL_QUALITY,
+                CaptureResult.LENS_FOCAL_LENGTH,
+                CaptureResult.LENS_OPTICAL_STABILIZATION_MODE,
+                CaptureResult.NOISE_REDUCTION_MODE,
+                CaptureResult.REQUEST_PIPELINE_DEPTH,
+                CaptureResult.SENSOR_TIMESTAMP,
+                CaptureResult.STATISTICS_HOT_PIXEL_MAP_MODE,
+                CaptureResult.STATISTICS_LENS_SHADING_MAP_MODE,
+                CaptureResult.STATISTICS_SCENE_FLICKER);
+
+        int cameraWidth = 640;
+        int cameraHeight = 480;
+        int minFps = 4;
+        int maxFps = 30;
+        int streamFormat = YUV_420_888;
+        long minFrameDuration = 1_000_000_000L / maxFps;
+        long minStallDuration = 0L;
+
+        Size supportedSize = new Size(cameraWidth, cameraHeight);
+        Range<Integer>[] supportedFpsRange = new Range[]{new Range<>(minFps, maxFps)};
+
+        StreamConfiguration streamConfig = new StreamConfiguration(streamFormat, cameraWidth,
+                cameraHeight, false);
+        StreamConfigurationDuration streamMinFrameConfig = new StreamConfigurationDuration(
+                streamFormat, cameraWidth, cameraHeight, minFrameDuration);
+        StreamConfigurationDuration streamStallConfig = new StreamConfigurationDuration(
+                streamFormat, cameraWidth, cameraHeight, minStallDuration);
+
+        return new CameraCharacteristics.Builder()
+                .set(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL,
+                        CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL)
+                .set(CameraCharacteristics.FLASH_INFO_AVAILABLE, false)
+                .set(CameraCharacteristics.LENS_FACING, LENS_FACING_FRONT)
+                .set(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS, new float[]{43.0f})
+                .set(CameraCharacteristics.SENSOR_ORIENTATION, SENSOR_ORIENTATION_0)
+                .set(CameraCharacteristics.SENSOR_READOUT_TIMESTAMP,
+                        CameraCharacteristics.SENSOR_READOUT_TIMESTAMP_NOT_SUPPORTED)
+                .set(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE,
+                        CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN)
+                .set(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE,
+                        new SizeF(36.0f, 24.0f))
+                .set(CameraCharacteristics.COLOR_CORRECTION_AVAILABLE_ABERRATION_MODES,
+                        new int[]{CameraCharacteristics.COLOR_CORRECTION_ABERRATION_MODE_OFF})
+                .set(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES,
+                        new int[]{CameraCharacteristics.NOISE_REDUCTION_MODE_OFF})
+                .set(CameraCharacteristics.STATISTICS_INFO_AVAILABLE_FACE_DETECT_MODES,
+                        new int[]{CameraCharacteristics.STATISTICS_FACE_DETECT_MODE_OFF})
+                .set(CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES, new long[]{
+                        CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES_DEFAULT,
+                        CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES_PREVIEW,
+                        CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES_STILL_CAPTURE,
+                        CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES_VIDEO_RECORD,
+                        CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES_PREVIEW_VIDEO_STILL,
+                        CameraCharacteristics.SCALER_AVAILABLE_STREAM_USE_CASES_VIDEO_CALL})
+                .set(CameraCharacteristics.SENSOR_AVAILABLE_TEST_PATTERN_MODES,
+                        new int[]{CameraCharacteristics.SENSOR_TEST_PATTERN_MODE_OFF})
+                .set(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM, 1.0f)
+                .set(CameraCharacteristics.CONTROL_AVAILABLE_MODES,
+                        new int[]{CameraCharacteristics.CONTROL_MODE_AUTO})
+                .set(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES,
+                        new int[]{CameraCharacteristics.CONTROL_AF_MODE_OFF})
+                .set(CameraCharacteristics.CONTROL_AVAILABLE_SCENE_MODES,
+                        new int[]{CameraCharacteristics.CONTROL_SCENE_MODE_DISABLED})
+                .set(CameraCharacteristics.CONTROL_AVAILABLE_EFFECTS,
+                        new int[]{CameraCharacteristics.CONTROL_EFFECT_MODE_OFF})
+                .set(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES,
+                        new int[]{CameraCharacteristics.CONTROL_VIDEO_STABILIZATION_MODE_OFF})
+                .set(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES,
+                        new int[]{CameraCharacteristics.CONTROL_AE_MODE_ON})
+                .set(CameraCharacteristics.CONTROL_AE_AVAILABLE_ANTIBANDING_MODES,
+                        new int[]{CameraCharacteristics.CONTROL_AE_ANTIBANDING_MODE_AUTO})
+                .set(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES,
+                        supportedFpsRange)
+                .set(CameraCharacteristics.CONTROL_MAX_REGIONS, new int[]{0, 0, 0})
+                .set(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE, new Range<>(0, 0))
+                .set(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP, new Rational(0, 0))
+                .set(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE, false)
+                .set(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE, false)
+                .set(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES,
+                        new int[]{CameraCharacteristics.CONTROL_AWB_MODE_AUTO})
+                .set(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE, new Range<>(1.0f, 1.0f))
+                .set(CameraCharacteristics.SCALER_CROPPING_TYPE,
+                        CameraCharacteristics.SCALER_CROPPING_TYPE_CENTER_ONLY)
+                .set(CameraCharacteristics.JPEG_AVAILABLE_THUMBNAIL_SIZES,
+                        new Size[]{supportedSize})
+                .set(CameraCharacteristics.STATISTICS_INFO_MAX_FACE_COUNT, 0)
+                .set(CameraCharacteristics.SENSOR_INFO_MAX_FRAME_DURATION, 1_000_000_000L)
+                .set(CameraCharacteristics.REQUEST_MAX_NUM_OUTPUT_STREAMS, new int[]{0, 3, 1})
+                .set(CameraCharacteristics.REQUEST_PARTIAL_RESULT_COUNT, 1)
+                .set(CameraCharacteristics.REQUEST_PIPELINE_MAX_DEPTH, (byte) 2)
+                .set(CameraCharacteristics.SYNC_MAX_LATENCY,
+                        CameraCharacteristics.SYNC_MAX_LATENCY_UNKNOWN)
+                .set(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES, new int[]{
+                        CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE})
+                .set(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE,
+                        new Rect(0, 0, cameraWidth, cameraHeight))
+                .set(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE, supportedSize)
+                // stream configurations
+                .set(CameraCharacteristics.SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
+                        new StreamConfiguration[]{streamConfig})
+                .set(CameraCharacteristics.SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
+                        new StreamConfigurationDuration[]{streamMinFrameConfig})
+                .set(CameraCharacteristics.SCALER_AVAILABLE_STALL_DURATIONS,
+                        new StreamConfigurationDuration[]{streamStallConfig})
+                .setAvailableCharacteristicsKeys(availableCharacteristicsKeys)
+                .setAvailableCaptureRequestKeys(availableCaptureRequestKeys)
+                .setAvailableCaptureResultKeys(availableCaptureResultKeys)
+                .build();
     }
 }

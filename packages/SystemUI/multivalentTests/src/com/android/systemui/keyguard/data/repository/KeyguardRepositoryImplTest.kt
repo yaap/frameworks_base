@@ -60,7 +60,6 @@ import org.mockito.MockitoAnnotations
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class KeyguardRepositoryImplTest : SysuiTestCase() {
 
     @Mock private lateinit var statusBarStateController: StatusBarStateController
@@ -94,6 +93,7 @@ class KeyguardRepositoryImplTest : SysuiTestCase() {
                 dreamOverlayCallbackController,
                 dispatcher,
                 testScope.backgroundScope,
+                context,
                 systemClock,
                 facePropertyRepository,
                 userTracker,

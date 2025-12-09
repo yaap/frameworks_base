@@ -17,35 +17,47 @@
 package android.app.appfunctions;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.content.pm.SignedPackage;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * @hide
  */
 public interface AppFunctionAccessServiceInterface {
 
-    /** check access */
-    boolean checkAppFunctionAccess(@NonNull String agentPackageName, int agentUserId,
-            @NonNull String targetPackageName, int targetUserId);
-
-    /** check access, but also informs if access is invalid */
+    /** @see AppFunctionManager#getAppFunctionAccessRequestState(String, String)  */
     @AppFunctionManager.AppFunctionAccessState
-    int getAppFunctionAccessRequestState(@NonNull String agentPackageName, int agentUserId,
+    int getAccessRequestState(@NonNull String agentPackageName, int agentUserId,
             @NonNull String targetPackageName, int targetUserId);
 
-    /** get flags for a given target and agent */
+    /** @see AppFunctionManager#getAccessFlags(String, String)  */
     @AppFunctionManager.AppFunctionAccessFlags
-    int getAppFunctionAccessFlags(@NonNull String agentPackageName, int agentUserId,
+    int getAccessFlags(@NonNull String agentPackageName, int agentUserId,
             @NonNull String targetPackageName, int targetUserId);
 
-    /** update flags for a given target and agent */
-    boolean updateAppFunctionAccessFlags(@NonNull String agentPackageName, int agentUserId,
+    /** @see AppFunctionManager#updateAccessFlags(String, String, int, int)  */
+    boolean updateAccessFlags(@NonNull String agentPackageName, int agentUserId,
             @NonNull String targetPackageName, int targetUserId,
             @AppFunctionManager.AppFunctionAccessFlags int flagMask,
             @AppFunctionManager.AppFunctionAccessFlags int flags) throws IllegalArgumentException;
 
-    /** update the agent allowlist */
-    void setAgentAllowlist(@NonNull List<SignedPackage> agentAllowlist);
+    /** @see AppFunctionManager#revokeSelfAccess(String) */
+    void revokeSelfAccess(@NonNull String targetPackageName);
+
+    /** Set the agent allowlist */
+    void setAgentAllowlist(@Nullable Set<SignedPackage> agentAllowlist);
+
+    /** @see AppFunctionManager#getValidAgents() */
+    @NonNull
+    List<String> getValidAgents(int userId);
+
+    /** @see AppFunctionManager#getValidTargets(String) () */
+    @NonNull
+    List<String> getValidTargets(int userId);
+
+    /** Should be called whenever a user starts */
+    void onUserStarting(int userId);
 }

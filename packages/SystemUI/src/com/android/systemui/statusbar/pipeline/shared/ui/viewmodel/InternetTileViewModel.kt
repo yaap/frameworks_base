@@ -27,7 +27,7 @@ import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.tileimpl.QSTileImpl.ResourceIcon
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.connectivity.ui.MobileContextProvider
-import com.android.systemui.statusbar.pipeline.airplane.data.repository.AirplaneModeRepository
+import com.android.systemui.statusbar.pipeline.airplane.domain.interactor.AirplaneModeInteractor
 import com.android.systemui.statusbar.pipeline.ethernet.domain.EthernetInteractor
 import com.android.systemui.statusbar.pipeline.mobile.domain.interactor.MobileIconsInteractor
 import com.android.systemui.statusbar.pipeline.mobile.domain.model.SignalIconModel
@@ -56,7 +56,7 @@ import kotlinx.coroutines.flow.stateIn
 class InternetTileViewModel
 @Inject
 constructor(
-    airplaneModeRepository: AirplaneModeRepository,
+    airplaneModeInteractor: AirplaneModeInteractor,
     connectivityRepository: ConnectivityRepository,
     ethernetInteractor: EthernetInteractor,
     mobileIconsInteractor: MobileIconsInteractor,
@@ -77,7 +77,7 @@ constructor(
                 flowOf(
                     InternetTileModel.Active(
                         secondaryTitle = secondary,
-                        icon = ResourceIcon.get(wifiIcon.icon.res),
+                        icon = ResourceIcon.get(wifiIcon.icon.resId),
                         stateDescription = wifiIcon.contentDescription,
                         contentDescription = ContentDescription.Loaded("$internetLabel,$secondary"),
                     )
@@ -138,7 +138,7 @@ constructor(
                                 signalIcon.icon.contentDescription.loadContentDescription(context)
                             InternetTileModel.Active(
                                 secondaryTitle = secondary,
-                                iconId = signalIcon.icon.res,
+                                iconId = signalIcon.icon.resId,
                                 stateDescription = ContentDescription.Loaded(secondary),
                                 contentDescription = ContentDescription.Loaded(internetLabel),
                             )
@@ -185,7 +185,7 @@ constructor(
                 flowOf(
                     InternetTileModel.Active(
                         secondaryLabel = secondary?.toText(),
-                        iconId = it.res,
+                        iconId = it.resId,
                         stateDescription = null,
                         contentDescription = secondary,
                     )
@@ -194,7 +194,7 @@ constructor(
         }
 
     private val notConnectedFlow: StateFlow<InternetTileModel> =
-        combine(wifiInteractor.areNetworksAvailable, airplaneModeRepository.isAirplaneMode) {
+        combine(wifiInteractor.areNetworksAvailable, airplaneModeInteractor.isAirplaneMode) {
                 networksAvailable,
                 isAirplaneMode ->
                 when {

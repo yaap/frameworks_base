@@ -368,8 +368,15 @@ class DragState {
         }
 
         final WindowState touchedWin = mService.mInputToWindowMap.get(token);
+        final float displayX = touchedWin != null
+                ? touchedWin.getBounds().left + inWindowX
+                : inWindowX;
+        final float displayY = touchedWin != null
+                ? touchedWin.getBounds().top + inWindowY
+                : inWindowY;
         if (!isWindowNotified(touchedWin)) {
-            final DragEvent unhandledDropEvent = createUnhandledDropEvent(inWindowX, inWindowY);
+            if (DEBUG_DRAG) Slog.d(TAG_WM, "Received drop for unnotified window " + touchedWin);
+            final DragEvent unhandledDropEvent = createUnhandledDropEvent(displayX, displayY);
             // Delegate to the unhandled drag listener as a first pass
             if (mDragDropController.notifyUnhandledDrop(unhandledDropEvent, "unhandled-drop")) {
                 // The unhandled drag listener will call back to notify whether it has consumed
@@ -387,8 +394,7 @@ class DragState {
         }
 
         if (DEBUG_DRAG) Slog.d(TAG_WM, "Sending DROP to " + touchedWin);
-        final DragEvent unhandledDropEvent = createUnhandledDropEvent(
-                touchedWin.getBounds().left + inWindowX, touchedWin.getBounds().top + inWindowY);
+        final DragEvent unhandledDropEvent = createUnhandledDropEvent(displayX, displayY);
 
         final IBinder clientToken = touchedWin.mClient.asBinder();
         final DragEvent event = createDropEvent(inWindowX, inWindowY, touchedWin);
@@ -415,14 +421,13 @@ class DragState {
     }
 
     class InputInterceptor {
-        InputChannel mClientChannel;
         DragInputEventReceiver mInputEventReceiver;
         InputApplicationHandle mDragApplicationHandle;
         InputWindowHandle mDragWindowHandle;
 
         InputInterceptor(Display display) {
-            mClientChannel = mService.mInputManager.createInputChannel("drag");
-            mInputEventReceiver = new DragInputEventReceiver(mClientChannel,
+            InputChannel clientChannel = mService.mInputManager.createInputChannel("drag");
+            mInputEventReceiver = new DragInputEventReceiver(clientChannel,
                     mService.mH.getLooper(), mDragDropController);
 
             mDragApplicationHandle = new InputApplicationHandle(new Binder(), "drag",
@@ -431,7 +436,7 @@ class DragState {
             mDragWindowHandle = new InputWindowHandle(mDragApplicationHandle,
                     display.getDisplayId());
             mDragWindowHandle.name = "drag";
-            mDragWindowHandle.token = mClientChannel.getToken();
+            mDragWindowHandle.token = mInputEventReceiver.getToken();
             mDragWindowHandle.layoutParamsType = WindowManager.LayoutParams.TYPE_DRAG;
             mDragWindowHandle.dispatchingTimeoutMillis = DEFAULT_DISPATCHING_TIMEOUT_MILLIS;
             mDragWindowHandle.ownerPid = MY_PID;
@@ -450,11 +455,9 @@ class DragState {
         }
 
         void tearDown() {
-            mService.mInputManager.removeInputChannel(mClientChannel.getToken());
+            mService.mInputManager.removeInputChannel(mInputEventReceiver.getToken());
             mInputEventReceiver.dispose();
             mInputEventReceiver = null;
-            mClientChannel.dispose();
-            mClientChannel = null;
 
             mDragWindowHandle = null;
             mDragApplicationHandle = null;
@@ -472,10 +475,10 @@ class DragState {
     }
 
     IBinder getInputToken() {
-        if (mInputInterceptor == null || mInputInterceptor.mClientChannel == null) {
+        if (mInputInterceptor == null || mInputInterceptor.mInputEventReceiver == null) {
             return null;
         }
-        return mInputInterceptor.mClientChannel.getToken();
+        return mInputInterceptor.mInputEventReceiver.getToken();
     }
 
     /**

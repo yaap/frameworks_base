@@ -20,6 +20,7 @@ import android.graphics.Point
 import android.hardware.display.DisplayManager
 import android.platform.test.annotations.RequiresFlagsEnabled
 import android.platform.test.flag.junit.DeviceFlagsValueProvider
+import android.platform.test.rule.ScreenRecordRule
 import android.tools.NavBar
 import android.tools.Rotation
 import android.tools.traces.parsers.WindowManagerStateHelper
@@ -59,6 +60,8 @@ abstract class DragMoveWindowToNextDisplay {
     val testSetupRule = Utils.testSetupRule(NavBar.MODE_GESTURAL, Rotation.ROTATION_0)
     @get:Rule(order = 2) val connectedDisplayRule = SimulatedConnectedDisplayTestRule()
     @get:Rule(order = 3) val desktopMouseRule = DesktopMouseTestRule()
+    @get:Rule(order = 4)
+    val screenRecordRule = ScreenRecordRule(/* keepTestLevelRecordingOnSuccess= */ false)
 
     @Before
     fun setup() {
@@ -68,8 +71,8 @@ abstract class DragMoveWindowToNextDisplay {
 
     @Test
     fun moveToNextDisplay() {
-        val connectedDisplayId = connectedDisplayRule.setupTestDisplay()
         testApp.enterDesktopMode(wmHelper, device)
+        val connectedDisplayId = connectedDisplayRule.setupTestDisplay()
 
         val captionBounds =
             checkNotNull(testApp.getCaptionForTheApp(wmHelper, device)?.visibleBounds)

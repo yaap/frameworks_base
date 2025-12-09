@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.compose.ui.graphics.painter.rememberDrawablePainter
@@ -45,6 +48,7 @@ import com.android.internal.app.MediaRouteChooserContentManager
 import com.android.internal.app.MediaRouteControllerContentManager
 import com.android.systemui.res.R as SystemUiR
 
+private val TILE_DETAILS_HORIZONTAL_PADDING = SystemUiR.dimen.tile_details_horizontal_padding
 private val MAX_CAST_LIST_HEIGHT = 5000.dp
 
 @Composable
@@ -67,8 +71,7 @@ fun CastDetailsContent(castDetailsViewModel: CastDetailsViewModel) {
     ) {
         Image(
             painter = rememberDrawablePainter(castDetailsViewModel.deviceIcon),
-            // TODO(b/388321032): Replace this string with a string in a translatable xml file.
-            contentDescription = "device icon",
+            contentDescription = null,
         )
         CastControllerView(contentManager)
         CastControllerDisconnectButton(contentManager)
@@ -154,20 +157,16 @@ fun CastControllerView(contentManager: MediaRouteControllerContentManager) {
 fun CastControllerDisconnectButton(contentManager: MediaRouteControllerContentManager) {
     Button(
         onClick = { contentManager.onDisconnectButtonClick() },
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier.fillMaxWidth()
+                .padding(horizontal = dimensionResource(TILE_DETAILS_HORIZONTAL_PADDING)),
     ) {
-        // TODO(b/388321032): Replace this string with a string in a translatable xml file.
-        Text(text = "Disconnect")
+        Text(text = stringResource(id = SystemUiR.string.quick_settings_cast_disconnect))
     }
 }
 
 private fun customizeView(listView: ListView) {
     val context = listView.context
-    val entryBackgroundStart =
-        context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_start)
-    val entryBackgroundEnd = context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_end)
-    val entryBackgroundMiddle =
-        context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_middle)
 
     // This code will run after the ListView has had a chance to complete its layout.
     listView.post {
@@ -185,11 +184,17 @@ private fun customizeView(listView: ListView) {
             if (adapterPosition != ListView.INVALID_POSITION) {
                 val entry = child.getChildAt(0) as LinearLayout
                 entry.background =
-                    when (adapterPosition) {
-                        0 -> entryBackgroundStart
-                        totalItemCount - 1 -> entryBackgroundEnd
-                        else -> entryBackgroundMiddle
+                    when {
+                        totalItemCount == 1 ->
+                            context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off)
+                        adapterPosition == 0 ->
+                            context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_start)
+                        adapterPosition == totalItemCount - 1 ->
+                            context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_end)
+                        else ->
+                            context.getDrawable(SystemUiR.drawable.settingslib_entry_bg_off_middle)
                     }
+
                 setPadding(context, child)
 
                 val titleTextView = entry.requireViewById<TextView>(R.id.text1)
@@ -206,8 +211,7 @@ private fun customizeView(listView: ListView) {
 }
 
 private fun setPadding(context: Context, targetBackgroundView: LinearLayout) {
-    val horizontalPadding =
-        context.resources.getDimensionPixelSize(SystemUiR.dimen.tile_details_horizontal_padding)
+    val horizontalPadding = context.resources.getDimensionPixelSize(TILE_DETAILS_HORIZONTAL_PADDING)
     targetBackgroundView.setPadding(
         horizontalPadding,
         targetBackgroundView.paddingTop,

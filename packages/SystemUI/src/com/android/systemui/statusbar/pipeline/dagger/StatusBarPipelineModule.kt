@@ -18,7 +18,6 @@ package com.android.systemui.statusbar.pipeline.dagger
 
 import android.net.wifi.WifiManager
 import com.android.systemui.CoreStartable
-import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.kairos.ExperimentalKairosApi
 import com.android.systemui.kairos.KairosNetwork
@@ -30,14 +29,13 @@ import com.android.systemui.log.table.TableLogBuffer
 import com.android.systemui.log.table.TableLogBufferFactory
 import com.android.systemui.statusbar.events.data.repository.SystemStatusEventAnimationRepository
 import com.android.systemui.statusbar.events.data.repository.SystemStatusEventAnimationRepositoryImpl
-import com.android.systemui.statusbar.pipeline.airplane.data.repository.AirplaneModeRepository
-import com.android.systemui.statusbar.pipeline.airplane.data.repository.AirplaneModeRepositoryImpl
 import com.android.systemui.statusbar.pipeline.airplane.ui.viewmodel.AirplaneModeViewModel
 import com.android.systemui.statusbar.pipeline.airplane.ui.viewmodel.AirplaneModeViewModelImpl
 import com.android.systemui.statusbar.pipeline.battery.data.repository.BatteryRepository
 import com.android.systemui.statusbar.pipeline.battery.data.repository.BatteryRepositoryImpl
 import com.android.systemui.statusbar.pipeline.icons.shared.BindableIconsRegistry
 import com.android.systemui.statusbar.pipeline.icons.shared.BindableIconsRegistryImpl
+import com.android.systemui.statusbar.pipeline.mobile.StatusBarMobileIconKairos
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.CarrierConfigCoreStartable
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.CarrierConfigRepository
 import com.android.systemui.statusbar.pipeline.mobile.data.repository.CarrierConfigRepositoryImpl
@@ -73,6 +71,7 @@ import com.android.systemui.statusbar.pipeline.shared.data.repository.Connectivi
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.RealWifiRepository
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.WifiRepository
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.WifiRepositorySwitcher
+import com.android.systemui.statusbar.pipeline.wifi.data.repository.demo.DemoModeWifiDataSourceKairos
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.prod.DisabledWifiRepository
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.prod.WifiRepositoryImpl
 import com.android.systemui.statusbar.pipeline.wifi.domain.interactor.WifiInteractor
@@ -94,6 +93,7 @@ import kotlinx.coroutines.flow.Flow
     includes =
         [
             DemoModeMobileConnectionDataSourceKairosImpl.Module::class,
+            DemoModeWifiDataSourceKairos.Module::class,
             MobileRepositorySwitcherKairos.Module::class,
             MobileConnectionsRepositoryKairosImpl.Module::class,
             MobileIconsInteractorKairosImpl.Module::class,
@@ -105,9 +105,6 @@ import kotlinx.coroutines.flow.Flow
         ]
 )
 abstract class StatusBarPipelineModule {
-    @Binds
-    abstract fun airplaneModeRepository(impl: AirplaneModeRepositoryImpl): AirplaneModeRepository
-
     @Binds
     abstract fun airplaneModeViewModel(impl: AirplaneModeViewModelImpl): AirplaneModeViewModel
 
@@ -175,7 +172,7 @@ abstract class StatusBarPipelineModule {
             impl: Provider<MobileIconsInteractorImpl>,
             kairosImpl: Provider<MobileIconsInteractorKairosAdapter>,
         ): MobileIconsInteractor {
-            return if (Flags.statusBarMobileIconKairos()) {
+            return if (StatusBarMobileIconKairos.isEnabled) {
                 kairosImpl.get()
             } else {
                 impl.get()
@@ -187,7 +184,7 @@ abstract class StatusBarPipelineModule {
             impl: Provider<MobileRepositorySwitcher>,
             kairosImpl: Provider<MobileConnectionsRepositoryKairosAdapter>,
         ): MobileConnectionsRepository {
-            return if (Flags.statusBarMobileIconKairos()) {
+            return if (StatusBarMobileIconKairos.isEnabled) {
                 kairosImpl.get()
             } else {
                 impl.get()
@@ -218,7 +215,7 @@ abstract class StatusBarPipelineModule {
             kairosViewModel: Provider<MobileIconsViewModelKairos>,
             kairosNetwork: KairosNetwork,
         ): Supplier<Flow<Boolean>> {
-            return if (Flags.statusBarMobileIconKairos()) {
+            return if (StatusBarMobileIconKairos.isEnabled) {
                 Supplier {
                     kairosViewModel
                         .get()
@@ -252,13 +249,6 @@ abstract class StatusBarPipelineModule {
 
         @Provides
         @SysUISingleton
-        @AirplaneTableLog
-        fun provideAirplaneTableLogBuffer(factory: TableLogBufferFactory): TableLogBuffer {
-            return factory.create("AirplaneTableLog", 30)
-        }
-
-        @Provides
-        @SysUISingleton
         @SharedConnectivityInputLog
         fun provideSharedConnectivityTableLogBuffer(factory: LogBufferFactory): LogBuffer {
             return factory.create("SharedConnectivityInputLog", 60)
@@ -268,7 +258,7 @@ abstract class StatusBarPipelineModule {
         @SysUISingleton
         @MobileSummaryLog
         fun provideMobileSummaryLogBuffer(factory: TableLogBufferFactory): TableLogBuffer {
-            return factory.create("MobileSummaryLog", 100)
+            return factory.create("MobileSummaryLog", 200)
         }
 
         @Provides
@@ -289,7 +279,7 @@ abstract class StatusBarPipelineModule {
         @SysUISingleton
         @VerboseMobileViewLog
         fun provideVerboseMobileViewLogBuffer(factory: LogBufferFactory): LogBuffer {
-            return factory.create("VerboseMobileViewLog", 100)
+            return factory.create("VerboseMobileViewLog", 200)
         }
 
         @Provides
@@ -318,6 +308,13 @@ abstract class StatusBarPipelineModule {
         @StackedMobileIconTableLog
         fun provideStackedMobileIconTableLog(factory: TableLogBufferFactory): TableLogBuffer {
             return factory.create("StackedMobileIconTableLog", 100)
+        }
+
+        @Provides
+        @SysUISingleton
+        @BatteryTableLog
+        fun provideBatteryTableLog(factory: TableLogBufferFactory): TableLogBuffer {
+            return factory.create("BatteryTableLog", 100)
         }
 
         const val FIRST_MOBILE_SUB_SHOWING_NETWORK_TYPE_ICON =

@@ -200,15 +200,27 @@ public final class Looper {
             return false;
         }
 
-        if (PerfettoTrace.MQ_CATEGORY.isEnabled()) {
-            PerfettoTrace.begin(PerfettoTrace.MQ_CATEGORY, "message_queue_receive")
-                    .beginProto()
-                    .beginNested(2004 /* message_queue */)
-                    .addField(1 /* sending_thread_name */, msg.sendingThreadName)
-                    .endNested()
-                    .endProto()
-                    .setTerminatingFlow(msg.mEventId.get())
-                    .emit();
+        if (PerfettoTrace.isMQCategoryEnabled()) {
+            if (PerfettoTrace.IS_USE_SDK_TRACING_API_V3) {
+                com.android.internal.dev.perfetto.sdk.PerfettoTrace.begin(
+                                PerfettoTrace.MQ_CATEGORY_V3, "message_queue_receive")
+                        .beginProto()
+                        .beginNested(2004 /* message_queue */)
+                        .addField(1 /* sending_thread_name */, msg.sendingThreadName)
+                        .endNested()
+                        .endProto()
+                        .setTerminatingFlow(msg.eventId)
+                        .emit();
+            } else {
+                PerfettoTrace.begin(PerfettoTrace.MQ_CATEGORY, "message_queue_receive")
+                        .beginProto()
+                        .beginNested(2004 /* message_queue */)
+                        .addField(1 /* sending_thread_name */, msg.sendingThreadName)
+                        .endNested()
+                        .endProto()
+                        .setTerminatingFlow(msg.eventId)
+                        .emit();
+            }
         }
 
         // This must be in a local variabe, in case a UI event sets the logger
@@ -300,8 +312,14 @@ public final class Looper {
                     + msg.target.getClass().getName() + " "
                     + msg.callback + " what=" + msg.what);
         }
-        if (PerfettoTrace.MQ_CATEGORY.isEnabled()) {
-            PerfettoTrace.end(PerfettoTrace.MQ_CATEGORY).emit();
+        if (PerfettoTrace.isMQCategoryEnabled()) {
+            if (PerfettoTrace.IS_USE_SDK_TRACING_API_V3) {
+                com.android.internal.dev.perfetto.sdk.PerfettoTrace.end(
+                                PerfettoTrace.MQ_CATEGORY_V3)
+                        .emit();
+            } else {
+                PerfettoTrace.end(PerfettoTrace.MQ_CATEGORY).emit();
+            }
         }
 
         msg.recycleUnchecked();
@@ -478,7 +496,7 @@ public final class Looper {
         mLogging = printer;
     }
 
-    /** {@hide} */
+    /** @hide */
     @UnsupportedAppUsage
     public void setTraceTag(long traceTag) {
         mTraceTag = traceTag;
@@ -486,7 +504,7 @@ public final class Looper {
 
     /**
      * Set a thresholds for slow dispatch/delivery log.
-     * {@hide}
+     * @hide
      */
     public void setSlowLogThresholdMs(long slowDispatchThresholdMs, long slowDeliveryThresholdMs) {
         mSlowDispatchThresholdMs = slowDispatchThresholdMs;
@@ -594,7 +612,7 @@ public final class Looper {
                 + ") {" + Integer.toHexString(System.identityHashCode(this)) + "}";
     }
 
-    /** {@hide} */
+    /** @hide */
     public interface Observer {
         /**
          * Called right before a message is dispatched.

@@ -418,6 +418,12 @@ public class TaskInfo {
     @Nullable
     public Rect topActivityMainWindowFrame;
 
+    /**
+     * Whether the Task should be an Interactive Picture-in-Picture window.
+     * @hide
+     */
+    public boolean isInteractivePictureInPicture;
+
     TaskInfo() {
         // Do nothing
     }
@@ -545,6 +551,7 @@ public class TaskInfo {
                 && Objects.equals(displayCutoutInsets, that.displayCutoutInsets)
                 && getWindowingMode() == that.getWindowingMode()
                 && configuration.uiMode == that.configuration.uiMode
+                && configuration.assetsSeq == that.configuration.assetsSeq
                 && Objects.equals(taskDescription, that.taskDescription)
                 && isFocused == that.isFocused
                 && isVisible == that.isVisible
@@ -565,8 +572,7 @@ public class TaskInfo {
                 && appCompatTaskInfo.equalsForTaskOrganizer(that.appCompatTaskInfo)
                 && Objects.equals(topActivityMainWindowFrame, that.topActivityMainWindowFrame)
                 && isAppBubble == that.isAppBubble
-                && (!com.android.window.flags.Flags.updateTaskMinDimensionsWithRootActivity()
-                || (minWidth == that.minWidth && minHeight == that.minHeight));
+                && minWidth == that.minWidth && minHeight == that.minHeight;
     }
 
     /**

@@ -54,6 +54,8 @@ import android.ravenwood.annotation.RavenwoodIgnore;
 import android.ravenwood.annotation.RavenwoodKeep;
 import android.ravenwood.annotation.RavenwoodKeepPartialClass;
 import android.ravenwood.annotation.RavenwoodKeepWholeClass;
+import android.ravenwood.annotation.RavenwoodRedirect;
+import android.ravenwood.annotation.RavenwoodRedirectionClass;
 import android.ravenwood.annotation.RavenwoodReplace;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
@@ -88,6 +90,7 @@ import java.util.concurrent.TimeoutException;
  * &lt;instrumentation&gt; tag.
  */
 @RavenwoodKeepPartialClass
+@RavenwoodRedirectionClass("Instrumentation_ravenwood")
 public class Instrumentation {
 
     /**
@@ -152,6 +155,10 @@ public class Instrumentation {
 
     @RavenwoodKeep
     public Instrumentation() {
+    }
+
+    @RavenwoodRedirect
+    private static void checkPendingExceptionOnRavenwood() {
     }
 
     /**
@@ -469,6 +476,7 @@ public class Instrumentation {
         mMessageQueue.addIdleHandler(idler);
         mMainHandler.post(new EmptyRunnable());
         idler.waitForIdle();
+        checkPendingExceptionOnRavenwood();
     }
 
     /**
@@ -484,6 +492,7 @@ public class Instrumentation {
         SyncRunnable sr = new SyncRunnable(runner);
         mMainHandler.post(sr);
         sr.waitForComplete();
+        checkPendingExceptionOnRavenwood();
     }
 
     boolean isSdkSandboxAllowedToStartActivities() {
@@ -1345,6 +1354,7 @@ public class Instrumentation {
      * 
      * @return The newly instantiated Application object.
      */
+    @RavenwoodKeep
     public Application newApplication(ClassLoader cl, String className, Context context)
             throws InstantiationException, IllegalAccessException, 
             ClassNotFoundException {
@@ -1367,6 +1377,7 @@ public class Instrumentation {
      * 
      * @return The newly instantiated Application object.
      */
+    @RavenwoodKeep
     static public Application newApplication(Class<?> clazz, Context context)
             throws InstantiationException, IllegalAccessException, 
             ClassNotFoundException {
@@ -1390,6 +1401,7 @@ public class Instrumentation {
      *
      * @param app The application being created.
      */
+    @RavenwoodKeep
     public void callApplicationOnCreate(Application app) {
         app.onCreate();
     }
@@ -1456,6 +1468,7 @@ public class Instrumentation {
         return getFactory(pkg).instantiateActivity(cl, className, intent);
     }
 
+    @RavenwoodReplace(reason = "Custom AppComponentFactory not supported")
     private AppComponentFactory getFactory(String pkg) {
         if (pkg == null) {
             Log.e(TAG, "No pkg specified, disabling AppComponentFactory");
@@ -1470,6 +1483,10 @@ public class Instrumentation {
         // This is in the case of starting up "android".
         if (apk == null) apk = mThread.getSystemContext().mPackageInfo;
         return apk.getAppFactory();
+    }
+
+    private AppComponentFactory getFactory$ravenwood(String pkg) {
+        return AppComponentFactory.DEFAULT;
     }
 
     /**
@@ -1958,7 +1975,7 @@ public class Instrumentation {
      * @see Activity#startActivity(Intent)
      * @see Activity#startActivityForResult(Intent, int)
      *
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage
     public ActivityResult execStartActivity(
@@ -2023,7 +2040,7 @@ public class Instrumentation {
      * {@link ActivityMonitor} objects only match against the first activity in
      * the array.
      *
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage
     public void execStartActivities(Context who, IBinder contextThread,
@@ -2042,7 +2059,7 @@ public class Instrumentation {
      *         {@link ActivityManager#START_SUCCESS} etc. indicating whether the launch was
      *         successful.
      *
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
     public int execStartActivitiesAsUser(Context who, IBinder contextThread,
@@ -2134,7 +2151,7 @@ public class Instrumentation {
      * @see Activity#startActivity(Intent)
      * @see Activity#startActivityForResult(Intent, int)
      *
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage
     public ActivityResult execStartActivity(
@@ -2214,7 +2231,7 @@ public class Instrumentation {
      * @see Activity#startActivity(Intent)
      * @see Activity#startActivityForResult(Intent, int)
      *
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage
     public ActivityResult execStartActivity(
@@ -2428,6 +2445,9 @@ public class Instrumentation {
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P, trackingBug = 115609023)
     public static void checkStartActivityResult(int res, Object intent) {
         if (!ActivityManager.isStartResultFatalError(res)) {
+            if (res == ActivityManager.START_ABORTED && Build.isDebuggable()) {
+                Log.w(TAG, new StackTrace("Activity start aborted"));
+            }
             return;
         }
 
@@ -2603,6 +2623,9 @@ public class Instrumentation {
         }
         public void run() {
             try {
+                // We have historically always done this in a way that does not propagate to
+                // Java-created child threads. It is unclear whether this is really necessary
+                // or useful, but it is less risky than a change.
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY);
             } catch (RuntimeException e) {
                 Log.w(TAG, "Exception setting priority of instrumentation thread "

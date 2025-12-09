@@ -13,6 +13,7 @@ flag {
   name: "add_fallback"
   namespace: "biometrics_framework"
   description: "Feature flag for adding auth fallbacks to biometric prompt"
+  is_exported: true
   bug: "391666818"
 }
 
@@ -99,4 +100,14 @@ flag {
   namespace: "biometrics_framework"
   description: "This flag is for the integration of Identity Check with Watch"
   bug: "397954948"
+}
+
+flag {
+  name: "bp_initialize_compose_watch"
+  namespace: "wear_frameworks"
+  description: "Initialize lifecycle to enable compose to run outside activities"
+  bug: "414859063"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }

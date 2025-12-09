@@ -31,14 +31,12 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.android.systemui.communal.data.repository.CommunalWidgetRepository
 import com.android.systemui.communal.shared.model.GlanceableHubMultiUserHelper
-import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IAppWidgetEventCallback
 import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IAppWidgetHostListener
 import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IConfigureWidgetCallback
 import com.android.systemui.communal.widgets.IGlanceableHubWidgetManagerService.IGlanceableHubWidgetsListener
 import com.android.systemui.log.LogBuffer
 import com.android.systemui.log.core.Logger
 import com.android.systemui.log.dagger.CommunalLog
-import java.util.concurrent.CompletableFuture
 import javax.inject.Inject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
@@ -267,16 +265,8 @@ constructor(
             override fun collectWidgetEvent(): AppWidgetEvent? {
                 if (!android.appwidget.flags.Flags.engagementMetrics()) return null
 
-                val future = CompletableFuture<AppWidgetEvent?>()
-                val callback =
-                    object : IAppWidgetEventCallback.Stub() {
-                        override fun onResult(event: AppWidgetEvent?) {
-                            future.complete(event)
-                        }
-                    }
                 return try {
-                    listener.collectWidgetEvent(callback)
-                    future.get()
+                    listener.collectWidgetEvent()
                 } catch (e: RemoteException) {
                     logger.e({ "Error collecting widget event: $str1" }) {
                         str1 = e.localizedMessage

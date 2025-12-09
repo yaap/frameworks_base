@@ -16,8 +16,8 @@
 
 package com.android.server.security.authenticationpolicy;
 
-import static android.hardware.biometrics.BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED;
-import static android.os.UserManager.DISALLOW_USER_SWITCH;
+import static android.content.Context.STATUS_BAR_SERVICE;
+import static android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG;
 import static android.security.Flags.secureLockDevice;
 import static android.security.Flags.secureLockdown;
 import static android.security.authenticationpolicy.AuthenticationPolicyManager.ERROR_ALREADY_ENABLED;
@@ -28,58 +28,61 @@ import static android.security.authenticationpolicy.AuthenticationPolicyManager.
 import static android.security.authenticationpolicy.AuthenticationPolicyManager.ERROR_UNSUPPORTED;
 import static android.security.authenticationpolicy.AuthenticationPolicyManager.SUCCESS;
 
+import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE;
+import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE;
+
 import android.annotation.NonNull;
 import android.app.ActivityManager;
+import android.app.ActivityTaskManager;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
+import android.hardware.biometrics.BiometricEnrollmentStatus;
 import android.hardware.biometrics.BiometricManager;
 import android.hardware.biometrics.BiometricStateListener;
+import android.hardware.biometrics.SensorProperties;
 import android.hardware.face.FaceManager;
 import android.hardware.fingerprint.FingerprintManager;
+import android.hardware.usb.IUsbManagerInternal;
+import android.hardware.usb.UsbManager;
 import android.os.Build;
-import android.os.Environment;
-import android.os.Handler;
 import android.os.PowerManager;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
+import android.os.ServiceManager;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.security.authenticationpolicy.AuthenticationPolicyManager;
 import android.security.authenticationpolicy.AuthenticationPolicyManager.DisableSecureLockDeviceRequestStatus;
 import android.security.authenticationpolicy.AuthenticationPolicyManager.EnableSecureLockDeviceRequestStatus;
-import android.security.authenticationpolicy.AuthenticationPolicyManager.IsSecureLockDeviceAvailableRequestStatus;
+import android.security.authenticationpolicy.AuthenticationPolicyManager.GetSecureLockDeviceAvailabilityRequestStatus;
 import android.security.authenticationpolicy.DisableSecureLockDeviceParams;
 import android.security.authenticationpolicy.EnableSecureLockDeviceParams;
 import android.security.authenticationpolicy.ISecureLockDeviceStatusListener;
-import android.util.AtomicFile;
-import android.util.Log;
 import android.util.Slog;
-import android.util.Xml;
 
 import androidx.annotation.Nullable;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.util.XmlUtils;
-import com.android.modules.utils.TypedXmlPullParser;
-import com.android.modules.utils.TypedXmlSerializer;
+import com.android.internal.app.IVoiceInteractionManagerService;
+import com.android.internal.statusbar.IStatusBarService;
+import com.android.internal.widget.LockPatternUtils;
 import com.android.server.IoThread;
 import com.android.server.LocalServices;
 import com.android.server.SystemService;
+import com.android.server.locksettings.LockSettingsInternal;
+import com.android.server.pm.UserManagerInternal;
+import com.android.server.security.authenticationpolicy.settings.SecureLockDeviceSettingsManager;
+import com.android.server.security.authenticationpolicy.settings.SecureLockDeviceSettingsManagerImpl;
+import com.android.server.security.authenticationpolicy.settings.SecureLockDeviceStore;
 import com.android.server.wm.WindowManagerInternal;
 
-import org.xmlpull.v1.XmlPullParserException;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * System service for remotely calling secure lock on the device.
  *
- * Callers will access this class via
- * {@link com.android.server.security.authenticationpolicy.AuthenticationPolicyService}.
+ * Callers will access this class via {@link AuthenticationPolicyService}.
  *
  * @see AuthenticationPolicyService
  * @see AuthenticationPolicyManager#enableSecureLockDevice
@@ -88,29 +91,76 @@ import java.nio.charset.StandardCharsets;
  */
 public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
     private static final String TAG = "SecureLockDeviceService";
-    private static final boolean DEBUG = Build.IS_DEBUGGABLE && Log.isLoggable(TAG, Log.DEBUG);
-    private final Context mContext;
+    private static final boolean DEBUG = Build.IS_DEBUGGABLE;
+
     @Nullable private final BiometricManager mBiometricManager;
+    private final Context mContext;
     @Nullable private final FaceManager mFaceManager;
     @Nullable private final FingerprintManager mFingerprintManager;
-    private final PowerManager mPowerManager;
+    @NonNull private final PowerManager mPowerManager;
+    @NonNull private final Object mSecureLockDeviceStatusListenerLock = new Object();
     @NonNull private final SecureLockDeviceStore mStore;
+    @NonNull private final SecureLockDeviceSettingsManager mSecureLockDeviceSettingsManager;
+    private final UserManagerInternal mUserManagerInternal;
+    // Lock for concurrent access to mUserAuthenticatedWithStrongBiometric
+    private final Object mBiometricAuthStateLock = new Object();
     private final RemoteCallbackList<ISecureLockDeviceStatusListener>
             mSecureLockDeviceStatusListeners = new RemoteCallbackList<>();
 
     // Not final because initialized after SecureLockDeviceService in SystemServer
     private ActivityManager mActivityManager;
-    private AuthenticationPolicyService mAuthenticationPolicyService;
-    private DevicePolicyManager mDevicePolicyManager;
+    private LockPatternUtils mLockPatternUtils;
+    private LockSettingsInternal mLockSettingsInternal;
+    private StrongAuthTracker mStrongAuthTracker;
     private WindowManagerInternal mWindowManagerInternal;
 
-    SecureLockDeviceService(@NonNull Context context) {
+    // Stores the UserHandle of the user who has authenticated with a strong biometric
+    // to disable secure lock. Will be null if no user is currently authenticated.
+    private UserHandle mUserAuthenticatedWithStrongBiometric = null;
+
+    // Whether test mode is enabled, meaning components of the feature that interfere with testing
+    // should be disabled (i.e. disabling USB connections, ADB, etc)
+    private boolean mSkipSecurityFeaturesForTest;
+
+    SecureLockDeviceService(@NonNull Context context,
+            @NonNull SecureLockDeviceSettingsManager settingsManager,
+            @Nullable BiometricManager biometricManager,
+            @Nullable FaceManager faceManager, @Nullable FingerprintManager fingerprintManager,
+            @NonNull PowerManager powerManager, @NonNull UserManagerInternal userManagerInternal) {
         mContext = context;
-        mBiometricManager = mContext.getSystemService(BiometricManager.class);
-        mFaceManager = mContext.getSystemService(FaceManager.class);
-        mFingerprintManager = mContext.getSystemService(FingerprintManager.class);
-        mPowerManager = context.getSystemService(PowerManager.class);
-        mStore = new SecureLockDeviceStore(IoThread.getHandler());
+        mBiometricManager = biometricManager;
+        mFaceManager = faceManager;
+        mFingerprintManager = fingerprintManager;
+        mPowerManager = powerManager;
+        mSecureLockDeviceSettingsManager = settingsManager;
+        mSecureLockDeviceSettingsManager.resetManagedSettings();
+        mUserManagerInternal = userManagerInternal;
+        mStore = new SecureLockDeviceStore(IoThread.getHandler(), mSecureLockDeviceSettingsManager);
+    }
+
+    /**
+     * Creates a new instance of SecureLockDeviceService.
+     * @param context {@link Context} for this service
+     * @return {@link SecureLockDeviceService} instance
+     */
+    public static SecureLockDeviceService create(@NonNull Context context) {
+        SecureLockDeviceSettingsManager settingsManager = new SecureLockDeviceSettingsManagerImpl(
+                context,
+                ActivityTaskManager.getInstance(),
+                IStatusBarService.Stub.asInterface(ServiceManager.getService(STATUS_BAR_SERVICE)),
+                IVoiceInteractionManagerService.Stub.asInterface(ServiceManager.getService(
+                        Context.VOICE_INTERACTION_MANAGER_SERVICE))
+        );
+
+        return new SecureLockDeviceService(
+                context,
+                settingsManager,
+                context.getSystemService(BiometricManager.class),
+                context.getSystemService(FaceManager.class),
+                context.getSystemService(FingerprintManager.class),
+                Objects.requireNonNull(context.getSystemService(PowerManager.class)),
+                LocalServices.getService(UserManagerInternal.class)
+        );
     }
 
     @NonNull
@@ -131,19 +181,22 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
     private boolean enableSecureLockDeviceAfterBoot() {
         // Switch users to the user who enabled secure lock device, in order to lock the device
         // under their credentials.
-        UserHandle callingUser = UserHandle.of(mStore.retrieveSecureLockDeviceClientId());
-        boolean result = switchCallingUserToForeground(callingUser);
+        int secureLockDeviceClientId = mStore.retrieveSecureLockDeviceClientId();
+        UserHandle userWhoEnabledSecureLockDevice = UserHandle.of(secureLockDeviceClientId);
+        boolean result = switchUserToForeground(userWhoEnabledSecureLockDevice);
         if (!result) {
             if (DEBUG) {
                 Slog.d(TAG, "Failed to switch calling user to foreground.");
             }
             return false;
         }
+        mSecureLockDeviceSettingsManager.enableSecurityFeaturesFromBoot(secureLockDeviceClientId);
 
-        // TODO (b/398058587): Set strong auth flags for user to configure allowed auth types
+        synchronized (mBiometricAuthStateLock) {
+            mUserAuthenticatedWithStrongBiometric = null;
+        }
 
-        // TODO (b/396680098): Enable security features
-
+        mStore.storeSecureLockDeviceEnabled(secureLockDeviceClientId);
         notifyAllSecureLockDeviceListenersEnabledStatusUpdated();
 
         if (DEBUG) {
@@ -186,35 +239,36 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
     @Override
     public void registerSecureLockDeviceStatusListener(@NonNull UserHandle user,
             @NonNull ISecureLockDeviceStatusListener listener) {
-        @IsSecureLockDeviceAvailableRequestStatus int isSecureLockDeviceAvailableForCurrentUser =
-                isSecureLockDeviceAvailable(user);
-        boolean isSecureLockDeviceEnabled = isSecureLockDeviceEnabled();
+        @GetSecureLockDeviceAvailabilityRequestStatus int secureLockDeviceAvailability =
+                getSecureLockDeviceAvailability(user);
+        synchronized (mSecureLockDeviceStatusListenerLock) {
+            boolean isSecureLockDeviceEnabled = isSecureLockDeviceEnabled();
 
-        // Register the listener with the UserHandle as its identifying cookie
-        if (mSecureLockDeviceStatusListeners.register(listener, user)) {
-            if (DEBUG) {
-                Slog.d(TAG, "Registered listener: " + listener + " for user "
-                        + user.getIdentifier());
-            }
-            try {
-                listener.onSecureLockDeviceAvailableStatusChanged(
-                        isSecureLockDeviceAvailableForCurrentUser);
-                listener.onSecureLockDeviceEnabledStatusChanged(
-                        isSecureLockDeviceEnabled);
+            // Register the listener with the UserHandle as its identifying cookie
+            if (mSecureLockDeviceStatusListeners.register(listener, user)) {
                 if (DEBUG) {
-                    Slog.d(TAG, "Sent initial enabled state " + isSecureLockDeviceEnabled
-                            + " and available state " + isSecureLockDeviceAvailableForCurrentUser
-                            + " to listener " + listener.asBinder() + "for user "
+                    Slog.d(TAG, "Registered listener: " + listener + " for user "
                             + user.getIdentifier());
                 }
-            } catch (RemoteException e) {
-                Slog.e(TAG, "Failed initial callback to listener for user "
-                        + user.getIdentifier() + ", unregistering listener.", e);
-                mSecureLockDeviceStatusListeners.unregister(listener);
+                try {
+                    listener.onSecureLockDeviceAvailableStatusChanged(secureLockDeviceAvailability);
+                    listener.onSecureLockDeviceEnabledStatusChanged(
+                            isSecureLockDeviceEnabled);
+                    if (DEBUG) {
+                        Slog.d(TAG, "Sent initial enabled state " + isSecureLockDeviceEnabled
+                                + " and available state " + secureLockDeviceAvailability
+                                + " to listener " + listener.asBinder() + "for user "
+                                + user.getIdentifier());
+                    }
+                } catch (RemoteException e) {
+                    Slog.e(TAG, "Failed initial callback to listener for user "
+                            + user.getIdentifier() + ", unregistering listener.", e);
+                    mSecureLockDeviceStatusListeners.unregister(listener);
+                }
+            } else {
+                Slog.w(TAG, "Failed to register listener " + listener.asBinder() + " for user "
+                        + user.getIdentifier());
             }
-        } else {
-            Slog.w(TAG, "Failed to register listener " + listener.asBinder() + " for user "
-                    + user.getIdentifier());
         }
     }
 
@@ -224,12 +278,33 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
     @Override
     public void unregisterSecureLockDeviceStatusListener(
             @NonNull ISecureLockDeviceStatusListener listener) {
-        if (mSecureLockDeviceStatusListeners.unregister(listener)) {
-            if (DEBUG) {
-                Slog.d(TAG, "Unregistered listener: " + listener.asBinder());
+        synchronized (mSecureLockDeviceStatusListenerLock) {
+            if (mSecureLockDeviceStatusListeners.unregister(listener)) {
+                if (DEBUG) {
+                    Slog.d(TAG, "Unregistered listener: " + listener.asBinder());
+                }
+            } else {
+                Slog.w(TAG, "Failed to unregister listener: " + listener.asBinder());
             }
-        } else {
-            Slog.w(TAG, "Failed to unregister listener: " + listener.asBinder());
+        }
+    }
+
+    /**
+     * Applies Secure Lock Device strong auth flags for all users when secure lock device is
+     * enabled.
+     *
+     * The StrongAuthFlags are used by keyguard and bouncer to determine allowed authenticators
+     * and lockdown state, and to display the correct UI for explaining why the device is locked.
+     */
+    private void setSecureLockDeviceStrongAuthFlags() {
+        // Require primary auth only (biometrics disabled) for the first unlock step of
+        // Secure Lock Device.
+        for (int userId : mUserManagerInternal.getUserIds()) {
+            mLockPatternUtils.requireStrongAuth(
+                    PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE, userId);
+            // Require strong biometric auth for the second unlock step of Secure Lock Device.
+            mLockPatternUtils.requireStrongAuth(
+                    STRONG_BIOMETRIC_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE, userId);
         }
     }
 
@@ -243,7 +318,14 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
             Slog.d(TAG, "onLockSettingsReady()");
         }
         mActivityManager = mContext.getSystemService(ActivityManager.class);
-        mDevicePolicyManager = mContext.getSystemService(DevicePolicyManager.class);
+        mLockSettingsInternal = LocalServices.getService(LockSettingsInternal.class);
+        if (mLockPatternUtils == null) {
+            mLockPatternUtils = new LockPatternUtils(mContext);
+            if (mStrongAuthTracker == null) {
+                mStrongAuthTracker = new StrongAuthTracker(mContext);
+            }
+            mLockPatternUtils.registerStrongAuthTracker(mStrongAuthTracker);
+        }
         mWindowManagerInternal = LocalServices.getService(WindowManagerInternal.class);
     }
 
@@ -252,13 +334,15 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
         if (DEBUG) {
             Slog.d(TAG, "onBootCompleted()");
         }
-        mAuthenticationPolicyService = LocalServices.getService(AuthenticationPolicyService.class);
 
-        if (mAuthenticationPolicyService == null) {
-            Slog.w(TAG, "AuthenticationPolicyService not found, listeners will not be "
-                    + "notified of secure lock device status updates.");
-        }
         listenForBiometricEnrollmentChanges();
+
+        mSecureLockDeviceSettingsManager.initSettingsControllerDependencies(
+                mContext.getSystemService(DevicePolicyManager.class),
+                mContext.getSystemService(UsbManager.class),
+                LocalServices.getService(IUsbManagerInternal.class)
+        );
+
         if (isSecureLockDeviceEnabled()) {
             if (DEBUG) {
                 Slog.d(TAG, "Restoring secure lock device enabled state after boot");
@@ -271,51 +355,76 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
     }
 
     /**
-     * @see AuthenticationPolicyManager#isSecureLockDeviceAvailable()
      * @param user {@link UserHandle} to check that secure lock device is available fo
-     * @return {@link IsSecureLockDeviceAvailableRequestStatus} int indicating whether secure lock
-     * device is available for the calling user
-     *
+     * @return {@link GetSecureLockDeviceAvailabilityRequestStatus} int indicating whether secure
+     * lock device is available for the calling user
      * @hide
+     * @see AuthenticationPolicyManager#getSecureLockDeviceAvailability()
      */
     @Override
-    @IsSecureLockDeviceAvailableRequestStatus
-    public int isSecureLockDeviceAvailable(UserHandle user) {
+    @GetSecureLockDeviceAvailabilityRequestStatus
+    public int getSecureLockDeviceAvailability(UserHandle user) {
         if (!secureLockDevice()) {
             return ERROR_UNSUPPORTED;
         }
 
-        int userId = user.getIdentifier();
         if (mBiometricManager == null) {
             Slog.w(TAG, "BiometricManager not available: secure lock device is unsupported.");
             return ERROR_UNSUPPORTED;
-        } else if (!mBiometricManager.hasEnrolledBiometrics(userId)) {
+        } else if (!hasStrongBiometricSensor()) {
             if (DEBUG) {
-                Slog.d(TAG, "Secure lock device unavailable: no biometrics are enrolled.");
-            }
-            return ERROR_NO_BIOMETRICS_ENROLLED;
-            // TODO: update to getEnrollmentStatus API once biometric strength check is supported
-        } else if (mBiometricManager.canAuthenticate(userId,
-                BiometricManager.Authenticators.BIOMETRIC_STRONG) == BIOMETRIC_ERROR_NONE_ENROLLED
-        ) {
-            if (DEBUG) {
-                Slog.d(TAG, "Secure lock device unavailable: no strong biometric enrollments.");
+                Slog.d(TAG, "Secure lock device unavailable: device does not have biometric"
+                        + "sensors of sufficient strength.");
             }
             return ERROR_INSUFFICIENT_BIOMETRICS;
+        } else if (!hasStrongBiometricsEnrolled(user)) {
+            if (DEBUG) {
+                Slog.d(TAG, "Secure lock device unavailable: device is missing enrollments "
+                        + "for strong biometric sensor.");
+            }
+            return ERROR_NO_BIOMETRICS_ENROLLED;
         } else {
             return SUCCESS;
         }
     }
 
+    private boolean hasStrongBiometricSensor() {
+        for (SensorProperties sensorProps : mBiometricManager.getSensorProperties()) {
+            if (sensorProps.getSensorStrength() == SensorProperties.STRENGTH_STRONG) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasStrongBiometricsEnrolled(UserHandle user) {
+        Context userContext = mContext.createContextAsUser(user, 0);
+        BiometricManager biometricManager = userContext.getSystemService(BiometricManager.class);
+
+        if (biometricManager == null) {
+            Slog.w(TAG, "BiometricManager not available, strong biometric enrollment cannot be "
+                    + "checked.");
+            return false;
+        }
+        Map<Integer, BiometricEnrollmentStatus> enrollmentStatusMap =
+                biometricManager.getEnrollmentStatus();
+
+        for (BiometricEnrollmentStatus status : enrollmentStatusMap.values()) {
+            if (status.getStrength() == BIOMETRIC_STRONG && status.getEnrollmentCount() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
-     * @see AuthenticationPolicyManager#enableSecureLockDevice
-     * @param user {@link UserHandle} of caller requesting to enable secure lock device
+     * @param user   {@link UserHandle} of caller requesting to enable secure lock device
      * @param params {@link EnableSecureLockDeviceParams} for caller to supply params related
      *               to the secure lock device request
      * @return {@link EnableSecureLockDeviceRequestStatus} int indicating the result of the
      * secure lock device request
-     *
      * @hide
+     * @see AuthenticationPolicyManager#enableSecureLockDevice
      */
     @Override
     @EnableSecureLockDeviceRequestStatus
@@ -323,9 +432,9 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
         if (!secureLockdown()) {
             return ERROR_UNSUPPORTED;
         }
-        int isSecureLockDeviceAvailable = isSecureLockDeviceAvailable(user);
-        if (isSecureLockDeviceAvailable != SUCCESS) {
-            return isSecureLockDeviceAvailable;
+        int secureLockDeviceAvailability = getSecureLockDeviceAvailability(user);
+        if (secureLockDeviceAvailability != SUCCESS) {
+            return secureLockDeviceAvailability;
         }
 
         if (isSecureLockDeviceEnabled()) {
@@ -337,7 +446,7 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
 
         // Switch to the context user enabling secure lock device, in order to lock the device
         // under their credentials.
-        boolean result = switchCallingUserToForeground(user);
+        boolean result = switchUserToForeground(user);
         if (!result) {
             if (DEBUG) {
                 Slog.d(TAG, "Failed to switch calling user " + user + " to "
@@ -346,19 +455,20 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
             return ERROR_UNKNOWN;
         }
 
-        // TODO (b/398058587): Set strong auth flags for user to configure allowed auth types
+        setSecureLockDeviceStrongAuthFlags();
 
         mPowerManager.goToSleep(SystemClock.uptimeMillis(),
                 PowerManager.GO_TO_SLEEP_REASON_DEVICE_ADMIN, 0);
-
         mWindowManagerInternal.lockNow();
 
-        // (2) Call into framework to configure secure lock 2FA lockscreen
-        // update, UI & string updates
-        // TODO (b/396639472, b/396642040): implement 2FA lockscreen update
-        // (3) Call into framework to configure keyguard security updates
-        // TODO (b/396680098): Implement enabling security features
-        mStore.storeSecureLockDeviceEnabled(user.getIdentifier());
+        int userId = user.getIdentifier();
+        mSecureLockDeviceSettingsManager.enableSecurityFeatures(userId);
+        mStore.storeSecureLockDeviceEnabled(userId);
+
+        synchronized (mBiometricAuthStateLock) {
+            mUserAuthenticatedWithStrongBiometric = null;
+        }
+
         notifyAllSecureLockDeviceListenersEnabledStatusUpdated();
         Slog.d(TAG, "Secure lock device is enabled");
 
@@ -366,65 +476,100 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
     }
 
     /**
-     * @see AuthenticationPolicyManager#disableSecureLockDevice
-     * @param user {@link UserHandle} of caller requesting to disable secure lock device
+     * Clears two factor authentication device entry requirement, clears strong auth flags
+     * associated with secure lock device, and disables security features.
+     *
+     * @param user   {@link UserHandle} of caller requesting to disable secure lock device
      * @param params {@link DisableSecureLockDeviceParams} for caller to supply params related
      *               to the secure lock device request
+     * @param authenticationComplete indicates if secure lock device is being disabled as a result
+     *                               of successful two-factor primary and strong biometric
+     *                               authentication
      * @return {@link DisableSecureLockDeviceRequestStatus} int indicating the result of the
      * secure lock device request
-     *
      * @hide
+     * @see AuthenticationPolicyManager#disableSecureLockDevice
      */
     @Override
     @DisableSecureLockDeviceRequestStatus
-    public int disableSecureLockDevice(UserHandle user, DisableSecureLockDeviceParams params) {
-        if (!secureLockdown()) {
-            return ERROR_UNSUPPORTED;
-        } else if (!isSecureLockDeviceEnabled()) {
+    public int disableSecureLockDevice(UserHandle user, DisableSecureLockDeviceParams params,
+            boolean authenticationComplete) {
+        if (!isSecureLockDeviceEnabled()) {
             if (DEBUG) {
                 Slog.d(TAG, "Secure lock device is already disabled.");
             }
             return SUCCESS;
         }
 
-        int enableSecureLockDeviceUserId = mStore.retrieveSecureLockDeviceClientId();
+        int secureLockDeviceClientId = mStore.retrieveSecureLockDeviceClientId();
         int callingUserId = user.getIdentifier();
 
         // Verify calling user matches the user who enabled secure lock device
         // or is a system/admin user with override privileges
-        if (enableSecureLockDeviceUserId != UserHandle.USER_NULL
-                && callingUserId != enableSecureLockDeviceUserId) {
+        if (secureLockDeviceClientId != UserHandle.USER_NULL
+                && callingUserId != secureLockDeviceClientId) {
             Slog.w(TAG, "User " + callingUserId + " attempted to disable secure lock device "
-                    + "enabled by user " + enableSecureLockDeviceUserId);
+                    + "enabled by user " + secureLockDeviceClientId);
             return ERROR_NOT_AUTHORIZED;
         }
 
-        // (1) Call into system_server to reset allowed auth types
-        // TODO (b/398058587): Reset strong auth flags for user
-        // (2) Call into framework to disable secure lock 2FA lockscreen, reset UI
-        // & string updates
-        // TODO (b/396639472, b/396642040): Disable 2FA lockscreen, reset UI
-        // (3) Call into framework to revert keyguard security updates
-        // TODO (b/396680098): Implement disabling security features
-
-        // Re-allow user switching from the UI
-        if (mDevicePolicyManager != null) {
-            mDevicePolicyManager.clearUserRestrictionGlobally(TAG, DISALLOW_USER_SWITCH);
+        if (mSkipSecurityFeaturesForTest) {
+            // 1) Clears strong auth flags and 2) unlocks user. authenticationComplete must be true
+            // for tests in order to prevent relocking CE storage, which interferes with tests
+            mLockSettingsInternal.disableSecureLockDevice(secureLockDeviceClientId,
+                    /* authenticationComplete =*/ true);
         } else {
-            Slog.w(TAG, "DevicePolicyManager not available: cannot clear user switching "
-                    + "restriction.");
+            // 1) Clears strong auth flags and 2) unlocks user if two-factor authentication is
+            // complete, or locks user if two-factor authentication is incomplete
+            mLockSettingsInternal.disableSecureLockDevice(secureLockDeviceClientId,
+                    authenticationComplete);
         }
+        disableSecurityFeatures(secureLockDeviceClientId);
 
         mStore.storeSecureLockDeviceDisabled();
         notifyAllSecureLockDeviceListenersEnabledStatusUpdated();
         Slog.d(TAG, "Secure lock device is disabled");
 
+        synchronized (mBiometricAuthStateLock) {
+            mUserAuthenticatedWithStrongBiometric = null;
+        }
         return SUCCESS;
     }
 
     /**
-     * @see AuthenticationPolicyManager#isSecureLockDeviceEnabled()
+     * Updates status on whether the user has completed successful two-factor primary authentication
+     * strong biometric authentication, and confirmed the biometric auth when necessary.
+     *
+     * @param user that performed the successful biometric authentication
+     *
+     * @hide
+     */
+    @Override
+    public void onStrongBiometricAuthenticationSuccess(UserHandle user) {
+        Slog.d(TAG, "Received strong biometric authentication success for user " + user + ", "
+                + "awaiting device entry completion to disable secure lock device.");
+        synchronized (mBiometricAuthStateLock) {
+            mUserAuthenticatedWithStrongBiometric = user;
+        }
+    }
+
+    /**
+     * Returns true if the user has completed successful two-factor primary authentication + strong
+     * biometric authentication, false otherwise.
+     * @param user to check for two-factor authentication completion
+     * @hide
+     */
+    @Override
+    public boolean hasUserCompletedTwoFactorAuthentication(UserHandle user) {
+        synchronized (mBiometricAuthStateLock) {
+            return mUserAuthenticatedWithStrongBiometric != null
+                    && mUserAuthenticatedWithStrongBiometric.equals(user);
+        }
+    }
+
+    /**
      * @return true if secure lock device is enabled, false otherwise
+     * @see AuthenticationPolicyManager#isSecureLockDeviceEnabled()
      */
     @Override
     public boolean isSecureLockDeviceEnabled() {
@@ -436,13 +581,14 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
     }
 
     /**
-     * Attempts to switch the calling user to foreground if not already in the foreground before
+     * Attempts to switch the target user to foreground if not already in the foreground before
      * enabling secure lock device.
      * Returns true on success, false otherwise
-     * @param targetUser userId of caller requesting to enable secure lock device
+     *
+     * @param targetUser userId of the user that is requesting to enable secure lock device
      * @return true if user was switched to foreground, false otherwise
      */
-    private boolean switchCallingUserToForeground(UserHandle targetUser) {
+    private boolean switchUserToForeground(UserHandle targetUser) {
         // Switch to the user associated with the calling process if not currently in the foreground
         try {
             if (!mActivityManager.isProfileForeground(targetUser)) {
@@ -459,9 +605,6 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
             Slog.e(TAG, "Exception during user switch attempt", e);
             return false;
         }
-
-        // After switching to the calling user, disable user switching from the UI.
-        mDevicePolicyManager.addUserRestrictionGlobally(TAG, DISALLOW_USER_SWITCH);
         return true;
     }
 
@@ -486,22 +629,21 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
                     continue;
                 }
 
-                @IsSecureLockDeviceAvailableRequestStatus
-                int isSecureLockDeviceAvailableForUser = isSecureLockDeviceAvailable(user);
+                @GetSecureLockDeviceAvailabilityRequestStatus
+                int secureLockDeviceAvailability = getSecureLockDeviceAvailability(user);
 
                 if (DEBUG) {
                     Slog.d(TAG, "Notifying listener " + listener.asBinder() + " for user "
                             + user.getIdentifier() + " of secure lock device status update: "
                             + "enabled = " + isSecureLockDeviceEnabled + ", available = "
-                            + isSecureLockDeviceAvailableForUser);
+                            + secureLockDeviceAvailability);
                 }
                 try {
-                    listener.onSecureLockDeviceAvailableStatusChanged(
-                            isSecureLockDeviceAvailableForUser);
+                    listener.onSecureLockDeviceAvailableStatusChanged(secureLockDeviceAvailability);
                     listener.onSecureLockDeviceEnabledStatusChanged(isSecureLockDeviceEnabled);
                 } catch (RemoteException e) {
                     Slog.e(TAG, "Failed to notify listener " + listener.asBinder() + " for "
-                            + "user "  + user.getIdentifier() + ", RemoteException thrown: ", e);
+                            + "user " + user.getIdentifier() + ", RemoteException thrown: ", e);
                 } catch (Exception e) {
                     Slog.e(TAG, "Exception thrown by listener " + listener.asBinder() + " for "
                             + "user " + user.getIdentifier() + " during callback: ", e);
@@ -513,6 +655,10 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
         }
     }
 
+    private void disableSecurityFeatures(int userId) {
+        mSecureLockDeviceSettingsManager.restoreOriginalSettings(userId);
+    }
+
     /**
      * Notifies registered listeners associated with {@param targetUserId} about availability
      * updates to secure lock device. This is called on user-specific events like biometric
@@ -522,239 +668,58 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
      *               update. Only listeners registered to this userId will be notified.s
      */
     private void notifySecureLockDeviceAvailabilityForUser(int userId) {
-        final int count = mSecureLockDeviceStatusListeners.beginBroadcast();
-        try {
-            for (int i = 0; i < count; i++) {
-                ISecureLockDeviceStatusListener listener =
-                        mSecureLockDeviceStatusListeners.getBroadcastItem(i);
-                UserHandle registeringUserHandle =
-                        (UserHandle) mSecureLockDeviceStatusListeners.getBroadcastCookie(i);
+        synchronized (mSecureLockDeviceStatusListenerLock) {
+            final int count = mSecureLockDeviceStatusListeners.beginBroadcast();
+            try {
+                for (int i = 0; i < count; i++) {
+                    ISecureLockDeviceStatusListener listener =
+                            mSecureLockDeviceStatusListeners.getBroadcastItem(i);
+                    UserHandle registeringUserHandle =
+                            (UserHandle) mSecureLockDeviceStatusListeners.getBroadcastCookie(i);
 
-                // Skip listeners that are not affiliated with the target userId
-                if (registeringUserHandle == null
-                        || registeringUserHandle.getIdentifier() != userId) {
-                    continue;
-                }
+                    // Skip listeners that are not affiliated with the target userId
+                    if (registeringUserHandle == null
+                            || registeringUserHandle.getIdentifier() != userId) {
+                        continue;
+                    }
 
-                @IsSecureLockDeviceAvailableRequestStatus
-                int isSecureLockDeviceAvailableForUser = isSecureLockDeviceAvailable(
-                        registeringUserHandle);
+                    @GetSecureLockDeviceAvailabilityRequestStatus
+                    int secureLockDeviceAvailability = getSecureLockDeviceAvailability(
+                            registeringUserHandle);
 
-                if (DEBUG) {
-                    Slog.d(TAG, "Notifying listener " + listener.asBinder() + " for user "
-                            + userId + " of secure lock device availability update: "
-                            + isSecureLockDeviceAvailableForUser);
+                    if (DEBUG) {
+                        Slog.d(TAG, "Notifying listener " + listener.asBinder() + " for user "
+                                + userId + " of secure lock device availability update: "
+                                + secureLockDeviceAvailability);
+                    }
+                    try {
+                        listener.onSecureLockDeviceAvailableStatusChanged(
+                                secureLockDeviceAvailability);
+                    } catch (RemoteException e) {
+                        Slog.e(TAG, "Failed to notify listener " + listener.asBinder()
+                                + " for user " + userId + ", RemoteException thrown: ", e);
+                    } catch (Exception e) {
+                        Slog.e(TAG, "Exception thrown by listener " + listener.asBinder()
+                                + " for user " + userId + " during callback: ", e);
+                        mSecureLockDeviceStatusListeners.unregister(listener);
+                    }
                 }
-                try {
-                    listener.onSecureLockDeviceAvailableStatusChanged(
-                            isSecureLockDeviceAvailableForUser);
-                } catch (RemoteException e) {
-                    Slog.e(TAG, "Failed to notify listener " + listener.asBinder() + " for "
-                            + "user " + userId + ", RemoteException thrown: ", e);
-                } catch (Exception e) {
-                    Slog.e(TAG, "Exception thrown by listener " + listener.asBinder() + " for "
-                            + "user " + userId + " during callback: ", e);
-                    mSecureLockDeviceStatusListeners.unregister(listener);
-                }
+            } finally {
+                mSecureLockDeviceStatusListeners.finishBroadcast();
             }
-        } finally {
-            mSecureLockDeviceStatusListeners.finishBroadcast();
         }
     }
 
     /**
-     * Stores the current state of Secure Lock Device in GlobalSettings.
+     * @see AuthenticationPolicyManager#setSecureLockDeviceTestStatus(boolean)
      */
-    @VisibleForTesting
-    static class SecureLockDeviceStore {
-        private static final String FILE_NAME = "secure_lock_device_state.xml";
-        private static final String XML_TAG_ROOT = "secure-lock-device-state";
-        private static final String XML_TAG_ENABLED = "enabled";
-        private static final String XML_TAG_CLIENT_ID = "client-id";
-
-        private final AtomicFile mStateFile;
-        private final Handler mHandler;
-        private final Object mFileLock = new Object();
-
-        private boolean mIsEnabled = false;
-        private int mClientUserId = UserHandle.USER_NULL;
-
-        SecureLockDeviceStore(Handler handler) {
-            mHandler = handler;
-
-            File systemDir = Environment.getDataSystemDirectory();
-            File filePath = new File(systemDir, FILE_NAME);
-            mStateFile = new AtomicFile(filePath);
-
-            if (DEBUG) {
-                Slog.d(TAG, "SecureLockDeviceStore initialized at " + filePath.getAbsolutePath());
-            }
-
-            try {
-                loadStateFromFile();
-            } catch (Exception e) {
-                Slog.e(TAG, "Exception during loadStateFromFile(): ", e);
-                synchronized (mFileLock) {
-                    resetToDefaults();
-                }
-            }
+    @Override
+    public void setSecureLockDeviceTestStatus(boolean isTestMode) {
+        if (DEBUG) {
+            Slog.d(TAG, "setSecureLockDeviceTestStatus(isTestMode = " + isTestMode + ")");
         }
-
-        /**
-         * Loads the persisted state (isEnabled and clientId) from the XML file.
-         * If the file doesn't exist or is corrupted, it defaults to a disabled state.
-         */
-        private void loadStateFromFile() {
-            synchronized (mFileLock) {
-                resetToDefaults();
-
-                if (!mStateFile.getBaseFile().exists()) {
-                    Slog.d(TAG, "Secure lock device state file does not exist.");
-                    return;
-                }
-
-                try (FileInputStream fis = mStateFile.openRead()) {
-                    TypedXmlPullParser parser = Xml.resolvePullParser(fis);
-                    XmlUtils.beginDocument(parser, XML_TAG_ROOT);
-                    int outerDepth = parser.getDepth();
-
-                    while (XmlUtils.nextElementWithin(parser, outerDepth)) {
-                        String tagName = parser.getName();
-                        if (XML_TAG_ENABLED.equals(tagName)) {
-                            mIsEnabled = Boolean.parseBoolean(parser.nextText());
-                        } else if (XML_TAG_CLIENT_ID.equals(tagName)) {
-                            mClientUserId = Integer.parseInt(parser.nextText());
-                        } else {
-                            Slog.w(TAG, "Unknown tag in state file: " + tagName);
-                            XmlUtils.skipCurrentTag(parser);
-                        }
-                    }
-                    if (DEBUG) {
-                        Slog.d(TAG,
-                                "Loaded state: isEnabled=" + mIsEnabled + ", clientId="
-                                        + mClientUserId);
-                    }
-                } catch (IOException | XmlPullParserException | NumberFormatException e) {
-                    Slog.e(TAG, "Error reading secure lock device state file, resetting to "
-                            + "defaults.", e);
-                    resetToDefaults();
-                }
-            }
-        }
-
-        /**
-         * Updates the in-memory state and schedules a write to the persistent file.
-         * @param enabled The new enabled state.
-         * @param userId The userId associated with the client enabling secure lock device state,
-         *              or USER_NULL if disabled.
-         */
-        private void updateStateAndWriteToFile(boolean enabled, int userId) {
-            synchronized (mFileLock) {
-                boolean changed = (mIsEnabled != enabled) || (mClientUserId != userId);
-
-                if (changed) {
-                    mIsEnabled = enabled;
-                    mClientUserId = userId;
-                    mHandler.post(() -> writeToFileInternal(enabled, userId));
-                }
-            }
-        }
-
-        /**
-         * Writes to the secure lock device state atomic file.
-         */
-        private void writeToFileInternal(boolean enabled, int clientId) {
-            FileOutputStream fos = null;
-            try {
-                fos = mStateFile.startWrite();
-                TypedXmlSerializer serializer = Xml.resolveSerializer(fos);
-                serializer.setOutput(fos, StandardCharsets.UTF_8.name());
-
-                serializer.startDocument(null, true);
-                serializer.startTag(null, XML_TAG_ROOT);
-
-                serializer.startTag(null, XML_TAG_ENABLED);
-                serializer.text(Boolean.toString(enabled));
-                serializer.endTag(null, XML_TAG_ENABLED);
-
-                serializer.startTag(null, XML_TAG_CLIENT_ID);
-                serializer.text(Integer.toString(clientId));
-                serializer.endTag(null, XML_TAG_CLIENT_ID);
-
-                serializer.endTag(null, XML_TAG_ROOT);
-                serializer.endDocument();
-
-                mStateFile.finishWrite(fos);
-                fos = null; // Indicates success to finally block
-
-                if (DEBUG) {
-                    Slog.d(TAG, "Saved state: isEnabled=" + enabled + ", clientId=" + clientId);
-                }
-            } catch (IOException e) {
-                Slog.e(TAG, "Error writing secure lock device state file: ", e);
-                if (fos != null) {
-                    mStateFile.failWrite(fos);
-                }
-            } finally {
-                if (fos != null) {
-                    Slog.e(TAG, "Failure during write to secure lock device state file, "
-                            + "closing file output stream.");
-                    mStateFile.failWrite(fos);
-                }
-            }
-        }
-
-        /**
-         * Resets the current state to defaults in the case of error parsing the file.
-         */
-        private void resetToDefaults() {
-            mIsEnabled = false;
-            mClientUserId = UserHandle.USER_NULL;
-        }
-
-        /**
-         * Updates the current Global settings to reflect Secure Lock Device being enabled.
-         * @param userId the userId of the client that enabled secure lock device
-         */
-        void storeSecureLockDeviceEnabled(int userId) {
-            if (DEBUG) {
-                Slog.d(TAG, "Storing SLD enabled by user: " + userId);
-            }
-            updateStateAndWriteToFile(/* enabled= */ true, /* userId= */ userId);
-        }
-
-        /**
-         * Updates the current Global settings to reflect Secure Lock Device being disabled.
-         */
-        void storeSecureLockDeviceDisabled() {
-            if (DEBUG) {
-                Slog.d(TAG, "Storing SLD disabled.");
-            }
-            updateStateAndWriteToFile(false, UserHandle.USER_NULL);
-        }
-
-        /**
-         * Retrieves the current state of whether Secure Lock Device in enabled or disabled in
-         * GlobalSettings.
-         * @return true if Secure Lock Device is enabled, false otherwise
-         */
-        boolean retrieveSecureLockDeviceEnabled() {
-            synchronized (mFileLock) {
-                return mIsEnabled;
-            }
-        }
-
-        /**
-         * Retrieves the user id of the client that enabled secure lock device, or
-         * {@link UserHandle.USER_NULL} if secure lock device is disabled.
-         * @return userId of the client that enabled secure lock device, or
-         * {@link UserHandle.USER_NULL} if secure lock device is disabled
-         */
-        int retrieveSecureLockDeviceClientId() {
-            synchronized (mFileLock) {
-                return mClientUserId;
-            }
-        }
+        mSkipSecurityFeaturesForTest = isTestMode;
+        mSecureLockDeviceSettingsManager.setSkipSecurityFeaturesForTest(isTestMode);
     }
 
     /**
@@ -765,7 +730,7 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
 
         public Lifecycle(@NonNull Context context) {
             super(context);
-            mService = new SecureLockDeviceService(context);
+            mService = SecureLockDeviceService.create(context);
         }
 
         @Override
@@ -781,6 +746,31 @@ public class SecureLockDeviceService extends SecureLockDeviceServiceInternal {
                 mService.onLockSettingsReady();
             } else if (phase == PHASE_BOOT_COMPLETED) {
                 mService.onBootCompleted();
+            }
+        }
+    }
+
+    @VisibleForTesting
+    protected class StrongAuthTracker extends LockPatternUtils.StrongAuthTracker {
+        StrongAuthTracker(Context context) {
+            super(context);
+        }
+
+        private boolean containsFlag(int haystack, int needle) {
+            return (haystack & needle) != 0;
+        }
+
+        @Override
+        public synchronized void onStrongAuthRequiredChanged(int userId) {
+            if (secureLockDevice() && isSecureLockDeviceEnabled()
+                    && containsFlag(getStrongAuthForUser(userId),
+                    PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE)
+            ) {
+                Slog.d(TAG, "Primary auth is required for secure lock device; reset pending "
+                        + "biometric auth success state.");
+                synchronized (mBiometricAuthStateLock) {
+                    mUserAuthenticatedWithStrongBiometric = null;
+                }
             }
         }
     }

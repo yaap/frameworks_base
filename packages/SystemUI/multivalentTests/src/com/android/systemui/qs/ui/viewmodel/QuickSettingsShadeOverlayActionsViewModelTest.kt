@@ -27,15 +27,18 @@ import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurr
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.coroutines.collectLastValue
 import com.android.systemui.flags.EnableSceneContainer
+import com.android.systemui.kosmos.collectLastValue
+import com.android.systemui.kosmos.runTest
 import com.android.systemui.kosmos.testScope
 import com.android.systemui.kosmos.useUnconfinedTestDispatcher
 import com.android.systemui.lifecycle.activateIn
 import com.android.systemui.qs.panels.ui.viewmodel.editModeViewModel
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea
+import com.android.systemui.shade.domain.interactor.enableDualShade
 import com.android.systemui.testKosmos
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -43,20 +46,21 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @TestableLooper.RunWithLooper
 @EnableSceneContainer
-@android.platform.test.annotations.EnabledOnRavenwood
 class QuickSettingsShadeOverlayActionsViewModelTest : SysuiTestCase() {
 
     private val kosmos = testKosmos().useUnconfinedTestDispatcher()
-    private val testScope = kosmos.testScope
 
-    private val underTest = kosmos.quickSettingsShadeOverlayActionsViewModel
+    private val underTest by lazy { kosmos.quickSettingsShadeOverlayActionsViewModel }
+    private val actions by kosmos.testScope.collectLastValue(underTest.actions)
+
+    @Before
+    fun setUp() {
+        underTest.activateIn(kosmos.testScope)
+    }
 
     @Test
     fun up_hidesShade() =
-        testScope.runTest {
-            val actions by collectLastValue(underTest.actions)
-            underTest.activateIn(this)
-
+        kosmos.runTest {
             assertThat((actions?.get(Swipe.Up) as? HideOverlay)?.overlay)
                 .isEqualTo(Overlays.QuickSettingsShade)
             assertThat(actions?.get(Swipe.Down)).isNull()
@@ -64,10 +68,8 @@ class QuickSettingsShadeOverlayActionsViewModelTest : SysuiTestCase() {
 
     @Test
     fun back_notEditing_hidesShade() =
-        testScope.runTest {
-            val actions by collectLastValue(underTest.actions)
-            val isEditing by collectLastValue(kosmos.editModeViewModel.isEditing)
-            underTest.activateIn(this)
+        kosmos.runTest {
+            val isEditing by collectLastValue(editModeViewModel.isEditing)
             assertThat(isEditing).isFalse()
 
             assertThat(actions?.get(Back)).isEqualTo(HideOverlay(Overlays.QuickSettingsShade))
@@ -75,43 +77,64 @@ class QuickSettingsShadeOverlayActionsViewModelTest : SysuiTestCase() {
 
     @Test
     fun back_whileEditing_doesNotHideShade() =
-        testScope.runTest {
-            val actions by collectLastValue(underTest.actions)
-            underTest.activateIn(this)
-
-            kosmos.editModeViewModel.startEditing()
+        kosmos.runTest {
+            editModeViewModel.startEditing()
 
             assertThat(actions?.get(Back)).isNull()
         }
 
     @Test
     fun upAboveEdge_whileEditing_doesNotHideShade() =
-        testScope.runTest {
-            val actions by collectLastValue(underTest.actions)
-            underTest.activateIn(this)
-
-            kosmos.editModeViewModel.startEditing()
+        kosmos.runTest {
+            editModeViewModel.startEditing()
 
             assertThat(actions?.get(Swipe.Up)).isNull()
         }
 
     @Test
     fun upFromEdge_whileEditing_hidesShade() =
-        testScope.runTest {
-            val actions by collectLastValue(underTest.actions)
-            underTest.activateIn(this)
-
-            kosmos.editModeViewModel.startEditing()
+        kosmos.runTest {
+            editModeViewModel.startEditing()
 
             val userAction = Swipe.Up(fromSource = SceneContainerArea.BottomEdge)
             assertThat(actions?.get(userAction)).isEqualTo(HideOverlay(Overlays.QuickSettingsShade))
         }
 
     @Test
-    fun downFromTopStart_switchesToNotificationsShade() =
-        testScope.runTest {
-            val actions by collectLastValue(underTest.actions)
-            underTest.activateIn(this)
+    fun downFromStartHalf_wideScreen_switchesToNotificationsShade() =
+        kosmos.runTest {
+            enableDualShade(wideLayout = true)
+
+            val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.StartHalf))
+            assertThat((action as ShowOverlay).overlay).isEqualTo(Overlays.NotificationsShade)
+            assertThat((action.hideCurrentOverlays as HideCurrentOverlays.Some).overlays)
+                .containsExactly(Overlays.QuickSettingsShade)
+        }
+
+    @Test
+    fun downFromStartHalf_narrowScreen_doesNothing() =
+        kosmos.runTest {
+            enableDualShade(wideLayout = false)
+
+            val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.StartHalf))
+            assertThat(action).isNull()
+        }
+
+    @Test
+    fun downFromTopEdgeStartHalf_wideScreen_switchesToNotificationsShade() =
+        kosmos.runTest {
+            enableDualShade(wideLayout = true)
+
+            val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf))
+            assertThat((action as ShowOverlay).overlay).isEqualTo(Overlays.NotificationsShade)
+            assertThat((action.hideCurrentOverlays as HideCurrentOverlays.Some).overlays)
+                .containsExactly(Overlays.QuickSettingsShade)
+        }
+
+    @Test
+    fun downFromTopEdgeStartHalf_narrowScreen_switchesToNotificationsShade() =
+        kosmos.runTest {
+            enableDualShade(wideLayout = false)
 
             val action = actions?.get(Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf))
             assertThat((action as ShowOverlay).overlay).isEqualTo(Overlays.NotificationsShade)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.systemui.statusbar.featurepods.vc.shared.model
+package com.android.systemui.statusbar.featurepods.av.shared.model
 
 /**
  * Model used to display a VC/Privacy control chip in the status bar.
@@ -22,4 +22,6 @@ package com.android.systemui.statusbar.featurepods.vc.shared.model
  * The class currently wraps only the SensorActivityModel, however in future it is intended to
  * contain more elements as we add functionality into the status bar chip.
  */
-data class AvControlsChipModel(val sensorActivityModel: SensorActivityModel)
+data class AvControlsChipModel(
+    val sensorActivityModel: SensorActivityModel = SensorActivityModel.Inactive
+)

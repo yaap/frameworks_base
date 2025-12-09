@@ -1179,6 +1179,22 @@ public final class Settings {
             "android.settings.DARK_THEME_SETTINGS";
 
     /**
+     * Activity Action: Show settings to configure the screen magnification feature.
+     * <p>
+     * In some cases, a matching Activity may not exist, so ensure you
+     * safeguard against this.
+     * <p>
+     * Input: Nothing.
+     * <p>
+     * Output: Nothing.
+     *
+     * @hide
+     */
+    @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
+    public static final String ACTION_SCREEN_MAGNIFICATION_SETTINGS =
+            "android.settings.MAGNIFICATION_SETTINGS";
+
+    /**
      * Activity Action: Show settings to allow configuration of locale.
      * <p>
      * In some cases, a matching Activity may not exist, so ensure you
@@ -1731,12 +1747,26 @@ public final class Settings {
      * In some cases, a matching Activity may not exist, so ensure you
      * safeguard against this.
      * <p>
+     * This intent is designed to be handled by a system component. To securely launch this intent,
+     * resolve the intent to a system application and verify that its priority is higher than the
+     * default value (0). This prevents other apps from intercepting the intent. If multiple system
+     * applications can handle this intent, the component with the highest priority will be
+     * launched.
+     * <p>
+     * For example:
+     * <pre>
+     * final PackageManager pm = context.getPackageManager();
+     * final Intent intent = new Intent(Settings.ACTION_SYSTEM_UPDATE_SETTINGS);
+     * final List&lt;ResolveInfo&gt; resolveInfos =
+     *         pm.queryIntentActivities(intent, PackageManager.MATCH_SYSTEM_ONLY);
+     * // ... find the ResolveInfo with the highest priority, ensure it's > 0, and launch it.
+     * </pre>
+     * <p>
      * Input: Nothing.
      * <p>
      * Output: Nothing.
-     *
-     * @hide
      */
+    @FlaggedApi(Flags.FLAG_EXPOSE_SYSTEM_UPDATE_SETTINGS)
     @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_SYSTEM_UPDATE_SETTINGS =
             "android.settings.SYSTEM_UPDATE_SETTINGS";
@@ -2515,7 +2545,6 @@ public final class Settings {
      *
      * @hide
      */
-    @FlaggedApi(com.android.internal.telephony.flags.Flags.FLAG_ACTION_SIM_PREFERENCE_SETTINGS)
     @SystemApi
     @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_SIM_PREFERENCE_SETTINGS =
@@ -2674,6 +2703,30 @@ public final class Settings {
     @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_MANAGE_SUPERVISOR_RESTRICTED_SETTING =
             "android.settings.MANAGE_SUPERVISOR_RESTRICTED_SETTING";
+
+    /**
+     * Activity action: Launch UI to bypass the user restrictions set by the SupervisionService
+     * system entity.
+     *
+     * <p>Input: {@link #EXTRA_SUPERVISION_RESTRICTION} specifies the restriction to bypass.
+     *
+     * <p>Output: Nothing.
+     *
+     * @hide
+     */
+    @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
+    public static final String ACTION_BYPASS_SUPERVISION_RESTRICTION =
+            "android.settings.BYPASS_SUPERVISION_RESTRICTION";
+
+    /**
+     * Intent extra: supervision restriction that we are trying to pybass.
+     *
+     * <p>This should be used when launching {@link #ACTION_BYPASS_SUPERVISION_RESTRICTION} .
+     *
+     * @hide
+     */
+    public static final String EXTRA_SUPERVISION_RESTRICTION =
+            "android.settings.EXTRA_SUPERVISION_RESTRICTION";
 
     /**
      * Activity Action: Show a dialog for remote bugreport flow.
@@ -5083,7 +5136,7 @@ public final class Settings {
 
         /**
          * @deprecated Use {@link android.provider.Settings.Global#RADIO_WIMAX} instead
-         * {@hide}
+         * @hide
          */
         @Deprecated
         public static final String RADIO_WIMAX = Global.RADIO_WIMAX;
@@ -5109,7 +5162,7 @@ public final class Settings {
         /**
          * @deprecated Use {@link android.provider.Settings.Global#AIRPLANE_MODE_TOGGLEABLE_RADIOS} instead
          *
-         * {@hide}
+         * @hide
          */
         @Deprecated
         @UnsupportedAppUsage
@@ -5830,9 +5883,9 @@ public final class Settings {
          */
         public static final Uri DEFAULT_RINGTONE_URI = getUriFor(RINGTONE);
 
-        /** {@hide} */
+        /** @hide */
         public static final String RINGTONE_CACHE = "ringtone_cache";
-        /** {@hide} */
+        /** @hide */
         public static final Uri RINGTONE_CACHE_URI = getUriFor(RINGTONE_CACHE);
 
         /**
@@ -5852,10 +5905,10 @@ public final class Settings {
          */
         public static final Uri DEFAULT_NOTIFICATION_URI = getUriFor(NOTIFICATION_SOUND);
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NOTIFICATION_SOUND_CACHE = "notification_sound_cache";
-        /** {@hide} */
+        /** @hide */
         public static final Uri NOTIFICATION_SOUND_CACHE_URI = getUriFor(NOTIFICATION_SOUND_CACHE);
 
         /**
@@ -5907,10 +5960,10 @@ public final class Settings {
          */
         public static final Uri DEFAULT_ALARM_ALERT_URI = getUriFor(ALARM_ALERT);
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String ALARM_ALERT_CACHE = "alarm_alert_cache";
-        /** {@hide} */
+        /** @hide */
         public static final Uri ALARM_ALERT_CACHE_URI = getUriFor(ALARM_ALERT_CACHE);
 
         /**
@@ -6491,6 +6544,13 @@ public final class Settings {
                 "touchpad_acceleration_enabled";
 
         /**
+         * Whether to enable touchpads.
+         *
+         * @hide
+         */
+        public static final String TOUCHPAD_ENABLED = "touchpad_enabled";
+
+        /**
          * Whether to enable reversed vertical scrolling for connected mice.
          *
          * When enabled, scrolling down on the mouse wheel will move the screen up and vice versa.
@@ -6576,6 +6636,27 @@ public final class Settings {
          */
         @Readable
         public static final String EGG_MODE = "egg_mode";
+
+        /**
+         * Comma-separated string of package names will have force invert applied no matter what,
+         * overriding any device-level config blocklists or other criteria, for debugging.
+         *
+         * Note: HWUI may still determine that the app already appears to be dark theme and may not
+         * obey this setting.
+         *
+         * @hide
+         */
+        public static final String ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_ENABLE =
+                "accessibility_force_invert_color_override_packages_to_enable";
+
+        /**
+         * Comma-separated string of package names will *never* have force invert applied,
+         * overriding any device-level config blocklists or other criteria, for debugging.
+         *
+         * @hide
+         */
+        public static final String ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_DISABLE =
+                "accessibility_force_invert_color_override_packages_to_disable";
 
         /**
          * Setting to determine whether or not to show the battery percentage in the status bar.
@@ -6664,7 +6745,7 @@ public final class Settings {
 
         /**
          * Setting to set CV preferred intensity
-         * Setting should be integer (0-10)
+         * Setting should be float range (0.0 - 1.0)
          *
          * @hide
          */
@@ -7500,6 +7581,8 @@ public final class Settings {
             PRIVATE_SETTINGS.add(WIFI_USE_STATIC_IP);
             PRIVATE_SETTINGS.add(END_BUTTON_BEHAVIOR);
             PRIVATE_SETTINGS.add(ADVANCED_SETTINGS);
+            PRIVATE_SETTINGS.add(ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_DISABLE);
+            PRIVATE_SETTINGS.add(ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_ENABLE);
             PRIVATE_SETTINGS.add(WEAR_ACCESSIBILITY_GESTURE_ENABLED);
             PRIVATE_SETTINGS.add(WEAR_ACCESSIBILITY_GESTURE_ENABLED_DURING_OOBE);
             PRIVATE_SETTINGS.add(WEAR_TTS_PREWARM_ENABLED);
@@ -7553,6 +7636,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(TOUCHPAD_RIGHT_CLICK_ZONE);
             PRIVATE_SETTINGS.add(TOUCHPAD_SYSTEM_GESTURES);
             PRIVATE_SETTINGS.add(TOUCHPAD_ACCELERATION_ENABLED);
+            PRIVATE_SETTINGS.add(TOUCHPAD_ENABLED);
             PRIVATE_SETTINGS.add(CAMERA_FLASH_NOTIFICATION);
             PRIVATE_SETTINGS.add(SCREEN_FLASH_NOTIFICATION);
             PRIVATE_SETTINGS.add(SCREEN_FLASH_NOTIFICATION_COLOR);
@@ -9652,17 +9736,13 @@ public final class Settings {
                 "suggested_theme_feature_enabled";
 
         /**
-         * Setting to indicate whether the AppFunction agent allowlist should be enabled.
-         *
-         * <ul>
-         *   <li>0 = Off
-         *   <li>1 = Enabled (Default)
-         * </ul>
-         *
+         * String property which is a comma separated list of package names. These package names
+         * will be added to the existing agent allowlist. Since this contains package names, it must
+         * NOT be marked @Readable.
          * @hide
          */
-        public static final String APP_FUNCTION_AGENT_ALLOWLIST_ENABLED =
-                "app_function_agent_allowlist_enabled";
+        public static final String APP_FUNCTION_ADDITIONAL_AGENT_ALLOWLIST =
+                "app_function_additional_agent_allowlist";
 
         /**
          * Set by the system to track if the user needs to see the call to action for
@@ -10384,10 +10464,15 @@ public final class Settings {
          * Whether or not larger size icons are used for the pointer of mouse/trackpad for
          * accessibility.
          * (0 = false, 1 = true)
+         *
+         * @deprecated This setting is no longer in use, as the size of pointer icons is now
+         *             controlled by the {@link #POINTER_SCALE} setting. The value of this setting
+         *             is ignored.
          * @hide
          */
         @UnsupportedAppUsage
         @Readable
+        @Deprecated
         public static final String ACCESSIBILITY_LARGE_POINTER_ICON =
                 "accessibility_large_pointer_icon";
 
@@ -10397,6 +10482,8 @@ public final class Settings {
          */
         @UnsupportedAppUsage
         @Readable
+        @TestApi
+        @SuppressLint({"UnflaggedApi", "NoSettingsProvider"}) // @TestApi purely for CTS support.
         public static final String LONG_PRESS_TIMEOUT = "long_press_timeout";
 
         /**
@@ -10405,6 +10492,8 @@ public final class Settings {
          * @hide
          */
         @Readable
+        @TestApi
+        @SuppressLint({"UnflaggedApi", "NoSettingsProvider"}) // @TestApi purely for CTS support.
         public static final String MULTI_PRESS_TIMEOUT = "multi_press_timeout";
 
         /**
@@ -11189,6 +11278,9 @@ public final class Settings {
          * Whether to mirror the built-in display on all connected displays.
          * @hide
          */
+        @TestApi
+        @Readable
+        @SuppressLint({"UnflaggedApi", "NoSettingsProvider"}) // @TestApi purely for CTS support.
         public static final String MIRROR_BUILT_IN_DISPLAY = "mirror_built_in_display";
 
         /**
@@ -13306,7 +13398,7 @@ public final class Settings {
          * backup_finished_notification_receivers  (String[])
          * </pre>
          *
-         * backup_finished_notification_receivers uses ":" as delimeter for values.
+         * backup_finished_notification_receivers uses ":" as delimiter for values.
          *
          * <p>
          * Type: string
@@ -13560,7 +13652,7 @@ public final class Settings {
          * 1 = right-to-left (recent, home, back)
          * @hide
          */
-        public static final String NAV_BAR_ORDER = "nav_bar_order";
+        public static final String NAVIGATIONBAR_KEY_ORDER = "navigationbar_key_order";
 
         /**
          * Navigation bar mode.
@@ -13836,6 +13928,14 @@ public final class Settings {
                 "accessibility_magnification_two_finger_triple_tap_enabled";
 
         /**
+         * Whether to always expand notification bundles in the notification shade.
+         * 1 = expand, 0 = collapse.
+         * @hide
+         */
+        public static final String NOTIFICATION_BUNDLES_ALWAYS_EXPAND =
+                "notification_bundles_always_expand";
+
+        /**
          * Whether the magnify navigation bar and keyboard feature is enabled.
          *
          * @hide
@@ -13993,7 +14093,10 @@ public final class Settings {
          *
          * @hide
          */
+        @TestApi
         @Readable
+        @FlaggedApi(android.view.accessibility.Flags.FLAG_FORCE_INVERT_COLOR)
+        @SuppressLint("NoSettingsProvider")
         public static final String ACCESSIBILITY_FORCE_INVERT_COLOR_ENABLED =
                 "accessibility_force_invert_color_enabled";
 
@@ -14235,6 +14338,8 @@ public final class Settings {
         public static final int ACTION_CORNER_ACTION_NOTIFICATIONS = 3;
         /** @hide */
         public static final int ACTION_CORNER_ACTION_QUICK_SETTINGS = 4;
+        /** @hide */
+        public static final int ACTION_CORNER_ACTION_LOCKSCREEN = 5;
 
         /**
          * The different actions that can be used for action corners
@@ -14246,6 +14351,7 @@ public final class Settings {
                 ACTION_CORNER_ACTION_OVERVIEW,
                 ACTION_CORNER_ACTION_NOTIFICATIONS,
                 ACTION_CORNER_ACTION_QUICK_SETTINGS,
+                ACTION_CORNER_ACTION_LOCKSCREEN,
         })
         @Retention(RetentionPolicy.SOURCE)
         public @interface ActionCornerActionType {
@@ -14923,6 +15029,23 @@ public final class Settings {
          * @hide
          */
         public static final String AAPM_USB_DATA_PROTECTION = "aapm_usb_data_protection";
+
+        /**
+         * Tracks if the user has seen the promo card for Identity Check.
+         * The promo card should only appear once per user via Safety Center.
+         *
+         * @hide
+         */
+        public static final String IDENTITY_CHECK_PROMO_CARD_SHOWN =
+                "identity_check_promo_card_shown";
+
+        /**
+         * Tracks if the user has interacted with the Identity Check promo notification.
+         * The notification should only appear once per user via Safety Center.
+         * @hide
+         */
+        public static final String IDENTITY_CHECK_NOTIFICATION_VIEW_DETAILS_CLICKED =
+                "identity_check_notification_view_details_clicked";
     }
 
     /**
@@ -14999,7 +15122,7 @@ public final class Settings {
 
         /**
          * Whether Theater Mode is on.
-         * {@hide}
+         * @hide
          */
         @SystemApi
         @Readable
@@ -15019,7 +15142,7 @@ public final class Settings {
         public static final String RADIO_WIFI = "wifi";
 
         /**
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String RADIO_WIMAX = "wimax";
@@ -15038,7 +15161,7 @@ public final class Settings {
         /**
          * Constant for use in SATELLITE_MODE_RADIOS to specify UWB radio.
          *
-         * {@hide}
+         * @hide
          */
         public static final String RADIO_UWB = "uwb";
 
@@ -15046,7 +15169,7 @@ public final class Settings {
         /**
          * A comma separated list of radios that need to be disabled when satellite mode is on.
          *
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String SATELLITE_MODE_RADIOS = "satellite_mode_radios";
@@ -15060,7 +15183,7 @@ public final class Settings {
          * When this setting is set to 0, it means the satellite mode is disabled. When this
          * setting is set to 1, it means the satellite mode is enabled.
          *
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String SATELLITE_MODE_ENABLED = "satellite_mode_enabled";
@@ -15098,7 +15221,7 @@ public final class Settings {
         /**
          * A Long representing a bitmap of profiles that should be disabled when bluetooth starts.
          * See {@link android.bluetooth.BluetoothProfile}.
-         * {@hide}
+         * @hide
          */
         @Readable
         @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
@@ -15893,92 +16016,92 @@ public final class Settings {
         public static final String CONNECTIVITY_METRICS_BUFFER_SIZE =
               "connectivity_metrics_buffer_size";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_ENABLED = "netstats_enabled";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_POLL_INTERVAL = "netstats_poll_interval";
         /**
          * @deprecated
-         * {@hide}
+         * @hide
          */
         @Deprecated
         @Readable
         public static final String NETSTATS_TIME_CACHE_MAX_AGE = "netstats_time_cache_max_age";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_GLOBAL_ALERT_BYTES = "netstats_global_alert_bytes";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_SAMPLE_ENABLED = "netstats_sample_enabled";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_AUGMENT_ENABLED = "netstats_augment_enabled";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_COMBINE_SUBTYPE_ENABLED =
                 "netstats_combine_subtype_enabled";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_DEV_BUCKET_DURATION = "netstats_dev_bucket_duration";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_DEV_PERSIST_BYTES = "netstats_dev_persist_bytes";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_DEV_ROTATE_AGE = "netstats_dev_rotate_age";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_DEV_DELETE_AGE = "netstats_dev_delete_age";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_BUCKET_DURATION = "netstats_uid_bucket_duration";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_PERSIST_BYTES = "netstats_uid_persist_bytes";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_ROTATE_AGE = "netstats_uid_rotate_age";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_DELETE_AGE = "netstats_uid_delete_age";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_TAG_BUCKET_DURATION =
                 "netstats_uid_tag_bucket_duration";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_TAG_PERSIST_BYTES =
                 "netstats_uid_tag_persist_bytes";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_TAG_ROTATE_AGE = "netstats_uid_tag_rotate_age";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETSTATS_UID_TAG_DELETE_AGE = "netstats_uid_tag_delete_age";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETPOLICY_QUOTA_ENABLED = "netpolicy_quota_enabled";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETPOLICY_QUOTA_UNLIMITED = "netpolicy_quota_unlimited";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETPOLICY_QUOTA_LIMITED = "netpolicy_quota_limited";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETPOLICY_QUOTA_FRAC_JOBS = "netpolicy_quota_frac_jobs";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETPOLICY_QUOTA_FRAC_MULTIPATH =
                 "netpolicy_quota_frac_multipath";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String NETPOLICY_OVERRIDE_ENABLED = "netpolicy_override_enabled";
 
@@ -16078,20 +16201,20 @@ public final class Settings {
         @Readable
         public static final String NTP_TIMEOUT = "ntp_timeout";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String STORAGE_BENCHMARK_INTERVAL = "storage_benchmark_interval";
 
         /**
          * Whether or not Settings should enable psd API.
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String SETTINGS_USE_PSD_API = "settings_use_psd_api";
 
         /**
          * Whether or not Settings should enable external provider API.
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String SETTINGS_USE_EXTERNAL_PROVIDER_API =
@@ -16099,7 +16222,7 @@ public final class Settings {
 
         /**
         * Sample validity in seconds to configure for the system DNS resolver.
-        * {@hide}
+        * @hide
         */
         @Readable
         public static final String DNS_RESOLVER_SAMPLE_VALIDITY_SECONDS =
@@ -16107,7 +16230,7 @@ public final class Settings {
 
         /**
         * Success threshold in percent for use with the system DNS resolver.
-        * {@hide}
+        * @hide
         */
         @Readable
         public static final String DNS_RESOLVER_SUCCESS_THRESHOLD_PERCENT =
@@ -16116,14 +16239,14 @@ public final class Settings {
         /**
         * Minimum number of samples needed for statistics to be considered meaningful in the
         * system DNS resolver.
-        * {@hide}
+        * @hide
         */
         @Readable
         public static final String DNS_RESOLVER_MIN_SAMPLES = "dns_resolver_min_samples";
 
         /**
         * Maximum number taken into account for statistics purposes in the system DNS resolver.
-        * {@hide}
+        * @hide
         */
         @Readable
         public static final String DNS_RESOLVER_MAX_SAMPLES = "dns_resolver_max_samples";
@@ -16581,7 +16704,7 @@ public final class Settings {
                "wifi_networks_available_notification_on";
 
         /**
-        * {@hide}
+        * @hide
         */
         @Readable
         public static final String WIMAX_NETWORKS_AVAILABLE_NOTIFICATION_ON =
@@ -17542,7 +17665,7 @@ public final class Settings {
         public static final String
                 INET_CONDITION_DEBOUNCE_DOWN_DELAY = "inet_condition_debounce_down_delay";
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 READ_EXTERNAL_STORAGE_ENFORCED_DEFAULT = "read_external_storage_enforced_default";
@@ -17634,63 +17757,63 @@ public final class Settings {
           *
           * Value is a string, suitable for assignment to PRIVATE_DNS_MODE above.
           *
-          * {@hide}
+          * @hide
           */
         @Readable
         public static final String PRIVATE_DNS_DEFAULT_MODE = "private_dns_default_mode";
 
 
-        /** {@hide} */
+        /** @hide */
         @Readable
         @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
         @SuppressLint("NoSettingsProvider")
         public static final String
                 BLUETOOTH_BTSNOOP_DEFAULT_MODE = "bluetooth_btsnoop_default_mode";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_HEADSET_PRIORITY_PREFIX = "bluetooth_headset_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_A2DP_SINK_PRIORITY_PREFIX = "bluetooth_a2dp_sink_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_A2DP_SRC_PRIORITY_PREFIX = "bluetooth_a2dp_src_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String BLUETOOTH_A2DP_SUPPORTS_OPTIONAL_CODECS_PREFIX =
                 "bluetooth_a2dp_supports_optional_codecs_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String BLUETOOTH_A2DP_OPTIONAL_CODECS_ENABLED_PREFIX =
                 "bluetooth_a2dp_optional_codecs_enabled_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_INPUT_DEVICE_PRIORITY_PREFIX = "bluetooth_input_device_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_MAP_PRIORITY_PREFIX = "bluetooth_map_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_MAP_CLIENT_PRIORITY_PREFIX = "bluetooth_map_client_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_PBAP_CLIENT_PRIORITY_PREFIX = "bluetooth_pbap_client_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_SAP_PRIORITY_PREFIX = "bluetooth_sap_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_PAN_PRIORITY_PREFIX = "bluetooth_pan_priority_";
-        /** {@hide} */
+        /** @hide */
         @Readable
         public static final String
                 BLUETOOTH_HEARING_AID_PRIORITY_PREFIX = "bluetooth_hearing_aid_priority_";
@@ -17698,7 +17821,7 @@ public final class Settings {
         /**
          * Enable/disable radio bug detection
          *
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String
@@ -17707,7 +17830,7 @@ public final class Settings {
         /**
          * Count threshold of RIL wakelock timeout for radio bug detection
          *
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String
@@ -17717,7 +17840,7 @@ public final class Settings {
         /**
          * Count threshold of RIL system error for radio bug detection
          *
-         * {@hide}
+         * @hide
          */
         @Readable
         public static final String
@@ -20167,6 +20290,17 @@ public final class Settings {
                 "hearing_device_local_notification";
 
         /**
+         * This defines the order in which the 3-button navigation bar's buttons are displayed.
+         * 0 = left-to-right (back, home, recent)
+         * 1 = right-to-left (recent, home, back)
+         * @hide
+         * @deprecated Use
+         * {@link Secure#NAVIGATIONBAR_KEY_ORDER} instead.
+         */
+        @Deprecated
+        public static final String NAVIGATIONBAR_KEY_ORDER = "navigationbar_key_order";
+
+        /**
          * Google Hybrid Battery Warnings
          * @hide
          */
@@ -20220,6 +20354,7 @@ public final class Settings {
             MOVED_TO_SECURE.add(Global.BUGREPORT_IN_POWER_MENU);
             MOVED_TO_SECURE.add(Global.CUSTOM_BUGREPORT_HANDLER_APP);
             MOVED_TO_SECURE.add(Global.CUSTOM_BUGREPORT_HANDLER_USER);
+            MOVED_TO_SECURE.add(Global.NAVIGATIONBAR_KEY_ORDER);
         }
 
         // Certain settings have been moved from global to the per-user system namespace
@@ -20689,32 +20824,6 @@ public final class Settings {
         @Readable
         public static final String MULTI_SIM_SMS_PROMPT = "multi_sim_sms_prompt";
 
-        /** User preferred subscriptions setting.
-          * This holds the details of the user selected subscription from the card and
-          * the activation status. Each settings string have the comma separated values
-          * iccId,appType,appId,activationStatus,3gppIndex,3gpp2Index
-          * @hide
-         */
-        @UnsupportedAppUsage
-        @Readable
-        public static final String[] MULTI_SIM_USER_PREFERRED_SUBS = {"user_preferred_sub1",
-                "user_preferred_sub2","user_preferred_sub3"};
-
-        /**
-         * Which subscription is enabled for a physical slot.
-         * @hide
-         */
-        @Readable
-        public static final String ENABLED_SUBSCRIPTION_FOR_SLOT = "enabled_subscription_for_slot";
-
-        /**
-         * Whether corresponding logical modem is enabled for a physical slot.
-         * The value 1 - enable, 0 - disable
-         * @hide
-         */
-        @Readable
-        public static final String MODEM_STACK_ENABLED_FOR_SLOT = "modem_stack_enabled_for_slot";
-
         /**
          * Whether to enable new contacts aggregator or not.
          * The value 1 - enable, 0 - disable
@@ -20882,30 +20991,6 @@ public final class Settings {
         public static final String NOTIFICATION_FEEDBACK_ENABLED = "notification_feedback_enabled";
 
         /**
-         * Settings key for the ratio of notification dismissals to notification views - one of the
-         * criteria for showing the notification blocking helper.
-         *
-         * <p>The value is a float ranging from 0.0 to 1.0 (the closer to 0.0, the more intrusive
-         * the blocking helper will be).
-         *
-         * @hide
-         */
-        @Readable
-        public static final String BLOCKING_HELPER_DISMISS_TO_VIEW_RATIO_LIMIT =
-                "blocking_helper_dismiss_to_view_ratio";
-
-        /**
-         * Settings key for the longest streak of dismissals  - one of the criteria for showing the
-         * notification blocking helper.
-         *
-         * <p>The value is an integer greater than 0.
-         *
-         * @hide
-         */
-        @Readable
-        public static final String BLOCKING_HELPER_STREAK_LIMIT = "blocking_helper_streak_limit";
-
-        /**
          * Configuration flags for SQLite Compatibility WAL. Encoded as a key-value list, separated
          * by commas. E.g.: compatibility_wal_supported=true, wal_syncmode=OFF
          *
@@ -21010,23 +21095,6 @@ public final class Settings {
         @Readable
         public static final String SMART_REPLIES_IN_NOTIFICATIONS_FLAGS =
                 "smart_replies_in_notifications_flags";
-
-        /**
-         * Configuration flags for the automatic generation of smart replies and smart actions in
-         * notifications. This is encoded as a key=value list, separated by commas. Ex:
-         * "generate_replies=false,generate_actions=true".
-         *
-         * The following keys are supported:
-         *
-         * <pre>
-         * generate_replies                 (boolean)
-         * generate_actions                 (boolean)
-         * </pre>
-         * @hide
-         */
-        @Readable
-        public static final String SMART_SUGGESTIONS_IN_NOTIFICATIONS_FLAGS =
-                "smart_suggestions_in_notifications_flags";
 
         /**
          * If nonzero, crashes in foreground processes will bring up a dialog.
@@ -21344,15 +21412,6 @@ public final class Settings {
                 "people_space_conversation_type";
 
         /**
-         * Whether to show new notification dismissal.
-         * Values are:
-         * 0: Disabled
-         * 1: Enabled
-         * @hide
-         */
-        public static final String SHOW_NEW_NOTIF_DISMISS = "show_new_notif_dismiss";
-
-        /**
          * The maximum allowed obscuring opacity by UID to propagate touches.
          *
          * For certain window types (eg. SAWs), the decision of honoring {@link LayoutParams
@@ -21471,6 +21530,29 @@ public final class Settings {
          */
         public static final String GLOBAL_ACTIONS_TIMEOUT_MILLIS =
                 "global_actions_timeout_ms";
+
+        /**Z
+         * Indicates if the primary device is eligible for watch ranging or not.
+         *
+         * @hide
+         */
+        public static final String WATCH_RANGING_SUPPORTED_BY_PRIMARY_DEVICE =
+                "watch_ranging_supported_by_primary_device";
+
+        /**
+         * Indicates whether the device is in minmode.
+         *
+         * @hide
+         */
+        public static final String MINMODE_ACTIVE = "minmode_active";
+
+        /**
+          * Indicates if watch ranging is available for the device.
+         *
+         * @hide
+         */
+        public static final String WATCH_RANGING_AVAILABLE =
+                "watch_ranging_available";
 
         /**
          * Whether airplane mode enhancement is enabled

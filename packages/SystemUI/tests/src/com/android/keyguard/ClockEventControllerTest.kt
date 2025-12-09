@@ -30,7 +30,6 @@ import com.android.systemui.flags.fakeFeatureFlagsClassic
 import com.android.systemui.keyguard.data.repository.FakeKeyguardRepository
 import com.android.systemui.keyguard.data.repository.fakeKeyguardRepository
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
-import com.android.systemui.keyguard.domain.interactor.keyguardInteractor
 import com.android.systemui.keyguard.shared.model.Edge
 import com.android.systemui.keyguard.shared.model.KeyguardState.AOD
 import com.android.systemui.keyguard.shared.model.KeyguardState.DOZING
@@ -39,22 +38,23 @@ import com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN
 import com.android.systemui.keyguard.shared.model.KeyguardState.OCCLUDED
 import com.android.systemui.keyguard.shared.model.TransitionState
 import com.android.systemui.keyguard.shared.model.TransitionStep
+import com.android.systemui.keyguard.ui.viewmodel.DozingToLockscreenTransitionViewModel
 import com.android.systemui.kosmos.testScope
 import com.android.systemui.log.LogcatOnlyMessageBuffer
 import com.android.systemui.log.core.LogLevel
-import com.android.systemui.plugins.clocks.ClockAnimations
-import com.android.systemui.plugins.clocks.ClockController
-import com.android.systemui.plugins.clocks.ClockEventListeners
-import com.android.systemui.plugins.clocks.ClockEvents
-import com.android.systemui.plugins.clocks.ClockFaceConfig
-import com.android.systemui.plugins.clocks.ClockFaceController
-import com.android.systemui.plugins.clocks.ClockFaceEvents
-import com.android.systemui.plugins.clocks.ClockMessageBuffers
-import com.android.systemui.plugins.clocks.ClockTickRate
-import com.android.systemui.plugins.clocks.ThemeConfig
-import com.android.systemui.plugins.clocks.TimeFormatKind
-import com.android.systemui.plugins.clocks.ZenData
-import com.android.systemui.plugins.clocks.ZenData.ZenMode
+import com.android.systemui.plugins.keyguard.data.model.ZenData
+import com.android.systemui.plugins.keyguard.data.model.ZenData.ZenMode
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockAnimations
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockEventListeners
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockEvents
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFaceConfig
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFaceController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockFaceEvents
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockMessageBuffers
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockTickRate
+import com.android.systemui.plugins.keyguard.ui.clocks.ThemeConfig
+import com.android.systemui.plugins.keyguard.ui.clocks.TimeFormatKind
 import com.android.systemui.res.R
 import com.android.systemui.settings.UserTracker
 import com.android.systemui.statusbar.policy.BatteryController
@@ -73,6 +73,7 @@ import java.util.TimeZone
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runCurrent
@@ -130,9 +131,11 @@ class ClockEventControllerTest : SysuiTestCase() {
     @Mock private lateinit var parentView: View
     @Mock private lateinit var keyguardTransitionInteractor: KeyguardTransitionInteractor
     @Mock private lateinit var userTracker: UserTracker
+    @Mock private lateinit var dozingToLockscreenViewModel: DozingToLockscreenTransitionViewModel
 
     @Mock private lateinit var zenModeController: ZenModeController
     private var zenModeControllerCallback: ZenModeController.Callback? = null
+    private var bindHandle: DisposableHandle? = null
 
     @Before
     fun setUp() {
@@ -163,7 +166,6 @@ class ClockEventControllerTest : SysuiTestCase() {
         kosmos.fakeFeatureFlagsClassic.set(Flags.REGION_SAMPLING, false)
         underTest =
             ClockEventController(
-                kosmos.keyguardInteractor,
                 keyguardTransitionInteractor,
                 broadcastDispatcher,
                 batteryController,
@@ -178,12 +180,13 @@ class ClockEventControllerTest : SysuiTestCase() {
                 zenModeController,
                 zenModeInteractor,
                 userTracker,
+                { dozingToLockscreenViewModel },
             )
         underTest.clock = clock
 
         runBlocking(IMMEDIATE) {
-            underTest.registerListeners(parentView)
-
+            underTest.registerListeners()
+            bindHandle = underTest.bind(parentView)
             repository.setIsDozing(true)
         }
 

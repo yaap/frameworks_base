@@ -259,7 +259,7 @@
          dozing).  This should be enabled if you have such services and expect apps to
          correctly use them when installed on your device.  Otherwise, keep this disabled
          so that applications can still use their own mechanisms. -->
-    <bool name="config_enableAutoPowerModes">true</bool>
+    <bool name="config_enableAutoPowerModes">false</bool>
 
     <!-- Whether (if true) this is a kind of device that can be moved around (eg. phone/laptop),
          or (if false) something for which movement is either not measurable or should not count
@@ -545,29 +545,12 @@
 
     <!-- If this is true, allow wake from theater mode when plugged in or unplugged. -->
     <bool name="config_allowTheaterModeWakeFromUnplug">false</bool>
-    <!-- If this is true, allow wake from theater mode from gesture. -->
-    <bool name="config_allowTheaterModeWakeFromGesture">false</bool>
-    <!-- If this is true, allow wake from theater mode from camera lens cover is switched. -->
-    <bool name="config_allowTheaterModeWakeFromCameraLens">false</bool>
-    <!-- If this is true, allow wake from theater mode from power key press. -->
-    <bool name="config_allowTheaterModeWakeFromPowerKey">true</bool>
-    <!-- If this is true, allow wake from theater mode from regular key press. Setting this value to
-         true implies config_allowTheaterModeWakeFromPowerKey is also true-->
-    <bool name="config_allowTheaterModeWakeFromKey">false</bool>
-    <!-- If this is true, allow wake from theater mode from motion. -->
-    <bool name="config_allowTheaterModeWakeFromMotion">false</bool>
-    <!-- If this is true, allow wake from theater mode from motion. -->
-    <bool name="config_allowTheaterModeWakeFromMotionWhenNotDreaming">false</bool>
-    <!-- If this is true, allow wake from theater mode from lid switch. -->
-    <bool name="config_allowTheaterModeWakeFromLidSwitch">false</bool>
     <!-- If this is true, allow wake from theater mode when docked. -->
     <bool name="config_allowTheaterModeWakeFromDock">false</bool>
     <!-- If this is true, allow wake from theater mode from window layout flag. -->
     <bool name="config_allowTheaterModeWakeFromWindowLayout">false</bool>
-    <!-- If this is true, go to sleep when theater mode is enabled from button press -->
-    <bool name="config_goToSleepOnButtonPressTheaterMode">true</bool>
     <!-- If this is true, long press on power button will be available from the non-interactive state -->
-    <bool name="config_supportLongPressPowerWhenNonInteractive">true</bool>
+    <bool name="config_supportLongPressPowerWhenNonInteractive">false</bool>
     <!-- If this is true, short press on power button will be available whenever the default display
          is on even if the device is non-interactive (dreaming). -->
     <bool name="config_supportShortPressPowerWhenDefaultDisplayOn">false</bool>
@@ -944,11 +927,11 @@
     <integer name="config_defaultNightDisplayCustomEndTime">21600000</integer>
 
     <!-- Minimum color temperature, in Kelvin, supported by Night display. -->
-    <integer name="config_nightDisplayColorTemperatureMin">1600</integer>
+    <integer name="config_nightDisplayColorTemperatureMin">2596</integer>
 
     <!-- Default color temperature, in Kelvin, to tint the screen when Night display is
          activated. -->
-    <integer name="config_nightDisplayColorTemperatureDefault">2650</integer>
+    <integer name="config_nightDisplayColorTemperatureDefault">2850</integer>
 
     <!-- Maximum color temperature, in Kelvin, supported by Night display. -->
     <integer name="config_nightDisplayColorTemperatureMax">4082</integer>
@@ -1161,7 +1144,7 @@
             5 - Go to assistant (Settings.Secure.ASSISTANT)
             6 - Go to sleep (doze)
     -->
-    <integer name="config_longPressOnPowerBehavior">1</integer>
+    <integer name="config_longPressOnPowerBehavior">5</integer>
 
     <!-- The time in milliseconds after which a press on power button is considered "long". -->
     <integer name="config_longPressOnPowerDurationMs">500</integer>
@@ -1193,7 +1176,7 @@
             1 - Mute toggle
             2 - Global actions menu
     -->
-    <integer name="config_keyChordPowerVolumeUp">1</integer>
+    <integer name="config_keyChordPowerVolumeUp">2</integer>
 
     <!-- Control the behavior when the user long presses the back button.  Non-zero values are only
          valid for watches as part of CDD/CTS.
@@ -1553,6 +1536,30 @@
          before the delays get very long. The software rate-limiter also does not count duplicate
          wrong guesses, improving usability. -->
     <bool name="config_softwareLskfRateLimiterEnforcing">false</bool>
+
+    <!-- Default value of the setting that controls whether animations should be disabled while
+         entering the PIN on the lockscreen.
+         False means animations should be enabled by default.
+         True means animations should be disabled by default. -->
+    <bool name="config_lockPinEnhancedPrivacyDefault">false</bool>
+
+    <!-- Default value for the setting that controls whether lock pattern is visible as user enters.
+         True means the pattern should be visible by default.
+         False means the pattern should not be visible by default. -->
+    <bool name="config_lockPatternVisibleDefault">true</bool>
+
+    <!-- If true, then enable the failed authentication lock feature (aka adaptive auth) which
+         locks the device after repeated authentication failures. Setting this to false weakens user
+         protection and is not recommended for production devices. -->
+    <bool name="config_enableFailedAuthLock">true</bool>
+
+    <!-- The maximum number of failed authentication attempts allowed before the device is locked,
+         if failed authentication lock is enabled -->
+    <integer name="config_maxAllowedFailedAuthAttempts">5</integer>
+
+    <!-- Whether to show a user-facing toggle for failed authentication lock if the feature is
+         enabled. -->
+    <bool name="config_enableFailedAuthLockToggle">true</bool>
 
     <!-- Control the behavior when the user long presses the home button.
             0 - Nothing
@@ -2157,9 +2164,7 @@
          set before. -->
     <bool name="config_defaultAdasGnssLocationEnabled" translatable="false">false</bool>
 
-    <string-array name="config_locationExtraPackageNames" translatable="false">
-     <item>com.android.bluetooth</item>
-    </string-array>
+    <string-array name="config_locationExtraPackageNames" translatable="false"></string-array>
 
     <!-- The package name of the default network recommendation app.
          A network recommendation provider must:
@@ -2393,6 +2398,9 @@
 
     <!-- Flag indicating if ringer mode affects alarm stream -->
     <bool name="config_audio_ringer_mode_affects_alarm_stream">false</bool>
+
+    <!-- The default value for whether multi audio focus is enabled -->
+    <bool name="config_multi_audio_focus_enabled_default">false</bool>
 
     <!-- The default value for whether head tracking for
          spatial audio is enabled for a newly connected audio device -->
@@ -2833,6 +2841,8 @@
         <item>1</item>
     </integer-array>
 
+    <!-- Should we show the preference to set up when to start dreaming? -->
+    <bool name="config_dreamsShowWhenToDreamSetting">true</bool>
     <!-- Are we allowed to dream while not plugged in? -->
     <bool name="config_dreamsEnabledOnBattery">false</bool>
     <!-- Minimum battery level to allow dreaming when powered.
@@ -2873,6 +2883,8 @@
     <integer name="config_whenToStartHubModeDefault">0</integer>
     <!-- Whether to restrict auto-showing glanceable hub to wireless charging. -->
     <bool name="config_onlyShowGlanceableHubWhenWirelessChargingDefault">false</bool>
+    <!-- Whether glanceable hub is enabled by default. -->
+    <bool name="config_glanceableHubEnabledByDefault">false</bool>
 
     <!-- Whether or not low light display behavior is enabled -->
     <bool name="config_lowLightDisplayBehaviorEnabledDefault">true</bool>
@@ -2964,6 +2976,18 @@
     <!-- Control whether the pickup gesture is enabled by default. This value will be used
      during initialization when the setting is still null. -->
     <bool name="config_dozePickupGestureEnabled">true</bool>
+
+    <!-- Control whether doze is enabled by default. This value will be used during initialization
+     when the setting is still null. -->
+    <bool name="config_dozeEnabled">true</bool>
+
+    <!-- Control whether the single tap gesture is enabled by default. This value will be used
+     during initialization when the setting is still null. -->
+    <bool name="config_dozeTapGestureEnabled">true</bool>
+
+    <!-- Control whether the double tap gesture is enabled by default. This value will be used
+     during initialization when the setting is still null. -->
+    <bool name="config_dozeDoubleTapGestureEnabled">true</bool>
 
     <!-- Control whether the always on display mode is enabled by default. This value will be used
          during initialization when the setting is still null. -->
@@ -3185,23 +3209,28 @@
     <!-- The default value if the SyncStorageEngine should sync automatically or not -->
     <bool name="config_syncstorageengine_masterSyncAutomatically">true</bool>
 
-    <!--  Maximum number of supported users, including all types of users (profiles, guests, demo,
-          etc.).
-          Setting to 1 enforces a single-user device.
-          For devices that support multiple users, the limit here should be based on overall
-          device storage capabilities and therefore could be set very high.
-          To limit the number of any particular user type, e.g. for UX considerations, set the
+    <!--  Maximum number of supported switchable users (excluding Guests & Demo users).
+          Does not include profiles. See {@link UserManager#getMaxSwitchableUsers()} for details.
+
+          Setting to 1 disables multiple switchable users (e.g. secondary users).
+
+          To limit the number of any particular user type (whether switchable or not), set the
           appropriate maximum in {@link com.android.internal.R.xml#config_user_types}.
-          Normally, storage shouldn't be the limiting factor, so this value should be at least as
-          large as the sum of all individual user type maxima. -->
+
+         Note: If > 1, it is expected that UserManager.USER_TYPE_FULL_SECONDARY users are supported
+         on the device (at least for testing purposes, even if in practice the UI really only allows
+         other switchable types, such as restricted profiles or guests, to be created).
+         -->
     <integer name="config_multiuserMaximumUsers">1</integer>
 
     <!-- Maximum number of users we allow to be running at a time. -->
     <integer name="config_multiuserMaxRunningUsers">3</integer>
 
-    <!-- Number of seconds of uptime after a full user enters the background before we attempt to
-         stop it due to inactivity. Set to -1 to disable scheduling stopping background users. -->
-    <integer name="config_backgroundUserScheduledStopTimeSecs">1800</integer> <!-- 30 minutes -->
+    <!-- Number of seconds of uptime after a full user enters the background before we consider
+         it as no longer important, and therefore can consider automatically stopping it.
+         Set to -1 to disable this feature (i.e. don't auto-stop background users after some elapsed
+         time). -->
+    <integer name="config_backgroundUserConsideredDispensableTimeSecs">93600</integer> <!-- 26 hours -->
 
     <!-- Whether to delay user data locking for background user.
          If false, user switched-out from user switching will still be in running state until
@@ -3263,7 +3292,10 @@
     <bool name="config_disallowRemovingLastAdminUser">true</bool>
 
     <!-- Whether all secondary users (and the system user) are eligible to have profiles.
-         If false, only the MainUser is eligible to have profiles. -->
+         If false, only the MainUser is eligible to have profiles.
+          NOTE: this feature not supported yet, and CTS will fail if it's set to
+          true.
+    -->
     <bool name="config_supportProfilesOnNonMainUser">false</bool>
 
     <!-- Whether the system should create the initial full user on boot.
@@ -3287,7 +3319,15 @@
     headless system user can run in the foreground even though it is not a full user. -->
     <bool name="config_canSwitchToHeadlessSystemUser">false</bool>
 
-    <!-- Whether UI for multi user should be shown -->
+    <!-- Whether UI for multi user should be shown.
+         Note: If true, it is expected that secondary users are supported on the device (at least
+         for testing purposes, even if in practice the UI really only allows other switchable
+         types, such as restricted profiles or guests, to be created).
+         @deprecated  Use config_multiuserMaximumUsers instead.
+         This config will likely be removed in the future; config_multiuserMaximumUsers, which now
+         only applies to full users, not profiles, should be updated accordingly as needed.
+         TODO(b/435521983): Remove this since it's now made redundant by config_multiuserMaximumUsers
+         -->
     <bool name="config_enableMultiUserUI">false</bool>
 
     <!-- Indicates the boot strategy in Headless System User Mode (HSUM)
@@ -3391,6 +3431,12 @@
          mirror the content of the default display. -->
     <bool name="config_localDisplaysMirrorContent">true</bool>
 
+    <!-- When true, the {@link Display#FLAG_PRESENTATION} flag is set to all internal displays.
+         When false, presentations are not allowed on internal displays by default, but vendors can
+         still explicitly override this by explicitly adding the flag to the internal display(s).
+    -->
+    <bool name="config_allowPresentationOnInternalDisplay">true</bool>
+
     <!-- When true, udfps vote is ignored. This feature is disabled by default. -->
     <bool name="config_ignoreUdfpsVote">false</bool>
 
@@ -3469,11 +3515,11 @@
     </integer-array>
 
     <!-- A vibration waveform for notifications that specify DEFAULT_VIBRATE.
-         If the device supports vibration frequency control, this value is a float array with
-         values grouped as
+         This value is a float array with values grouped as
          { targetAmplitude (within [0,1]), targetFrequency (in hertz), duration (in milliseconds) }
-         If the device doesn't support frequency control, then the value is a float array with the
-         values grouped as { targetAmplitude (within [0,255]), duration (in milliseconds) }
+         This is only applied on devices with vibration frequency control. If the device doesn't
+         support frequency control, then the vibration specified in
+         config_defaultNotificationVibePattern is used instead.
      -->
     <array name="config_defaultNotificationVibeWaveform">
     </array>
@@ -3490,11 +3536,11 @@
     </integer-array>
 
     <!-- A vibration waveform for notifications that do not specify vibration but vibrate anyway,
-         because the device is in vibrate mode. If the device supports vibration frequency control,
-         this value is a float array with values grouped as
+         because the device is in vibrate mode. This value is a float array with values grouped as
          { targetAmplitude (within [0,1]), targetFrequency (in hertz), duration (in milliseconds) }
-         If the device doesn't support frequency control, then the value is a float array with the
-         values grouped as { targetAmplitude (within [0,255]), duration (in milliseconds) }
+         This is only applied on devices with vibration frequency control. If the device doesn't
+         support frequency control, then the vibration specified in
+         config_notificationFallbackVibePattern is used instead.
      -->
     <array name="config_notificationFallbackVibeWaveform">
     </array>
@@ -3704,7 +3750,6 @@
         <item>com.android.server.notification.ZenModeExtractor</item>
         <item>com.android.server.notification.ImportanceExtractor</item>
         <!-- depends on ImportanceExtractor-->
-        <item>com.android.server.notification.NotificationIntrusivenessExtractor</item>
         <item>com.android.server.notification.VisibilityExtractor</item>
         <!-- Depends on ZenModeExtractor -->
         <item>com.android.server.notification.BadgeExtractor</item>
@@ -3863,7 +3908,7 @@
     <integer name="config_maxNumVisibleRecentTasks">-1</integer>
 
     <!-- The duration in which a recent task is considered in session and should be visible. -->
-    <integer name="config_activeTaskDurationHours">12</integer>
+    <integer name="config_activeTaskDurationHours">6</integer>
 
     <!-- Whether this device prefers to show snapshot or splash screen on back predict target.
          When set true, there will create windowless starting surface for the preview target, so it
@@ -3891,18 +3936,20 @@
          "users" = list of users
          "restart" = restart device
          "emergency" = Launch emergency dialer
+         "lock" = Lock device without requiring strong authentication
          "lockdown" = Lock down device until the user authenticates
          "logout" =  Logout the current user
          "system_update" = Launch System Update screen
          "standby" = Bring the device to standby
-         "panic" = Trigger a panic
          -->
     <string-array translatable="false" name="config_globalActionsList">
         <item>emergency</item>
         <item>lockdown</item>
         <item>power</item>
         <item>restart</item>
-        <item>panic</item>
+        <item>logout</item>
+        <item>screenshot</item>
+        <item>bugreport</item>
     </string-array>
 
     <!-- Number of milliseconds to hold a wake lock to ensure that drawing is fully
@@ -4006,6 +4053,7 @@
     <!-- Flag specifying whether the device will use the "allow_hold_in_ims_call" carrier config
          option.  When false, the device will support holding of IMS calls, regardless of the
          carrier config setting. -->
+    <!-- @deprecated all carriers should support hold so this is obsolete -->
     <bool name="config_device_respects_hold_carrier_config">true</bool>
 
     <!-- Flag specifying whether VT should be available for carrier: independent of
@@ -4389,6 +4437,31 @@
     <!-- The default vibration strength, must be between 1 and 255 inclusive. -->
     <integer name="config_defaultVibrationAmplitude">255</integer>
 
+    <!-- The scale factor to be applied at each vibration intensity level supported by the device,
+     defined by a positive float value.
+     The default framework scaling will be applied if this is not set, based on the user and the
+     default scales for each usage.
+     The number of entries here must be the device supported scale levels for LOW/MEDIUM/HIGH.
+     Example:
+     <string-array name="config_vibrationIntensityScaleFactors" translatable="false">
+       <item>0.5</item> -> Vibrator.VIBRATION_INTENSITY_LOW
+       <item>0.7</item> -> Vibrator.VIBRATION_INTENSITY_MEDIUM
+       <item>1.0</item> -> Vibrator.VIBRATION_INTENSITY_HIGH
+     </string-array> -->
+    <string-array name="config_vibrationIntensityScaleFactors" translatable="false" />
+
+    <!-- The scale factor to be applied for external vibrations only (i.e. audio-coupled haptics),
+         defined by a positive float value.
+         The values from config_vibrationIntensityScaleFactors will be used if this is not set.
+         The number of entries here must be the device supported scale levels for LOW/MEDIUM/HIGH.
+         Example:
+         <string-array name="config_externalVibrationIntensityScaleFactors" translatable="false">
+           <item>0.3</item> -> Vibrator.VIBRATION_INTENSITY_LOW
+           <item>0.5</item> -> Vibrator.VIBRATION_INTENSITY_MEDIUM
+           <item>1.0</item> -> Vibrator.VIBRATION_INTENSITY_HIGH
+         </string-array> -->
+    <string-array name="config_externalVibrationIntensityScaleFactors" translatable="false" />
+
     <!-- The max vibration strength allowed in audio haptic channels, must be positive or zero if
          limit is unknown. -->
     <item name="config_hapticChannelMaxVibrationAmplitude" format="float" type="dimen">0</item>
@@ -4402,6 +4475,24 @@
 
     <!-- Indicating if ringtone vibration settings supported or not. -->
     <bool name="config_ringtoneVibrationSettingsSupported">false</bool>
+
+    <!-- Mapping for the ringtone vibration pattern name to metric ID for logging
+         ringtone vibration customization.
+     Example:
+     <string-array name="config_ringtoneVibrationPatternToMetricIdMapping" translatable="false">
+       <item>Classic_ringtone.xml,101</item>
+       <item>Bumps.xml,102</item>
+     </string-array> -->
+    <string-array name="config_ringtoneVibrationPatternToMetricIdMapping" translatable="false" />
+
+    <!-- Mapping for the notification vibration pattern name to metric ID for logging
+         notification vibration customization.
+     Example:
+     <string-array name="config_notificationVibrationPatternToMetricIdMapping" translatable="false">
+       <item>Classic_notification.xml,201</item>
+       <item>Taps.xml,202</item>
+     </string-array> -->
+    <string-array name="config_notificationVibrationPatternToMetricIdMapping" translatable="false" />
 
     <!-- If the device should still vibrate even in low power mode, for certain priority vibrations
      (e.g. accessibility, alarms). This is mainly for Wear devices that don't have speakers. -->
@@ -4561,7 +4652,7 @@
              1 - 3 snap targets: fixed ratio, 1:1, (1 - fixed ratio)
              2 - 1 snap target: 1:1
     -->
-    <integer name="config_dockedStackDividerSnapMode">1</integer>
+    <integer name="config_dockedStackDividerSnapMode">0</integer>
 
     <!-- The maximum aspect ratio (longerSide/shorterSide) that is treated as close-to-square. The
          orientation requests from apps would be ignored if the display is close-to-square. -->
@@ -4569,7 +4660,7 @@
 
     <!-- List of comma separated package names for which we the system will not show crash, ANR,
          etc. dialogs. -->
-    <string translatable="false" name="config_appsNotReportingCrashes">com.android.statementservice</string>
+    <string translatable="false" name="config_appsNotReportingCrashes"></string>
 
     <!-- Specifies the delay in milliseconds for JobScheduler to postpone the running
          of regular jobs when coming out of doze -->
@@ -4771,7 +4862,8 @@
     <string name="config_defaultDndDeniedPackages" translatable="false"></string>
 
     <!-- User restrictions set on the SYSTEM user when it is first created.
-         Note: Also update appropriate overlay files. -->
+         @deprecated Set the System's default-restrictions in config_user_types.xml, which
+         overwrites this value anyway, instead.  -->
     <string-array translatable="false" name="config_defaultFirstUserRestrictions">
     </string-array>
 
@@ -4840,7 +4932,7 @@
     <bool name="config_allow3rdPartyAppOnInternal">true</bool>
 
     <!-- Specifies the path that is used by AdaptiveIconDrawable class to crop launcher icons. -->
-    <string name="config_icon_mask" translatable="false">"M50,0L92,0C96.42,0 100,4.58 100 8L100,92C100, 96.42 96.42 100 92 100L8 100C4.58, 100 0 96.42 0 92L0 8 C 0 4.42 4.42 0 8 0L50 0Z"</string>
+    <string name="config_icon_mask" translatable="false">"M 50 0 L 92 0 A 8 8 0 0 1 100 8 L 100 92 A 8 8 0 0 1 92 100 L 8 100 A 8 8 0 0 1 0 92 L 0 8 A 8 8 0 0 1 8 0 L 50 0 Z"</string>
     <!-- Specifies the path that is used by AdaptiveIconDrawable class to crop launcher banners. -->
     <string name="config_banner_mask" translatable="false">@string/config_icon_mask</string>
 
@@ -4871,6 +4963,13 @@
         <!--
         <item>com.example.package.first/com.example.class.FirstService</item>
         <item>com.example.package.second/com.example.class.SecondService</item>
+        -->
+    </string-array>
+
+    <string-array translatable="false" name="config_forceInvertPackageBlocklist">
+        <!--
+        <item>com.example.package.first</item>
+        <item>com.example.package.second</item>
         -->
     </string-array>
 
@@ -5301,7 +5400,7 @@
     <integer translatable="false" name="config_storageManagerDaystoRetainDefault">90</integer>
 
     <!-- Name of a font family to use for headlines. If empty, falls back to platform default -->
-    <string name="config_headlineFontFamily" translatable="false">@string/config_bodyFontFamily</string>
+    <string name="config_headlineFontFamily" translatable="false"></string>
     <!-- Allows setting custom fontFeatureSettings on specific text. -->
     <string name="config_headlineFontFeatureSettings" translatable="false"></string>
 
@@ -5386,7 +5485,7 @@
     <!-- Controls whether system buttons use all caps for text -->
     <bool name="config_buttonTextAllCaps">true</bool>
     <!-- Name of the font family used for system surfaces where the font should use medium weight -->
-    <string name="config_headlineFontFamilyMedium" translateable="false">@string/config_bodyFontFamilyMedium</string>
+    <string name="config_headlineFontFamilyMedium" translateable="false">@string/font_family_button_material</string>
     <!-- Name of a font family to use for body text. -->
     <string name="config_bodyFontFamily" translatable="false">sans-serif</string>
     <!-- Name of a font family to use for medium body text. -->
@@ -5418,7 +5517,7 @@
     <bool name="config_swipe_up_gesture_setting_available">true</bool>
 
     <!-- Whether or not we should show the option to show battery percentage -->
-    <bool name="config_battery_percentage_setting_available">false</bool>
+    <bool name="config_battery_percentage_setting_available">true</bool>
 
     <!-- Default value set for battery percentage in status bar false = disabled, true = enabled -->
     <bool name="config_defaultBatteryPercentageSetting">false</bool>
@@ -6063,6 +6162,9 @@
     <!-- The list of packages that will use ANGLE as the GLES driver -->
     <string-array name="config_angleAllowList"></string-array>
 
+    <!-- The list of packages that will not use ANGLE as the GLES driver -->
+    <string-array name="config_angleDenyList"></string-array>
+
     <!-- The list of packages to automatically opt in to refresh rate suppressing by small area
     detection. Format of this array should be packageName:threshold and threshold value should
      be between 0 to 1-->
@@ -6237,7 +6339,7 @@
     <item name="config_wallpaperMinScale" format="float" type="dimen">1</item>
 
     <!-- The max scale for the wallpaper when it's zoomed in -->
-    <item name="config_wallpaperMaxScale" format="float" type="dimen">1</item>
+    <item name="config_wallpaperMaxScale" format="float" type="dimen">1.10</item>
 
     <!-- If true, the wallpaper will scale regardless of the value of shouldZoomOutWallpaper() -->
     <bool name="config_alwaysScaleWallpaper">false</bool>
@@ -6500,9 +6602,12 @@
         is enabled and activity is connected to the camera in fullscreen. -->
     <bool name="config_isWindowManagerCameraCompatSplitScreenAspectRatioEnabled">false</bool>
 
-    <!-- Which aspect ratio to use when camera compat treatment is enabled and an activity eligible
-        for treatment is connected to the camera. -->
-    <item name="config_windowManagerCameraCompatAspectRatio" format="float" type="dimen">1.0</item>
+    <!-- Whether camera compat treatment which simulates app's requested orientation is enabled. The
+        purpose of the treatment is to mitigate issues caused by orientation mismatch between camera
+        buffer and an app window. This includes letterboxing fixed orientation activities connected
+        to the camera, cropping the camera buffer (rotate-and-crop) and sandboxing display rotation
+        to match what the apps most likely expect in their requested orientation. -->
+    <bool name="config_isCameraCompatSimulateRequestedOrientationTreatmentEnabled">true</bool>
 
     <!-- Docking is a uiMode configuration change and will cause activities to relaunch if it's not
          handled. If true, the configuration change will be sent but activities will not be
@@ -6773,6 +6878,12 @@
     <bool name="config_cecQuerySadMaxDisabled_allowed">true</bool>
     <bool name="config_cecQuerySadMaxDisabled_default">false</bool>
 
+    <bool name="config_cecTvBehaviorOnStandbyMessage_userConfigurable">false</bool>
+    <bool name="config_cecTvBehaviorOnStandbyMessageGoToSleep_allowed">true</bool>
+    <bool name="config_cecTvBehaviorOnStandbyMessageGoToSleep_default">true</bool>
+    <bool name="config_cecTvBehaviorOnStandbyMessageGoToDream_allowed">true</bool>
+    <bool name="config_cecTvBehaviorOnStandbyMessageGoToDream_default">false</bool>
+
     <!-- eARC Configuration -->
     <bool name="config_earcEnabled_userConfigurable">true</bool>
     <bool name="config_earcFeatureEnabled_allowed">true</bool>
@@ -6781,7 +6892,7 @@
     <bool name="config_earcFeatureDisabled_default">false</bool>
 
     <!-- Whether app hibernation deletes OAT artifact files as part of global hibernation. -->
-    <bool name="config_hibernationDeletesOatArtifactsEnabled">false</bool>
+    <bool name="config_hibernationDeletesOatArtifactsEnabled">true</bool>
 
     <!-- Package name of the on-device intelligent processor for system UI
          features. Examples include the search functionality or the app
@@ -6810,7 +6921,7 @@
     <string name="config_systemVisualIntelligence" translatable="false"></string>
     <!-- Package name of a telephony-related system app, such as an IMS service.
          Exempted from privacy indicators. -->
-     <string name="config_systemTelephonyPackage" translatable="false"></string>
+    <string name="config_systemTelephonyPackage" translatable="false"></string>
     <!-- On-device package for providing companion device associations. -->
     <string name="config_systemCompanionDeviceProvider" translatable="false"></string>
 
@@ -7462,7 +7573,7 @@
     <integer name="config_maxDesktopWindowingActiveTasks">0</integer>
 
     <!-- Maximum number desks on a device running Desktop Windowing. Set to 0 for unlimited. -->
-    <integer name="config_maxDesktopWindowingDesks">0</integer>
+    <integer name="config_maxDesktopWindowingDesks">4</integer>
 
     <!-- Whether a display enters desktop mode by default when the windowing mode of the display's
          root TaskDisplayArea is set to WINDOWING_MODE_FREEFORM. -->
@@ -7474,6 +7585,9 @@
 
     <!-- Whether the home screen should be shown behind freeform tasks in desktop mode. -->
     <bool name="config_showHomeBehindDesktop">false</bool>
+
+    <!-- List of packages which should be exempt from desktop mode. -->
+    <string-array name="config_desktopExemptPackages" translatable="false"/>
 
     <!-- Frame rate compatibility value for Wallpaper
          FRAME_RATE_COMPATIBILITY_MIN (102) is used by default for lower power consumption -->
@@ -7599,17 +7713,53 @@
     <!-- Maximum number of devices that allows for audio sharing. -->
     <integer name="config_audio_sharing_maximum_sinks">2</integer>
 
-    <!--For App Functions, this configuration lists package names grouped as "Device Settings".
+    <!-- Whether ResolverActivity should highlight the last used app.
+         When false, ResolverActivity shows a list of apps instead of highlighting the last used app
+         and displaying other apps separately. -->
+    <bool name="config_resolverActivityFilterLastUsed">true</bool>
+
+    <!--For App Function, this configuration lists package names grouped as "Device Settings".
         Packages in this list share the same App Function access settings. In the UI, they are
         presented as a single "Device Settings" item rather than individually. -->
-    <string-array name="config_appFunctionsDeviceSettingsPackages" translatable="false">
+    <string-array name="config_appFunctionDeviceSettingsPackages" translatable="false">
     </string-array>
+
+    <!-- Defines the default allowlist of package names for preloaded agents authorized to use App
+         Function features. This static list operates as a fallback allowlist in case the
+         updatable allowlist is not available. -->
+    <string-array name="config_defaultAppFunctionAgentAllowlist" translatable="false">
+    </string-array>
+
+    <!-- Package name for developer verification service provider app [DO NOT TRANSLATE] -->
+    <string name="config_developerVerificationServiceProviderPackageName" translatable="false"></string>
+    <!-- Package name for developer verification policy delegate app [DO NOT TRANSLATE] -->
+    <string name="config_developerVerificationPolicyDelegatePackageName" translatable="false"></string>
 
     <!-- Whether the system package installer supports the material design. -->
     <bool name="config_enableMaterialDesignInPackageInstaller">true</bool>
 
-    <!-- Package and class info to bind to ProximityProviderService -->
-    <string name="proximity_provider_service_package_name" translatable="false"></string>
-    <string name="proximity_provider_service_class_name" translatable="false"></string>
+    <!-- Whether to enable partial sleep wake locks. -->
+    <bool name="config_allowPartialSleepWakeLocks">false</bool>
 
+    <!-- Maximum partial sleep wake lock duration in milliseconds. -->
+    <integer name="config_maximumPartialSleepWakeLockDuration">1000</integer>
+
+    <!-- Package and class info to bind to ProximityProviderService -->
+    <string name="proximity_provider_service_package_name" translatable="false">android</string>
+    <string name="proximity_provider_service_class_name" translatable="false">android.proximity.DefaultProximityProviderService</string>
+
+    <!-- Action for opening trusted location settings page [CHAR LIMIT=NONE] [DO NOT TRANSLATE] -->
+    <string name="trusted_location_settings_action" translatable="false"></string>
+
+    <!-- The delay in milliseconds to suppress the toast after the user presses the
+         power button. -->
+    <integer name="config_turnOffTvToastSuppressionDelayMs">0</integer>
+
+    <!-- The delay in milliseconds to show the toast after the user presses the power button. -->
+    <integer name="config_turnOffTvToastPostDelayMs">0</integer>
+
+    <!-- A list of permissions to be granted under WatchFaceBehavior role
+        It can only contain non-AOSP permissions outside of the android.*
+        and com.android.* namespace. -->
+    <string-array name="config_watchFacePermissions" translatable="false"/>
 </resources>

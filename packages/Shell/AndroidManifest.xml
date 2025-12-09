@@ -149,6 +149,7 @@
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
     <uses-permission android:name="android.permission.LOCATION_BYPASS" />
+    <uses-permission android:name="android.permission.READ_LOCATION_BYPASS_ALLOWLIST" />
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
     <uses-permission android:name="android.permission.WRITE_DEVICE_CONFIG"
         android:featureFlag="!android.security.protect_device_config_flags"/>
@@ -174,6 +175,7 @@
     <uses-permission android:name="android.permission.REPORT_USAGE_STATS" />
     <uses-permission android:name="android.permission.INTERNAL_SYSTEM_WINDOW" />
     <uses-permission android:name="android.permission.INJECT_EVENTS" />
+    <uses-permission android:name="android.permission.INJECT_KEY_EVENTS" />
     <uses-permission android:name="android.permission.RETRIEVE_WINDOW_CONTENT" />
     <uses-permission android:name="android.permission.SET_ACTIVITY_WATCHER" />
     <uses-permission android:name="android.permission.READ_INPUT_STATE" />
@@ -293,6 +295,8 @@
     <uses-permission android:name="android.permission.SET_TIME" />
     <uses-permission android:name="android.permission.SET_TIME_ZONE" />
     <uses-permission android:name="android.permission.DISABLE_HIDDEN_API_CHECKS" />
+    <uses-permission android:name="android.permission.GET_ROLE_HOLDERS"
+        android:featureFlag="android.permission.flags.supervision_role_enabled"/>
     <uses-permission android:name="android.permission.MANAGE_ROLE_HOLDERS" />
     <uses-permission android:name="android.permission.MANAGE_DEFAULT_APPLICATIONS" />
     <uses-permission android:name="android.permission.BYPASS_ROLE_QUALIFICATION" />
@@ -353,6 +357,7 @@
     <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_VIRTUAL_DEVICE" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_WATCH" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_GLASSES" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_MEDICAL" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_SELF_MANAGED" />
     <uses-permission android:name="android.permission.USE_COMPANION_TRANSPORTS" />
     <uses-permission android:name="android.permission.REQUEST_OBSERVE_DEVICE_UUID_PRESENCE" />
@@ -615,6 +620,7 @@
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
     <uses-permission android:name="android.permission.MANAGE_WIFI_INTERFACES" />
     <uses-permission android:name="android.permission.OVERRIDE_WIFI_CONFIG" />
+    <uses-permission android:name="android.permission.WIFI_SET_DEVICE_MOBILITY_STATE" />
     <!-- Permission needed for CTS test - ConcurrencyTest#testP2pExternalApprover
          P2P external approver API sets require MANAGE_WIFI_NETWORK_SELECTION permission. -->
     <uses-permission android:name="android.permission.MANAGE_WIFI_NETWORK_SELECTION" />
@@ -985,7 +991,7 @@
     <uses-permission android:name="android.permission.ADD_TRUSTED_DISPLAY" />
     <uses-permission android:name="android.permission.ADD_ALWAYS_UNLOCKED_DISPLAY" />
     <uses-permission android:name="android.permission.ADD_MIRROR_DISPLAY"
-        android:featureFlag="android.companion.virtualdevice.flags.enable_limited_vdm_role"/>
+        android:featureFlag="android.companion.virtualdevice.flags.vdm_mirror_display_permission"/>
 
     <!-- Permission required for CTS test - CtsAppTestCases -->
     <uses-permission android:name="android.permission.KILL_UID" />
@@ -1036,11 +1042,15 @@
     <!-- Permission required to test mouse movement on display -->
     <uses-permission android:name="android.permission.SET_POINTER_SPEED" />
 
+    <!-- Permission required for CTS test - CtsAppFunctionTestCases -->
+    <uses-permission android:name="android.permission.MANAGE_APP_FUNCTION_ACCESS" />
+
     <!-- Permissions required for integration test - InputTest -->
     <uses-permission android:name="android.permission.LISTEN_FOR_KEY_ACTIVITY" />
 
     <!-- Permission required for CTS test - CtsMediaProjectionTestCases -->
     <uses-permission android:name="android.permission.MANAGE_MEDIA_PROJECTION" />
+
 
     <application
         android:label="@string/app_label"

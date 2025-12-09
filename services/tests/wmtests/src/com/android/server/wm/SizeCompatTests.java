@@ -34,6 +34,9 @@ import static android.content.pm.PackageManager.USER_MIN_ASPECT_RATIO_SPLIT_SCRE
 import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 import static android.content.res.Configuration.ORIENTATION_PORTRAIT;
 import static android.provider.DeviceConfig.NAMESPACE_CONSTRAIN_DISPLAY_APIS;
+import static android.view.Display.DEFAULT_DISPLAY;
+import static android.view.Display.TYPE_EXTERNAL;
+import static android.view.Display.TYPE_INTERNAL;
 import static android.view.InsetsSource.FLAG_INSETS_ROUNDED_CORNER;
 import static android.view.Surface.ROTATION_0;
 import static android.view.Surface.ROTATION_180;
@@ -52,6 +55,7 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.doReturn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.doThrow;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.eq;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mock;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.never;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.spyOn;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
@@ -67,7 +71,6 @@ import static com.android.server.wm.ActivityRecord.State.STOPPED;
 import static com.android.server.wm.AppCompatConfiguration.LETTERBOX_POSITION_MULTIPLIER_CENTER;
 import static com.android.server.wm.AppCompatUtils.computeAspectRatio;
 import static com.android.server.wm.WindowContainer.POSITION_TOP;
-import static com.android.window.flags.Flags.FLAG_ENABLE_SIZE_COMPAT_MODE_IMPROVEMENTS_FOR_CONNECTED_DISPLAYS;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -136,6 +139,7 @@ import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockitoSession;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -159,6 +163,8 @@ public class SizeCompatTests extends WindowTestsBase {
             "never_constrain_display_apis_all_packages";
 
     private static final float DELTA_ASPECT_RATIO_TOLERANCE = 0.005f;
+
+    private static final double DELTA_COMPAT_SCALE_TOLERANCE = 1e7;
 
     @Rule
     public TestRule compatChangeRule = new PlatformCompatChangeRule();
@@ -479,7 +485,8 @@ public class SizeCompatTests extends WindowTestsBase {
         mActivity.setState(RESUMED, "anyStateChange");
         doReturn(true).when(mSupervisor).hasScheduledRestartTimeouts(mActivity);
         mAtm.mActivityClientController.activityStopped(mActivity.token, null /* icicle */,
-                null /* persistentState */, null /* description */);
+                null /* persistentState */, null /* handoffActivityData */,
+                null /* description */);
         assertEquals(RESTARTING_PROCESS, mActivity.getState());
         verify(mSupervisor).removeRestartTimeouts(mActivity);
     }
@@ -563,7 +570,7 @@ public class SizeCompatTests extends WindowTestsBase {
         assertDownScaled();
     }
 
-    @EnableFlags(FLAG_ENABLE_SIZE_COMPAT_MODE_IMPROVEMENTS_FOR_CONNECTED_DISPLAYS)
+    @EnableFlags(Flags.FLAG_ENABLE_SIZE_COMPAT_MODE_IMPROVEMENTS_FOR_CONNECTED_DISPLAYS)
     @Test
     public void testFixedMiscConfigurationWhenMovingToDisplay() {
         setUpDisplaySizeWithApp(1000, 2500);
@@ -752,8 +759,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags({com.android.wm.shell.Flags.FLAG_ENABLE_CREATE_ANY_BUBBLE,
-            com.android.wm.shell.Flags.FLAG_ENABLE_BUBBLE_APP_COMPAT_FIXES})
+    @EnableFlags(com.android.wm.shell.Flags.FLAG_ENABLE_CREATE_ANY_BUBBLE)
     // Enable to prevent any non-legacy override insets from being added.
     @EnableCompatChanges({ActivityInfo.INSETS_DECOUPLED_CONFIGURATION_ENFORCED})
     public void testLegacyInsetOverride_isAppBubble_notApplied() {
@@ -4594,6 +4600,92 @@ public class SizeCompatTests extends WindowTestsBase {
         assertEquals(notchHeight, appBounds.top - bounds.top);
     }
 
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_UPSCALING_SIZE_COMPAT_ON_EXITING_DESKTOP_BUGFIX)
+    public void testUpscaling_boundsUpscaledWithWindowingModeChange() {
+        allowDesktopMode();
+
+        // Launch an SCM app in freeform on an external display.
+        final int dw = 2000;
+        final int dh = 1600;
+        final DisplayInfo displayInfo = new DisplayInfo();
+        displayInfo.copyFrom(mDisplayInfo);
+        displayInfo.type = TYPE_EXTERNAL;
+        displayInfo.displayId = DEFAULT_DISPLAY + 1;
+        displayInfo.logicalWidth = dw;
+        displayInfo.logicalHeight = dh;
+        final DisplayContent display = new TestDisplayContent.Builder(mAtm, displayInfo).build();
+        final TaskBuilder taskBuilder =
+                new TaskBuilder(mSupervisor).setWindowingMode(WINDOWING_MODE_FREEFORM);
+        setUpApp(display, null /* appBuilder */, taskBuilder);
+        Rect bounds = new Rect(0, 0, 600, 800);
+        mTask.setBounds(bounds);
+        mTask.onConfigurationChanged(mTask.getDisplayArea().getConfiguration());
+        prepareUnresizable(mActivity, SCREEN_ORIENTATION_PORTRAIT);
+        assertEquals(WindowConfiguration.WINDOWING_MODE_FREEFORM, mTask.getWindowingMode());
+        assertFitted();
+
+        // Exit freeform into fullscreen.
+        display.getDefaultTaskDisplayArea()
+                .setWindowingMode(WindowConfiguration.WINDOWING_MODE_FULLSCREEN);
+        mTask.setBounds(null);
+        mActivity.onConfigurationChanged(mTask.getConfiguration());
+        assertUpScaled();
+
+        // Move to a fullscreen, ignore-orientation-request, internal display.
+        final DisplayInfo internalDisplayInfo = new DisplayInfo();
+        internalDisplayInfo.copyFrom(display.getDisplayInfo());
+        internalDisplayInfo.type = TYPE_INTERNAL;
+        internalDisplayInfo.displayId = display.getDisplayInfo().displayId + 1;
+        final DisplayContent internalDisplay =
+                new TestDisplayContent.Builder(mAtm, internalDisplayInfo).build();
+        mTask.mWmService.mRoot.moveRootTaskToDisplay(mTask.mTaskId, internalDisplay.mDisplayId,
+                true /* onTop */);
+        internalDisplay.setIgnoreOrientationRequest(true);
+        mActivity.onConfigurationChanged(mTask.getConfiguration());
+        assertTrue(mActivity.inSizeCompatMode());
+        assertEquals(1f, mActivity.getCompatScale(), DELTA_COMPAT_SCALE_TOLERANCE);
+
+        // Make the display not ignore-orientation-request.
+        internalDisplay.setIgnoreOrientationRequest(false);
+        mActivity.onConfigurationChanged(mTask.getConfiguration());
+        assertUpScaled();
+
+        // Make the display ignore-orientation-request again.
+        internalDisplay.setIgnoreOrientationRequest(true);
+        mActivity.onConfigurationChanged(mTask.getConfiguration());
+        assertEquals(1f, mActivity.getCompatScale(), DELTA_COMPAT_SCALE_TOLERANCE);
+
+        // Make the display desktop-first.
+        mActivity.onConfigurationChanged(mTask.getConfiguration());
+        display.getDefaultTaskDisplayArea()
+                .setWindowingMode(WindowConfiguration.WINDOWING_MODE_FREEFORM);
+        assertUpScaled();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_ENABLE_UPSCALING_SIZE_COMPAT_ON_EXITING_DESKTOP_BUGFIX)
+    public void testUpscaling_boundsUpscaledWithDisplayMove() {
+        final int dw = 1000;
+        final int dh = 600;
+        final DisplayContent display = new TestDisplayContent.Builder(mAtm, dw, dh).build();
+        setUpApp(display);
+        prepareUnresizable(mActivity, SCREEN_ORIENTATION_PORTRAIT);
+        assertEquals(WindowConfiguration.WINDOWING_MODE_FULLSCREEN, mTask.getWindowingMode());
+        assertFitted();
+
+        final DisplayInfo displayInfo = new DisplayInfo();
+        displayInfo.copyFrom(mDisplayInfo);
+        displayInfo.type = TYPE_EXTERNAL;
+        displayInfo.logicalWidth = dw * 2;
+        displayInfo.logicalHeight = dh * 2;
+        final DisplayContent biggerExternalDisplay =
+                new TestDisplayContent.Builder(mAtm, displayInfo).build();
+        mActivity.mRootWindowContainer.moveRootTaskToDisplay(mTask.mTaskId,
+                biggerExternalDisplay.mDisplayId, true /* onTop */);
+        mActivity.onConfigurationChanged(mTask.getConfiguration());
+        assertUpScaled();
+    }
 
     @Test
     @EnableFlags(Flags.FLAG_IGNORE_ASPECT_RATIO_RESTRICTIONS_FOR_RESIZEABLE_FREEFORM_ACTIVITIES)
@@ -4767,7 +4859,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testIsLetterboxedForSafeRegionOnlyAllowed_noManifestProperty_returnsTrue() {
         setUpLandscapeLargeScreenDisplayWithApp();
 
@@ -4786,7 +4878,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testIsLetterboxedForSafeRegionOnlyAllowed_allowedForActivity_returnsTrue() {
         setUpLandscapeLargeScreenDisplayWithApp();
 
@@ -4812,7 +4904,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testIsLetterboxedForSafeRegionOnly_appPropUnset_allowedForActivity_returnsTrue()
             throws PackageManager.NameNotFoundException {
         setUpLandscapeLargeScreenDisplayWithApp();
@@ -4840,7 +4932,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testIsLetterboxedForSafeRegionOnlyAllowed_notAllowedForActivity_returnsFalse() {
         setUpLandscapeLargeScreenDisplayWithApp();
 
@@ -4865,7 +4957,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testIsLetterboxedForSafeRegionOnlyAllowed_notAllowedForApplication_returnsFalse() {
         setUpLandscapeLargeScreenDisplayWithApp();
 
@@ -4890,7 +4982,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testIsLetterboxedForSafeRegionOnlyAllowed_allowedForApplication_returnsTrue() {
         setUpLandscapeLargeScreenDisplayWithApp();
 
@@ -4953,7 +5045,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testAreBoundsLetterboxed_letterboxedForSafeRegionAndFixedOrientation_returnTrue() {
         setUpLandscapeLargeScreenDisplayWithApp();
         mActivity.mDisplayContent.setIgnoreOrientationRequest(true /* ignoreOrientationRequest */);
@@ -4977,7 +5069,7 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testAreBoundsLetterboxed_letterboxedForSafeRegionAndAspectRatio_returnTrue() {
         setUpPortraitLargeScreenDisplayWithApp();
 
@@ -5488,6 +5580,44 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     @Test
+    @EnableCompatChanges({ActivityInfo.UNIVERSAL_RESIZABLE_BY_DEFAULT})
+    public void testRestrictedResizabilityOptOutNotOverrideToUser() {
+        mDisplayContent.setIgnoreOrientationRequest(true);
+        makeDisplayLargeScreen(mDisplayContent);
+        setUpApp(mDisplayContent, new ActivityBuilder(mAtm)
+                .setResizeMode(RESIZE_MODE_UNRESIZEABLE)
+                .setScreenOrientation(SCREEN_ORIENTATION_PORTRAIT));
+
+        assertEquals(SCREEN_ORIENTATION_UNSPECIFIED, mActivity.getOverrideOrientation());
+
+        final AppCompatAspectRatioOverrides overrides =
+                mActivity.mAppCompatController.getAspectRatioOverrides();
+        final MockitoSession session = mockitoSession().spyStatic(AppCompatUtils.class)
+                .strictness(org.mockito.quality.Strictness.LENIENT).startMocking();
+        try {
+            doReturn(true).when(() -> AppCompatUtils.isChangeEnabled(
+                    eq(mActivity), eq(ActivityInfo.OVERRIDE_ANY_ORIENTATION_TO_USER)));
+            overrides.resetSystemFullscreenOverrideCache();
+
+            assertTrue(overrides.isSystemOverrideToFullscreenEnabled());
+            if (!com.android.window.flags.Flags.optOutOverrideOrientationToUser()) {
+                return;
+            }
+
+            final AppCompatResizeOverrides resizeOverrides =
+                    mActivity.mAppCompatController.getResizeOverrides();
+            spyOn(resizeOverrides);
+            doReturn(true).when(resizeOverrides).allowRestrictedResizability();
+            overrides.resetSystemFullscreenOverrideCache();
+
+            assertFalse(overrides.isSystemOverrideToFullscreenEnabled());
+            assertEquals(SCREEN_ORIENTATION_PORTRAIT, mActivity.getOverrideOrientation());
+        } finally {
+            session.finishMocking();
+        }
+    }
+
+    @Test
     public void testClearSizeCompat_resetOverrideConfig() {
         final int origDensity = 480;
         final int newDensity = 520;
@@ -5511,8 +5641,8 @@ public class SizeCompatTests extends WindowTestsBase {
     }
 
     /**
-     * {@code canEnterDesktopMode} is called when {@link CameraCompatFreeformPolicy} is created in
-     * {@link AppCompatCameraPolicy}.
+     * {@code canEnterDesktopMode} is called when {@link AppCompatCameraSimReqOrientationPolicy}
+     * is created in {@link AppCompatCameraPolicy}.
      *
      * <p>{@link #allowDesktopMode()} needs to be called before {@link DisplayContent} is created.
      */
@@ -5522,8 +5652,8 @@ public class SizeCompatTests extends WindowTestsBase {
 
     private void setupCameraCompatAspectRatio(float cameraCompatAspectRatio,
             @NonNull DisplayContent display) {
-        CameraCompatFreeformPolicy cameraPolicy = display.mAppCompatCameraPolicy
-                .mCameraCompatFreeformPolicy;
+        AppCompatCameraSimReqOrientationPolicy cameraPolicy = display.mAppCompatCameraPolicy
+                .mSimReqOrientationPolicy;
         spyOn(cameraPolicy);
         doReturn(true).when(cameraPolicy).shouldCameraCompatControlAspectRatio(any());
         doReturn(cameraCompatAspectRatio).when(cameraPolicy).getCameraCompatAspectRatio(any());

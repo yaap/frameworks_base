@@ -42,7 +42,6 @@ import org.mockito.kotlin.verify
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class EditWidgetsActivityStarterTest : SysuiTestCase() {
     private val activityStarter = mock<ActivityStarter>()
     private val kosmos = testKosmos()
@@ -74,6 +73,7 @@ class EditWidgetsActivityStarterTest : SysuiTestCase() {
                         eq(true),
                         eq(true),
                         any(),
+                        any(),
                         captor.capture(),
                     )
 
@@ -93,19 +93,19 @@ class EditWidgetsActivityStarterTest : SysuiTestCase() {
             testScope.runTest {
                 underTest.startActivity(shouldOpenWidgetPickerOnStart = true)
                 verify(activityStarter)
-                    .startActivityDismissingKeyguard(any(), eq(true), eq(true), any(), any())
+                    .startActivityDismissingKeyguard(any(), eq(true), eq(true), any(), any(), any())
 
                 clearInvocations(activityStarter)
 
                 underTest.startActivity(shouldOpenWidgetPickerOnStart = false)
                 verify(activityStarter, never())
-                    .startActivityDismissingKeyguard(any(), eq(true), eq(true), any(), any())
+                    .startActivityDismissingKeyguard(any(), eq(true), eq(true), any(), any(), any())
 
                 communalSceneInteractor.setEditModeState(null)
 
                 underTest.startActivity(shouldOpenWidgetPickerOnStart = true)
                 verify(activityStarter)
-                    .startActivityDismissingKeyguard(any(), eq(true), eq(true), any(), any())
+                    .startActivityDismissingKeyguard(any(), eq(true), eq(true), any(), any(), any())
             }
         }
     }
@@ -122,6 +122,7 @@ class EditWidgetsActivityStarterTest : SysuiTestCase() {
                         captor.capture(),
                         eq(true),
                         eq(true),
+                        any(),
                         any(),
                         any(),
                     )
@@ -146,6 +147,7 @@ class EditWidgetsActivityStarterTest : SysuiTestCase() {
                         captor.capture(),
                         eq(true),
                         eq(true),
+                        any(),
                         any(),
                         any(),
                     )

@@ -86,7 +86,13 @@ import com.android.systemui.statusbar.policy.ZenModeControllerImpl;
 import com.android.systemui.statusbar.policy.bluetooth.data.repository.BluetoothRepository;
 import com.android.systemui.statusbar.policy.bluetooth.data.repository.BluetoothRepositoryImpl;
 import com.android.systemui.statusbar.policy.data.repository.DeviceProvisioningRepositoryModule;
+import com.android.systemui.statusbar.policy.profile.data.repository.ManagedProfileRepository;
+import com.android.systemui.statusbar.policy.profile.data.repository.impl.ManagedProfileRepositoryImpl;
+import com.android.systemui.statusbar.policy.vpn.data.repository.VpnRepository;
+import com.android.systemui.statusbar.policy.vpn.data.repository.impl.VpnRepositoryImpl;
 import com.android.systemui.supervision.data.repository.SupervisionRepositoryModule;
+import com.android.systemui.util.wrapper.CameraRotationSettingProvider;
+import com.android.systemui.util.wrapper.CameraRotationSettingProviderImpl;
 
 import dagger.Binds;
 import dagger.Module;
@@ -112,6 +118,10 @@ public interface StatusBarPolicyModule {
     /** */
     @Binds
     BluetoothRepository provideBluetoothRepository(BluetoothRepositoryImpl impl);
+
+    /** */
+    @Binds
+    VpnRepository provideVpnRepository(VpnRepositoryImpl impl);
 
     /** */
     @Binds
@@ -151,6 +161,11 @@ public interface StatusBarPolicyModule {
 
     /** */
     @Binds
+    ManagedProfileRepository provideManagedProfileRepository(
+            ManagedProfileRepositoryImpl impl);
+
+    /** */
+    @Binds
     NetworkController provideNetworkController(NetworkControllerImpl controllerImpl);
 
     /** */
@@ -160,6 +175,12 @@ public interface StatusBarPolicyModule {
     /** */
     @Binds
     RotationLockController provideRotationLockController(RotationLockControllerImpl controllerImpl);
+
+    /** */
+    @Binds
+    @SysUISingleton
+    CameraRotationSettingProvider bindCameraRotationSettingProvider(
+            CameraRotationSettingProviderImpl impl);
 
     /** */
     @Binds
@@ -286,7 +307,7 @@ public interface StatusBarPolicyModule {
     @SysUISingleton
     @BatteryControllerLog
     static LogBuffer provideBatteryControllerLog(LogBufferFactory factory) {
-        return factory.create(BatteryControllerLogger.TAG, 30);
+        return factory.create(BatteryControllerLogger.TAG, 150);
     }
 
     /** Provides a log buffer for CastControllerImpl */

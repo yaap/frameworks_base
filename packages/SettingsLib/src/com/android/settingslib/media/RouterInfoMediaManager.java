@@ -25,11 +25,13 @@ import android.media.MediaRouter2.RoutingController;
 import android.media.MediaRouter2Manager;
 import android.media.RouteDiscoveryPreference;
 import android.media.RouteListingPreference;
+import android.media.RoutingChangeInfo;
 import android.media.RoutingSessionInfo;
 import android.media.SuggestedDeviceInfo;
 import android.media.session.MediaController;
 import android.os.UserHandle;
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.GuardedBy;
 import androidx.annotation.NonNull;
@@ -45,7 +47,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -55,11 +56,12 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
 
     private static final String TAG = "RouterInfoMediaManager";
 
+    private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
+
     private final MediaRouter2 mRouter;
     @VisibleForTesting
     MediaRouter2Manager mRouterManager;
 
-    private final Executor mExecutor = Executors.newSingleThreadExecutor();
     @VisibleForTesting
     final RouteCallback mRouteCallback = new RouteCallback();
     @VisibleForTesting
@@ -69,6 +71,10 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
     @VisibleForTesting
     final Consumer<RouteListingPreference> mRouteListingPreferenceCallback =
             (preference) -> {
+                if (DEBUG) {
+                    Log.d(TAG,
+                            "onRouteListingPreferenceUpdated(), hasRLP: " + (preference != null));
+                }
                 notifyRouteListingPreferenceUpdated(preference);
                 refreshDevices();
             };
@@ -79,19 +85,22 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
                 public void onSuggestionsUpdated(
                         String suggestingPackageName,
                         List<SuggestedDeviceInfo> suggestedDeviceInfo) {
-                    updateDeviceSuggestion(suggestingPackageName, suggestedDeviceInfo);
+                    Log.i(TAG, "onSuggestionsUpdated(), packageName: " + suggestingPackageName
+                            + ", deviceInfo: " + suggestedDeviceInfo);
+                    notifyDeviceSuggestionUpdated(suggestingPackageName, suggestedDeviceInfo);
                 }
 
                 @Override
                 public void onSuggestionsCleared(String suggestingPackageName) {
-                    updateDeviceSuggestion(suggestingPackageName, null);
+                    Log.i(TAG, "onSuggestionsCleared(), packageName: " + suggestingPackageName);
+                    notifyDeviceSuggestionUpdated(suggestingPackageName, null);
                 }
 
                 @Override
                 public void onSuggestionsRequested() {} // no-op
             };
 
-    @GuardedBy("this")
+    @GuardedBy("InfoMediaManager.this.fieldName")
     @Nullable
     private MediaRouter2.ScanToken mScanToken;
 
@@ -143,7 +152,7 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
     @Override
     protected void startScanOnRouter() {
         if (Flags.enableScreenOffScanning()) {
-            synchronized (this) {
+            synchronized (super.mLock) {
                 if (mScanToken == null) {
                     MediaRouter2.ScanRequest request =
                             new MediaRouter2.ScanRequest.Builder().build();
@@ -156,26 +165,26 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
     }
 
     @Override
-    protected void registerRouter() {
-        mRouter.registerRouteCallback(mExecutor, mRouteCallback, RouteDiscoveryPreference.EMPTY);
+    protected void registerRouter(Executor executor) {
+        mRouter.registerRouteCallback(executor, mRouteCallback, RouteDiscoveryPreference.EMPTY);
         mRouter.registerRouteListingPreferenceUpdatedCallback(
-                mExecutor, mRouteListingPreferenceCallback);
+                executor, mRouteListingPreferenceCallback);
         mRouter.registerDeviceSuggestionsUpdatesCallback(
-                mExecutor, mDeviceSuggestionsUpdatesCallback);
+                executor, mDeviceSuggestionsUpdatesCallback);
         if (Flags.enableSuggestedDeviceApi()) {
             for (Map.Entry<String, List<SuggestedDeviceInfo>> entry :
                     mRouter.getDeviceSuggestions().entrySet()) {
-                updateDeviceSuggestion(entry.getKey(), entry.getValue());
+                notifyDeviceSuggestionUpdated(entry.getKey(), entry.getValue());
             }
         }
-        mRouter.registerTransferCallback(mExecutor, mTransferCallback);
-        mRouter.registerControllerCallback(mExecutor, mControllerCallback);
+        mRouter.registerTransferCallback(executor, mTransferCallback);
+        mRouter.registerControllerCallback(executor, mControllerCallback);
     }
 
     @Override
     protected void stopScanOnRouter() {
         if (Flags.enableScreenOffScanning()) {
-            synchronized (this) {
+            synchronized (super.mLock) {
                 if (mScanToken != null) {
                     mRouter.cancelScanRequest(mScanToken);
                     mScanToken = null;
@@ -196,23 +205,30 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
     }
 
     @Override
-    protected void transferToRoute(@NonNull MediaRoute2Info route) {
-        mRouter.transferTo(route);
+    protected void transferToRoute(
+            @NonNull MediaRoute2Info route, @NonNull RoutingChangeInfo routingChangeInfo) {
+        mRouter.transferTo(route, routingChangeInfo);
     }
 
     @Override
-    protected void selectRoute(@NonNull MediaRoute2Info route, @NonNull RoutingSessionInfo info) {
+    protected void selectRoute(
+            @NonNull MediaRoute2Info route,
+            @NonNull RoutingSessionInfo info,
+            @NonNull RoutingChangeInfo routingChangeInfo) {
         RoutingController controller = getControllerForSession(info);
         if (controller != null) {
-            controller.selectRoute(route);
+            controller.selectRoute(route, routingChangeInfo);
         }
     }
 
     @Override
-    protected void deselectRoute(@NonNull MediaRoute2Info route, @NonNull RoutingSessionInfo info) {
+    protected void deselectRoute(
+            @NonNull MediaRoute2Info route,
+            @NonNull RoutingSessionInfo info,
+            @NonNull RoutingChangeInfo routingChangeInfo) {
         RoutingController controller = getControllerForSession(info);
         if (controller != null) {
-            controller.deselectRoute(route);
+            controller.deselectRoute(route, routingChangeInfo);
         }
     }
 
@@ -333,6 +349,7 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
 
     @Override
     public void requestDeviceSuggestion() {
+        Log.i(TAG, "requestDeviceSuggestion()");
         mRouter.notifyDeviceSuggestionRequested();
     }
 
@@ -366,11 +383,19 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
     final class RouteCallback extends MediaRouter2.RouteCallback {
         @Override
         public void onRoutesUpdated(@NonNull List<MediaRoute2Info> routes) {
+            if (DEBUG) {
+                Log.d(TAG, "onRoutesUpdated()");
+                for (MediaRoute2Info route : routes) {
+                    Log.d(TAG, route.toString());
+                }
+            }
             refreshDevices();
         }
 
         @Override
         public void onPreferredFeaturesChanged(@NonNull List<String> preferredFeatures) {
+            Log.i(TAG, "onPreferredFeaturesChanged(): [" + TextUtils.join(",", preferredFeatures)
+                    + "]");
             refreshDevices();
         }
     }
@@ -381,22 +406,27 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
         public void onTransfer(
                 @NonNull RoutingController oldController,
                 @NonNull RoutingController newController) {
+            Log.i(TAG, "onTransfer(), oldId: " + oldController.getId() + ", newId: "
+                    + newController.getId());
             rebuildDeviceList();
             notifyCurrentConnectedDeviceChanged();
         }
 
         @Override
         public void onTransferFailure(@NonNull MediaRoute2Info requestedRoute) {
+            Log.w(TAG, "onTransferFailure(), route: " + requestedRoute.getId());
             // Do nothing.
         }
 
         @Override
         public void onStop(@NonNull RoutingController controller) {
+            Log.i(TAG, "onStop(), id: " + controller.getId());
             refreshDevices();
         }
 
         @Override
         public void onRequestFailed(int reason) {
+            Log.w(TAG, "onRequestFailed(), reason: " + reason);
             dispatchOnRequestFailed(reason);
         }
     }
@@ -405,6 +435,9 @@ public final class RouterInfoMediaManager extends InfoMediaManager {
     final class ControllerCallback extends MediaRouter2.ControllerCallback {
         @Override
         public void onControllerUpdated(@NonNull RoutingController controller) {
+            if (DEBUG) {
+                Log.d(TAG, "onControllerUpdated(), id: " + controller.getId());
+            }
             refreshDevices();
         }
     }

@@ -23,6 +23,7 @@ import static android.content.Intent.ACTION_SCREEN_ON;
 
 import android.Manifest;
 import android.annotation.RequiresPermission;
+import android.app.ActivityManager;
 import android.app.job.JobInfo;
 import android.app.job.JobParameters;
 import android.app.job.JobScheduler;
@@ -43,6 +44,7 @@ import android.os.ServiceManager;
 import android.os.SystemProperties;
 import android.os.UpdateEngine;
 import android.os.UpdateEngineCallback;
+import android.os.UserHandle;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
@@ -291,7 +293,7 @@ public final class ProfcollectForwardingService extends SystemService {
                             "collection_interval", 600);
                     mScheduledExecutorService.scheduleWithFixedDelay(() -> {
                         if (sIProfcollect != null) {
-                            Utils.traceSystem(sIProfcollect, "periodic");
+                            Utils.traceSystem(sIProfcollect, "periodic", /* durationMs */ 0);
                         }
                     }, 0, interval, TimeUnit.SECONDS);
                     // Background process and upload service.
@@ -373,7 +375,7 @@ public final class ProfcollectForwardingService extends SystemService {
         @Override
         public void onIntentStarted(Intent intent, long timestampNanos) {
             if (Utils.withFrequency("applaunch_trace_freq", 5)) {
-                Utils.traceSystem(sIProfcollect, "applaunch");
+                Utils.traceSystem(sIProfcollect, "applaunch", /* durationMs */ 0);
             }
         }
     }
@@ -391,9 +393,9 @@ public final class ProfcollectForwardingService extends SystemService {
     }
 
     private void traceOnDex2oatStart() {
-        if (Utils.withFrequency("dex2oat_trace_freq", 25)) {
+        if (Utils.withFrequency("dex2oat_trace_freq", 75)) {
             // Dex2oat could take a while before it starts. Add a short delay before start tracing.
-            Utils.traceSystem(sIProfcollect, "dex2oat", /* delayMs */ 1000);
+            Utils.traceSystem(sIProfcollect, "dex2oat", /* durationMs */ 0, /* delayMs */ 1000);
         }
     }
 
@@ -438,7 +440,8 @@ public final class ProfcollectForwardingService extends SystemService {
                     .setPackage("com.android.shell")
                     .setAction("com.android.shell.action.PROFCOLLECT_UPLOAD")
                     .putExtra("filename", reportName);
-            pfs.getContext().sendBroadcast(intent);
+            pfs.getContext().sendBroadcastAsUser(intent,
+                    UserHandle.of(ActivityManager.getCurrentUser()));
         });
     }
 

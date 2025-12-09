@@ -45,6 +45,8 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.LocalServices;
 import com.android.server.devicepolicy.OwnersData.OwnerInfo;
+import com.android.server.pm.UserManagerInternal;
+import com.android.server.utils.Slogf;
 import com.android.server.wm.ActivityTaskManagerInternal;
 
 import java.io.File;
@@ -66,6 +68,7 @@ class Owners {
     private final PackageManagerInternal mPackageManagerInternal;
     private final ActivityTaskManagerInternal mActivityTaskManagerInternal;
     private final ActivityManagerInternal mActivityManagerInternal;
+    private final UserManagerInternal mUserManagerInternal;
     private final DeviceStateCacheImpl mDeviceStateCache;
 
     @GuardedBy("mData")
@@ -78,12 +81,14 @@ class Owners {
             PackageManagerInternal packageManagerInternal,
             ActivityTaskManagerInternal activityTaskManagerInternal,
             ActivityManagerInternal activityManagerInternal,
+            UserManagerInternal userManagerInternal,
             DeviceStateCacheImpl deviceStateCache,
             PolicyPathProvider pathProvider) {
         mUserManager = userManager;
         mPackageManagerInternal = packageManagerInternal;
         mActivityTaskManagerInternal = activityTaskManagerInternal;
         mActivityManagerInternal = activityManagerInternal;
+        mUserManagerInternal = userManagerInternal;
         mDeviceStateCache = deviceStateCache;
         mData = new OwnersData(pathProvider);
     }
@@ -119,9 +124,11 @@ class Owners {
     // ActivityTaskManager.
     @GuardedBy("mData")
     private void notifyChangeLocked() {
+        Slogf.d(TAG, "notifyChangeLocked()");
         pushToDevicePolicyManager();
         pushToPackageManagerLocked();
         pushToActivityManagerLocked();
+        pushToUserManagerLocked();
         pushToAppOpsLocked();
     }
 
@@ -168,6 +175,11 @@ class Owners {
             }
         }
         mActivityManagerInternal.setProfileOwnerUid(profileOwners);
+    }
+
+    @GuardedBy("mData")
+    private void pushToUserManagerLocked() {
+        mUserManagerInternal.setDeviceOwnerUserId(getDeviceOwnerUserId());
     }
 
     @GuardedBy("mData")
@@ -408,6 +420,18 @@ class Owners {
         }
     }
 
+    boolean isDeviceManaged() {
+        synchronized (mData) {
+            return mData.mDeviceManaged;
+        }
+    }
+
+    void setDeviceManaged(boolean deviceManaged) {
+        synchronized (mData) {
+            mData.mDeviceManaged = deviceManaged;
+        }
+    }
+
     boolean isDeviceOwnerUserId(int userId) {
         synchronized (mData) {
             return mData.mDeviceOwner != null && mData.mDeviceOwnerUserId == userId;
@@ -629,6 +653,19 @@ class Owners {
         }
     }
 
+    void markCrossProfileWidgetProviderMigrated() {
+        synchronized (mData) {
+            mData.mCrossProfileWidgetProviderMigrated = true;
+            mData.writeDeviceOwner();
+        }
+    }
+
+    boolean isCrossProfileWidgetProviderMigrated() {
+        synchronized (mData) {
+            return mData.mCrossProfileWidgetProviderMigrated;
+        }
+    }
+
     void markPermissionGrantStateMigrated() {
         synchronized (mData) {
             mData.mPermissionGrantStateMigrated = true;
@@ -639,6 +676,19 @@ class Owners {
     boolean isPermissionGrantStateMigrated() {
         synchronized (mData) {
             return mData.mPermissionGrantStateMigrated;
+        }
+    }
+
+    void markSetApplicationRestrictionsMigrated() {
+        synchronized (mData) {
+            mData.mSetApplicationRestrictionsMigrated = true;
+            mData.writeDeviceOwner();
+        }
+    }
+
+    boolean isSetApplicationRestrictionsMigrated() {
+        synchronized (mData) {
+            return mData.mSetApplicationRestrictionsMigrated;
         }
     }
 
@@ -693,6 +743,7 @@ class Owners {
         synchronized (mData) {
             mSystemReady = true;
             pushToActivityManagerLocked();
+            pushToUserManagerLocked();
             pushToAppOpsLocked();
         }
     }

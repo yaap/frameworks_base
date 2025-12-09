@@ -30,7 +30,8 @@ import com.android.internal.view.AppearanceRegion
 import com.android.systemui.CoreStartable
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.statusbar.CommandQueue
-import com.android.systemui.statusbar.core.StatusBarInitializer.OnStatusBarViewInitializedListener
+import com.android.systemui.statusbar.StatusBarAlwaysUseRegionSampling
+import com.android.systemui.statusbar.core.StatusBarInitializer.StatusBarViewLifecycleListener
 import com.android.systemui.statusbar.core.StatusBarRootModernization
 import com.android.systemui.statusbar.data.model.StatusBarAppearance
 import com.android.systemui.statusbar.data.model.StatusBarMode
@@ -61,7 +62,7 @@ import kotlinx.coroutines.flow.stateIn
  * Note: These status bar modes are status bar *window* states that are sent to us from
  * WindowManager, not determined internally.
  */
-interface StatusBarModePerDisplayRepository : OnStatusBarViewInitializedListener, CoreStartable {
+interface StatusBarModePerDisplayRepository : StatusBarViewLifecycleListener, CoreStartable {
     /**
      * True if the status bar window is showing transiently and will disappear soon, and false
      * otherwise. ("Otherwise" in this case means the status bar is persistently hidden OR
@@ -113,6 +114,12 @@ interface StatusBarModePerDisplayRepository : OnStatusBarViewInitializedListener
      * state.
      */
     fun setOngoingProcessRequiresStatusBarVisible(requiredVisible: Boolean)
+
+    /**
+     * Sets [AppearanceRegion]s obtained from region lightness sampling. If non-empty then these
+     * regions override the regions obtained from DisplayPolicy.
+     */
+    fun setSampledAppearanceRegions(appearanceRegions: List<AppearanceRegion>)
 }
 
 class StatusBarModePerDisplayRepositoryImpl
@@ -220,6 +227,12 @@ constructor(
         _ongoingProcessRequiresStatusBarVisible.value = requiredVisible
     }
 
+    private val _sampledAppearanceRegions = MutableStateFlow<List<AppearanceRegion>>(emptyList())
+
+    override fun setSampledAppearanceRegions(appearanceRegions: List<AppearanceRegion>) {
+        _sampledAppearanceRegions.value = appearanceRegions
+    }
+
     override val isInFullscreenMode: StateFlow<Boolean> =
         _originalStatusBarAttributes
             .map { params ->
@@ -231,16 +244,26 @@ constructor(
 
     /** Modifies the raw [StatusBarAttributes] if letterboxing is needed. */
     private val modifiedStatusBarAttributes: StateFlow<ModifiedStatusBarAttributes?> =
-        combine(_originalStatusBarAttributes, _statusBarBounds) {
+        combine(_originalStatusBarAttributes, _statusBarBounds, _sampledAppearanceRegions) {
                 originalAttributes,
-                statusBarBounds ->
+                statusBarBounds,
+                sampledAppearanceRegions ->
                 if (originalAttributes == null) {
                     null
                 } else {
+                    val originalAppearanceRegions =
+                        if (
+                            StatusBarAlwaysUseRegionSampling.isAnyRegionSamplingEnabled &&
+                                sampledAppearanceRegions.isNotEmpty()
+                        ) {
+                            sampledAppearanceRegions
+                        } else {
+                            originalAttributes.appearanceRegions
+                        }
                     val (newAppearance, newAppearanceRegions) =
                         modifyAppearanceIfNeeded(
                             originalAttributes.appearance,
-                            originalAttributes.appearanceRegions,
+                            originalAppearanceRegions,
                             originalAttributes.letterboxDetails,
                             statusBarBounds,
                         )

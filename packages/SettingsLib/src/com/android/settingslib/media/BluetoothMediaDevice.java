@@ -15,8 +15,6 @@
  */
 package com.android.settingslib.media;
 
-import static com.android.media.flags.Flags.avoidBinderCallsDuringRender;
-import static com.android.media.flags.Flags.avoidBinderCallsForMutingExpectedDevice;
 import static com.android.settingslib.media.MediaDevice.SelectionBehavior.SELECTION_BEHAVIOR_TRANSFER;
 
 import android.annotation.NonNull;
@@ -26,7 +24,6 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothHearingAid;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
-import android.media.AudioManager;
 import android.media.MediaRoute2Info;
 import android.media.RouteListingPreference;
 
@@ -42,46 +39,41 @@ public class BluetoothMediaDevice extends MediaDevice {
     private static final String TAG = "BluetoothMediaDevice";
 
     private final CachedBluetoothDevice mCachedDevice;
-    private final AudioManager mAudioManager;
     private final boolean mIsMutingExpectedDevice;
 
     BluetoothMediaDevice(
             @NonNull Context context,
             @NonNull CachedBluetoothDevice device,
-            @Nullable MediaRoute2Info info,
+            @Nullable MediaRoute2Info routeInfo,
             @Nullable DynamicRouteAttributes dynamicRouteAttributes,
-            @Nullable RouteListingPreference.Item item) {
-        this(context, device, info, dynamicRouteAttributes, item,
+            @Nullable RouteListingPreference.Item rlpItem) {
+        this(context, device, routeInfo, dynamicRouteAttributes, rlpItem,
                 /* isMutingExpectedDevice= */ false);
     }
 
     BluetoothMediaDevice(
             @NonNull Context context,
             @NonNull CachedBluetoothDevice device,
-            @Nullable MediaRoute2Info info,
+            @Nullable MediaRoute2Info routeInfo,
             @Nullable DynamicRouteAttributes dynamicRouteAttributes,
-            @Nullable RouteListingPreference.Item item,
+            @Nullable RouteListingPreference.Item rlpItem,
             boolean isMutingExpectedDevice) {
-        super(context, info, dynamicRouteAttributes, item);
+        super(context, routeInfo, dynamicRouteAttributes, rlpItem);
         mCachedDevice = device;
         mIsMutingExpectedDevice = isMutingExpectedDevice;
-        mAudioManager = context.getSystemService(AudioManager.class);
         initDeviceRecord();
     }
 
     @Override
     public String getName() {
-        if (avoidBinderCallsDuringRender()) {
-            if (mRouteInfo != null) {
-                // Prefer name from route info since CachedBluetoothDevice#getName results in an
-                // IPC call.
-                return mRouteInfo.getName().toString();
-            } else {
-                return mCachedDevice.getName();
-            }
+        if (mRouteInfo != null) {
+            // Prefer name from route info since CachedBluetoothDevice#getName results in an
+            // IPC call.
+            return mRouteInfo.getName().toString();
+        } else {
+            return mCachedDevice.getName();
         }
 
-        return mCachedDevice.getName();
     }
 
     @Override
@@ -158,11 +150,7 @@ public class BluetoothMediaDevice extends MediaDevice {
 
     @Override
     public boolean isMutingExpectedDevice() {
-        if (avoidBinderCallsForMutingExpectedDevice()) {
-            return mIsMutingExpectedDevice;
-        }
-        return mAudioManager.getMutingExpectedDevice() != null && mCachedDevice.getAddress().equals(
-                mAudioManager.getMutingExpectedDevice().getAddress());
+        return mIsMutingExpectedDevice;
     }
 
     @Override

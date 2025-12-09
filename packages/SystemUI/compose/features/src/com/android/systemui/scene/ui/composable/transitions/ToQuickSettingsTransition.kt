@@ -20,11 +20,12 @@ import androidx.compose.animation.core.tween
 import com.android.compose.animation.scene.Edge
 import com.android.compose.animation.scene.TransitionBuilder
 import com.android.systemui.notifications.ui.composable.Notifications
-import com.android.systemui.qs.ui.composable.QuickSettings
+import com.android.systemui.qs.shared.ui.QuickSettings.Elements
+import com.android.systemui.qs.ui.composable.QuickSettingsScene
 import com.android.systemui.shade.ui.composable.ShadeHeader
 import kotlin.time.Duration.Companion.milliseconds
 
-fun TransitionBuilder.toQuickSettingsTransition(durationScale: Double = 1.0) {
+fun TransitionBuilder.toQuickSettingsSceneTransition(durationScale: Double = 1.0) {
     spec = tween(durationMillis = (DefaultDuration * durationScale).inWholeMilliseconds.toInt())
 
     val translationY = ShadeHeader.Dimensions.CollapsedHeightForTransitions
@@ -41,8 +42,12 @@ fun TransitionBuilder.toQuickSettingsTransition(durationScale: Double = 1.0) {
         fade(ShadeHeader.Elements.ShadeCarrierGroup)
     }
 
-    translate(QuickSettings.Elements.Content, y = -ShadeHeader.Dimensions.ExpandedHeight * .66f)
+    fade(Notifications.Elements.HeadsUpNotificationPlaceholder)
+
+    // New all compose element
+    translate(Elements.QuickSettingsContent, y = -ShadeHeader.Dimensions.ExpandedHeight * .66f)
     translate(Notifications.Elements.NotificationScrim, Edge.Top, false)
+    translate(QuickSettingsScene.Companion.InternalScenes.Edit.rootElementKey, Edge.Top, true)
 }
 
 private val DefaultDuration = 500.milliseconds

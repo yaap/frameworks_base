@@ -18,6 +18,8 @@ package com.android.keyguard
 import android.app.admin.DevicePolicyManager
 import android.content.res.Configuration
 import android.media.AudioManager
+import android.platform.test.annotations.EnableFlags
+import android.security.Flags.FLAG_SECURE_LOCK_DEVICE
 import android.telephony.TelephonyManager
 import android.testing.TestableLooper.RunWithLooper
 import android.testing.TestableResources
@@ -41,6 +43,7 @@ import com.android.keyguard.domain.interactor.KeyguardKeyboardInteractor
 import com.android.systemui.Flags as AConfigFlags
 import com.android.systemui.SysuiTestCase
 import com.android.systemui.biometrics.FaceAuthAccessibilityDelegate
+import com.android.systemui.bouncer.domain.interactor.BouncerInteractor
 import com.android.systemui.bouncer.domain.interactor.PrimaryBouncerInteractor
 import com.android.systemui.bouncer.shared.constants.KeyguardBouncerConstants
 import com.android.systemui.classifier.FalsingA11yDelegate
@@ -72,6 +75,8 @@ import com.android.systemui.scene.shared.model.FakeSceneDataSource
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.scene.shared.model.fakeSceneDataSource
+import com.android.systemui.securelockdevice.data.repository.fakeSecureLockDeviceRepository
+import com.android.systemui.securelockdevice.domain.interactor.secureLockDeviceInteractor
 import com.android.systemui.shade.domain.interactor.enableSingleShade
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.statusbar.policy.DevicePostureController
@@ -90,8 +95,10 @@ import com.android.systemui.util.mockito.mock
 import com.android.systemui.util.mockito.whenever
 import com.android.systemui.util.settings.GlobalSettings
 import com.android.systemui.util.time.FakeSystemClock
+import com.android.systemui.util.wrapper.LockPatternCheckerWrapper
 import com.android.systemui.window.domain.interactor.windowRootViewBlurInteractor
 import com.google.common.truth.Truth
+import com.google.common.truth.Truth.assertThat
 import junit.framework.Assert
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -161,7 +168,12 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
     @Mock private lateinit var postureController: DevicePostureController
     @Mock private lateinit var devicePolicyManager: DevicePolicyManager
     @Mock private lateinit var mUserActivityNotifier: UserActivityNotifier
+    @Mock private lateinit var bouncerInteractor: BouncerInteractor
+    @Mock private lateinit var lockPatternChecker: LockPatternCheckerWrapper
 
+    @Captor
+    private lateinit var keyguardUpdateMonitorCallbackCaptor:
+        ArgumentCaptor<KeyguardUpdateMonitorCallback>
     @Captor
     private lateinit var swipeListenerArgumentCaptor:
         ArgumentCaptor<KeyguardSecurityContainer.SwipeListener>
@@ -192,7 +204,6 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
         testableResources.resources.configuration.orientation = Configuration.ORIENTATION_UNDEFINED
         whenever(view.context).thenReturn(mContext)
         whenever(view.resources).thenReturn(testableResources.resources)
-
         val lp = FrameLayout.LayoutParams(/* width= */ 0, /* height= */ 0)
         lp.gravity = 0
         whenever(view.layoutParams).thenReturn(lp)
@@ -245,6 +256,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 keyguardKeyboardInteractor,
                 null,
                 mUserActivityNotifier,
+                lockPatternChecker,
             )
 
         kosmos = testKosmos()
@@ -291,6 +303,8 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 executor,
                 { deviceEntryInteractor },
                 { kosmos.windowRootViewBlurInteractor },
+                { bouncerInteractor },
+                { kosmos.secureLockDeviceInteractor },
             )
     }
 
@@ -306,6 +320,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
     }
 
@@ -345,6 +360,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
 
         // Update rotation. Should trigger update
@@ -358,6 +374,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
     }
 
@@ -399,6 +416,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
     }
 
@@ -415,6 +433,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
     }
 
@@ -431,6 +450,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
     }
 
@@ -447,6 +467,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
     }
 
@@ -463,6 +484,7 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(userSwitcherController),
                 any(),
                 eq(falsingA11yDelegate),
+                any(),
             )
     }
 
@@ -472,7 +494,15 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
         val captor = ArgumentCaptor.forClass(UserSwitcherCallback::class.java)
         setupGetSecurityView(SecurityMode.Password)
         verify(view)
-            .initMode(anyInt(), any(), any(), any(), captor.capture(), eq(falsingA11yDelegate))
+            .initMode(
+                anyInt(),
+                any(),
+                any(),
+                any(),
+                captor.capture(),
+                eq(falsingA11yDelegate),
+                any(),
+            )
         captor.value.showUnlockToContinueMessage()
         viewControllerImmediately
         verify(keyguardPasswordViewControllerMock)
@@ -663,6 +693,37 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
         // THEN we will show the SIM PIN screen
         verify(viewFlipperController).getSecurityView(eq(SecurityMode.SimPin), any(), any())
     }
+
+    @Test
+    @DisableSceneContainer
+    @EnableFlags(FLAG_SECURE_LOCK_DEVICE)
+    fun keyguardDoesNotDismiss_onPrimaryAuthSuccess_ifSecureLockDeviceEnabled() =
+        kosmos.testScope.runTest {
+            val isSecureLockDeviceEnabled by
+                collectLastValue(kosmos.secureLockDeviceInteractor.isSecureLockDeviceEnabled)
+
+            kosmos.fakeSecureLockDeviceRepository.onSecureLockDeviceEnabled()
+            runCurrent()
+
+            assertThat(isSecureLockDeviceEnabled).isTrue()
+
+            // GIVEN current security mode has been set to PIN
+            underTest.showSecurityScreen(SecurityMode.PIN)
+
+            // WHEN a primary auth success requests to dismiss the security screen
+            kosmos.fakeSecureLockDeviceRepository.onSuccessfulPrimaryAuth()
+            val keyguardDone =
+                underTest.showNextSecurityScreenOrFinish(
+                    /* authenticated= */ true,
+                    TARGET_USER_ID,
+                    /* bypassSecondaryLockScreen= */ true,
+                    SecurityMode.PIN,
+                )
+            runCurrent()
+
+            // THEN no action has happened, which will not dismiss the security screens
+            assertThat(keyguardDone).isEqualTo(false)
+        }
 
     @Test
     @DisableSceneContainer
@@ -858,6 +919,38 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
             .getSecurityView(any(), any(), onViewInflatedCallbackArgumentCaptor.capture())
         onViewInflatedCallbackArgumentCaptor.value.onViewInflated(inputViewController)
         verify(view).updateSecurityViewFlipper()
+    }
+
+    @Test
+    @EnableFlags(FLAG_SECURE_LOCK_DEVICE)
+    @DisableSceneContainer
+    fun reinflateViewFlipper_onSecureLockDeviceBiometricAuthViewShownOrInterrupted() {
+        // On shown
+        val onViewInflatedCallback = KeyguardSecurityViewFlipperController.OnViewInflatedCallback {}
+        underTest.showSecureLockDeviceView(onViewInflatedCallback)
+        verify(viewFlipperController).clearViews()
+        verify(viewFlipperController)
+            .getSecurityView(
+                eq(SecurityMode.SecureLockDeviceBiometricAuth),
+                any(),
+                onViewInflatedCallbackArgumentCaptor.capture(),
+            )
+        onViewInflatedCallbackArgumentCaptor.value.onViewInflated(inputViewController)
+        verify(view).updateSecurityViewFlipper()
+
+        clearInvocations(view)
+        clearInvocations(viewFlipperController)
+
+        // On hidden (e.g. back gesture, dozing, biometric lockout, etc)
+        kosmos.fakeSecureLockDeviceRepository.setRequiresPrimaryAuthForSecureLockDevice(true)
+
+        underTest.onSecureLockDeviceBiometricAuthInterrupted(onViewInflatedCallback)
+        verify(viewFlipperController).clearViews()
+        verify(viewFlipperController)
+            .getSecurityView(any(), any(), onViewInflatedCallbackArgumentCaptor.capture())
+        onViewInflatedCallbackArgumentCaptor.value.onViewInflated(inputViewController)
+        verify(view).updateSecurityViewFlipper()
+        verify(viewMediatorCallback).resetKeyguard()
     }
 
     @Test
@@ -1090,6 +1183,14 @@ class KeyguardSecurityContainerControllerTest : SysuiTestCase() {
                 eq(KeyguardSecurityContainer.USER_TYPE_SECONDARY_USER),
             )
     }
+
+    private val registeredKeyguardUpdateMonitorCallback: KeyguardUpdateMonitorCallback
+        get() {
+            underTest.onViewAttached()
+            verify(keyguardUpdateMonitor)
+                .registerCallback(keyguardUpdateMonitorCallbackCaptor.capture())
+            return keyguardUpdateMonitorCallbackCaptor.value
+        }
 
     private val registeredSwipeListener: KeyguardSecurityContainer.SwipeListener
         get() {

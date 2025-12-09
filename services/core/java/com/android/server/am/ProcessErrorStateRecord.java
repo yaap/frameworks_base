@@ -303,9 +303,6 @@ class ProcessErrorStateRecord {
         SparseBooleanArray lastPids = new SparseBooleanArray(20);
         ActivityManagerService.VolatileDropboxEntryStates volatileDropboxEntriyStates = null;
 
-        // Release the expired timer preparatory to starting the dump or returning without dumping.
-        timeoutRecord.closeExpiredTimer();
-
         if (mApp.isDebugging()) {
             Slog.i(TAG, "Skipping debugged app ANR: " + this + " " + annotation);
             return;
@@ -421,7 +418,7 @@ class ProcessErrorStateRecord {
                             if (r.isPersistent()) {
                                 firstPids.add(myPid);
                                 if (DEBUG_ANR) Slog.i(TAG, "Adding persistent proc: " + r);
-                            } else if (r.mServices.isTreatedLikeActivity()) {
+                            } else if (r.mServices.isTreatLikeActivity()) {
                                 firstPids.add(myPid);
                                 if (DEBUG_ANR) Slog.i(TAG, "Adding likely IME: " + r);
                             } else {
@@ -541,7 +538,7 @@ class ProcessErrorStateRecord {
                 isSilentAnr ? null : processCpuTracker, isSilentAnr ? null : lastPids,
                 nativePidsFuture, tracesFileException, firstPidEndOffset, annotation,
                 criticalEventLog, memoryHeaders, auxiliaryTaskExecutor, firstPidFilePromise,
-                latencyTracker);
+                latencyTracker, timeoutRecord);
 
         if (isMonitorCpuUsage()) {
             // Wait for the first call to finish
@@ -576,7 +573,8 @@ class ProcessErrorStateRecord {
             final long startOffset = 0L;
             final long endOffset = firstPidEndOffset.get();
             mService.mProcessList.mAppExitInfoTracker.scheduleLogAnrTrace(
-                    pid, mApp.uid, mApp.getPackageList(), tracesFile, startOffset, endOffset);
+                    pid, mApp.uid, mApp.getProcessPackageNames(), tracesFile, startOffset,
+                    endOffset);
         }
 
         // Check if package is still being loaded
@@ -757,7 +755,7 @@ class ProcessErrorStateRecord {
         // several places in the system server.
         return mApp.isInterestingToUserLocked()
                 || (mApp.info != null && "com.android.systemui".equals(mApp.info.packageName))
-                || (mApp.mState.hasTopUi() || mApp.mState.hasOverlayUi());
+                || (mApp.getHasTopUi() || mApp.getHasOverlayUi());
     }
 
     private boolean getShowBackground() {

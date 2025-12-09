@@ -53,6 +53,7 @@ import android.util.DebugUtils
 import android.util.IndentingPrintWriter
 import android.util.IntArray as GrowingIntArray
 import android.util.Slog
+import android.util.SparseArray
 import android.util.SparseBooleanArray
 import com.android.internal.annotations.GuardedBy
 import com.android.internal.compat.IPlatformCompat
@@ -86,6 +87,8 @@ import com.android.server.permission.access.util.withClearedCallingIdentity
 import com.android.server.pm.KnownPackages
 import com.android.server.pm.PackageInstallerService
 import com.android.server.pm.PackageManagerLocal
+import com.android.server.pm.PackageManagerService
+import com.android.server.pm.PackageMetrics
 import com.android.server.pm.UserManagerInternal
 import com.android.server.pm.UserManagerService
 import com.android.server.pm.permission.LegacyPermission
@@ -135,7 +138,10 @@ class PermissionService(private val service: AccessCheckingService) :
 
     private var virtualDeviceManagerInternal: VirtualDeviceManagerInternal? = null
 
-    private lateinit var permissionControllerManager: PermissionControllerManager
+    /**
+     * Cache of PermissionControllerManager instances, keyed by user ID.
+     */
+    private val permissionControllerManagers = SparseArray<PermissionControllerManager>()
 
     /**
      * A permission backup might contain apps that are not installed. In this case we delay the
@@ -162,7 +168,8 @@ class PermissionService(private val service: AccessCheckingService) :
         // The package info cache is the cache for package and permission information.
         // Disable the package info and package permission caches locally but leave the
         // checkPermission cache active.
-        PackageManager.invalidatePackageInfoCache()
+        PackageManagerService.invalidatePackageInfoCache(
+                PackageMetrics.INVALIDATION_REASON_PERMISSION_SERVICE_INIT)
         PermissionManager.disablePackageNamePermissionCache()
 
         handlerThread =
@@ -1994,10 +2001,10 @@ class PermissionService(private val service: AccessCheckingService) :
 
         val permission = service.getState { with(policy) { getPermissions()[permissionName] } }
         if (permission == null || !permission.isAppOp) {
-            packageNames.toTypedArray()
+            return packageNames.toTypedArray()
         }
 
-        packageManagerLocal.withUnfilteredSnapshot().use { snapshot ->
+        packageManagerLocal.withFilteredSnapshot().use { snapshot ->
             snapshot.packageStates.forEach { (_, packageState) ->
                 if (packageState.isApex) {
                     return@forEach
@@ -2037,7 +2044,7 @@ class PermissionService(private val service: AccessCheckingService) :
     override fun backupRuntimePermissions(userId: Int): ByteArray? {
         Preconditions.checkArgumentNonnegative(userId, "userId cannot be null")
         val backup = CompletableFuture<ByteArray>()
-        permissionControllerManager.getRuntimePermissionBackup(
+        getPermissionControllerManager(userId).getRuntimePermissionBackup(
             UserHandle.of(userId),
             PermissionThread.getExecutor(),
             backup::complete,
@@ -2065,7 +2072,7 @@ class PermissionService(private val service: AccessCheckingService) :
         synchronized(isDelayedPermissionBackupFinished) {
             isDelayedPermissionBackupFinished -= userId
         }
-        permissionControllerManager.stageAndApplyRuntimePermissionsBackup(
+        getPermissionControllerManager(userId).stageAndApplyRuntimePermissionsBackup(
             backup,
             UserHandle.of(userId),
         )
@@ -2080,7 +2087,7 @@ class PermissionService(private val service: AccessCheckingService) :
                 return
             }
         }
-        permissionControllerManager.applyStagedRuntimePermissionBackup(
+        getPermissionControllerManager(userId).applyStagedRuntimePermissionBackup(
             packageName,
             UserHandle.of(userId),
             PermissionThread.getExecutor(),
@@ -2093,6 +2100,14 @@ class PermissionService(private val service: AccessCheckingService) :
             }
         }
     }
+
+    private fun getPermissionControllerManager(userId: Int): PermissionControllerManager =
+        synchronized(permissionControllerManagers) {
+            permissionControllerManagers.getOrPut(userId) {
+                val userContext = context.createContextAsUser(UserHandle.of(userId), 0)
+                PermissionControllerManager(userContext, PermissionThread.getHandler())
+            }
+        }
 
     override fun dump(fd: FileDescriptor, pw: PrintWriter, args: Array<out String>?) {
         if (!DumpUtils.checkDumpPermission(context, LOG_TAG, pw)) {
@@ -2383,9 +2398,6 @@ class PermissionService(private val service: AccessCheckingService) :
         virtualDeviceManagerInternal?.registerPersistentDeviceIdRemovedListener { deviceId ->
             service.mutateState { with(devicePolicy) { onDeviceIdRemoved(deviceId) } }
         }
-
-        permissionControllerManager =
-            PermissionControllerManager(context, PermissionThread.getHandler())
     }
 
     override fun onUserCreated(userId: Int) {
@@ -2504,15 +2516,16 @@ class PermissionService(private val service: AccessCheckingService) :
             return
         }
 
-        val userIds =
-            if (userId == UserHandle.USER_ALL) {
-                userManagerService.userIdsIncludingPreCreated
-            } else {
-                intArrayOf(userId)
-            }
-        userIds.forEach { service.onPackageUninstalled(packageName, appId, it) }
         val packageState = packageManagerInternal.packageStates[packageName]
-        if (packageState == null) {
+        if (packageState != null) {
+            val userIds =
+                if (userId == UserHandle.USER_ALL) {
+                    userManagerService.userIdsIncludingPreCreated
+                } else {
+                    intArrayOf(userId)
+                }
+            userIds.forEach { service.onPackageUninstalled(packageName, appId, it) }
+        } else {
             service.onPackageRemoved(packageName, appId)
         }
     }
@@ -2681,7 +2694,8 @@ class PermissionService(private val service: AccessCheckingService) :
 
         override fun onStateMutated() {
             if (isPermissionFlagsChanged) {
-                PackageManager.invalidatePackageInfoCache()
+                PackageManagerService.invalidatePackageInfoCache(
+                        PackageMetrics.INVALIDATION_REASON_PERMISSION_FLAG_CHANGED)
                 isPermissionFlagsChanged = false
             }
 

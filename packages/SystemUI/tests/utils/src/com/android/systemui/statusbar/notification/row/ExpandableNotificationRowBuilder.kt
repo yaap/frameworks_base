@@ -43,7 +43,6 @@ import com.android.systemui.flags.Flags
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.log.logcatLogBuffer
 import com.android.systemui.media.NotificationMediaManager
-import com.android.systemui.media.controls.util.MediaFeatureFlag
 import com.android.systemui.media.dialog.MediaOutputDialogManager
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.plugins.statusbar.StatusBarStateController
@@ -61,9 +60,13 @@ import com.android.systemui.statusbar.notification.BundleInteractionLogger
 import com.android.systemui.statusbar.notification.ColorUpdateLogger
 import com.android.systemui.statusbar.notification.ConversationNotificationManager
 import com.android.systemui.statusbar.notification.ConversationNotificationProcessor
+import com.android.systemui.statusbar.notification.NotificationActivityStarter
+import com.android.systemui.statusbar.notification.collection.BundleEntry
+import com.android.systemui.statusbar.notification.collection.BundleSpec
 import com.android.systemui.statusbar.notification.collection.GroupEntryBuilder
 import com.android.systemui.statusbar.notification.collection.NotificationEntry
 import com.android.systemui.statusbar.notification.collection.NotificationEntryBuilder
+import com.android.systemui.statusbar.notification.collection.PipelineEntry
 import com.android.systemui.statusbar.notification.collection.buildNotificationEntry
 import com.android.systemui.statusbar.notification.collection.buildSummaryNotificationEntry
 import com.android.systemui.statusbar.notification.collection.mockNotifCollection
@@ -91,7 +94,6 @@ import com.android.systemui.statusbar.notification.row.icon.NotificationRowIconV
 import com.android.systemui.statusbar.notification.row.icon.appIconProvider
 import com.android.systemui.statusbar.notification.row.icon.mockAppIconProvider
 import com.android.systemui.statusbar.notification.row.icon.notificationIconStyleProvider
-import com.android.systemui.statusbar.notification.row.shared.NotificationRowContentBinderRefactor
 import com.android.systemui.statusbar.notification.row.shared.SkeletonImageTransform
 import com.android.systemui.statusbar.notification.stack.NotificationChildrenContainerLogger
 import com.android.systemui.statusbar.phone.KeyguardBypassController
@@ -114,7 +116,6 @@ import kotlinx.coroutines.test.TestScope
 import org.junit.Assert.assertTrue
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.Mockito
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
@@ -177,6 +178,7 @@ class ExpandableNotificationRowBuilder(
                 mTestScope,
                 mBgCoroutineContext,
                 mMainCoroutineContext,
+                context,
             )
 
         mSmartReplyConstants =
@@ -253,31 +255,17 @@ class ExpandableNotificationRowBuilder(
             )
 
         mContentBinder =
-            if (NotificationRowContentBinderRefactor.isEnabled)
-                NotificationRowContentBinderImpl(
-                    Mockito.mock(NotifRemoteViewCache::class.java, STUB_ONLY),
-                    remoteInputManager,
-                    conversationProcessor,
-                    Mockito.mock(Executor::class.java, STUB_ONLY),
-                    smartReplyStateInflater,
-                    notifLayoutInflaterFactoryProvider,
-                    Mockito.mock(HeadsUpStyleProvider::class.java, STUB_ONLY),
-                    promotedNotificationContentExtractor,
-                    Mockito.mock(NotificationRowContentBinderLogger::class.java, STUB_ONLY),
-                )
-            else
-                NotificationContentInflater(
-                    Mockito.mock(NotifRemoteViewCache::class.java, STUB_ONLY),
-                    remoteInputManager,
-                    conversationProcessor,
-                    Mockito.mock(MediaFeatureFlag::class.java, STUB_ONLY),
-                    Mockito.mock(Executor::class.java, STUB_ONLY),
-                    smartReplyStateInflater,
-                    notifLayoutInflaterFactoryProvider,
-                    Mockito.mock(HeadsUpStyleProvider::class.java, STUB_ONLY),
-                    promotedNotificationContentExtractor,
-                    Mockito.mock(NotificationRowContentBinderLogger::class.java, STUB_ONLY),
-                )
+            NotificationRowContentBinderImpl(
+                Mockito.mock(NotifRemoteViewCache::class.java, STUB_ONLY),
+                remoteInputManager,
+                conversationProcessor,
+                Mockito.mock(Executor::class.java, STUB_ONLY),
+                smartReplyStateInflater,
+                notifLayoutInflaterFactoryProvider,
+                Mockito.mock(HeadsUpStyleProvider::class.java, STUB_ONLY),
+                promotedNotificationContentExtractor,
+                Mockito.mock(NotificationRowContentBinderLogger::class.java, STUB_ONLY),
+            )
         mContentBinder.setInflateSynchronously(true)
         mBindStage =
             RowContentBindStage(
@@ -319,12 +307,7 @@ class ExpandableNotificationRowBuilder(
     ): NotifRemoteViewsFactoryContainer {
         val iconDrawable = mock<Drawable>()
         whenever(
-                kosmos.mockAppIconProvider.getOrFetchAppIcon(
-                    anyOrNull(),
-                    anyOrNull(),
-                    anyBoolean(),
-                    anyBoolean(),
-                )
+                kosmos.mockAppIconProvider.getOrFetchAppIcon(anyOrNull(), anyOrNull(), anyOrNull())
             )
             .thenReturn(iconDrawable)
 
@@ -346,16 +329,8 @@ class ExpandableNotificationRowBuilder(
     }
 
     fun createRowGroup(childCount: Int = 4): ExpandableNotificationRow {
-        val summary =
-            kosmos.buildSummaryNotificationEntry {
-                Notification.Builder(context, "channel")
-                    .setSmallIcon(R.drawable.ic_person)
-                    .setGroupSummary(true)
-                    .setGroup("group")
-            }
-        summary.row = kosmos.createRowWithEntry(summary)
-        val groupBuilder = GroupEntryBuilder().setSummary(summary)
-        for (i in 0..<childCount) {
+        val children = ArrayList<NotificationEntry>()
+        for (i in 0..< childCount) {
             val childEntry =
                 kosmos.buildNotificationEntry {
                     Notification.Builder(context, "channel")
@@ -363,10 +338,19 @@ class ExpandableNotificationRowBuilder(
                         .setGroup("group")
                 }
             childEntry.row = kosmos.createRowWithEntry(childEntry)
-            groupBuilder.addChild(childEntry)
-            summary.row.addChildNotification(childEntry.row)
+            children.add(childEntry)
         }
-        groupBuilder.build()
+        val summary =
+            kosmos.buildSummaryNotificationEntry(children, {
+                Notification.Builder(context, "channel")
+                    .setSmallIcon(R.drawable.ic_person)
+                    .setGroupSummary(true)
+                    .setGroup("group")
+            })
+        summary.row = kosmos.createRowWithEntry(summary)
+        for (child in children) {
+            summary.row.addChildNotification(child.row)
+        }
         return summary.row
     }
 
@@ -431,13 +415,11 @@ class ExpandableNotificationRowBuilder(
         return generateRow(entry, INFLATION_FLAGS)
     }
 
-    private fun generateRow(
-        entry: NotificationEntry,
-        @InflationFlag extraInflationFlags: Int,
-    ): ExpandableNotificationRow {
-        // NOTE: This flag is read when the ExpandableNotificationRow is inflated, so it needs to be
-        //  set, but we do not want to override an existing value that is needed by a specific test.
+    fun createRowBundle(spec: BundleSpec): ExpandableNotificationRow {
+        return generateRow(BundleEntry(spec))
+    }
 
+    private fun initRow(entry: PipelineEntry): ExpandableNotificationRow {
         val userTracker = Mockito.mock(UserTracker::class.java, STUB_ONLY)
         whenever(userTracker.userHandle).thenReturn(context.user)
 
@@ -449,13 +431,7 @@ class ExpandableNotificationRowBuilder(
                 Mockito.mock(AsyncRowInflater::class.java, STUB_ONLY),
             )
         val row = rowInflaterTask.inflateSynchronously(context, null, entry)
-
         val entryAdapter = kosmos.entryAdapterFactory.create(entry)
-
-        entry.row = row
-        mIconManager.createIcons(entry)
-        mBindPipelineEntryListener.onEntryInit(entry)
-        mBindPipeline.manageRow(entry, row)
         row.initialize(
             entryAdapter, // if (NotificationBundleUi.isEnabled) entryAdapter else null,
             entry, // if (NotificationBundleUi.isEnabled) null else entry,
@@ -485,10 +461,32 @@ class ExpandableNotificationRowBuilder(
             Mockito.mock(UiEventLogger::class.java, STUB_ONLY),
             Mockito.mock(NotificationRebindingTracker::class.java, STUB_ONLY),
             Mockito.mock(BundleInteractionLogger::class.java, STUB_ONLY),
+            Mockito.mock(NotificationActivityStarter::class.java, STUB_ONLY),
         )
         row.setAboveShelfChangedListener {}
+        return row
+    }
+
+    private fun generateRow(
+        entry: NotificationEntry,
+        @InflationFlag extraInflationFlags: Int,
+    ): ExpandableNotificationRow {
+        // NOTE: This flag is read when the ExpandableNotificationRow is inflated, so it needs to be
+        //  set, but we do not want to override an existing value that is needed by a specific test.
+
+        val row = initRow(entry)
+        entry.row = row
+        mIconManager.createIcons(entry)
+        mBindPipelineEntryListener.onEntryInit(entry)
+        mBindPipeline.manageRow(entry, row)
         mBindStage.getStageParams(entry).requireContentViews(extraInflationFlags)
         inflateAndWait(entry)
+        return row
+    }
+
+    private fun generateRow(entry: BundleEntry): ExpandableNotificationRow {
+        val row = initRow(entry)
+        entry.row = row
         return row
     }
 

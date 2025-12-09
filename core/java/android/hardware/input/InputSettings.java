@@ -16,15 +16,13 @@
 
 package android.hardware.input;
 
-import static com.android.hardware.input.Flags.FLAG_KEYBOARD_A11Y_MOUSE_KEYS;
 import static com.android.hardware.input.Flags.enableCustomizableInputGestures;
-import static com.android.hardware.input.Flags.keyboardA11yMouseKeys;
 import static com.android.hardware.input.Flags.mouseScrollingAcceleration;
 import static com.android.hardware.input.Flags.mouseReverseVerticalScrolling;
 import static com.android.hardware.input.Flags.mouseSwapPrimaryButton;
 import static com.android.hardware.input.Flags.pointerAcceleration;
+import static com.android.hardware.input.Flags.touchpadDisable;
 import static com.android.hardware.input.Flags.touchpadSystemGestureDisable;
-import static com.android.hardware.input.Flags.touchpadThreeFingerTapShortcut;
 import static com.android.hardware.input.Flags.touchpadVisualizer;
 import static com.android.input.flags.Flags.FLAG_KEYBOARD_REPEAT_KEYS;
 import static com.android.input.flags.Flags.keyboardRepeatKeys;
@@ -435,21 +433,21 @@ public class InputSettings {
     }
 
     /**
+     * Returns true if the feature flag for disabling touchpads is enabled.
+     *
+     * @hide
+     */
+    public static boolean isTouchpadDisableFeatureFlagEnabled() {
+        return touchpadDisable();
+    }
+
+    /**
      * Returns true if the feature flag for touchpad visualizer is enabled.
      *
      * @hide
      */
     public static boolean isTouchpadVisualizerFeatureFlagEnabled() {
         return touchpadVisualizer();
-    }
-
-    /**
-     * Returns true if the feature flag for the touchpad three-finger tap shortcut is enabled.
-     *
-     * @hide
-     */
-    public static boolean isTouchpadThreeFingerTapShortcutFeatureFlagEnabled() {
-        return isCustomizableInputGesturesFeatureFlagEnabled() && touchpadThreeFingerTapShortcut();
     }
 
     /**
@@ -598,8 +596,7 @@ public class InputSettings {
         int customizedShortcut = Settings.System.getIntForUser(context.getContentResolver(),
                 Settings.System.TOUCHPAD_THREE_FINGER_TAP_CUSTOMIZATION,
                 KeyGestureEvent.KEY_GESTURE_TYPE_UNSPECIFIED, UserHandle.USER_CURRENT);
-        return customizedShortcut != KeyGestureEvent.KEY_GESTURE_TYPE_UNSPECIFIED
-                && isTouchpadThreeFingerTapShortcutFeatureFlagEnabled();
+        return customizedShortcut != KeyGestureEvent.KEY_GESTURE_TYPE_UNSPECIFIED;
     }
 
     /**
@@ -634,6 +631,39 @@ public class InputSettings {
         }
         Settings.System.putIntForUser(context.getContentResolver(),
                 Settings.System.TOUCHPAD_SYSTEM_GESTURES, enabled ? 1 : 0, UserHandle.USER_CURRENT);
+    }
+
+    /**
+     * Returns true if touchpads should be enabled.
+     *
+     * @param context The application context.
+     * @return Whether touchpads are enabled
+     *
+     * @hide
+     */
+    public static boolean useTouchpads(@NonNull Context context) {
+        if (!isTouchpadDisableFeatureFlagEnabled()) {
+            return true;
+        }
+        return Settings.System.getIntForUser(context.getContentResolver(),
+                Settings.System.TOUCHPAD_ENABLED, 1, UserHandle.USER_CURRENT) == 1;
+    }
+
+    /**
+     * Sets whether touchpads are enabled.
+     *
+     * @param context The application context.
+     * @param enabled True to enable touchpads.
+     *
+     * @hide
+     */
+    @RequiresPermission(Manifest.permission.WRITE_SETTINGS)
+    public static void setTouchpadsEnabled(@NonNull Context context, boolean enabled) {
+        if (!isTouchpadDisableFeatureFlagEnabled()) {
+            return;
+        }
+        Settings.System.putIntForUser(context.getContentResolver(),
+                Settings.System.TOUCHPAD_ENABLED, enabled ? 1 : 0, UserHandle.USER_CURRENT);
     }
 
     /**
@@ -685,7 +715,7 @@ public class InputSettings {
         }
 
         return Settings.System.getIntForUser(context.getContentResolver(),
-            Settings.System.MOUSE_SCROLLING_ACCELERATION, 0, UserHandle.USER_CURRENT) != 0;
+            Settings.System.MOUSE_SCROLLING_ACCELERATION, 1, UserHandle.USER_CURRENT) == 1;
     }
 
     /**
@@ -1040,21 +1070,6 @@ public class InputSettings {
     }
 
     /**
-     * Whether Accessibility mouse keys feature flag is enabled.
-     *
-     * <p>
-     * ‘Mouse keys’ is an accessibility feature to aid users who have physical disabilities,
-     * that allows the user to use the keys on the keyboard to control the mouse pointer and
-     * other perform other mouse functionality.
-     * </p>
-     *
-     * @hide
-     */
-    public static boolean isAccessibilityMouseKeysFeatureFlagEnabled() {
-        return keyboardA11yMouseKeys();
-    }
-
-    /**
      * Whether Accessibility mouse keys is enabled.
      *
      * <p>
@@ -1066,11 +1081,7 @@ public class InputSettings {
      * @hide
      */
     @TestApi
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
     public static boolean isAccessibilityMouseKeysEnabled(@NonNull Context context) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return false;
-        }
         return Settings.Secure.getIntForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_ENABLED, 0, UserHandle.USER_CURRENT)
                 != 0;
@@ -1088,13 +1099,9 @@ public class InputSettings {
      * @hide
      */
     @TestApi
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
     @RequiresPermission(Manifest.permission.WRITE_SETTINGS)
     public static void setAccessibilityMouseKeysEnabled(@NonNull Context context,
             boolean enabled) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return;
-        }
         Settings.Secure.putIntForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_ENABLED, enabled ? 1 : 0,
                 UserHandle.USER_CURRENT);
@@ -1112,11 +1119,7 @@ public class InputSettings {
      *
      * @hide
      */
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
     public static float getAccessibilityMouseKeysAcceleration(@NonNull Context context) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return 0;
-        }
         return Settings.Secure.getFloatForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_ACCELERATION,
                 DEFAULT_MOUSE_KEYS_ACCELERATION,
@@ -1134,13 +1137,9 @@ public class InputSettings {
      *
      * @hide
      */
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
     @RequiresPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
     public static void setAccessibilityMouseKeysAcceleration(@NonNull Context context,
             float acceleration) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return;
-        }
         Settings.Secure.putFloatForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_ACCELERATION,
                 acceleration, UserHandle.USER_CURRENT);
@@ -1158,11 +1157,7 @@ public class InputSettings {
      *
      * @hide
      */
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
     public static int getAccessibilityMouseKeysMaxSpeed(@NonNull Context context) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return 0;
-        }
         return Settings.Secure.getIntForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_MAX_SPEED,
                 DEFAULT_MOUSE_KEYS_MAX_SPEED,
@@ -1180,13 +1175,9 @@ public class InputSettings {
      *
      * @hide
      */
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
     @RequiresPermission(Manifest.permission.WRITE_SETTINGS)
     public static void setAccessibilityMouseKeysMaxSpeed(@NonNull Context context,
             int maxSpeed) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return;
-        }
         Settings.Secure.putIntForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_MAX_SPEED,
                 maxSpeed, UserHandle.USER_CURRENT);
@@ -1205,12 +1196,7 @@ public class InputSettings {
      * @return Whether user can use primary keys to control the Mouse Key.
      * @hide
      */
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
     public static boolean isPrimaryKeysForMouseKeysEnabled(@NonNull Context context) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return false;
-        }
-
         return Settings.Secure.getIntForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_USE_PRIMARY_KEYS,
                 1, UserHandle.USER_CURRENT) != 0;
@@ -1227,12 +1213,9 @@ public class InputSettings {
      *
      * @hide
      */
-    @FlaggedApi(FLAG_KEYBOARD_A11Y_MOUSE_KEYS)
+    @RequiresPermission(Manifest.permission.WRITE_SETTINGS)
     public static void setPrimaryKeysForMouseKeysEnabled(
             @NonNull Context context, boolean enabled) {
-        if (!isAccessibilityMouseKeysFeatureFlagEnabled()) {
-            return;
-        }
 
         Settings.Secure.putIntForUser(context.getContentResolver(),
                 Settings.Secure.ACCESSIBILITY_MOUSE_KEYS_USE_PRIMARY_KEYS,

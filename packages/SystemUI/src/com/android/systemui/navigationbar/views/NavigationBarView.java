@@ -56,7 +56,6 @@ import android.view.WindowManager;
 import android.view.WindowManagerGlobal;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction;
-import android.view.inputmethod.Flags;
 import android.widget.FrameLayout;
 
 import androidx.annotation.Nullable;
@@ -79,6 +78,7 @@ import com.android.systemui.navigationbar.views.buttons.KeyButtonDrawable;
 import com.android.systemui.navigationbar.views.buttons.NearestTouchFrame;
 import com.android.systemui.recents.Recents;
 import com.android.systemui.res.R;
+import com.android.systemui.rotation.RotationPolicyWrapper;
 import com.android.systemui.settings.DisplayTracker;
 import com.android.systemui.shade.ShadeViewController;
 import com.android.systemui.shade.domain.interactor.PanelExpansionInteractor;
@@ -162,8 +162,9 @@ public class NavigationBarView extends FrameLayout
     private ShadeViewController mShadeViewController;
     @Nullable
     private PanelExpansionInteractor mPanelExpansionInteractor;
-    private FloatingRotationButton mFloatingRotationButton;
+    @Nullable
     private RotationButtonController mRotationButtonController;
+    private FloatingRotationButton mFloatingRotationButton;
 
     /**
      * Helper that is responsible for showing the right toast when a disallowed activity operation
@@ -295,11 +296,8 @@ public class NavigationBarView extends FrameLayout
 
         // Set up the context group of buttons
         mContextualButtonGroup = new ContextualButtonGroup(R.id.menu_container);
-        final int switcherResId = Flags.imeSwitcherRevamp()
-                ? com.android.internal.R.drawable.ic_ime_switcher_new
-                : R.drawable.ic_ime_switcher_default;
         final ContextualButton imeSwitcherButton = new ContextualButton(R.id.ime_switcher,
-                mLightContext, switcherResId);
+                mLightContext, com.android.internal.R.drawable.ic_ime_switcher);
         final ContextualButton accessibilityButton =
                 new ContextualButton(R.id.accessibility_button, mLightContext,
                         R.drawable.ic_sysbar_accessibility_button);
@@ -316,12 +314,6 @@ public class NavigationBarView extends FrameLayout
                 R.dimen.floating_rotation_button_diameter,
                 R.dimen.key_button_ripple_max_width,
                 R.bool.floating_rotation_button_position_left);
-        mRotationButtonController = new RotationButtonController(mLightContext, mLightIconColor,
-                mDarkIconColor, R.drawable.ic_sysbar_rotate_button_ccw_start_0,
-                R.drawable.ic_sysbar_rotate_button_ccw_start_90,
-                R.drawable.ic_sysbar_rotate_button_cw_start_0,
-                R.drawable.ic_sysbar_rotate_button_cw_start_90,
-                () -> mCurrentRotation);
 
         mConfiguration = new Configuration();
         mTmpLastConfiguration = new Configuration();
@@ -344,6 +336,16 @@ public class NavigationBarView extends FrameLayout
 
     public void setEdgeBackGestureHandler(EdgeBackGestureHandler edgeBackGestureHandler) {
         mEdgeBackGestureHandler = edgeBackGestureHandler;
+    }
+
+    public void setRotationPolicyWrapper(RotationPolicyWrapper rotationPolicyWrapper) {
+        mRotationButtonController = new RotationButtonController(rotationPolicyWrapper,
+                mLightContext, mLightIconColor, mDarkIconColor,
+                R.drawable.ic_sysbar_rotate_button_ccw_start_0,
+                R.drawable.ic_sysbar_rotate_button_ccw_start_90,
+                R.drawable.ic_sysbar_rotate_button_cw_start_0,
+                R.drawable.ic_sysbar_rotate_button_cw_start_90,
+                () -> mCurrentRotation);
     }
 
     void setBarTransitions(NavigationBarTransitions navigationBarTransitions) {
@@ -376,7 +378,9 @@ public class NavigationBarView extends FrameLayout
 
     public void setBackgroundExecutor(Executor bgExecutor) {
         mBgExecutor = bgExecutor;
-        mRotationButtonController.setBgExecutor(bgExecutor);
+        if (mRotationButtonController != null) {
+            mRotationButtonController.setBgExecutor(bgExecutor);
+        }
     }
 
     public void setDisplayTracker(DisplayTracker displayTracker) {
@@ -418,6 +422,7 @@ public class NavigationBarView extends FrameLayout
         }
     }
 
+    @Nullable
     public RotationButtonController getRotationButtonController() {
         return mRotationButtonController;
     }
@@ -492,8 +497,10 @@ public class NavigationBarView extends FrameLayout
      * Updates the rotation button based on the current navigation mode.
      */
     void updateRotationButton() {
-        mRotationButtonController.setRotationButton(mFloatingRotationButton,
-                mRotationButtonListener);
+        if (mRotationButtonController != null) {
+            mRotationButtonController.setRotationButton(mFloatingRotationButton,
+                    mRotationButtonListener);
+        }
     }
 
     public KeyButtonDrawable getBackDrawable() {
@@ -551,12 +558,16 @@ public class NavigationBarView extends FrameLayout
     }
 
     public void setWindowVisible(boolean visible) {
-        mRotationButtonController.onNavigationBarWindowVisibilityChange(visible);
+        if (mRotationButtonController != null) {
+            mRotationButtonController.onNavigationBarWindowVisibilityChange(visible);
+        }
     }
 
     public void setBehavior(@Behavior int behavior) {
-        mRotationButtonController.onBehaviorChanged(mDisplayTracker.getDefaultDisplayId(),
-                behavior);
+        if (mRotationButtonController != null) {
+            mRotationButtonController.onBehaviorChanged(mDisplayTracker.getDefaultDisplayId(),
+                    behavior);
+        }
     }
 
     @Override
@@ -840,7 +851,9 @@ public class NavigationBarView extends FrameLayout
         mImeDrawsImeNavBar = imeDrawsImeNavBar;
         mBarTransitions.onNavigationModeChanged(mNavBarMode);
         mEdgeBackGestureHandler.onNavigationModeChanged(mNavBarMode);
-        mRotationButtonController.onNavigationModeChanged(mNavBarMode);
+        if (mRotationButtonController != null) {
+            mRotationButtonController.onNavigationModeChanged(mNavBarMode);
+        }
         updateRotationButton();
     }
 

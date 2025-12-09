@@ -18,6 +18,8 @@ package com.android.test.input
 import android.Manifest
 import android.hardware.input.InputManager
 import android.platform.test.annotations.RequiresFlagsEnabled
+import android.platform.test.flag.junit.CheckFlagsRule
+import android.platform.test.flag.junit.DeviceFlagsValueProvider
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.compatibility.common.util.AdoptShellPermissionsRule
@@ -25,7 +27,6 @@ import com.android.compatibility.common.util.PollingCheck
 import com.android.cts.input.CaptureEventActivity
 import com.android.cts.input.EvdevInputEventCodes
 import com.android.cts.input.UinputKeyboard
-import com.android.hardware.input.Flags.FLAG_KEY_EVENT_ACTIVITY_DETECTION
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertTrue
@@ -39,11 +40,14 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoMoreInteractions
 import org.mockito.Mockito.`when`
 
-@RequiresFlagsEnabled(FLAG_KEY_EVENT_ACTIVITY_DETECTION)
+@RequiresFlagsEnabled(com.android.hardware.input.Flags.FLAG_KEY_EVENT_ACTIVITY_DETECTION)
 class KeyEventActivityListenerTest {
     private lateinit var inputManager: InputManager
     private lateinit var listener: InputManager.KeyEventActivityListener
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
+
+    @get:Rule val checkFlagsRule: CheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule()
+
     @get:Rule
     val rule = ActivityScenarioRule<CaptureEventActivity>(CaptureEventActivity::class.java)
 

@@ -22,8 +22,6 @@ import static android.view.flags.Flags.FLAG_TOOLKIT_VIEWGROUP_SET_REQUESTED_FRAM
 import static android.view.flags.Flags.scrollCaptureTargetZOrderFix;
 import static android.view.flags.Flags.toolkitViewgroupSetRequestedFrameRateApi;
 
-import static com.android.window.flags.Flags.interceptMotionFromMoveToCancel;
-
 import android.animation.LayoutTransition;
 import android.annotation.CallSuper;
 import android.annotation.FlaggedApi;
@@ -148,7 +146,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      * Views which have been hidden or removed which need to be animated on
      * their way out.
      * This field should be made private, so it is hidden from the SDK.
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage
     protected ArrayList<View> mDisappearingChildren;
@@ -157,7 +155,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      * Listener used to propagate events indicating when children are added
      * and/or removed from a view group.
      * This field should be made private, so it is hidden from the SDK.
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P, trackingBug = 123768704)
     protected OnHierarchyChangeListener mOnHierarchyChangeListener;
@@ -255,7 +253,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      * Internal flags.
      *
      * This field should be made private, so it is hidden from the SDK.
-     * {@hide}
+     * @hide
      */
     @ViewDebug.ExportedProperty(flagMapping = {
             @ViewDebug.FlagToString(mask = FLAG_CLIP_CHILDREN, equals = FLAG_CLIP_CHILDREN,
@@ -338,7 +336,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      * {@link #getChildStaticTransformation(View, android.view.animation.Transformation)} should
      * set this flags in {@link #mGroupFlags}.
      *
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P, trackingBug = 123769647)
     protected static final int FLAG_SUPPORT_STATIC_TRANSFORMATIONS = 0x800;
@@ -392,7 +390,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
     /**
      * When set, this ViewGroup should not intercept touch events.
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.P, trackingBug = 123983692)
     protected static final int FLAG_DISALLOW_INTERCEPT = 0x80000;
@@ -463,7 +461,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     /**
      * Indicates which types of drawing caches are to be kept in memory.
      * This field should be made private, so it is hidden from the SDK.
-     * {@hide}
+     * @hide
      */
     @UnsupportedAppUsage
     protected int mPersistentDrawingCache;
@@ -2675,10 +2673,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
             ViewRootImpl viewRootImpl = getViewRootImpl();
             if (actionMasked == MotionEvent.ACTION_DOWN || mFirstTouchTarget != null) {
                 final boolean disallowIntercept = (mGroupFlags & FLAG_DISALLOW_INTERCEPT) != 0;
-                final boolean isBackGestureInProgress = !interceptMotionFromMoveToCancel()
-                        && (viewRootImpl != null
-                        && viewRootImpl.getOnBackInvokedDispatcher().isBackGestureInProgress());
-                if (!disallowIntercept || isBackGestureInProgress) {
+                if (!disallowIntercept) {
                     // Allow back to intercept touch
                     intercepted = onInterceptTouchEvent(ev);
                     ev.setAction(action); // restore action in case it was changed
@@ -4783,7 +4778,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     }
 
     /**
-     * {@hide}
+     * @hide
      */
     @Override
     protected <T extends View> T findViewTraversal(@IdRes int id) {
@@ -4810,7 +4805,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     }
 
     /**
-     * {@hide}
+     * @hide
      */
     @Override
     protected <T extends View> T findViewWithTagTraversal(Object tag) {
@@ -4837,7 +4832,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     }
 
     /**
-     * {@hide}
+     * @hide
      */
     @Override
     protected <T extends View> T findViewByPredicateTraversal(Predicate<View> predicate,

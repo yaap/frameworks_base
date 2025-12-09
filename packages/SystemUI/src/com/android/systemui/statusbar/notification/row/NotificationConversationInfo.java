@@ -16,7 +16,9 @@
 
 package com.android.systemui.statusbar.notification.row;
 
+import static android.app.Flags.notificationClassificationUi;
 import static android.app.Notification.EXTRA_BUILDER_APPLICATION_INFO;
+import static android.app.NotificationChannel.SYSTEM_RESERVED_IDS;
 import static android.app.NotificationManager.BUBBLE_PREFERENCE_ALL;
 import static android.app.NotificationManager.BUBBLE_PREFERENCE_NONE;
 import static android.app.NotificationManager.BUBBLE_PREFERENCE_SELECTED;
@@ -33,6 +35,7 @@ import static java.lang.annotation.RetentionPolicy.SOURCE;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.Flags;
 import android.app.INotificationManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -308,51 +311,21 @@ public class NotificationConversationInfo extends LinearLayout implements
         bindDelegate();
     }
     private boolean showSummarizationFeedback() {
-        return NmSummarizationUiFlag.isEnabled()
-                && !TextUtils.isEmpty(mRanking.getSummarization());
+        return NmSummarizationUiFlag.isEnabled();
     }
-    private static boolean isAnimatedReply(CharSequence choice) {
-        if (choice instanceof Spanned) {
-            Spanned spanned = (Spanned) choice;
-            Annotation[] annotations = spanned.getSpans(0, choice.length(), Annotation.class);
-            if (annotations != null) { // Add null check
-                for (Annotation annotation : annotations) {
-                    if ("isAnimatedReply".equals(annotation.getKey())
-                            && "1".equals(annotation.getValue())) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
+
     private boolean showAnimatedFeedback() {
-        boolean hasAnimatedSmartReplies = false;
-        boolean hasAnimatedSmartActions = false;
-        // Check for animated smart replies
-        List<CharSequence> smartReplies = mRanking.getSmartReplies();
-            for (CharSequence reply : smartReplies) {
-                if (isAnimatedReply(reply)) {
-                    hasAnimatedSmartReplies = true;
-                    break;
-                }
-            }
-        // Check for animated actions
-        List<Notification.Action> smartActions = mRanking.getSmartActions();
-            for (Notification.Action action : smartActions) {
-                if (action != null && action.getExtras() != null &&
-                        action.getExtras().getBoolean(Notification.Action.EXTRA_IS_ANIMATED,
-                                false)) {
-                    hasAnimatedSmartActions = true;
-                    break;
-                }
-            }
-        return com.android.systemui.Flags.notificationAnimatedActionsTreatment() &&
-                (hasAnimatedSmartActions || hasAnimatedSmartReplies);
+        return com.android.systemui.Flags.notificationAnimatedActionsTreatment();
     }
+
+    private boolean showClassificationFeedback() {
+        return Flags.notificationClassificationUi();
+    }
+
     private void bindFeedback() {
         View feedbackButton = findViewById(R.id.feedback);
-        if (!showSummarizationFeedback() && !showAnimatedFeedback()) {
+        if (!showSummarizationFeedback() && !showAnimatedFeedback()
+                && !showClassificationFeedback()) {
             feedbackButton.setVisibility(GONE);
         } else {
             Intent intent = NotificationInfo.getAssistantFeedbackIntent(

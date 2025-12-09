@@ -153,8 +153,6 @@ final class TaskDisplayArea extends DisplayArea<WindowContainer> {
      */
     private final boolean mCanHostHomeTask;
 
-    private final Configuration mTempConfiguration = new Configuration();
-
     /**
      * @param createdByOrganizer    whether this TaskDisplayArea is created by a
      *                              {@link android.window.WindowOrganizer}.
@@ -651,7 +649,9 @@ final class TaskDisplayArea extends DisplayArea<WindowContainer> {
     }
 
     void assignRootTaskOrdering(SurfaceControl.Transaction t) {
-        if (getParent() == null) {
+        if (!mTransitionController.mBuildingTransitionLayers
+                && mTransitionController.isShellTransitionsEnabled()) {
+            // All root tasks can be organized, so handle them centrally by shell transitions.
             return;
         }
         mTmpAlwaysOnTopChildren.clear();
@@ -803,7 +803,11 @@ final class TaskDisplayArea extends DisplayArea<WindowContainer> {
             final Task launchParentTask = getLaunchRootTask(resolvedWindowingMode, activityType,
                     options, sourceTask, launchFlags, candidateTask);
             final boolean reparentToTda = (options != null && options.getReparentLeafTaskToTda())
-                    || candidateTask.getRootTask().mReparentLeafTaskIfRelaunch;
+                    || candidateTask.getRootTask().mReparentLeafTaskIfRelaunch
+                    // TODO(b/407669465): remove it once migrated to the new approach
+                    // Before using a root task to manage the bubble tasks, the launching bubble
+                    // task should be re-parented to TDA.
+                    || (sourceTask != null && sourceTask.mLaunchNextToBubble);
             if (launchParentTask != null) {
                 if (candidateTask.getParent() == null) {
                     launchParentTask.addChild(candidateTask, position);
@@ -1064,6 +1068,12 @@ final class TaskDisplayArea extends DisplayArea<WindowContainer> {
                     return adjacentRootTask[0];
                 }
                 return sourceTask.getCreatedByOrganizerTask();
+            }
+            if (com.android.window.flags.Flags.rootTaskForBubble()) {
+                final Task parentTask = sourceTask.getParent().asTask();
+                if (parentTask != null && parentTask.mCreatedByOrganizer) {
+                    return parentTask;
+                }
             }
         }
 
@@ -1626,7 +1636,14 @@ final class TaskDisplayArea extends DisplayArea<WindowContainer> {
     }
 
     boolean shouldKeepNoTask() {
-        return mShouldKeepNoTask;
+        if (mShouldKeepNoTask) {
+            return true;
+        }
+
+        // A TaskDisplayArea can have another child TaskDisplayArea, so we should check all it's
+        // parent TaskDisplayArea.
+        return getParent() != null && getParent().asTaskDisplayArea() != null
+                && getParent().asTaskDisplayArea().shouldKeepNoTask();
     }
 
     @Override
@@ -1786,14 +1803,6 @@ final class TaskDisplayArea extends DisplayArea<WindowContainer> {
 
     void clearPreferredTopFocusableRootTask() {
         mPreferredTopFocusableRootTask = null;
-    }
-
-    @Override
-    public void setWindowingMode(int windowingMode) {
-        mTempConfiguration.setTo(getRequestedOverrideConfiguration());
-        WindowConfiguration tempRequestWindowConfiguration = mTempConfiguration.windowConfiguration;
-        tempRequestWindowConfiguration.setWindowingMode(windowingMode);
-        onRequestedOverrideConfigurationChanged(mTempConfiguration);
     }
 
     @Override

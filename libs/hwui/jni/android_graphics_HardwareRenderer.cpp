@@ -43,6 +43,7 @@
 #include <media/NdkImageReader.h>
 #include <nativehelper/JNIPlatformHelp.h>
 #ifdef __ANDROID__
+#include <pipeline/skia/PersistentGraphicsCache.h>
 #include <pipeline/skia/ShaderCache.h>
 #include <private/EGL/cache.h>
 #endif
@@ -854,8 +855,8 @@ static void android_view_ThreadedRenderer_setForceDark(JNIEnv* env, jobject claz
     proxy->setForceDark(static_cast<ForceDarkType>(type));
 }
 
-static void android_view_ThreadedRenderer_preload(JNIEnv*, jclass) {
-    RenderProxy::preload();
+static int android_view_ThreadedRenderer_preload(JNIEnv*, jclass) {
+    return RenderProxy::preload();
 }
 
 static void android_view_ThreadedRenderer_preInitBufferAllocator(JNIEnv*, jclass) {
@@ -945,19 +946,25 @@ static void android_view_ThreadedRenderer_removeObserver(JNIEnv* env, jclass cla
 }
 
 // ----------------------------------------------------------------------------
-// Shaders
+// Persistent graphics cache
 // ----------------------------------------------------------------------------
 
-static void android_view_ThreadedRenderer_setupShadersDiskCache(JNIEnv* env, jobject clazz,
-        jstring diskCachePath, jstring skiaDiskCachePath) {
+static void android_view_ThreadedRenderer_setupPersistentGraphicsCache(
+        JNIEnv* env, jobject clazz, jstring openglShaderCachePath, jstring skiaShaderCachePath,
+        jstring skiaPipelineCachePath) {
 #ifdef __ANDROID__
-    const char* cacheArray = env->GetStringUTFChars(diskCachePath, NULL);
-    android::egl_set_cache_filename(cacheArray);
-    env->ReleaseStringUTFChars(diskCachePath, cacheArray);
+    const char* openglShaderCachePathArray = env->GetStringUTFChars(openglShaderCachePath, NULL);
+    android::egl_set_cache_filename(openglShaderCachePathArray);
+    env->ReleaseStringUTFChars(openglShaderCachePath, openglShaderCachePathArray);
 
-    const char* skiaCacheArray = env->GetStringUTFChars(skiaDiskCachePath, NULL);
-    uirenderer::skiapipeline::ShaderCache::get().setFilename(skiaCacheArray);
-    env->ReleaseStringUTFChars(skiaDiskCachePath, skiaCacheArray);
+    const char* skiaShaderCachePathArray = env->GetStringUTFChars(skiaShaderCachePath, NULL);
+    uirenderer::skiapipeline::ShaderCache::get().setFilename(skiaShaderCachePathArray);
+    env->ReleaseStringUTFChars(skiaShaderCachePath, skiaShaderCachePathArray);
+
+    const char* skiaPipelineCachePathArray = env->GetStringUTFChars(skiaPipelineCachePath, NULL);
+    uirenderer::skiapipeline::PersistentGraphicsCache::get().initPipelineCache(
+            skiaPipelineCachePathArray);
+    env->ReleaseStringUTFChars(skiaPipelineCachePath, skiaPipelineCachePathArray);
 #endif
 }
 
@@ -1025,8 +1032,9 @@ static const JNINativeMethod gMethods[] = {
          (void*)android_view_ThreadedRenderer_dumpProfileInfo},
         {"nDumpGlobalProfileInfo", "(Ljava/io/FileDescriptor;I)V",
          (void*)android_view_ThreadedRenderer_dumpGlobalProfileInfo},
-        {"setupShadersDiskCache", "(Ljava/lang/String;Ljava/lang/String;)V",
-         (void*)android_view_ThreadedRenderer_setupShadersDiskCache},
+        {"setupPersistentGraphicsCache",
+         "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+         (void*)android_view_ThreadedRenderer_setupPersistentGraphicsCache},
         {"nAddRenderNode", "(JJZ)V", (void*)android_view_ThreadedRenderer_addRenderNode},
         {"nRemoveRenderNode", "(JJ)V", (void*)android_view_ThreadedRenderer_removeRenderNode},
         {"nDrawRenderNode", "(JJ)V", (void*)android_view_ThreadedRendererd_drawRenderNode},
@@ -1066,7 +1074,7 @@ static const JNINativeMethod gMethods[] = {
         {"nSetDisplayDensityDpi", "(I)V",
          (void*)android_view_ThreadedRenderer_setDisplayDensityDpi},
         {"nInitDisplayInfo", "(IIFIJJZZZ)V", (void*)android_view_ThreadedRenderer_initDisplayInfo},
-        {"preload", "()V", (void*)android_view_ThreadedRenderer_preload},
+        {"preload", "()I", (void*)android_view_ThreadedRenderer_preload},
         {"preInitBufferAllocator", "()V",
          (void*)android_view_ThreadedRenderer_preInitBufferAllocator},
         {"isWebViewOverlaysEnabled", "()Z",

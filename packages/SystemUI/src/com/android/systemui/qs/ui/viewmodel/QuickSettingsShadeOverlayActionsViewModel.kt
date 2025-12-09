@@ -25,38 +25,46 @@ import com.android.compose.animation.scene.UserActionResult.ShowOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurrentOverlays
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
 import com.android.systemui.scene.shared.model.Overlays
-import com.android.systemui.scene.ui.viewmodel.SceneContainerArea
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.BottomEdge
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.StartHalf
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.TopEdgeStartHalf
 import com.android.systemui.scene.ui.viewmodel.UserActionsViewModel
+import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 
 /** Models the UI state for the user actions for navigating to other scenes or overlays. */
 class QuickSettingsShadeOverlayActionsViewModel
 @AssistedInject
-constructor(private val editModeViewModel: EditModeViewModel) : UserActionsViewModel() {
+constructor(
+    private val editModeViewModel: EditModeViewModel,
+    private val shadeModeInteractor: ShadeModeInteractor,
+) : UserActionsViewModel() {
 
     override suspend fun hydrateActions(setActions: (Map<UserAction, UserActionResult>) -> Unit) {
-        editModeViewModel.isEditing
-            .map { isEditing ->
+        combine(editModeViewModel.isEditing, shadeModeInteractor.isFullWidthShade) {
+                isEditing,
+                isFullWidthShade ->
                 val hideQuickSettings = HideOverlay(Overlays.QuickSettingsShade)
+                val openNotificationsShade =
+                    ShowOverlay(
+                        Overlays.NotificationsShade,
+                        hideCurrentOverlays = HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
+                    )
                 buildMap {
                     if (isEditing) {
                         // When editing, the back gesture is handled outside of this view-model.
                         // TODO(b/418003378): Back should go back to the QS grid layout.
-                        put(Swipe.Up(fromSource = SceneContainerArea.BottomEdge), hideQuickSettings)
+                        put(Swipe.Up(fromSource = BottomEdge), hideQuickSettings)
                     } else {
                         put(Back, hideQuickSettings)
                         put(Swipe.Up, hideQuickSettings)
                     }
-                    put(
-                        Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf),
-                        ShowOverlay(
-                            Overlays.NotificationsShade,
-                            hideCurrentOverlays =
-                                HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
-                        ),
-                    )
+                    put(Swipe.Down(fromSource = TopEdgeStartHalf), openNotificationsShade)
+                    if (!isFullWidthShade) {
+                        put(Swipe.Down(fromSource = StartHalf), openNotificationsShade)
+                    }
                 }
             }
             .collect { actions -> setActions(actions) }

@@ -39,7 +39,7 @@ import kotlinx.coroutines.flow.stateIn
 /** Aggregates display state information. */
 interface DisplayStateInteractor {
     /** Whether the default display is currently off. */
-    val isDefaultDisplayOff: Flow<Boolean>
+    val isDefaultDisplayOff: StateFlow<Boolean>
 
     /** Whether the device is currently in rear display mode. */
     val isInRearDisplayMode: StateFlow<Boolean>
@@ -104,12 +104,7 @@ constructor(
                     )
                 }
 
-                val callback =
-                    object : FoldProvider.FoldCallback {
-                        override fun onFoldUpdated(isFolded: Boolean) {
-                            sendFoldStateUpdate(isFolded)
-                        }
-                    }
+                val callback = FoldProvider.FoldCallback(sendFoldStateUpdate)
 
                 sendFoldStateUpdate(false)
                 screenSizeFoldProvider.registerCallback(callback, mainExecutor)

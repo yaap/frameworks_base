@@ -18,6 +18,8 @@ package com.android.server.wm;
 
 import static android.Manifest.permission.EMBED_ANY_APP_IN_UNTRUSTED_MODE;
 import static android.Manifest.permission.MANAGE_ACTIVITY_TASKS;
+import static android.app.ActivityManager.LOCK_TASK_MODE_LOCKED;
+import static android.app.ActivityManager.LOCK_TASK_MODE_PINNED;
 import static android.app.ActivityTaskManager.INVALID_TASK_ID;
 import static android.app.WindowConfiguration.ACTIVITY_TYPE_ASSISTANT;
 import static android.app.WindowConfiguration.ACTIVITY_TYPE_HOME;
@@ -28,7 +30,6 @@ import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.app.WindowConfiguration.WINDOWING_MODE_MULTI_WINDOW;
 import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
 import static android.app.WindowConfiguration.WINDOWING_MODE_UNDEFINED;
-import static android.app.WindowConfiguration.isFloating;
 import static android.content.pm.ActivityInfo.FLAG_ALLOW_UNTRUSTED_ACTIVITY_EMBEDDING;
 import static android.content.pm.ActivityInfo.FLAG_RESUME_WHILE_PAUSING;
 import static android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSET;
@@ -52,6 +53,7 @@ import static android.view.Display.INVALID_DISPLAY;
 import static android.view.Surface.ROTATION_270;
 import static android.view.Surface.ROTATION_90;
 import static android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND;
+import static android.window.DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_ENTERPRISE_BUGFIX;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_STATES;
 import static com.android.server.wm.ActivityRecord.State.PAUSED;
@@ -200,6 +202,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     final ActivityTaskSupervisor mTaskSupervisor;
     final RootWindowContainer mRootWindowContainer;
     private final TaskFragmentOrganizerController mTaskFragmentOrganizerController;
+    private final LockTaskController mLockTaskController;
 
     // TODO(b/233177466): Move mMinWidth and mMinHeight to Task and remove usages in TaskFragment
     /**
@@ -214,7 +217,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
      */
     int mMinHeight;
 
-    Dimmer mDimmer = new Dimmer(this);
+    final Dimmer mDimmer = new Dimmer(this);
 
     /** Apply the dim layer on the embedded TaskFragment. */
     static final int EMBEDDED_DIM_AREA_TASK_FRAGMENT = 0;
@@ -248,9 +251,21 @@ class TaskFragment extends WindowContainer<WindowContainer> {
      * Unlike the {@link #mAdjacentTaskFragments}, the companion TaskFragment is not always visually
      * adjacent to this one, but this TaskFragment will be removed by the organizer if the
      * companion TaskFragment is removed.
+     *
+     * Note: if {@link #mCompanionTaskFragment} is non-{@code null}, the organizer will only remove
+     * that Activity instead unless that Activity is the last Activity in this TaskFragment.
      */
     @Nullable
     private TaskFragment mCompanionTaskFragment;
+
+    /**
+     * When this is non-{@code null} while {@link #mCompanionTaskFragment} is set, only this
+     * Activity will be removed by the organizer if the companion TaskFragment is removed, unless
+     * this is the last Activity in this TaskFragment, in which case this TaskFragment will also be
+     * removed.
+     */
+    @Nullable
+    private IBinder mCompanionToBeFinishedActivity;
 
     /**
      * Prevents duplicate calls to onTaskFragmentAppeared.
@@ -446,6 +461,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         mRelativeEmbeddedBounds = isEmbedded ? new Rect() : null;
         mTaskFragmentOrganizerController =
                 mAtmService.mWindowOrganizerController.mTaskFragmentOrganizerController;
+        mLockTaskController = mAtmService.getLockTaskController();
         mFragmentToken = fragmentToken;
         mRemoteToken = new RemoteToken(this);
         mPowerManagerInternal = LocalServices.getService(PowerManagerInternal.class);
@@ -462,12 +478,40 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         adjacentTaskFragments.setAsAdjacent();
     }
 
-    void setCompanionTaskFragment(@Nullable TaskFragment companionTaskFragment) {
-        mCompanionTaskFragment = companionTaskFragment;
+    void clearCompanionTaskFragment() {
+        mCompanionTaskFragment = null;
+        mCompanionToBeFinishedActivity = null;
     }
 
+    void setCompanionTaskFragment(@Nullable TaskFragment companionTaskFragment,
+            @Nullable IBinder toBeFinishedActivity) {
+        mCompanionTaskFragment = companionTaskFragment;
+        if (Flags.taskFragmentCompanionActivity()) {
+            mCompanionToBeFinishedActivity = toBeFinishedActivity;
+        }
+    }
+
+    @Nullable
     TaskFragment getCompanionTaskFragment() {
         return mCompanionTaskFragment;
+    }
+
+    @Nullable
+    IBinder getCompanionToBeFinishedActivity() {
+        return mCompanionToBeFinishedActivity;
+    }
+
+    boolean shouldBeFinishedWithCompanionTaskFragment() {
+        if (getCompanionTaskFragment() == null) {
+            return false;
+        }
+        if (getCompanionToBeFinishedActivity() == null) {
+            return true;
+        }
+        // Only the mCompanionToBeFinishedActivity activity will be finished with the companion TF,
+        // unless the mCompanionToBeFinishedActivity is the only activity in this TF.
+        return getNonFinishingActivityCount() == 1
+                && getTopNonFinishingActivity().token.equals(getCompanionToBeFinishedActivity());
     }
 
     void clearAdjacentTaskFragments() {
@@ -767,6 +811,34 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     @Override
     boolean isEmbedded() {
         return mIsEmbedded;
+    }
+
+
+    /**
+     * Returns true if this container fills its parent by policy or bounds. Similar to
+     * {@link ActivityRecord}, this returns {@code true} if it has override bounds which equals
+     * to its parent bounds
+     */
+    @Override
+    boolean fillsParentBounds() {
+        if (com.android.window.flags.Flags.rootTaskForBubble()) {
+            final int windowingMode = getWindowingMode();
+            if (windowingMode == WINDOWING_MODE_PINNED) {
+                return false;
+            }
+            if (windowingMode == WINDOWING_MODE_FULLSCREEN) {
+                return true;
+            }
+
+            final Rect overrideBounds = getResolvedOverrideBounds();
+            if (overrideBounds.isEmpty()) {
+                return true;
+            }
+            final WindowContainer parent = getParent();
+            return parent == null || parent.getBounds().equals(overrideBounds);
+        }
+
+        return super.fillsParentBounds();
     }
 
     @EmbeddingCheckResult
@@ -1256,6 +1328,33 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     }
 
     /**
+     * Returns whether the activity launch by the source activity in this TaskFragment should be
+     * aborted. Currently only activity launches from a cross-uid embedded source within a finishing
+     * TaskFragment are aborted.
+     *
+     * @param source an activity in this TaskFragment that launches another activity.
+     */
+    boolean shouldAbortActivityLaunchOnFinishingTf(@NonNull ActivityRecord source) {
+        if (!Flags.activityEmbeddingAbortCrossUidLaunchInFinishingTaskFragment()) {
+            return false;
+        }
+        // If the source activity is a cross-uid embedded activity, the newly launched activity is
+        // always expected to be in the same TaskFragment. If this TaskFragment is being removed, we
+        // should not allow a new activity to be launched by the source, because it may be placed
+        // into a wrong TaskFragment due to current limitations in cross-uid activity launch
+        // tracking.
+        // TODO(b/293800510) Improve cross-uid activity launch tracking.
+        boolean abort = isEmbedded() && isRemovalRequested()
+                && mTaskFragmentOrganizerUid != INVALID_UID
+                && source.getUid() != mTaskFragmentOrganizerUid;
+        if (abort) {
+            Slog.w(TAG, "Activity launch aborted for cross-uid launch from " + source
+                    + " in a finishing TaskFragment");
+        }
+        return abort;
+    }
+
+    /**
      * Returns the visibility state of this TaskFragment.
      *
      * @param starting The currently starting activity or null if there is none.
@@ -1275,6 +1374,10 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                 && mTransitionController.isTransientVisible(thisTask)) {
             // Keep transient-hide root tasks visible. Non-root tasks still follow standard rule.
             return TASK_FRAGMENT_VISIBILITY_VISIBLE;
+        }
+
+        if (thisTask != null && !isPermittedInLockTask(thisTask)) {
+            return TASK_FRAGMENT_VISIBILITY_INVISIBLE;
         }
 
         boolean gotTranslucentFullscreen = false;
@@ -1415,6 +1518,34 @@ class TaskFragment extends WindowContainer<WindowContainer> {
     private boolean isTopActivityLaunchedBehind() {
         final ActivityRecord top = topRunningActivity();
         return top != null && top.mLaunchTaskBehind;
+    }
+
+    /**
+     * Checks if a task is allowed to run in the lock task mode.
+     *
+     * <p>Returns {@code true} if {@link ENABLE_DESKTOP_WINDOWING_ENTERPRISE_BUGFIX} flag is not
+     * enabled.
+     *
+     * <p>Returns {@code true} if the device is not currently in lock task.
+     *
+     * <p>A task is permitted if it's a leaf task that is allowed by the lock task admin policy, or
+     * if any of its descendant leaf tasks are permitted by the policy.
+     *
+     * @param task The task to evaluate.
+     * @return {@code true} if the task is allowed to run, {@code false} otherwise.
+     */
+    private boolean isPermittedInLockTask(@NonNull Task task) {
+        if (!ENABLE_DESKTOP_WINDOWING_ENTERPRISE_BUGFIX.isTrue()) {
+            return true;
+        }
+        final int lockTaskState = mLockTaskController.getLockTaskModeState();
+        final boolean isInLockTask =
+                lockTaskState == LOCK_TASK_MODE_LOCKED || lockTaskState == LOCK_TASK_MODE_PINNED;
+        if (!isInLockTask) {
+            return true;
+        }
+        return task.forAllTasks(
+                leafTask -> !mLockTaskController.isLockTaskModeViolation(leafTask));
     }
 
     final void updateActivityVisibilities(@Nullable ActivityRecord starting,
@@ -1742,6 +1873,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                 if (DEBUG_SWITCH) Slog.v(TAG_SWITCH, "Restarting: " + next);
             }
             ProtoLog.d(WM_DEBUG_STATES, "resumeTopActivity: Restarting %s", next);
+            next.setVisibility(true);
             mTaskSupervisor.startSpecificActivity(next, true, true);
         }
 
@@ -2213,6 +2345,10 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         if (hostProcess != null) {
             hostProcess.addEmbeddedActivity(addingActivity);
         }
+
+        // Make sure the list of display UID allowlists is updated
+        // now that this record is in a new task fragment.
+        mRootWindowContainer.updateUIDsPresentOnDisplay();
     }
 
     @Override
@@ -2256,6 +2392,12 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         mTmpBounds.set(getResolvedOverrideConfiguration().windowConfiguration.getBounds());
         super.resolveOverrideConfiguration(newParentConfig);
         final Configuration resolvedConfig = getResolvedOverrideConfiguration();
+        final Task thisTask = asTask();
+        if (!resolvedConfig.windowConfiguration.getBounds().isEmpty() && thisTask != null
+                && !thisTask.isOverrideBoundsAllowed()) {
+            // clear the bounds if it is not allowed from its ancestors.
+            resolvedConfig.windowConfiguration.setBounds(new Rect());
+        }
 
         if (mRelativeEmbeddedBounds != null && !mRelativeEmbeddedBounds.isEmpty()) {
             // For embedded TaskFragment, make sure the bounds is set based on the relative bounds.
@@ -2283,7 +2425,6 @@ class TaskFragment extends WindowContainer<WindowContainer> {
             }
         }
 
-        final Task thisTask = asTask();
         if (thisTask != null) {
             thisTask.resolveLeafTaskOnlyOverrideConfigs(newParentConfig,
                     mTmpBounds /* previousBounds */);
@@ -2454,23 +2595,16 @@ class TaskFragment extends WindowContainer<WindowContainer> {
             inOutConfig.windowConfiguration.setAppBounds(mTmpFullBounds);
             outAppBounds = inOutConfig.windowConfiguration.getAppBounds();
 
-            // Floating tasks shouldn't be restricted by containing app bounds.
-            if (!customContainerPolicy && !isFloating(windowingMode)) {
-                final Rect containingAppBounds;
-                if (insideParentBounds) {
-                    containingAppBounds = useOverrideInsetsForConfig
-                            ? overrideHint.mParentAppBoundsOverride
-                            : parentConfig.windowConfiguration.getAppBounds();
-                } else {
-                    // Restrict appBounds to display non-decor rather than parent because the
-                    // override bounds are beyond the parent. Otherwise, it won't match the
-                    // overridden bounds.
-                    final TaskDisplayArea displayArea = getDisplayArea();
-                    containingAppBounds = displayArea != null
-                            ? displayArea.getWindowConfiguration().getAppBounds() : null;
-                }
-                if (containingAppBounds != null && !containingAppBounds.isEmpty()) {
-                    outAppBounds.intersect(containingAppBounds);
+            if (insideParentBounds && useOverrideInsetsForConfig && !customContainerPolicy
+                    && overrideHint.mParentAppBoundsOverride != null
+                    && !WindowConfiguration.isFloating(windowingMode)) {
+                // Clip decor insets for legacy apps (no INSETS_DECOUPLED_CONFIGURATION_ENFORCED).
+                outAppBounds.intersectUnchecked(overrideHint.mParentAppBoundsOverride);
+            } else if (resolvedBounds.isEmpty()) {
+                // Inherit from parent if there is no override bounds.
+                final Rect parentAppBounds = parentConfig.windowConfiguration.getAppBounds();
+                if (parentAppBounds != null) {
+                    outAppBounds.set(parentAppBounds);
                 }
             }
         }
@@ -2543,8 +2677,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
                 // For floating tasks and app bubbles, calculate the smallest width from the bounds
                 // of the task, because they should not be affected by insets.
                 boolean shouldUseTaskBounds = WindowConfiguration.isFloating(windowingMode);
-                if (com.android.wm.shell.Flags.enableCreateAnyBubble()
-                        && com.android.wm.shell.Flags.enableBubbleAppCompatFixes()) {
+                if (com.android.wm.shell.Flags.enableCreateAnyBubble()) {
                     final Task task = getTask();
                     if (task != null) {
                         // TODO(b/407669465): Update mLaunchNextToBubble usage when migrated.
@@ -3205,7 +3338,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         }
         task.forAllLeafTaskFragments(taskFragment -> {
             if (taskFragment.getCompanionTaskFragment() == this) {
-                taskFragment.setCompanionTaskFragment(null /* companionTaskFragment */);
+                taskFragment.clearCompanionTaskFragment();
             }
         }, false /* traverseTopToBottom */);
     }
@@ -3246,6 +3379,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
         return forAllWindows(getDimBehindWindow, true);
     }
 
+    // It is replaced by WindowState#getDimController().
     @Deprecated
     @Override
     Dimmer getDimmer() {
@@ -3259,7 +3393,21 @@ class TaskFragment extends WindowContainer<WindowContainer> {
 
     /** Bounds to be used for dimming, as well as touch related tests. */
     void getDimBounds(@NonNull Rect out) {
-        if (Flags.useTasksDimOnly() && mDimmer.hasDimState()) {
+        if (com.android.window.flags.Flags.removeGetDimmer()) {
+            if (mIsEmbedded && isDimmingOnParentTask()) {
+                // Return the task bounds if the dimmer is showing and should cover on the Task
+                // (not just on this embedded TaskFragment).
+                final Task task = getTask();
+                if (task != null && task.mDimmer.hasDimState()) {
+                    out.set(task.getBounds());
+                    return;
+                }
+            }
+            out.set(getBounds());
+            return;
+        }
+
+        if (mDimmer.hasDimState()) {
             out.set(mDimmer.getDimBounds());
         } else {
             if (mIsEmbedded && isDimmingOnParentTask() && getDimmer().getDimBounds() != null) {
@@ -3291,36 +3439,24 @@ class TaskFragment extends WindowContainer<WindowContainer> {
 
     @Override
     void prepareSurfaces() {
-        if (asTask() != null) {
-            super.prepareSurfaces();
-            return;
-        }
-
         mDimmer.resetDimStates();
         super.prepareSurfaces();
 
-        if (!Flags.useTasksDimOnly()) {
-            final Rect dimBounds = mDimmer.getDimBounds();
-            if (dimBounds != null) {
-                // Bounds need to be relative, as the dim layer is a child.
-                dimBounds.offsetTo(0 /* newLeft */, 0 /* newTop */);
-                if (mDimmer.updateDims(getSyncTransaction())) {
-                    scheduleAnimation();
-                }
-            }
-        } else {
-            if (mDimmer.updateDims(getSyncTransaction())) {
-                scheduleAnimation();
-            }
+        if (mDimmer.hasDimState() && mDimmer.updateDims(getSyncTransaction())) {
+            scheduleAnimation();
         }
     }
 
     @Override
     boolean fillsParent() {
-        // From the perspective of policy, we still want to report that this task fills parent
-        // in fullscreen windowing mode even it doesn't match parent bounds because there will be
-        // letterbox around its real content.
-        return getWindowingMode() == WINDOWING_MODE_FULLSCREEN || matchParentBounds();
+        if (!com.android.window.flags.Flags.refactorMatchParentBounds()) {
+            // From the perspective of policy, we still want to report that this task fills parent
+            // in fullscreen windowing mode even it doesn't match parent bounds because there
+            // will be letterbox around its real content.
+            return getWindowingMode() == WINDOWING_MODE_FULLSCREEN || matchParentBounds();
+        }
+
+        return matchParentBounds();
     }
 
     @Override

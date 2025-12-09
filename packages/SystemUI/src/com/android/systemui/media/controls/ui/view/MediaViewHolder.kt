@@ -28,10 +28,11 @@ import android.widget.TextView
 import androidx.constraintlayout.widget.Barrier
 import com.android.internal.widget.CachingIconView
 import com.android.systemui.Flags.enableSuggestedDeviceUi
+import com.android.systemui.FontStyles.GSF_BODY_MEDIUM
 import com.android.systemui.FontStyles.GSF_HEADLINE_SMALL
-import com.android.systemui.FontStyles.GSF_LABEL_LARGE
 import com.android.systemui.FontStyles.GSF_LABEL_MEDIUM
 import com.android.systemui.FontStyles.GSF_TITLE_MEDIUM
+import com.android.systemui.FontStyles.GSF_TITLE_MEDIUM_EMPHASIZED
 import com.android.systemui.res.R
 import com.android.systemui.surfaceeffects.loadingeffect.LoadingEffectView
 import com.android.systemui.surfaceeffects.ripple.MultiRippleView
@@ -101,6 +102,10 @@ class MediaViewHolder constructor(itemView: View) {
 
     val actionsTopBarrier = itemView.requireViewById<Barrier>(R.id.media_action_barrier_top)
 
+    // Pagination
+    val pageLeft = itemView.requireViewById<ImageButton>(R.id.page_left)
+    val pageRight = itemView.requireViewById<ImageButton>(R.id.page_right)
+
     fun getAction(id: Int): ImageButton {
         return when (id) {
             R.id.actionPlayPause -> actionPlayPause
@@ -115,10 +120,6 @@ class MediaViewHolder constructor(itemView: View) {
                 throw IllegalArgumentException()
             }
         }
-    }
-
-    fun getTransparentActionButtons(): List<ImageButton> {
-        return listOf(actionNext, actionPrev, action0, action1, action2, action3, action4)
     }
 
     fun setSquiggleEnabled(enabled: Boolean) {
@@ -185,6 +186,8 @@ class MediaViewHolder constructor(itemView: View) {
                     R.id.icon,
                     R.id.media_scrubbing_elapsed_time,
                     R.id.media_scrubbing_total_time,
+                    R.id.page_left,
+                    R.id.page_right,
                 )
                 .apply {
                     if (enableSuggestedDeviceUi()) {
@@ -216,6 +219,8 @@ class MediaViewHolder constructor(itemView: View) {
                 R.id.header_artist,
                 R.id.media_explicit_indicator,
                 R.id.actionPlayPause,
+                R.id.page_left,
+                R.id.page_right,
             )
 
         val backgroundIds =
@@ -227,8 +232,10 @@ class MediaViewHolder constructor(itemView: View) {
             )
 
         val headlineSmallTF: Typeface = Typeface.create(GSF_HEADLINE_SMALL, Typeface.NORMAL)
+        val titleMediumEmphasizedTF: Typeface =
+            Typeface.create(GSF_TITLE_MEDIUM_EMPHASIZED, Typeface.NORMAL)
         val titleMediumTF: Typeface = Typeface.create(GSF_TITLE_MEDIUM, Typeface.NORMAL)
         val labelMediumTF: Typeface = Typeface.create(GSF_LABEL_MEDIUM, Typeface.NORMAL)
-        val labelLargeTF: Typeface = Typeface.create(GSF_LABEL_LARGE, Typeface.NORMAL)
+        val bodyMediumTF: Typeface = Typeface.create(GSF_BODY_MEDIUM, Typeface.NORMAL)
     }
 }

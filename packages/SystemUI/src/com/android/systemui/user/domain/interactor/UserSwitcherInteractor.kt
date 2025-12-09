@@ -548,7 +548,7 @@ constructor(
      * If [context] is provided, the dialog will be created from that context. If not provided, the
      * shade context will be used.
      */
-    fun showUserSwitcher(expandable: Expandable, context: Context? = null) {
+    fun showUserSwitcher(expandable: Expandable?, context: Context? = null) {
         if (featureFlags.isEnabled(Flags.FULL_SCREEN_USER_SWITCHER)) {
             showDialog(ShowDialogRequestModel.ShowUserSwitcherFullscreenDialog(expandable, context))
         } else {
@@ -659,8 +659,8 @@ constructor(
     }
 
     private fun restartSecondaryService(@UserIdInt userId: Int) {
-        // Do not start service for user that is marked for deletion.
-        if (!manager.aliveUsers.map { it.id }.contains(userId)) {
+        // Do not start service for user that isn't running
+        if (!manager.isUserRunning(userId)) {
             return
         }
 

@@ -55,7 +55,6 @@ import java.util.Set;
 
 @SmallTest
 @RunWith(AndroidJUnit4.class)
-@android.platform.test.annotations.EnabledOnRavenwood
 public class BrightLineFalsingManagerTest extends SysuiTestCase {
     private BrightLineFalsingManager mBrightLineFalsingManager;
     @Mock
@@ -208,6 +207,13 @@ public class BrightLineFalsingManagerTest extends SysuiTestCase {
     public void testSkipCommunalHub() {
         assertThat(mBrightLineFalsingManager.isFalseTouch(Classifier.GENERIC)).isTrue();
         when(mFalsingDataProvider.isShowingCommunalHub()).thenReturn(true);
+        assertThat(mBrightLineFalsingManager.isFalseTouch(Classifier.GENERIC)).isFalse();
+    }
+
+    @Test
+    public void testSkipDesktopDevices() {
+        assertThat(mBrightLineFalsingManager.isFalseTouch(Classifier.GENERIC)).isTrue();
+        when(mFalsingDataProvider.isDesktop()).thenReturn(true);
         assertThat(mBrightLineFalsingManager.isFalseTouch(Classifier.GENERIC)).isFalse();
     }
 

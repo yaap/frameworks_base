@@ -29,6 +29,8 @@ import android.util.Range;
 import android.util.Size;
 import android.view.Surface;
 
+import com.android.internal.camera.flags.Flags;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
@@ -47,6 +49,8 @@ public class SurfaceUtils {
     // Usage flags not yet included in HardwareBuffer
     private static final int USAGE_RENDERSCRIPT = 0x00100000;
     private static final int USAGE_HW_COMPOSER = 0x00000800;
+    private static final int USAGE_HW_MASK = 0x00071F00;
+    private static final int USAGE_SW_READ_MASK = 0x0000000F;
 
     // Image formats not yet included in PixelFormat
     private static final int BGRA_8888 = 0x5;
@@ -68,7 +72,6 @@ public class SurfaceUtils {
                 | HardwareBuffer.USAGE_GPU_COLOR_OUTPUT;
         boolean previewConsumer = ((usageFlags & disallowedFlags) == 0
                 && (usageFlags & allowedFlags) != 0);
-        int surfaceFormat = getSurfaceFormat(surface);
 
         return previewConsumer;
     }
@@ -88,8 +91,6 @@ public class SurfaceUtils {
         long allowedFlags = HardwareBuffer.USAGE_VIDEO_ENCODE;
         boolean videoEncoderConsumer = ((usageFlags & disallowedFlags) == 0
                 && (usageFlags & allowedFlags) != 0);
-
-        int surfaceFormat = getSurfaceFormat(surface);
 
         return videoEncoderConsumer;
     }
@@ -154,14 +155,35 @@ public class SurfaceUtils {
         checkNotNull(surface);
         int surfaceType = nativeDetectSurfaceType(surface);
         if (surfaceType == BAD_VALUE) throw new IllegalArgumentException("Surface was abandoned");
+        long usageFlags = nativeDetectSurfaceUsageFlags(surface);
+        return getOverrideFormat(surfaceType, usageFlags);
+    }
 
-        // TODO: remove this override since the default format should be
-        // ImageFormat.PRIVATE. b/9487482
-        if ((surfaceType >= PixelFormat.RGBA_8888
-                && surfaceType <= BGRA_8888)) {
-            surfaceType = ImageFormat.PRIVATE;
+    /**
+     * Get override format based on application specified format and usage flags
+     *
+     * If the camera override the output format, return the
+     * overridden value. Otherwise, return the original value.
+     *
+     * @param format The format set by the application
+     * @param usage The consumer usage flag of the output surface
+     * @return format of the camera output
+     */
+    public static int getOverrideFormat(int format, long usage) {
+        if (format >= PixelFormat.RGBA_8888 && format <= BGRA_8888) {
+            if (!Flags.surfaceFormatFix()) {
+                // Maintain existing behavior
+                return ImageFormat.PRIVATE;
+            }
+
+            // Only override to PRIVATE if the usage has only hardware
+            // bits.
+            if (((usage & USAGE_HW_MASK) != 0)
+                    && ((usage & USAGE_SW_READ_MASK) == 0)) {
+                return ImageFormat.PRIVATE;
+            }
         }
-        return surfaceType;
+        return format;
     }
 
     /**

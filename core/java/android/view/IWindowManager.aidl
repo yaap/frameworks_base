@@ -72,19 +72,21 @@ import android.view.displayhash.VerifiedDisplayHash;
 import android.window.AddToSurfaceSyncGroupResult;
 import android.window.ConfigurationChangeSetting;
 import android.window.IGlobalDragListener;
+import android.window.IScreenCaptureCallback;
 import android.window.IScreenRecordingCallback;
 import android.window.ISurfaceSyncGroupCompletedListener;
 import android.window.ITaskFpsCallback;
 import android.window.ITrustedPresentationListener;
 import android.window.InputTransferToken;
 import android.window.ScreenCapture;
+import android.window.ScreenCaptureInternal;
 import android.window.TrustedPresentationThresholds;
 import android.window.WindowContextInfo;
 
 /**
  * System private interface to the window manager.
  *
- * {@hide}
+ * @hide
  */
 interface IWindowManager
 {
@@ -470,6 +472,7 @@ interface IWindowManager
 
     /**
      * Used only for assist -- request a screenshot of the current application.
+     * @deprecated. Use WindowManagerInternal#requestAssistScreenshot instead.
      */
     void requestAssistScreenshot(IAssistDataReceiver receiver);
 
@@ -737,17 +740,6 @@ interface IWindowManager
      * @return {@code true} if the display should show system decors.
      */
     boolean shouldShowSystemDecors(int displayId);
-
-    /**
-     * Sets that the display should show system decors.
-     * <p>
-     * System decors include status bar, navigation bar, launcher.
-     * </p>
-     *
-     * @param displayId The id of the display.
-     * @param shouldShow Indicates that the display should show system decors.
-     */
-    void setShouldShowSystemDecors(int displayId, boolean shouldShow);
 
     /**
      * Indicates that the display is eligible for the desktop mode from WindowManager's perspective.
@@ -1114,8 +1106,14 @@ interface IWindowManager
      * Captures the entire display specified by the displayId using the args provided. If the args
      * are null or if the sourceCrop is invalid or null, the entire display bounds will be captured.
      */
-    oneway void captureDisplay(int displayId, in @nullable ScreenCapture.CaptureArgs captureArgs,
-            in ScreenCapture.ScreenCaptureListener listener);
+    oneway void captureDisplay(int displayId, in @nullable ScreenCaptureInternal.CaptureArgs captureArgs,
+            in ScreenCaptureInternal.ScreenCaptureListener listener);
+
+    /**
+     * Implements the ScreenCapture system API.
+     */
+    oneway void screenCapture(in ScreenCapture.ScreenCaptureParams params,
+                              in IScreenCaptureCallback callback);
 
     /**
      * Returns {@code true} if the key will be handled globally and not forwarded to all apps.

@@ -252,7 +252,8 @@ public final class PictureProfile implements Parcelable {
         mInputId = in.readString();
         mPackageName = in.readString();
         mParams = in.readPersistableBundle();
-        mHandle = in.readParcelable(PictureProfileHandle.class.getClassLoader());
+        mHandle = in.readParcelable(PictureProfileHandle.class.getClassLoader(),
+                PictureProfileHandle.class);
     }
 
     @Override
@@ -385,6 +386,30 @@ public final class PictureProfile implements Parcelable {
     @NonNull
     public PersistableBundle getParameters() {
         return new PersistableBundle(mParams);
+    }
+
+    /**
+     * Add a string parameter
+     * Used by system only.
+     * @hide
+     */
+    public void addStringParameter(String key, String value) {
+        mParams.putString(key, value);
+    }
+
+    /**
+     * Copies all info from the given profile
+     * @hide
+     */
+    public static PictureProfile copyFrom(PictureProfile orig) {
+        return new PictureProfile(
+                orig.mId,
+                orig.mType,
+                orig.mName,
+                orig.mInputId,
+                orig.mPackageName,
+                new PersistableBundle(orig.mParams),
+                orig.mHandle);
     }
 
     /**

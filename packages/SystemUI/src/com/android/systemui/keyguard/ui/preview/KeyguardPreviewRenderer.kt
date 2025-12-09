@@ -23,6 +23,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Resources
+import android.content.theming.ThemeStyle
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.os.Handler
@@ -36,7 +37,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.window.InputTransferToken
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
@@ -46,6 +46,7 @@ import androidx.constraintlayout.widget.ConstraintSet.TOP
 import androidx.core.view.isInvisible
 import com.android.app.tracing.coroutines.runBlockingTraced as runBlocking
 import com.android.keyguard.ClockEventController
+import com.android.systemui.Flags
 import com.android.systemui.animation.view.LaunchableImageView
 import com.android.systemui.biometrics.domain.interactor.UdfpsOverlayInteractor
 import com.android.systemui.broadcast.BroadcastDispatcher
@@ -64,11 +65,9 @@ import com.android.systemui.keyguard.ui.viewmodel.KeyguardPreviewSmartspaceViewM
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardPreviewViewModel
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardQuickAffordancesCombinedViewModel
 import com.android.systemui.monet.ColorScheme
-import com.android.systemui.monet.Style
-import com.android.systemui.plugins.clocks.ClockController
-import com.android.systemui.plugins.clocks.ClockViewIds
-import com.android.systemui.plugins.clocks.ThemeConfig
-import com.android.systemui.plugins.clocks.WeatherData
+import com.android.systemui.plugins.keyguard.data.model.WeatherData
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
+import com.android.systemui.plugins.keyguard.ui.clocks.ThemeConfig
 import com.android.systemui.res.R
 import com.android.systemui.shared.clocks.ClockRegistry
 import com.android.systemui.shared.keyguard.shared.model.KeyguardQuickAffordanceSlots
@@ -122,7 +121,7 @@ constructor(
     private val keyguardQuickAffordanceViewBinder: KeyguardQuickAffordanceViewBinder,
     private val wallpaperFocalAreaInteractor: WallpaperFocalAreaInteractor,
 ) {
-    private var host: SurfaceControlViewHost
+    private lateinit var host: SurfaceControlViewHost
 
     private var _surfacePackage: SurfaceControlViewHost.SurfacePackage? = null
     val surfacePackage: SurfaceControlViewHost.SurfacePackage
@@ -137,10 +136,14 @@ constructor(
 
     private val shortcutsBindings = mutableSetOf<KeyguardQuickAffordanceViewBinder.Binding>()
 
-    @Style.Type private var themeStyle: Int? = null
+    @ThemeStyle.Type private var themeStyle: Int? = null
 
     init {
+        clockController.isPreview = true
+        clockController.registerListeners()
+        disposables += DisposableHandle { clockController.unregisterListeners() }
         clockController.setFallbackWeatherData(WeatherData.getPlaceholderWeatherData())
+
         quickAffordancesCombinedViewModel.enablePreviewMode(
             initiallySelectedSlotId =
                 previewViewModel.request.getString(KEY_INITIALLY_SELECTED_SLOT_ID)
@@ -148,19 +151,25 @@ constructor(
             shouldHighlightSelectedAffordance = previewViewModel.shouldHighlightSelectedAffordance,
         )
 
-        runBlocking(context = mainDispatcher) {
-            host =
-                SurfaceControlViewHost(
-                    context,
-                    displayManager.getDisplay(DEFAULT_DISPLAY),
-                    previewViewModel.hostToken?.let { InputTransferToken(it) },
-                    TAG,
-                )
-            disposables += DisposableHandle {
-                _surfacePackage?.release()
-                _surfacePackage = null
-                host.release()
-            }
+        if (Flags.doNotUseRunBlocking()) {
+            mainHandler.post { provideSurfaceControlViewHost(displayManager) }
+        } else {
+            runBlocking(context = mainDispatcher) { provideSurfaceControlViewHost(displayManager) }
+        }
+    }
+
+    private fun provideSurfaceControlViewHost(displayManager: DisplayManager) {
+        host =
+            SurfaceControlViewHost(
+                context,
+                displayManager.getDisplay(DEFAULT_DISPLAY),
+                previewViewModel.hostToken?.let { InputTransferToken(it) },
+                TAG,
+            )
+        disposables += DisposableHandle {
+            _surfacePackage?.release()
+            _surfacePackage = null
+            host.release()
         }
     }
 
@@ -314,12 +323,10 @@ constructor(
             cs.clone(parentView)
             cs.apply {
                 largeDateView =
-                    lockscreenSmartspaceController
-                        .buildAndConnectDateView(parentView, true)
+                    lockscreenSmartspaceController.buildAndConnectDateView(previewContext, true)
 
                 smallDateView =
-                    lockscreenSmartspaceController
-                        .buildAndConnectDateView(parentView, false)
+                    lockscreenSmartspaceController.buildAndConnectDateView(previewContext, false)
                 parentView.addView(largeDateView)
                 parentView.addView(smallDateView)
             }
@@ -327,7 +334,7 @@ constructor(
         } else {
             smartSpaceView =
                 lockscreenSmartspaceController.buildAndConnectDateView(
-                    parent = parentView,
+                    previewContext,
                     isLargeClock = false,
                 )
 
@@ -485,7 +492,7 @@ constructor(
             // Seed color null means users do not override any color on the clock. The default
             // color will need to use wallpaper's extracted color and consider if the
             // wallpaper's color is dark or light.
-            @Style.Type
+            @ThemeStyle.Type
             val style = themeStyle ?: fetchThemeStyleFromSetting().also { themeStyle = it }
             val wallpaperColorScheme = ColorScheme(colors, false, style)
             val lightClockColor = wallpaperColorScheme.accent1.s100
@@ -513,7 +520,7 @@ constructor(
         )
     }
 
-    @Style.Type
+    @ThemeStyle.Type
     private suspend fun fetchThemeStyleFromSetting(): Int {
         val overlayPackageJson =
             withContext(backgroundDispatcher) {
@@ -522,16 +529,16 @@ constructor(
         return if (!overlayPackageJson.isNullOrEmpty()) {
             try {
                 val jsonObject = JSONObject(overlayPackageJson)
-                Style.valueOf(jsonObject.getString(OVERLAY_CATEGORY_THEME_STYLE))
+                ThemeStyle.valueOf(jsonObject.getString(OVERLAY_CATEGORY_THEME_STYLE))
             } catch (e: (JSONException)) {
                 Log.i(TAG, "Failed to parse THEME_CUSTOMIZATION_OVERLAY_PACKAGES.", e)
-                Style.TONAL_SPOT
+                ThemeStyle.TONAL_SPOT
             } catch (e: IllegalArgumentException) {
                 Log.i(TAG, "Failed to parse THEME_CUSTOMIZATION_OVERLAY_PACKAGES.", e)
-                Style.TONAL_SPOT
+                ThemeStyle.TONAL_SPOT
             }
         } else {
-            Style.TONAL_SPOT
+            ThemeStyle.TONAL_SPOT
         }
     }
 

@@ -41,6 +41,7 @@ import static android.service.voice.VoiceInteractionSession.SHOW_SOURCE_APPLICAT
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.view.Display.INVALID_DISPLAY;
 import static android.view.WindowManager.TRANSIT_CHANGE;
+import static android.view.WindowManager.TRANSIT_START_LOCK_TASK_MODE;
 import static android.view.WindowManager.TRANSIT_TO_BACK;
 import static android.view.WindowManager.TRANSIT_TO_FRONT;
 
@@ -69,6 +70,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityTaskManager;
 import android.app.FullscreenRequestHandler;
+import android.app.HandoffActivityData;
 import android.app.IActivityClientController;
 import android.app.IRequestFinishCallback;
 import android.app.PictureInPictureParams;
@@ -97,6 +99,7 @@ import android.os.UserHandle;
 import android.service.voice.VoiceInteractionManagerInternal;
 import android.util.Slog;
 import android.view.RemoteAnimationDefinition;
+import android.window.DesktopExperienceFlags;
 import android.window.DesktopModeFlags;
 import android.window.SizeConfigurationBuckets;
 import android.window.TransitionInfo;
@@ -217,10 +220,18 @@ class ActivityClientController extends IActivityClientController.Stub {
     }
 
     @Override
-    public void activityTopResumedStateLost() {
+    public void activityTopResumedStateLost(IBinder token) {
         final long origId = Binder.clearCallingIdentity();
         synchronized (mGlobalLock) {
-            mTaskSupervisor.handleTopResumedStateReleased(false /* timeout */);
+            if (com.android.window.flags.Flags.fixRapidTopResumedSwitch()) {
+                final ActivityRecord r = ActivityRecord.forTokenLocked(token);
+                if (r != null) {
+                    mTaskSupervisor.handleTopResumedStateReleasedIfNeeded(r, false /* timeout */);
+                }
+            } else {
+                mTaskSupervisor.handleTopResumedStateReleasedIfNeeded(null, false /* timeout */);
+            }
+
         }
         Binder.restoreCallingIdentity(origId);
     }
@@ -240,8 +251,12 @@ class ActivityClientController extends IActivityClientController.Stub {
     }
 
     @Override
-    public void activityStopped(IBinder token, Bundle icicle, PersistableBundle persistentState,
-            CharSequence description) {
+    public void activityStopped(
+        IBinder token,
+        Bundle icicle,
+        PersistableBundle persistentState,
+        HandoffActivityData handoffActivityData,
+        CharSequence description) {
         if (DEBUG_ALL) Slog.v(TAG, "Activity stopped: token=" + token);
 
         // Refuse possible leaked file descriptors.
@@ -269,7 +284,7 @@ class ActivityClientController extends IActivityClientController.Stub {
                     restartingName = r.app.mName;
                     restartingUid = r.app.mUid;
                 }
-                r.activityStopped(icicle, persistentState, description);
+                r.activityStopped(icicle, persistentState, handoffActivityData, description);
             }
             Trace.traceEnd(TRACE_TAG_WINDOW_MANAGER);
         }
@@ -622,13 +637,15 @@ class ActivityClientController extends IActivityClientController.Stub {
                 final ActivityRecord r = ActivityRecord.isInRootTaskLocked(token);
                 if (r == null) return;
 
-                // TODO: This should probably only loop over the task since you need to be in the
-                // same task to return results.
-                r.getRootTask().forAllActivities(activity -> {
-                    activity.finishIfSubActivity(r /* parent */, resultWho, requestCode);
-                }, true /* traverseTopToBottom */);
+                try (var unused = mService.mActivityStateUpdater.startBatchSession()) {
+                    // TODO: This should probably only loop over the task since you need to be in
+                    //  the same task to return results.
+                    r.getRootTask().forAllActivities(activity -> {
+                        activity.finishIfSubActivity(r /* parent */, resultWho, requestCode);
+                    }, true /* traverseTopToBottom */);
 
-                mService.updateOomAdj();
+                    mService.updateOomAdj();
+                }
             }
         } finally {
             Binder.restoreCallingIdentity(origId);
@@ -902,6 +919,8 @@ class ActivityClientController extends IActivityClientController.Stub {
                 if (r == null) {
                     return;
                 }
+                EventLogTags.writeWmSetRequestedOrientation(requestedOrientation,
+                        r.shortComponentName);
                 // A new Transition need to be started in case the orientation update
                 // won't make the Display to rotate.
                 Transition transition = null;
@@ -1273,21 +1292,33 @@ class ActivityClientController extends IActivityClientController.Stub {
         }
     }
 
+    private Task getMultiwindowFullscreenTargetTask() {
+        Task task = mService.getTopDisplayFocusedRootTask();
+        if (DesktopExperienceFlags.ENABLE_REQUEST_FULLSCREEN_RESTORE_FREEFORM_BUGFIX.isTrue()
+                && task.mCreatedByOrganizer) {
+            final Task topMostChild = task.getTopLeafTask();
+            if (topMostChild != null) {
+                task = topMostChild;
+            }
+        }
+        return task;
+    }
+
     private @FullscreenRequestHandler.RequestResult int validateMultiwindowFullscreenRequestLocked(
-            Task topFocusedRootTask, int fullscreenRequest, ActivityRecord requesterActivity) {
+            Task targetTask, int fullscreenRequest, ActivityRecord requesterActivity) {
         if (requesterActivity.getWindowingMode() == WINDOWING_MODE_PINNED) {
             return RESULT_APPROVED;
         }
-        final int taskWindowingMode = topFocusedRootTask.getWindowingMode();
         // If this is not coming from the currently top-most activity, reject the request.
-        if (requesterActivity != topFocusedRootTask.getTopMostActivity()) {
+        if (requesterActivity != targetTask.getTopMostActivity()) {
             return RESULT_FAILED_NOT_TOP_FOCUSED;
         }
+        final int taskWindowingMode = targetTask.getWindowingMode();
         if (fullscreenRequest == FULLSCREEN_MODE_REQUEST_EXIT) {
             if (taskWindowingMode != WINDOWING_MODE_FULLSCREEN) {
                 return RESULT_FAILED_NOT_IN_FULLSCREEN_WITH_HISTORY;
             }
-            if (topFocusedRootTask.mMultiWindowRestoreWindowingMode == INVALID_WINDOWING_MODE) {
+            if (targetTask.mMultiWindowRestoreWindowingMode == INVALID_WINDOWING_MODE) {
                 return RESULT_FAILED_NOT_IN_FULLSCREEN_WITH_HISTORY;
             }
             return RESULT_APPROVED;
@@ -1325,13 +1356,12 @@ class ActivityClientController extends IActivityClientController.Stub {
         final TransitionController controller = r.mTransitionController;
         if (!controller.isShellTransitionsEnabled()) {
             final @FullscreenRequestHandler.RequestResult int validateResult;
-            final Task topFocusedRootTask;
-            topFocusedRootTask = mService.getTopDisplayFocusedRootTask();
-            validateResult = validateMultiwindowFullscreenRequestLocked(topFocusedRootTask,
+            final Task targetTask = getMultiwindowFullscreenTargetTask();
+            validateResult = validateMultiwindowFullscreenRequestLocked(targetTask,
                     fullscreenRequest, r);
             reportMultiwindowFullscreenRequestValidatingResult(callback, validateResult);
             if (validateResult == RESULT_APPROVED) {
-                executeMultiWindowFullscreenRequest(fullscreenRequest, topFocusedRootTask);
+                executeMultiWindowFullscreenRequest(fullscreenRequest, targetTask);
             }
             return;
         }
@@ -1348,9 +1378,8 @@ class ActivityClientController extends IActivityClientController.Stub {
     private void executeFullscreenRequestTransition(int fullscreenRequest, IRemoteCallback callback,
             ActivityRecord r, Transition transition, boolean queued) {
         final @FullscreenRequestHandler.RequestResult int validateResult;
-        final Task topFocusedRootTask;
-        topFocusedRootTask = mService.getTopDisplayFocusedRootTask();
-        validateResult = validateMultiwindowFullscreenRequestLocked(topFocusedRootTask,
+        final Task targetTask = getMultiwindowFullscreenTargetTask();
+        validateResult = validateMultiwindowFullscreenRequestLocked(targetTask,
                 fullscreenRequest, r);
         reportMultiwindowFullscreenRequestValidatingResult(callback, validateResult);
         if (validateResult != RESULT_APPROVED) {
@@ -1412,7 +1441,35 @@ class ActivityClientController extends IActivityClientController.Stub {
         synchronized (mGlobalLock) {
             final ActivityRecord r = ActivityRecord.forTokenLocked(token);
             if (r == null) return;
-            mService.startLockTaskMode(r.getTask(), false /* isSystemCaller */);
+
+            if (DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_ENTERPRISE_BUGFIX.isTrue()
+                    && mService.getTransitionController().isShellTransitionsEnabled()) {
+                final Task task = r.getTask();
+
+                if (!mService.canEnterLockTaskMode(task) || !mService.isTopMostTask(task)) {
+                    Slog.w(TAG, "startLockTaskMode: Can't lock due to auth, task: " + task);
+                    throw new IllegalArgumentException(
+                            "startLockTaskMode: Can't lock due to auth, task: " + task);
+                }
+                ActionChain chain = mService.mChainTracker.startTransit("startLockTaskModeByToken");
+                Transition newTransition = chain.isCollecting() ? null : new Transition(
+                        TRANSIT_START_LOCK_TASK_MODE,
+                        0 /* flags */,
+                        mService.getTransitionController(), mService.mWindowManager.mSyncEngine);
+                if (newTransition != null) {
+                    mService.getTransitionController().requestStartTransition(newTransition,
+                            task,
+                            null /* remoteTransition */, null /* displayChange */);
+                }
+                chain.collect(task);
+                mService.startLockTaskMode(task, false /* isSystemCaller */);
+                if (newTransition != null) {
+                    newTransition.setReady(task, true);
+                }
+                mService.mChainTracker.end();
+            } else {
+                mService.startLockTaskMode(r.getTask(), false /* isSystemCaller */);
+            }
         }
     }
 
@@ -1790,7 +1847,9 @@ class ActivityClientController extends IActivityClientController.Stub {
 
         // The given Activity is the relative Task root if its TaskFragment is a companion
         // TaskFragment to the taskRoot (i.e. the taskRoot TF will be finished together).
-        return taskRoot.getTaskFragment().getCompanionTaskFragment() == taskFragment;
+        final TaskFragment taskRootTf = taskRoot.getTaskFragment();
+        return taskRootTf.getCompanionTaskFragment() == taskFragment
+                && taskRootTf.shouldBeFinishedWithCompanionTaskFragment();
     }
 
     private static boolean isTopActivityInTaskFragment(ActivityRecord activity) {
@@ -1817,7 +1876,7 @@ class ActivityClientController extends IActivityClientController.Stub {
                 final ActivityRecord root = task.getRootActivity(false /*ignoreRelinquishIdentity*/,
                         true /*setToBottomIfNone*/);
                 if (r == root && mService.mWindowOrganizerController.mTaskOrganizerController
-                        .handleInterceptBackPressedOnTaskRoot(r.getRootTask())) {
+                        .handleInterceptBackPressedOnTaskRoot(r)) {
                     // This task is handled by a task organizer that has requested the back
                     // pressed callback.
                     return;

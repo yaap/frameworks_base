@@ -1374,7 +1374,6 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
     @Overridable
     @Disabled
     @TestApi
-    @FlaggedApi(Flags.FLAG_ENABLE_CAMERA_COMPAT_FOR_DESKTOP_WINDOWING_OPT_OUT_API)
     public static final long OVERRIDE_CAMERA_COMPAT_DISABLE_SIMULATE_REQUESTED_ORIENTATION =
             398195815L;  // buganizer id
 
@@ -1605,11 +1604,11 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
      * fullscreen. While display rotation is fixed to landscape, the orientation requested by the
      * activity will be still respected by bounds resolution logic. For instance, if an activity
      * requests portrait orientation and this override is set, then activity will appear in the
-     * letterbox mode for fixed orientation with the display rotated to the lanscape natural
+     * letterbox mode for fixed orientation with the display rotated to the landscape natural
      * orientation.
      *
      * <p>This override is applicable only when natural orientation of the device is
-     * landscape and display ignores orientation requestes.
+     * landscape and display ignores orientation requests.
      *
      * <p>Main use case for this override are camera-using activities that are portrait-only and
      * assume alignment with natural device orientation. Such activities can automatically be
@@ -1626,8 +1625,9 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
 
     /**
      * Enables {@link #SCREEN_ORIENTATION_USER} which overrides any orientation requested
-     * by the activity. Fixed orientation apps can be overridden to fullscreen on large
-     * screen devices with ignoreOrientationRequest enabled with this override.
+     * by the activity. Fixed-orientation and fixed&ndash;aspect ratio apps can be overridden
+     * to full screen on large screen devices when this override is enabled. The override
+     * applies only to default displays that have {@code ignoreOrientationRequest} set to true.
      *
      * @hide
      */
@@ -1712,6 +1712,22 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
     @Overridable
     @Disabled
     public static final long OVERRIDE_MOUSE_TO_TOUCH = 413207127L;
+
+    /**
+     * This change id automatically restarts apps when they move between displays.
+     *
+     * <p>Some apps don't work well with density change. The override enabled by this change id
+     * allows them to automatically restart their process to ensure that UI is rendered based on the
+     * correct density. This is disabled by default, and can be enabled by device manufacturers on a
+     * per-application basis, controlled via
+     * <a href="https://developer.android.com/guide/practices/device-compatibility-mode#device_manufacturer_per-app_overrides">Device manufacturer per-app overrides</a>.
+     *
+     * @hide
+     */
+    @ChangeId
+    @Overridable
+    @Disabled
+    public static final long OVERRIDE_AUTO_RESTART_ON_DISPLAY_MOVE = 427878712L;
 
     /**
      * Optional set of a certificates identifying apps that are allowed to embed this activity. From
@@ -1891,6 +1907,8 @@ public class ActivityInfo extends ComponentInfo implements Parcelable {
         supportsSizeChanges = orig.supportsSizeChanges;
         requiredDisplayCategory = orig.requiredDisplayCategory;
         requireContentUriPermissionFromCaller = orig.requireContentUriPermissionFromCaller;
+        launchToken = orig.launchToken;
+        persistableMode = orig.persistableMode;
     }
 
     /**

@@ -29,13 +29,13 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@android.platform.test.annotations.EnabledOnRavenwood
 class ResizeableItemFrameViewModelTest : SysuiTestCase() {
     private val kosmos = testKosmos()
     private val testScope = kosmos.testScope
@@ -508,19 +508,29 @@ class ResizeableItemFrameViewModelTest : SysuiTestCase() {
             assertThat(resizeInfo).isNull()
         }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun testIllegalState_maxHeightLessThanMinHeight() =
-        testScope.runTest {
-            updateGridLayout(singleSpanGrid.copy(maxHeightPx = 50, minHeightPx = 100))
+    @Test
+    fun testIllegalState_maxHeightLessThanMinHeight() {
+        Assert.assertThrows(IllegalArgumentException::class.java) {
+            testScope.runTest {
+                updateGridLayout(singleSpanGrid.copy(maxHeightPx = 50, minHeightPx = 100))
+            }
         }
+    }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun testIllegalState_currentSpanExceedsTotalSpans() =
-        testScope.runTest { updateGridLayout(singleSpanGrid.copy(currentSpan = 3, totalSpans = 2)) }
+    @Test
+    fun testIllegalState_currentSpanExceedsTotalSpans() {
+        Assert.assertThrows(IllegalArgumentException::class.java) {
+            testScope.runTest {
+                updateGridLayout(singleSpanGrid.copy(currentSpan = 3, totalSpans = 2)) }
+        }
+    }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun testIllegalState_resizeMultipleZeroOrNegative() =
-        testScope.runTest { updateGridLayout(singleSpanGrid.copy(resizeMultiple = 0)) }
+    @Test
+    fun testIllegalState_resizeMultipleZeroOrNegative() {
+        Assert.assertThrows(IllegalArgumentException::class.java) {
+            testScope.runTest { updateGridLayout(singleSpanGrid.copy(resizeMultiple = 0)) }
+        }
+    }
 
     @Test
     fun testZeroHeights_cannotResize() =

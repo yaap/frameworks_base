@@ -16,7 +16,8 @@
   -->
 
 <!-- Layout for media session-based controls -->
-<com.android.systemui.util.animation.TransitionLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.android.systemui.util.animation.TransitionLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/qs_media_controls"
     android:layout_width="match_parent"
@@ -93,7 +94,34 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:orientation="vertical"
-        app:layout_constraintGuide_end="@dimen/qs_media_session_collapsed_legacy_guideline" />
+        app:layout_constraintGuide_end="@dimen/qs_media_session_collapsed_guideline" />
+
+    <!-- Carousel pagination -->
+    <ImageButton
+        android:id="@+id/page_left"
+        android:src="@drawable/ic_chevron_left"
+        style="@style/MediaPlayer.PageButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:minHeight="48dp"
+        android:visibility="gone"
+        />
+
+    <ImageButton
+        android:id="@+id/page_right"
+        android:src="@drawable/ic_chevron_right"
+        style="@style/MediaPlayer.PageButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:minHeight="48dp"
+        android:visibility="gone"
+        />
 
     <!-- App icon -->
     <com.android.internal.widget.CachingIconView
@@ -104,7 +132,6 @@
         android:layout_marginTop="@dimen/qs_media_padding"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
-
 
     <!-- Device Suggestions -->
     <LinearLayout
@@ -130,18 +157,21 @@
             android:minHeight="@dimen/qs_seamless_height"
             android:maxHeight="@dimen/min_clickable_item_size"
             android:background="@drawable/qs_media_bordered_button"
+            android:backgroundTint="@null"
             android:orientation="horizontal"
-            android:visibility="gone"
-            android:contentDescription="@string/quick_settings_media_device_label">
+            android:visibility="gone">
 
             <ImageView
                 android:id="@+id/device_suggestion_icon"
+                android:importantForAccessibility="no"
                 android:layout_width="@dimen/qs_seamless_icon_size"
                 android:layout_height="@dimen/qs_seamless_icon_size"
                 android:layout_gravity="center_vertical"
-                android:src="@*android:drawable/ic_media_seamless" />
+                android:src="@*android:drawable/ic_media_seamless"
+                android:tint="@color/media_on_background" />
              <ProgressBar
                 android:id="@+id/device_suggestion_progressbar"
+                android:indeterminateTint="@color/media_on_background"
                 android:layout_width="@dimen/qs_seamless_icon_size"
                 android:layout_height="@dimen/qs_seamless_icon_size"
                 android:layout_gravity="center_vertical" />
@@ -154,6 +184,7 @@
                 android:fontFamily="@*android:string/config_headlineFontFamilyMedium"
                 android:singleLine="true"
                 android:textDirection="locale"
+                android:textColor="@color/media_on_background"
                 android:textSize="12sp"
                 android:lineHeight="16sp" />
             </LinearLayout>
@@ -249,7 +280,7 @@
     <ImageButton
         android:id="@+id/actionPlayPause"
         style="@style/MediaPlayer.SessionAction.Primary"
-        android:layout_width="48dp"
+        android:layout_width="@dimen/qs_media_action_play_pause_width"
         android:layout_height="48dp"
         android:layout_marginStart="@dimen/qs_media_padding"
         android:layout_marginEnd="@dimen/qs_media_padding" />

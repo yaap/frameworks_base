@@ -214,11 +214,46 @@ public class NotificationTest {
     }
 
     @Test
-    public void testHasCompletedProgress_zeroMax() {
-        Notification n = new Notification.Builder(mContext)
+    @EnableFlags(Flags.FLAG_NOTIFICATION_UPDATE_SHEDDING_ALLOW_PROGRESS_COMPLETION)
+    public void getProgressState_indeterminate_ongoing() {
+        Notification n1 = new Notification.Builder(mContext)
                 .setProgress(0, 0, true)
                 .build();
-        assertFalse(n.hasCompletedProgress());
+        assertThat(n1.getProgressState()).isEqualTo(Notification.PROGRESS_STATE_ONGOING);
+
+        // Ignores max and progress.
+        Notification n2 = new Notification.Builder(mContext)
+                .setProgress(100, 100, true)
+                .build();
+        Notification n3 = new Notification.Builder(mContext)
+                .setProgress(100, 50, true)
+                .build();
+        assertThat(n2.getProgressState()).isEqualTo(Notification.PROGRESS_STATE_ONGOING);
+        assertThat(n3.getProgressState()).isEqualTo(Notification.PROGRESS_STATE_ONGOING);
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_NOTIFICATION_UPDATE_SHEDDING_ALLOW_PROGRESS_COMPLETION)
+    public void getProgressState_noProgress_none() {
+        Notification n = new Notification.Builder(mContext).build();
+        assertThat(n.getProgressState()).isEqualTo(Notification.PROGRESS_STATE_NONE);
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_NOTIFICATION_UPDATE_SHEDDING_ALLOW_PROGRESS_COMPLETION)
+    public void getProgressState_atMax_complete() {
+        Notification n = new Notification.Builder(mContext)
+                .setProgress(10, 10, false)
+                .build();
+        assertThat(n.getProgressState()).isEqualTo(Notification.PROGRESS_STATE_COMPLETE);
+    }
+
+    @Test
+    public void getProgressState_notAtMax_ongoing() {
+        Notification n = new Notification.Builder(mContext)
+                .setProgress(10, 4, false)
+                .build();
+        assertThat(n.getProgressState()).isEqualTo(Notification.PROGRESS_STATE_ONGOING);
     }
 
     @Test
@@ -364,7 +399,9 @@ public class NotificationTest {
     public void testGetNotificationStyle_metricStyle_withApiFlagEnabled() {
         // FIRST -- check that this works if you use the constructor
         Notification n = new Notification.Builder(mContext, "test")
-                .setStyle(new Notification.MetricStyle())
+                .setStyle(new Notification.MetricStyle()
+                        .addMetric(new Notification.Metric(
+                                new Notification.Metric.FixedInt(1), "Int")))
                 .setSmallIcon(android.R.drawable.sym_def_app_icon)
                 .build();
         assertThat(n.extras.getString(Notification.EXTRA_TEMPLATE))
@@ -1356,6 +1393,7 @@ public class NotificationTest {
 
         if (rawColor != Notification.COLOR_DEFAULT) {
             // When a color is provided, night mode should have no effect on the notification
+            // Exception: ProtectionColor will not match, since it has different values for LT/DT
             assertEquals(cDay.getBackgroundColor(), cNight.getBackgroundColor());
             assertEquals(cDay.getPrimaryTextColor(), cNight.getPrimaryTextColor());
             assertEquals(cDay.getSecondaryTextColor(), cNight.getSecondaryTextColor());
@@ -1368,7 +1406,6 @@ public class NotificationTest {
                     cNight.getTertiaryFixedDimAccentColor());
             assertEquals(cDay.getOnTertiaryFixedAccentTextColor(),
                     cNight.getOnTertiaryFixedAccentTextColor());
-            assertEquals(cDay.getProtectionColor(), cNight.getProtectionColor());
             assertEquals(cDay.getContrastColor(), cNight.getContrastColor());
             assertEquals(cDay.getRippleAlpha(), cNight.getRippleAlpha());
         }

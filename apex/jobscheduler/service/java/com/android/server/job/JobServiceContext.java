@@ -447,8 +447,7 @@ public final class JobServiceContext implements ServiceConnection {
 
             mWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
                     job.getWakelockTag());
-            mWakeLock.setWorkSource(
-                    mService.deriveWorkSource(job.getSourceUid(), job.getSourcePackageName()));
+            mWakeLock.setWorkSource(mService.deriveWorkSource(job.getSourceUid()));
             mWakeLock.setReferenceCounted(false);
             mWakeLock.acquire();
 
@@ -1790,9 +1789,16 @@ public final class JobServiceContext implements ServiceConnection {
         if (completedJob.isUserVisibleJob()) {
             mService.informObserversOfUserVisibleJobChange(this, completedJob, false);
         }
-        mCompletedListener.onJobCompletedLocked(completedJob,
-                reschedulingStopReason, reschedulingInternalStopReason, reschedule);
-        mJobConcurrencyManager.onJobCompletedLocked(this, completedJob, workType);
+
+        if (Flags.fixReportingActiveJobs()) {
+            mJobConcurrencyManager.onJobCompletedLocked(this, completedJob, workType);
+            mCompletedListener.onJobCompletedLocked(completedJob,
+                    reschedulingStopReason, reschedulingInternalStopReason, reschedule);
+        } else {
+            mCompletedListener.onJobCompletedLocked(completedJob,
+                    reschedulingStopReason, reschedulingInternalStopReason, reschedule);
+            mJobConcurrencyManager.onJobCompletedLocked(this, completedJob, workType);
+        }
     }
 
     private void applyStoppedReasonLocked(@Nullable String reason) {

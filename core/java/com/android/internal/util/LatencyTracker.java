@@ -49,8 +49,10 @@ import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPOR
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_SMARTSPACE_DOORBELL;
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_START_RECENTS_ANIMATION;
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_SWITCH_DISPLAY_UNFOLD;
+import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_SWITCH_DISPLAY_FOLD;
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_TOGGLE_RECENTS;
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_TURN_ON_SCREEN;
+import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP;
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_UDFPS_ILLUMINATE;
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__ACTION_USER_SWITCH;
 import static com.android.internal.util.FrameworkStatsLog.UIACTION_LATENCY_REPORTED__ACTION__UNKNOWN_ACTION;
@@ -78,6 +80,7 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.jank.InteractionMonitorDebugOverlay;
 import com.android.internal.logging.EventLogTags;
 import com.android.internal.os.BackgroundThread;
 
@@ -311,6 +314,29 @@ public class LatencyTracker {
      */
     public static final int ACTION_DESKTOP_MODE_EXIT_MODE_ON_LAST_WINDOW_CLOSE = 33;
 
+    /**
+     * Time it takes to turn on the outer screen for a foldable device after fold.
+     * <p>
+     * Starts when the device is folded, signaled by device-state change event.
+     * Ends when the outer screen is turned on, signaled by power interactor emitting SCREEN_ON
+     * event.
+     */
+    public static final int ACTION_SWITCH_DISPLAY_FOLD = 34;
+
+    /**
+     * Time it takes for the udfps overlay to be attached after the device is going to sleep.
+     * <p>
+     * The overlay is a translucent (not visible to the user) view that receives touches to
+     * send to FingerprintManager for fingerprint authentication. It is attached after the device is
+     * going to sleep.
+     * </p>
+     *
+     * @see com.android.systemui.biometrics.ui.view.UdfpsTouchOverlay
+     * @see com.android.systemui.biometrics.UdfpsControllerOverlay
+     * @see com.android.systemui.biometrics.UdfpsController
+     */
+    public static final int ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP = 35;
+
     private static final int[] ACTIONS_ALL = {
         ACTION_EXPAND_PANEL,
         ACTION_TOGGLE_RECENTS,
@@ -346,6 +372,8 @@ public class LatencyTracker {
         ACTION_DESKTOP_MODE_ENTER_APP_HANDLE_MENU,
         ACTION_DESKTOP_MODE_EXIT_MODE,
         ACTION_DESKTOP_MODE_EXIT_MODE_ON_LAST_WINDOW_CLOSE,
+        ACTION_SWITCH_DISPLAY_FOLD,
+        ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP,
     };
 
     /** @hide */
@@ -384,6 +412,8 @@ public class LatencyTracker {
         ACTION_DESKTOP_MODE_ENTER_APP_HANDLE_MENU,
         ACTION_DESKTOP_MODE_EXIT_MODE,
         ACTION_DESKTOP_MODE_EXIT_MODE_ON_LAST_WINDOW_CLOSE,
+        ACTION_SWITCH_DISPLAY_FOLD,
+        ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP,
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface Action {}
@@ -424,6 +454,8 @@ public class LatencyTracker {
             UIACTION_LATENCY_REPORTED__ACTION__ACTION_DESKTOP_MODE_ENTER_APP_HANDLE_MENU,
             UIACTION_LATENCY_REPORTED__ACTION__ACTION_DESKTOP_MODE_EXIT_MODE,
             UIACTION_LATENCY_REPORTED__ACTION__ACTION_DESKTOP_MODE_EXIT_MODE_ON_LAST_WINDOW_CLOSE,
+            UIACTION_LATENCY_REPORTED__ACTION__ACTION_SWITCH_DISPLAY_FOLD,
+            UIACTION_LATENCY_REPORTED__ACTION__ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP,
     };
 
     private final Object mLock = new Object();
@@ -435,6 +467,8 @@ public class LatencyTracker {
     private boolean mEnabled;
     private final DeviceConfig.OnPropertiesChangedListener mOnPropertiesChangedListener =
             this::updateProperties;
+    @GuardedBy("mLock")
+    private InteractionMonitorDebugOverlay mInteractionMonitorDebugOverlay = null;
 
     // Wrapping this in a holder class achieves lazy loading behavior
     private static final class SLatencyTrackerHolder {
@@ -487,6 +521,16 @@ public class LatencyTracker {
                                 legacyActionTraceThreshold)));
             }
             onDeviceConfigPropertiesUpdated(mActionPropertiesMap);
+        }
+    }
+
+    /**
+     * Set debug overlay used for drawing names of latency events
+     * @hide
+     */
+    public void setDebugOverlay(InteractionMonitorDebugOverlay debugOverlay) {
+        synchronized (mLock) {
+            mInteractionMonitorDebugOverlay = debugOverlay;
         }
     }
 
@@ -636,6 +680,10 @@ public class LatencyTracker {
                 return "ACTION_DESKTOP_MODE_EXIT_MODE";
             case UIACTION_LATENCY_REPORTED__ACTION__ACTION_DESKTOP_MODE_EXIT_MODE_ON_LAST_WINDOW_CLOSE:
                 return "ACTION_DESKTOP_MODE_EXIT_MODE_ON_LAST_WINDOW_CLOSE";
+            case UIACTION_LATENCY_REPORTED__ACTION__ACTION_SWITCH_DISPLAY_FOLD:
+                return "ACTION_SWITCH_DISPLAY_FOLD";
+            case UIACTION_LATENCY_REPORTED__ACTION__ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP:
+                return "ACTION_UDFPS_OVERLAY_ATTACHED_AFTER_GOING_TO_SLEEP";
             default:
                 throw new IllegalArgumentException("Invalid action");
         }
@@ -710,9 +758,12 @@ public class LatencyTracker {
                 return;
             }
             Session session = new Session(action, tag);
+            if (mInteractionMonitorDebugOverlay != null) {
+                mInteractionMonitorDebugOverlay.onTrackerAdded(
+                        session.traceName(), System.identityHashCode(session));
+            }
             session.begin(() -> onActionCancel(action));
             mSessions.put(action, session);
-
             if (DEBUG) {
                 Log.d(TAG, "onActionStart: " + session.name() + ", start=" + session.mStartRtc);
             }
@@ -732,6 +783,10 @@ public class LatencyTracker {
             Session session = mSessions.get(action);
             if (session == null) {
                 return;
+            }
+            if (mInteractionMonitorDebugOverlay != null) {
+                mInteractionMonitorDebugOverlay.onTrackerRemoved(false,
+                        System.identityHashCode(session));
             }
             session.end();
             mSessions.delete(action);
@@ -754,6 +809,10 @@ public class LatencyTracker {
             Session session = mSessions.get(action);
             if (session == null) {
                 return;
+            }
+            if (mInteractionMonitorDebugOverlay != null) {
+                mInteractionMonitorDebugOverlay.onTrackerRemoved(true,
+                        System.identityHashCode(session));
             }
             session.cancel();
             mSessions.delete(action);

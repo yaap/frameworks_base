@@ -25,8 +25,8 @@ import static com.android.server.testutils.MockitoUtilsKt.eq;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyFloat;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -34,6 +34,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.content.res.Configuration;
+import android.hardware.input.InputManager;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
@@ -41,9 +43,11 @@ import android.provider.Settings;
 import android.testing.AndroidTestingRunner;
 import android.testing.TestableContext;
 import android.testing.TestableLooper;
+import android.view.Gravity;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.PointerIcon;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 
@@ -56,6 +60,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
@@ -83,6 +88,7 @@ public class AutoclickControllerTest {
     private AccessibilityTraceManager mMockTrace;
     @Mock
     private WindowManager mMockWindowManager;
+    @Mock private AutoclickController.InputManagerWrapper mMockInputManagerWrapper;
     private AutoclickController mController;
     private MotionEventCaptor mMotionEventCaptor;
 
@@ -423,7 +429,7 @@ public class AutoclickControllerTest {
         long initialScheduledTime = mController.mClickScheduler.getScheduledClickTimeForTesting();
 
         // Significant change in x (30f difference) and y (30f difference)
-        injectFakeMouseMoveEvent(/* x= */ 60f, /* y= */ 70f, MotionEvent.ACTION_HOVER_MOVE);
+        injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 100f, MotionEvent.ACTION_HOVER_MOVE);
 
         // Verify that the scheduled click time has changed (click was rescheduled).
         assertThat(mController.mClickScheduler.getScheduledClickTimeForTesting())
@@ -480,7 +486,7 @@ public class AutoclickControllerTest {
 
     @Test
     @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
-    public void onIgnoreCursorMovementFromSettingsChange_clickTriggered() {
+    public void onNotIgnoreCursorMovement_clickNotTriggered_whenMoveIsWithinSlop() {
         // Send initial mouse movement.
         injectFakeMouseActionHoverMoveEvent();
 
@@ -494,16 +500,72 @@ public class AutoclickControllerTest {
                 Settings.Secure.getUriFor(
                         Settings.Secure.ACCESSIBILITY_AUTOCLICK_CURSOR_AREA_SIZE));
 
-        // Move the mouse down less than customSize radius but ignore custom movement is not enabled
-        // so a click is triggered.
+        // Move the mouse down less than customSize radius. Even if ignore custom movement is not
+        // enabled, a click is not triggered as long as the move is within the slop.
         float moveDownY = customSize - 100;
         injectFakeMouseMoveEvent(/* x= */ 0, /* y= */ moveDownY, MotionEvent.ACTION_HOVER_MOVE);
-        assertThat(mController.mClickScheduler.getIsActiveForTesting()).isTrue();
+        assertThat(mController.mClickScheduler.getIsActiveForTesting()).isFalse();
     }
 
     @Test
     @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
-    public void onIgnoreCursorMovementFromSettingsChange_clickNotTriggered() {
+    public void sendClick_ignoreMinorMovementTrue_clicksAtAnchorPosition() {
+        initializeAutoclick();
+        enableIgnoreMinorCursorMovement();
+
+        // First move event to set the anchor.
+        float anchorX = 50f;
+        float anchorY = 60f;
+        injectFakeMouseMoveEvent(anchorX, anchorY, MotionEvent.ACTION_HOVER_MOVE);
+
+        // Second move event to trigger the click.
+        float lastX = 80f;
+        float lastY = 80f;
+        injectFakeMouseMoveEvent(lastX, lastY, MotionEvent.ACTION_HOVER_MOVE);
+        mController.mClickScheduler.run();
+
+        // Verify click happened at anchor position, not the last position.
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getX()).isEqualTo(anchorX);
+        assertThat(mMotionEventCaptor.downEvent.getY()).isEqualTo(anchorY);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void sendClick_ignoreMinorMovementFalse_clicksAtLastPosition() {
+        initializeAutoclick();
+
+        // Ensure setting is off.
+        Settings.Secure.putIntForUser(
+                mTestableContext.getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_AUTOCLICK_IGNORE_MINOR_CURSOR_MOVEMENT,
+                AccessibilityUtils.State.OFF,
+                mTestableContext.getUserId());
+        mController.onChangeForTesting(
+                /* selfChange= */ true,
+                Settings.Secure.getUriFor(
+                        Settings.Secure.ACCESSIBILITY_AUTOCLICK_IGNORE_MINOR_CURSOR_MOVEMENT));
+
+        // First move event to set the anchor.
+        float anchorX = 50f;
+        float anchorY = 60f;
+        injectFakeMouseMoveEvent(anchorX, anchorY, MotionEvent.ACTION_HOVER_MOVE);
+
+        // Second move event to trigger the click.
+        float lastX = 80f;
+        float lastY = 80f;
+        injectFakeMouseMoveEvent(lastX, lastY, MotionEvent.ACTION_HOVER_MOVE);
+        mController.mClickScheduler.run();
+
+        // Verify click happened at the last position.
+        assertThat(mMotionEventCaptor.downEvent).isNotNull();
+        assertThat(mMotionEventCaptor.downEvent.getX()).isEqualTo(lastX);
+        assertThat(mMotionEventCaptor.downEvent.getY()).isEqualTo(lastY);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void onIgnoreCursorMovement_clickNotTriggered_whenMoveIsWithinSlop() {
         // Move mouse to initialize autoclick panel before enabling ignore minor cursor movement.
         injectFakeMouseActionHoverMoveEvent();
         enableIgnoreMinorCursorMovement();
@@ -518,8 +580,8 @@ public class AutoclickControllerTest {
                 Settings.Secure.getUriFor(
                         Settings.Secure.ACCESSIBILITY_AUTOCLICK_CURSOR_AREA_SIZE));
 
-        // After enabling ignore custom movement, move the mouse right, less than customSize radius
-        // so a click won't be triggered.
+        // No matter if ignore custom movement is enabled or not, a click won't be triggered as long
+        // as the move is inside the slop.
         float moveRightX = customSize - 100;
         injectFakeMouseMoveEvent(/* x= */ moveRightX, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         assertThat(mController.mClickScheduler.getIsActiveForTesting()).isFalse();
@@ -575,7 +637,7 @@ public class AutoclickControllerTest {
         assertThat(mController.mClickScheduler.getScheduledClickTimeForTesting()).isEqualTo(-1);
 
         // Send move again to trigger click and verify there is now a pending click.
-        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         assertThat(mController.mClickScheduler.getIsActiveForTesting()).isTrue();
         assertThat(mController.mClickScheduler.getScheduledClickTimeForTesting()).isNotEqualTo(-1);
     }
@@ -724,7 +786,7 @@ public class AutoclickControllerTest {
         initializeAutoclick();
 
         // Send hover move event.
-        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
 
         // Verify left click sent.
@@ -744,7 +806,7 @@ public class AutoclickControllerTest {
         mController.mAutoclickTypePanel = mockAutoclickTypePanel;
 
         // Send hover move event.
-        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
 
         // Verify right click sent.
@@ -767,7 +829,7 @@ public class AutoclickControllerTest {
         mController.mAutoclickScrollPanel = mockScrollPanel;
 
         // First hover move event.
-        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
 
         // Verify scroll panel is shown once.
@@ -1132,7 +1194,7 @@ public class AutoclickControllerTest {
         mController.clickPanelController.handleAutoclickTypeChange(
                 AutoclickTypePanel.AUTOCLICK_TYPE_DRAG);
 
-        injectFakeMouseMoveEvent(/* x= */ 30, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        injectFakeMouseMoveEvent(/* x= */ 100, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
 
         // Verify only two motion events were sent.
@@ -1173,6 +1235,13 @@ public class AutoclickControllerTest {
         assertThat(mMotionEventCaptor.upEvent).isNotNull();
         assertThat(mMotionEventCaptor.upEvent.getDownTime()).isEqualTo(
                 mMotionEventCaptor.downEvent.getDownTime());
+
+        // Verify the button release & up event have the correct click parameters.
+        assertThat(mMotionEventCaptor.buttonReleaseEvent.getActionButton()).isEqualTo(
+                MotionEvent.BUTTON_PRIMARY);
+        assertThat(mMotionEventCaptor.buttonReleaseEvent.getButtonState()).isEqualTo(0);
+        assertThat(mMotionEventCaptor.upEvent.getActionButton()).isEqualTo(0);
+        assertThat(mMotionEventCaptor.upEvent.getButtonState()).isEqualTo(0);
     }
 
 
@@ -1285,7 +1354,7 @@ public class AutoclickControllerTest {
         mController.mAutoclickTypePanel = mockAutoclickTypePanel;
 
         // Send hover move event.
-        injectFakeMouseMoveEvent(/* x= */ 30f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
+        injectFakeMouseMoveEvent(/* x= */ 100f, /* y= */ 0, MotionEvent.ACTION_HOVER_MOVE);
         mTestableLooper.processAllMessages();
         assertThat(motionEventCaptor.downEvent).isNotNull();
         assertThat(motionEventCaptor.downEvent.getButtonState()).isEqualTo(
@@ -1436,6 +1505,62 @@ public class AutoclickControllerTest {
 
     @Test
     @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void typePanelDrag_completeLifeCycle() {
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Store initial position for comparison.
+        WindowManager.LayoutParams initialParams =
+                mController.mAutoclickTypePanel.getLayoutParamsForTesting();
+        int initialX = initialParams.x;
+        int initialY = initialParams.y;
+
+        // Test onDragStart - should enable dragging and change cursor.
+        MotionEvent dragStartEvent = MotionEvent.obtain(
+                /* downTime= */ 0, /* eventTime= */ 0, MotionEvent.ACTION_DOWN,
+                /* x= */ 100f, /* y= */ 100f, /* metaState= */ 0);
+        mController.mAutoclickTypePanel.onDragStart(dragStartEvent);
+        assertThat(mController.mAutoclickTypePanel.getIsDragging()).isTrue();
+        assertThat(mController.mAutoclickTypePanel.getCurrentCursorForTesting().getType())
+                .isEqualTo(PointerIcon.TYPE_GRABBING);
+
+        // Test onDragMove - should update position and maintain drag state.
+        MotionEvent dragMoveEvent = MotionEvent.obtain(
+                /* downTime= */ 0, /* eventTime= */ 50, MotionEvent.ACTION_MOVE,
+                /* x= */ 150f, /* y= */ 150f, /* metaState= */ 0);
+        mController.mAutoclickTypePanel.onDragMove(dragMoveEvent);
+
+        // Verify drag state maintained and gravity changed to absolute positioning
+        assertThat(mController.mAutoclickTypePanel.getIsDragging()).isTrue();
+        assertThat(mController.mAutoclickTypePanel.getCurrentCursorForTesting().getType())
+                .isEqualTo(PointerIcon.TYPE_GRABBING);
+        assertThat(mController.mAutoclickTypePanel.getLayoutParamsForTesting().gravity)
+                .isEqualTo(Gravity.LEFT | Gravity.TOP);
+
+        // Verify position coordinates actually changed from drag movement.
+        WindowManager.LayoutParams dragParams =
+                mController.mAutoclickTypePanel.getLayoutParamsForTesting();
+        assertThat(dragParams.x).isNotEqualTo(initialX);
+        assertThat(dragParams.y).isNotEqualTo(initialY);
+
+        // Test onDragEnd - should reset state, change cursor, and snap to edge.
+        mController.mAutoclickTypePanel.onDragEnd();
+        assertThat(mController.mAutoclickTypePanel.getIsDragging()).isFalse();
+        assertThat(mController.mAutoclickTypePanel.getCurrentCursorForTesting().getType())
+                .isEqualTo(PointerIcon.TYPE_GRAB);
+
+        // Verify panel snapped to edge.
+        WindowManager.LayoutParams finalParams =
+                mController.mAutoclickTypePanel.getLayoutParamsForTesting();
+        boolean snappedToLeftEdge = (finalParams.gravity & Gravity.START) == Gravity.START;
+        boolean snappedToRightEdge = (finalParams.gravity & Gravity.END) == Gravity.END;
+        assertThat(snappedToLeftEdge || snappedToRightEdge).isTrue();
+
+        dragStartEvent.recycle();
+        dragMoveEvent.recycle();
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
     public void exitButton_exitsScrollMode() {
         // Initialize the controller.
         injectFakeMouseActionHoverMoveEvent();
@@ -1467,6 +1592,215 @@ public class AutoclickControllerTest {
         assertThat(mController.getActiveClickTypeForTest())
                 .isEqualTo(AutoclickTypePanel.AUTOCLICK_TYPE_LEFT_CLICK);
     }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void onConfigurationChanged_notifiesIndicatorToUpdateTheme() throws Exception {
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Create a spy on the real object to verify method calls.
+        AutoclickIndicatorView spyIndicatorView = spy(mController.mAutoclickIndicatorView);
+        mController.mAutoclickIndicatorView = spyIndicatorView;
+
+        // Simulate a theme change.
+        Configuration newConfig = new Configuration();
+        mController.onConfigurationChanged(newConfig);
+
+        // Verify updateConfiguration was called.
+        verify(spyIndicatorView).onConfigurationChanged(newConfig);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void onConfigurationChanged_notifiesTypePanelToUpdateTheme() throws Exception {
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Create a spy on the real object to verify method calls.
+        AutoclickTypePanel spyTypePanel = spy(mController.mAutoclickTypePanel);
+        mController.mAutoclickTypePanel = spyTypePanel;
+
+        // Simulate a theme change.
+        Configuration newConfig = new Configuration();
+        mController.onConfigurationChanged(newConfig);
+
+        // Verify onThemeChanged was called.
+        verify(spyTypePanel).onConfigurationChanged(newConfig);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void onConfigurationChanged_notifiesScrollPanelToUpdateTheme() throws Exception {
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Create a spy on the real object to verify method calls.
+        AutoclickScrollPanel spyScrollPanel = spy(mController.mAutoclickScrollPanel);
+        mController.mAutoclickScrollPanel = spyScrollPanel;
+
+        // Simulate a theme change.
+        Configuration newConfig = new Configuration();
+        mController.onConfigurationChanged(newConfig);
+
+        // Verify onConfigurationChanged was called.
+        verify(spyScrollPanel).onConfigurationChanged(newConfig);
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void onInputDeviceChanged_disconnectAndReconnect_hidesAndShowsTypePanel() {
+        // Setup: one mouse connected initially.
+        mController.mInputManagerWrapper = mMockInputManagerWrapper;
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[] {1});
+        AutoclickController.InputDeviceWrapper mockMouse =
+                mock(AutoclickController.InputDeviceWrapper.class);
+        when(mockMouse.supportsSource(InputDevice.SOURCE_MOUSE)).thenReturn(true);
+        when(mockMouse.isEnabled()).thenReturn(true);
+        when(mockMouse.isVirtual()).thenReturn(false);
+        when(mMockInputManagerWrapper.getInputDevice(1)).thenReturn(mockMouse);
+
+        // Initialize controller and panels.
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Capture the listener.
+        ArgumentCaptor<InputManager.InputDeviceListener> listenerCaptor =
+                ArgumentCaptor.forClass(InputManager.InputDeviceListener.class);
+        verify(mMockInputManagerWrapper)
+                .registerInputDeviceListener(listenerCaptor.capture(), any());
+        InputManager.InputDeviceListener listener = listenerCaptor.getValue();
+
+        // Mock panels to verify interactions.
+        AutoclickTypePanel mockTypePanel = mock(AutoclickTypePanel.class);
+        AutoclickScrollPanel mockScrollPanel = mock(AutoclickScrollPanel.class);
+        mController.mAutoclickTypePanel = mockTypePanel;
+        mController.mAutoclickScrollPanel = mockScrollPanel;
+
+        // Action: disconnect mouse.
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[0]);
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Verify panels are hidden.
+        verify(mockTypePanel).hide();
+        verify(mockScrollPanel).hide();
+
+        // Action: reconnect mouse.
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[] {1});
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Verify type panel is shown, but scroll panel is not.
+        verify(mockTypePanel).show();
+        verify(mockScrollPanel, Mockito.never()).show(anyFloat(), anyFloat());
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void onInputDeviceChanged_noConnectionChange_panelsStateUnchanged() {
+        // Setup: one mouse connected initially.
+        mController.mInputManagerWrapper = mMockInputManagerWrapper;
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[] {1});
+        AutoclickController.InputDeviceWrapper mockMouse =
+                mock(AutoclickController.InputDeviceWrapper.class);
+        when(mockMouse.supportsSource(InputDevice.SOURCE_MOUSE)).thenReturn(true);
+        when(mockMouse.isEnabled()).thenReturn(true);
+        when(mockMouse.isVirtual()).thenReturn(false);
+        when(mMockInputManagerWrapper.getInputDevice(1)).thenReturn(mockMouse);
+
+        // Initialize controller and panels.
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Capture the listener.
+        ArgumentCaptor<InputManager.InputDeviceListener> listenerCaptor =
+                ArgumentCaptor.forClass(InputManager.InputDeviceListener.class);
+        verify(mMockInputManagerWrapper)
+                .registerInputDeviceListener(listenerCaptor.capture(), any());
+        InputManager.InputDeviceListener listener = listenerCaptor.getValue();
+
+        // Manually trigger once to establish initial connected state.
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Mock panels to verify interactions.
+        AutoclickTypePanel mockTypePanel = mock(AutoclickTypePanel.class);
+        AutoclickScrollPanel mockScrollPanel = mock(AutoclickScrollPanel.class);
+        mController.mAutoclickTypePanel = mockTypePanel;
+        mController.mAutoclickScrollPanel = mockScrollPanel;
+
+        // Action: trigger change, but connection state is the same (connected).
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Verify panels state is unchanged.
+        verify(mockTypePanel, Mockito.never()).hide();
+        verify(mockScrollPanel, Mockito.never()).hide();
+        verify(mockTypePanel, Mockito.never()).show();
+
+        // Action: disconnect mouse.
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[0]);
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Verify hide was called once.
+        verify(mockTypePanel, times(1)).hide();
+        verify(mockScrollPanel, times(1)).hide();
+
+        // Action: trigger change, but connection state is the same (disconnected).
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Verify panels state is unchanged (hide not called again).
+        verify(mockTypePanel, times(1)).hide();
+        verify(mockScrollPanel, times(1)).hide();
+        verify(mockTypePanel, Mockito.never()).show();
+    }
+
+    @Test
+    @EnableFlags(com.android.server.accessibility.Flags.FLAG_ENABLE_AUTOCLICK_INDICATOR)
+    public void onInputDeviceChanged_touchpad_hidesAndShowsTypePanel() {
+        // Setup: one touchpad connected initially.
+        mController.mInputManagerWrapper = mMockInputManagerWrapper;
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[]{1});
+        AutoclickController.InputDeviceWrapper mockTouchpad =
+                mock(AutoclickController.InputDeviceWrapper.class);
+        when(mockTouchpad.supportsSource(InputDevice.SOURCE_TOUCHPAD)).thenReturn(true);
+        when(mockTouchpad.isEnabled()).thenReturn(true);
+        when(mockTouchpad.isVirtual()).thenReturn(false);
+        when(mMockInputManagerWrapper.getInputDevice(1)).thenReturn(mockTouchpad);
+
+        // Initialize controller and panels.
+        injectFakeMouseActionHoverMoveEvent();
+
+        // Capture the listener.
+        ArgumentCaptor<InputManager.InputDeviceListener> listenerCaptor =
+                ArgumentCaptor.forClass(InputManager.InputDeviceListener.class);
+        verify(mMockInputManagerWrapper)
+                .registerInputDeviceListener(listenerCaptor.capture(), any());
+        InputManager.InputDeviceListener listener = listenerCaptor.getValue();
+
+        // Mock panels to verify interactions.
+        AutoclickTypePanel mockTypePanel = mock(AutoclickTypePanel.class);
+        AutoclickScrollPanel mockScrollPanel = mock(AutoclickScrollPanel.class);
+        mController.mAutoclickTypePanel = mockTypePanel;
+        mController.mAutoclickScrollPanel = mockScrollPanel;
+
+        // Action: disconnect touchpad.
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[0]);
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Verify panels are hidden.
+        verify(mockTypePanel).hide();
+        verify(mockScrollPanel).hide();
+
+        // Action: reconnect touchpad.
+        when(mMockInputManagerWrapper.getInputDeviceIds()).thenReturn(new int[]{1});
+        listener.onInputDeviceChanged(1);
+        mTestableLooper.processAllMessages();
+
+        // Verify type panel is shown, but scroll panel is not.
+        verify(mockTypePanel).show();
+        verify(mockScrollPanel, Mockito.never()).show(anyFloat(), anyFloat());
+    }
+
     /**
      * =========================================================================
      * Helper Functions

@@ -72,12 +72,9 @@ import com.android.systemui.statusbar.notification.row.NotificationRowContentBin
 import com.android.systemui.statusbar.notification.row.NotificationRowContentBinder.InflationCallback
 import com.android.systemui.statusbar.notification.row.NotificationRowContentBinder.InflationFlag
 import com.android.systemui.statusbar.notification.row.shared.AsyncGroupHeaderViewInflation
-import com.android.systemui.statusbar.notification.row.shared.AsyncHybridViewInflation
 import com.android.systemui.statusbar.notification.row.shared.HeadsUpStatusBarModel
-import com.android.systemui.statusbar.notification.row.shared.LockscreenOtpRedaction
 import com.android.systemui.statusbar.notification.row.shared.NewRemoteViews
 import com.android.systemui.statusbar.notification.row.shared.NotificationContentModel
-import com.android.systemui.statusbar.notification.row.shared.NotificationRowContentBinderRefactor
 import com.android.systemui.statusbar.notification.row.ui.viewbinder.SingleLineViewBinder
 import com.android.systemui.statusbar.notification.row.wrapper.NotificationViewWrapper
 import com.android.systemui.statusbar.notification.shared.NotificationBundleUi
@@ -87,7 +84,6 @@ import com.android.systemui.statusbar.policy.InflatedSmartReplyViewHolder
 import com.android.systemui.statusbar.policy.SmartReplyStateInflater
 import com.android.systemui.util.Assert
 import java.util.concurrent.Executor
-import java.util.function.Consumer
 import javax.inject.Inject
 
 /**
@@ -109,11 +105,6 @@ constructor(
     private val promotedNotificationContentExtractor: PromotedNotificationContentExtractor,
     private val logger: NotificationRowContentBinderLogger,
 ) : NotificationRowContentBinder {
-
-    init {
-        /* check if */ NotificationRowContentBinderRefactor.isUnexpectedlyInLegacyMode()
-    }
-
     private var inflateSynchronously = false
 
     override fun bindContent(
@@ -205,30 +196,26 @@ constructor(
             smartRepliesInflater,
             logger,
         )
-        if (AsyncHybridViewInflation.isEnabled) {
-            result.inflatedSingleLineView =
-                result.contentModel.singleLineViewModel?.let { viewModel ->
-                    SingleLineViewInflater.inflatePrivateSingleLineView(
-                        viewModel.isConversation(),
-                        reInflateFlags,
-                        entry,
-                        systemUIContext,
-                        logger,
-                    )
-                }
-        }
-        if (LockscreenOtpRedaction.isEnabled) {
-            result.inflatedPublicSingleLineView =
-                result.contentModel.publicSingleLineViewModel?.let { viewModel ->
-                    SingleLineViewInflater.inflatePublicSingleLineView(
-                        viewModel.isConversation(),
-                        reInflateFlags,
-                        entry,
-                        systemUIContext,
-                        logger,
-                    )
-                }
-        }
+        result.inflatedSingleLineView =
+            result.contentModel.singleLineViewModel?.let { viewModel ->
+                SingleLineViewInflater.inflatePrivateSingleLineView(
+                    viewModel.isConversation(),
+                    reInflateFlags,
+                    entry,
+                    systemUIContext,
+                    logger,
+                )
+            }
+        result.inflatedPublicSingleLineView =
+            result.contentModel.publicSingleLineViewModel?.let { viewModel ->
+                SingleLineViewInflater.inflatePublicSingleLineView(
+                    viewModel.isConversation(),
+                    reInflateFlags,
+                    entry,
+                    systemUIContext,
+                    logger,
+                )
+            }
         apply(
             inflationExecutor,
             inflateSynchronously,
@@ -304,17 +291,13 @@ constructor(
                     remoteViewCache.removeCachedView(entry, FLAG_CONTENT_VIEW_PUBLIC)
                 }
             FLAG_CONTENT_VIEW_SINGLE_LINE -> {
-                if (AsyncHybridViewInflation.isEnabled) {
-                    row.privateLayout.performWhenContentInactive(VISIBLE_TYPE_SINGLELINE) {
-                        row.privateLayout.setSingleLineView(null)
-                    }
+                row.privateLayout.performWhenContentInactive(VISIBLE_TYPE_SINGLELINE) {
+                    row.privateLayout.setSingleLineView(null)
                 }
             }
             FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE -> {
-                if (LockscreenOtpRedaction.isEnabled) {
-                    row.publicLayout.performWhenContentInactive(VISIBLE_TYPE_SINGLELINE) {
-                        row.publicLayout.setSingleLineView(null)
-                    }
+                row.publicLayout.performWhenContentInactive(VISIBLE_TYPE_SINGLELINE) {
+                    row.publicLayout.setSingleLineView(null)
                 }
             }
             else -> {}
@@ -344,16 +327,10 @@ constructor(
         if (contentViews and FLAG_CONTENT_VIEW_PUBLIC != 0) {
             row.publicLayout.removeContentInactiveRunnable(VISIBLE_TYPE_CONTRACTED)
         }
-        if (
-            AsyncHybridViewInflation.isEnabled &&
-                contentViews and FLAG_CONTENT_VIEW_SINGLE_LINE != 0
-        ) {
+        if (contentViews and FLAG_CONTENT_VIEW_SINGLE_LINE != 0) {
             row.privateLayout.removeContentInactiveRunnable(VISIBLE_TYPE_SINGLELINE)
         }
-        if (
-            LockscreenOtpRedaction.isEnabled &&
-                contentViews and FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE != 0
-        ) {
+        if (contentViews and FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE != 0) {
             row.publicLayout.removeContentInactiveRunnable(VISIBLE_TYPE_SINGLELINE)
         }
     }
@@ -469,33 +446,29 @@ constructor(
                 smartRepliesInflater,
                 logger,
             )
-            if (AsyncHybridViewInflation.isEnabled) {
-                logger.logAsyncTaskProgress(entry.logKey, "inflating single line view")
-                inflationProgress.inflatedSingleLineView =
-                    inflationProgress.contentModel.singleLineViewModel?.let {
-                        SingleLineViewInflater.inflatePrivateSingleLineView(
-                            it.isConversation(),
-                            reInflateFlags,
-                            entry,
-                            context,
-                            logger,
-                        )
-                    }
-            }
+            logger.logAsyncTaskProgress(entry.logKey, "inflating single line view")
+            inflationProgress.inflatedSingleLineView =
+                inflationProgress.contentModel.singleLineViewModel?.let {
+                    SingleLineViewInflater.inflatePrivateSingleLineView(
+                        it.isConversation(),
+                        reInflateFlags,
+                        entry,
+                        context,
+                        logger,
+                    )
+                }
 
-            if (LockscreenOtpRedaction.isEnabled) {
-                logger.logAsyncTaskProgress(entry.logKey, "inflating public single line view")
-                inflationProgress.inflatedPublicSingleLineView =
-                    inflationProgress.contentModel.publicSingleLineViewModel?.let { viewModel ->
-                        SingleLineViewInflater.inflatePublicSingleLineView(
-                            viewModel.isConversation(),
-                            reInflateFlags,
-                            entry,
-                            context,
-                            logger,
-                        )
-                    }
-            }
+            logger.logAsyncTaskProgress(entry.logKey, "inflating public single line view")
+            inflationProgress.inflatedPublicSingleLineView =
+                inflationProgress.contentModel.publicSingleLineViewModel?.let { viewModel ->
+                    SingleLineViewInflater.inflatePublicSingleLineView(
+                        viewModel.isConversation(),
+                        reInflateFlags,
+                        entry,
+                        context,
+                        logger,
+                    )
+                }
 
             logger.logAsyncTaskProgress(entry.logKey, "loading RON images")
             inflationProgress.rowImageInflater.loadImagesSynchronously(packageContext)
@@ -745,10 +718,7 @@ constructor(
                 )
 
             val singleLineViewModel =
-                if (
-                    AsyncHybridViewInflation.isEnabled &&
-                        reInflateFlags and FLAG_CONTENT_VIEW_SINGLE_LINE != 0
-                ) {
+                if (reInflateFlags and FLAG_CONTENT_VIEW_SINGLE_LINE != 0) {
                     logger.logAsyncTaskProgress(entry.logKey, "inflating single line view model")
                     SingleLineViewInflater.inflateSingleLineViewModel(
                         notification = entry.sbn.notification,
@@ -762,10 +732,7 @@ constructor(
                 } else null
 
             val publicSingleLineViewModel =
-                if (
-                    LockscreenOtpRedaction.isEnabled &&
-                        reInflateFlags and FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE != 0
-                ) {
+                if (reInflateFlags and FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE != 0) {
                     logger.logAsyncTaskProgress(
                         entry.logKey,
                         "inflating public single line view model",
@@ -886,10 +853,7 @@ constructor(
                 val public =
                     if (reInflateFlags and FLAG_CONTENT_VIEW_PUBLIC != 0) {
                         logger.logAsyncTaskProgress(row.loggingKey, "creating public remote view")
-                        if (
-                            LockscreenOtpRedaction.isEnabled &&
-                                bindParams.redactionType == REDACTION_TYPE_OTP
-                        ) {
+                        if (bindParams.redactionType == REDACTION_TYPE_OTP) {
                             createSensitiveContentMessageNotification(
                                     entry.sbn.notification,
                                     builder.style,
@@ -939,26 +903,22 @@ constructor(
             row: ExpandableNotificationRow,
             provider: NotifLayoutInflaterFactory.Provider,
         ): NewRemoteViews {
-            contracted?.let {
-                it.layoutInflaterFactory = provider.provide(row, FLAG_CONTENT_VIEW_CONTRACTED)
+
+            fun RemoteViews?.setLayoutInflaterFactoryRecursively(@InflationFlag layoutType: Int) {
+                val layoutInflaterFactory = provider.provide(row, layoutType)
+                this?.visitRemoteViews { it.layoutInflaterFactory = layoutInflaterFactory }
             }
-            expanded?.let {
-                it.layoutInflaterFactory = provider.provide(row, FLAG_CONTENT_VIEW_EXPANDED)
-            }
-            headsUp?.let {
-                it.layoutInflaterFactory = provider.provide(row, FLAG_CONTENT_VIEW_HEADS_UP)
-            }
-            public?.let {
-                it.layoutInflaterFactory = provider.provide(row, FLAG_CONTENT_VIEW_PUBLIC)
-            }
+
+            contracted.setLayoutInflaterFactoryRecursively(FLAG_CONTENT_VIEW_CONTRACTED)
+            expanded.setLayoutInflaterFactoryRecursively(FLAG_CONTENT_VIEW_EXPANDED)
+            headsUp.setLayoutInflaterFactoryRecursively(FLAG_CONTENT_VIEW_HEADS_UP)
+            public.setLayoutInflaterFactoryRecursively(FLAG_CONTENT_VIEW_PUBLIC)
+
             if (android.app.Flags.notificationsRedesignAppIcons()) {
-                normalGroupHeader?.let {
-                    it.layoutInflaterFactory = provider.provide(row, FLAG_GROUP_SUMMARY_HEADER)
-                }
-                minimizedGroupHeader?.let {
-                    it.layoutInflaterFactory =
-                        provider.provide(row, FLAG_LOW_PRIORITY_GROUP_SUMMARY_HEADER)
-                }
+                normalGroupHeader.setLayoutInflaterFactoryRecursively(FLAG_GROUP_SUMMARY_HEADER)
+                minimizedGroupHeader.setLayoutInflaterFactoryRecursively(
+                    FLAG_LOW_PRIORITY_GROUP_SUMMARY_HEADER
+                )
             }
             return this
         }
@@ -979,7 +939,7 @@ constructor(
             Trace.beginAsyncSection(APPLY_TRACE_METHOD, System.identityHashCode(row))
             val privateLayout = row.privateLayout
             val publicLayout = row.publicLayout
-            val runningInflations = HashMap<Int, CancellationSignal>()
+            val runningInflations = InflationTaskTracker()
             var flag = FLAG_CONTENT_VIEW_CONTRACTED
             if (reInflateFlags and flag != 0 && result.remoteViews.contracted != null) {
                 val isNewView =
@@ -1248,9 +1208,7 @@ constructor(
             cancellationSignal.setOnCancelListener {
                 logger.logAsyncTaskProgress(entry.logKey, "apply cancelled")
                 Trace.endAsyncSection(APPLY_TRACE_METHOD, System.identityHashCode(row))
-                runningInflations.values.forEach(
-                    Consumer { obj: CancellationSignal -> obj.cancel() }
-                )
+                runningInflations.cancelAll()
             }
             return cancellationSignal
         }
@@ -1272,7 +1230,7 @@ constructor(
             parentLayout: ViewGroup?,
             existingView: View?,
             existingWrapper: NotificationViewWrapper?,
-            runningInflations: HashMap<Int, CancellationSignal>,
+            runningInflations: InflationTaskTracker,
             applyCallback: ApplyCallback,
             logger: NotificationRowContentBinderLogger,
         ) {
@@ -1311,7 +1269,7 @@ constructor(
                     )
                     // Add a running inflation to make sure we don't trigger callbacks.
                     // Safe to do because only happens in tests.
-                    runningInflations[inflationId] = CancellationSignal()
+                    runningInflations.registerRemoteViews(inflationId, CancellationSignal())
                 }
                 return
             }
@@ -1343,7 +1301,7 @@ constructor(
                                 logger,
                                 "applied invalid view",
                             )
-                            runningInflations.remove(inflationId)
+                            runningInflations.unregisterRemoteViews(inflationId)
                             return
                         }
                         if (isNewView) {
@@ -1351,7 +1309,7 @@ constructor(
                         } else {
                             existingWrapper?.onReinflated()
                         }
-                        runningInflations.remove(inflationId)
+                        runningInflations.unregisterRemoteViews(inflationId)
                         finishIfDone(
                             result,
                             isMinimized,
@@ -1374,7 +1332,7 @@ constructor(
                                 existingWrapper?.onReinflated()
                             }
                         } catch (e: InflationException) {
-                            runningInflations.remove(inflationId)
+                            runningInflations.unregisterRemoteViews(inflationId)
                             handleInflationError(
                                 runningInflations,
                                 e,
@@ -1387,7 +1345,7 @@ constructor(
                             return
                         }
 
-                        runningInflations.remove(inflationId)
+                        runningInflations.unregisterRemoteViews(inflationId)
                         finishIfDone(
                             result,
                             isMinimized,
@@ -1428,7 +1386,7 @@ constructor(
                             )
                             onViewApplied(newView)
                         } catch (anotherException: Exception) {
-                            runningInflations.remove(inflationId)
+                            runningInflations.unregisterRemoteViews(inflationId)
                             handleInflationError(
                                 runningInflations,
                                 e,
@@ -1459,7 +1417,7 @@ constructor(
                         remoteViewClickHandler,
                     )
                 }
-            runningInflations[inflationId] = cancellationSignal
+            runningInflations.registerRemoteViews(inflationId, cancellationSignal)
         }
 
         /**
@@ -1534,7 +1492,7 @@ constructor(
         }
 
         private fun handleInflationError(
-            runningInflations: HashMap<Int, CancellationSignal>,
+            runningInflations: InflationTaskTracker,
             e: Exception,
             notification: ExpandableNotificationRow?,
             entry: NotificationEntry,
@@ -1544,7 +1502,7 @@ constructor(
         ) {
             Assert.isMainThread()
             logger.logAsyncTaskException(notification?.loggingKey, logContext, e)
-            runningInflations.values.forEach(Consumer { obj: CancellationSignal -> obj.cancel() })
+            runningInflations.cancelAll()
             callback?.handleInflationException(entry, e)
         }
 
@@ -1558,14 +1516,14 @@ constructor(
             isMinimized: Boolean,
             @InflationFlag reInflateFlags: Int,
             remoteViewCache: NotifRemoteViewCache,
-            runningInflations: HashMap<Int, CancellationSignal>,
+            runningInflations: InflationTaskTracker,
             endListener: InflationCallback?,
             entry: NotificationEntry,
             row: ExpandableNotificationRow,
             logger: NotificationRowContentBinderLogger,
         ): Boolean {
             Assert.isMainThread()
-            if (runningInflations.isNotEmpty()) {
+            if (runningInflations.isAnyActive()) {
                 return false
             }
             logger.logAsyncTaskProgress(row.loggingKey, "finishing")
@@ -1589,10 +1547,7 @@ constructor(
                 isMinimized,
             )
 
-            if (
-                AsyncHybridViewInflation.isEnabled &&
-                    reInflateFlags and FLAG_CONTENT_VIEW_SINGLE_LINE != 0
-            ) {
+            if (reInflateFlags and FLAG_CONTENT_VIEW_SINGLE_LINE != 0) {
                 val singleLineView = result.inflatedSingleLineView
                 val viewModel = result.contentModel.singleLineViewModel
                 if (singleLineView != null && viewModel != null) {
@@ -1601,10 +1556,7 @@ constructor(
                 }
             }
 
-            if (
-                LockscreenOtpRedaction.isEnabled &&
-                    reInflateFlags and FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE != 0
-            ) {
+            if (reInflateFlags and FLAG_CONTENT_VIEW_PUBLIC_SINGLE_LINE != 0) {
                 val singleLineView = result.inflatedPublicSingleLineView
                 val viewModel = result.contentModel.publicSingleLineViewModel
                 if (singleLineView != null && viewModel != null) {
@@ -1780,5 +1732,23 @@ constructor(
         private const val ASYNC_TASK_TRACE_METHOD =
             "NotificationRowContentBinderImpl.AsyncInflationTask"
         private const val APPLY_TRACE_METHOD = "NotificationRowContentBinderImpl#apply"
+    }
+
+    class InflationTaskTracker {
+        private val remoteViews = HashMap<Int, CancellationSignal>()
+
+        fun registerRemoteViews(inflationId: Int, signal: CancellationSignal) {
+            remoteViews[inflationId] = signal
+        }
+
+        fun unregisterRemoteViews(inflationId: Int) {
+            remoteViews.remove(inflationId)
+        }
+
+        fun cancelAll() {
+            remoteViews.values.forEach(CancellationSignal::cancel)
+        }
+
+        fun isAnyActive(): Boolean = remoteViews.isNotEmpty()
     }
 }

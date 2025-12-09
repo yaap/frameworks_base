@@ -26,6 +26,7 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.AnimatedVectorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Handler;
 import android.os.IBinder;
 import android.text.TextUtils;
 import android.util.Log;
@@ -57,6 +58,7 @@ import android.window.InputTransferToken;
 import com.android.internal.R;
 import com.android.internal.util.Preconditions;
 import com.android.internal.widget.floatingtoolbar.FloatingToolbar;
+import com.android.server.FgThread;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -78,7 +80,11 @@ public final class RemoteSelectionToolbar {
     private static final int MIN_OVERFLOW_SIZE = 2;
     private static final int MAX_OVERFLOW_SIZE = 4;
 
-    private int mCallingUid;
+    private static final int TOOLBAR_STATE_SHOWN = 1;
+    private static final int TOOLBAR_STATE_HIDDEN = 2;
+    private static final int TOOLBAR_STATE_DISMISSED = 3;
+
+    private final int mUid;
 
     private final Context mContext;
 
@@ -119,7 +125,6 @@ public final class RemoteSelectionToolbar {
     private final int mLineHeight;
     private final int mIconTextSpacing;
 
-    private final long mSelectionToolbarToken;
     private IBinder mHostInputToken;
     private final SelectionToolbarRenderService.RemoteCallbackWrapper mCallbackWrapper;
     private final SelectionToolbarRenderService.TransferTouchListener mTransferTouchListener;
@@ -133,6 +138,7 @@ public final class RemoteSelectionToolbar {
     private List<ToolbarMenuItem> mMenuItems;
     private SurfaceControlViewHost mSurfaceControlViewHost;
     private SurfaceControlViewHost.SurfacePackage mSurfacePackage;
+    private final Handler mFgHandler;
 
     /**
      * @see OverflowPanelViewHelper#preparePopupContent()
@@ -145,9 +151,8 @@ public final class RemoteSelectionToolbar {
         }
     };
 
-    private boolean mDismissed = true; // tracks whether this popup is dismissed or dismissing.
-    private boolean mHidden; // tracks whether this popup is hidden or hiding.
-
+    // Tracks this selection toolbar state.
+    private int mState = TOOLBAR_STATE_DISMISSED;
     /* Calculated sizes for panels and overflow button. */
     private final Size mOverflowButtonSize;
     private Size mOverflowPanelSize;  // Should be null when there is no overflow.
@@ -167,13 +172,12 @@ public final class RemoteSelectionToolbar {
     private final Rect mTempContentRectForRoot = new Rect();
     private final int[] mTempCoords = new int[2];
 
-    public RemoteSelectionToolbar(int callingUid, Context context, long selectionToolbarToken,
+    public RemoteSelectionToolbar(int uid, Context context,
             ShowInfo showInfo, SelectionToolbarRenderService.RemoteCallbackWrapper callbackWrapper,
             SelectionToolbarRenderService.TransferTouchListener transferTouchListener,
             SelectionToolbarRenderService.OnPasteActionCallback onPasteActionCallback) {
-        mCallingUid = callingUid;
+        mUid = uid;
         mContext = wrapContext(context, showInfo);
-        mSelectionToolbarToken = selectionToolbarToken;
         mCallbackWrapper = callbackWrapper;
         mTransferTouchListener = transferTouchListener;
         mOnPasteActionCallback = onPasteActionCallback;
@@ -187,6 +191,7 @@ public final class RemoteSelectionToolbar {
                 .getDimensionPixelSize(R.dimen.floating_toolbar_height);
         mIconTextSpacing = mContext.getResources()
                 .getDimensionPixelSize(R.dimen.floating_toolbar_icon_text_spacing);
+        mFgHandler = FgThread.getHandler();
 
         // Interpolators
         mLogAccelerateInterpolator = new LogAccelerateInterpolator();
@@ -250,14 +255,18 @@ public final class RemoteSelectionToolbar {
                 0,  // startDelay
                 null); // TODO(b/215497659): should handle hide after animation
         mMenuItemButtonOnClickListener = v -> {
-            Object tag = v.getTag();
-            if (tag instanceof ToolbarMenuItem toolbarMenuItem) {
-                if (toolbarMenuItem.itemId == R.id.paste
-                        || toolbarMenuItem.itemId == R.id.pasteAsPlainText) {
-                    mOnPasteActionCallback.onPasteAction(mCallingUid);
+            // Post the callback to fg thread because the onPasteAction() callback
+            // needs to be synchronous but it shouldn't block the main thread.
+            mFgHandler.post(() -> {
+                Object tag = v.getTag();
+                if (tag instanceof ToolbarMenuItem toolbarMenuItem) {
+                    if (toolbarMenuItem.itemId == R.id.paste
+                            || toolbarMenuItem.itemId == R.id.pasteAsPlainText) {
+                        mOnPasteActionCallback.onPasteAction(mUid);
+                    }
+                    mCallbackWrapper.onMenuItemClicked(toolbarMenuItem.itemIndex);
                 }
-                mCallbackWrapper.onMenuItemClicked(toolbarMenuItem.itemIndex);
-            }
+            });
         };
     }
 
@@ -281,7 +290,6 @@ public final class RemoteSelectionToolbar {
                 mRelativeCoordsForToolbar.y + mPopupHeight);
         WidgetInfo widgetInfo = new WidgetInfo();
         widgetInfo.sequenceNumber = mSequenceNumber;
-        widgetInfo.widgetToken = mSelectionToolbarToken;
         widgetInfo.contentRect = mTempContentRect;
         widgetInfo.surfacePackage = getSurfacePackage();
         return widgetInfo;
@@ -342,12 +350,11 @@ public final class RemoteSelectionToolbar {
     private void show(Rect contentRectOnScreen) {
         Objects.requireNonNull(contentRectOnScreen);
 
-        mHidden = false;
-        mDismissed = false;
         cancelDismissAndHideAnimations();
         cancelOverflowAnimations();
         refreshCoordinatesAndOverflowDirection(contentRectOnScreen);
         preparePopupContent();
+        mState = TOOLBAR_STATE_SHOWN;
         mCallbackWrapper.onShown(createWidgetInfo());
         // TODO(b/215681595): Use Choreographer to coordinate for show between different thread
         mShowAnimation.start();
@@ -356,33 +363,34 @@ public final class RemoteSelectionToolbar {
     /**
      * Dismiss the specified selection toolbar.
      */
-    public void dismiss(long floatingToolbarToken) {
-        debugLog("dismiss for " + floatingToolbarToken);
-        if (mDismissed) {
+    public void dismiss(int uid) {
+        debugLog("dismiss for uid: " + uid);
+        if (mState == TOOLBAR_STATE_DISMISSED) {
             return;
         }
-        mHidden = false;
-        mDismissed = true;
-
         mHideAnimation.cancel();
         mDismissAnimation.start();
+        mState = TOOLBAR_STATE_DISMISSED;
     }
 
     /**
      * Hide the specified selection toolbar.
      */
-    public void hide(long floatingToolbarToken) {
-        debugLog("hide for " + floatingToolbarToken);
+    public void hide(int uid) {
+        debugLog("hide for uid: " + uid);
         if (!isShowing()) {
             return;
         }
-
-        mHidden = true;
         mHideAnimation.start();
+        mState = TOOLBAR_STATE_HIDDEN;
     }
 
     public boolean isShowing() {
-        return !mDismissed && !mHidden;
+        return mState == TOOLBAR_STATE_SHOWN;
+    }
+
+    public boolean isHidden() {
+        return mState == TOOLBAR_STATE_HIDDEN;
     }
 
     private void updateCoordinates(Rect contentRectOnScreen) {
@@ -1293,6 +1301,7 @@ public final class RemoteSelectionToolbar {
 
                     newMenuItem.groupId = menuItem.groupId;
                     newMenuItem.priority = menuItem.priority;
+                    newMenuItem.itemIndex = menuItem.itemIndex;
 
                     newMenuItem.itemId = android.R.id.paste;
                     newMenuItem.title = context.getString(R.string.paste);
@@ -1305,6 +1314,7 @@ public final class RemoteSelectionToolbar {
 
                     newMenuItem.groupId = menuItem.groupId;
                     newMenuItem.priority = menuItem.priority;
+                    newMenuItem.itemIndex = menuItem.itemIndex;
 
                     newMenuItem.itemId = android.R.id.pasteAsPlainText;
                     newMenuItem.title = context.getString(R.string.paste_as_plain_text);
@@ -1427,9 +1437,8 @@ public final class RemoteSelectionToolbar {
      * Dumps information about this class.
      */
     public void dump(String prefix, PrintWriter pw) {
-        pw.print(prefix); pw.print("toolbar token: "); pw.println(mSelectionToolbarToken);
-        pw.print(prefix); pw.print("dismissed: "); pw.println(mDismissed);
-        pw.print(prefix); pw.print("hidden: "); pw.println(mHidden);
+        pw.print(prefix); pw.print("dismissed: "); pw.println(mState == TOOLBAR_STATE_DISMISSED);
+        pw.print(prefix); pw.print("hidden: "); pw.println(mState == TOOLBAR_STATE_HIDDEN);
         pw.print(prefix); pw.print("popup width: "); pw.println(mPopupWidth);
         pw.print(prefix); pw.print("popup height: "); pw.println(mPopupHeight);
         pw.print(prefix); pw.print("relative coords: "); pw.println(mRelativeCoordsForToolbar);

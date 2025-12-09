@@ -16,7 +16,6 @@
 
 package com.android.server.accessibility.magnification;
 
-import static com.android.server.accessibility.Flags.FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL;
 import static com.android.server.accessibility.magnification.MagnificationController.PAN_DIRECTION_DOWN;
 import static com.android.server.accessibility.magnification.MagnificationController.PAN_DIRECTION_LEFT;
 import static com.android.server.accessibility.magnification.MagnificationController.PAN_DIRECTION_RIGHT;
@@ -26,11 +25,11 @@ import static com.android.server.accessibility.magnification.MagnificationContro
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.view.Display;
@@ -38,6 +37,7 @@ import android.view.KeyEvent;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.server.accessibility.AccessibilityManagerService;
 import com.android.server.accessibility.EventStreamTransformation;
 
 import org.junit.Before;
@@ -52,8 +52,8 @@ import org.mockito.MockitoAnnotations;
  * Tests for {@link MagnificationKeyHandler}.
  */
 @RunWith(AndroidJUnit4.class)
-@RequiresFlagsEnabled(FLAG_ENABLE_MAGNIFICATION_KEYBOARD_CONTROL)
 public class MagnificationKeyHandlerTest {
+    private static final int EXTERNAL_DISPLAY_ID = 2;
 
     @Rule
     public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
@@ -64,13 +64,17 @@ public class MagnificationKeyHandlerTest {
     MagnificationKeyHandler.Callback mCallback;
 
     @Mock
+    AccessibilityManagerService mAms;
+
+    @Mock
     EventStreamTransformation mNextHandler;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         when(mCallback.isMagnificationActivated(any(Integer.class))).thenReturn(true);
-        mMkh = new MagnificationKeyHandler(mCallback);
+        doReturn(Display.DEFAULT_DISPLAY).when(mAms).getTopFocusedDisplayId();
+        mMkh = new MagnificationKeyHandler(mCallback, mAms);
         mMkh.setNext(mNextHandler);
     }
 
@@ -138,32 +142,70 @@ public class MagnificationKeyHandlerTest {
 
     @Test
     public void onKeyEvent_panStartAndEnd_left() {
-        testPanMagnification(KeyEvent.KEYCODE_DPAD_LEFT, PAN_DIRECTION_LEFT);
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_LEFT, PAN_DIRECTION_LEFT, Display.DEFAULT_DISPLAY);
     }
+
+
+    @Test
+    public void onKeyEvent_panStartAndEnd_left_onExternalDisplay() {
+        doReturn(EXTERNAL_DISPLAY_ID).when(mAms).getTopFocusedDisplayId();
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_LEFT, PAN_DIRECTION_LEFT, EXTERNAL_DISPLAY_ID);
+    }
+
 
     @Test
     public void onKeyEvent_panStartAndEnd_right() {
-        testPanMagnification(KeyEvent.KEYCODE_DPAD_RIGHT, PAN_DIRECTION_RIGHT);
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_RIGHT, PAN_DIRECTION_RIGHT, Display.DEFAULT_DISPLAY);
+    }
+
+    @Test
+    public void onKeyEvent_panStartAndEnd_right_onExternalDisplay() {
+        doReturn(EXTERNAL_DISPLAY_ID).when(mAms).getTopFocusedDisplayId();
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_RIGHT, PAN_DIRECTION_RIGHT, EXTERNAL_DISPLAY_ID);
     }
 
     @Test
     public void onKeyEvent_panStartAndEnd_up() {
-        testPanMagnification(KeyEvent.KEYCODE_DPAD_UP, PAN_DIRECTION_UP);
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_UP, PAN_DIRECTION_UP, Display.DEFAULT_DISPLAY);
+    }
+
+    @Test
+    public void onKeyEvent_panStartAndEnd_up_onExternalDisplay() {
+        doReturn(EXTERNAL_DISPLAY_ID).when(mAms).getTopFocusedDisplayId();
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_UP, PAN_DIRECTION_UP, EXTERNAL_DISPLAY_ID);
     }
 
     @Test
     public void onKeyEvent_panStartAndEnd_down() {
-        testPanMagnification(KeyEvent.KEYCODE_DPAD_DOWN, PAN_DIRECTION_DOWN);
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_DOWN, PAN_DIRECTION_DOWN, Display.DEFAULT_DISPLAY);
+    }
+
+    @Test
+    public void onKeyEvent_panStartAndEnd_down_onExternalDisplay() {
+        doReturn(EXTERNAL_DISPLAY_ID).when(mAms).getTopFocusedDisplayId();
+        testPanMagnification(KeyEvent.KEYCODE_DPAD_DOWN, PAN_DIRECTION_DOWN, EXTERNAL_DISPLAY_ID);
     }
 
     @Test
     public void onKeyEvent_scaleStartAndEnd_zoomIn() {
-        testScaleMagnification(KeyEvent.KEYCODE_EQUALS, ZOOM_DIRECTION_IN);
+        testScaleMagnification(KeyEvent.KEYCODE_EQUALS, ZOOM_DIRECTION_IN, Display.DEFAULT_DISPLAY);
+    }
+
+    @Test
+    public void onKeyEvent_scaleStartAndEnd_zoomIn_onExternalDisplay() {
+        doReturn(EXTERNAL_DISPLAY_ID).when(mAms).getTopFocusedDisplayId();
+        testScaleMagnification(KeyEvent.KEYCODE_EQUALS, ZOOM_DIRECTION_IN, EXTERNAL_DISPLAY_ID);
     }
 
     @Test
     public void onKeyEvent_scaleStartAndEnd_zoomOut() {
-        testScaleMagnification(KeyEvent.KEYCODE_MINUS, ZOOM_DIRECTION_OUT);
+        testScaleMagnification(KeyEvent.KEYCODE_MINUS, ZOOM_DIRECTION_OUT, Display.DEFAULT_DISPLAY);
+    }
+
+    @Test
+    public void onKeyEvent_scaleStartAndEnd_zoomOut_onExternalDisplay() {
+        doReturn(EXTERNAL_DISPLAY_ID).when(mAms).getTopFocusedDisplayId();
+        testScaleMagnification(KeyEvent.KEYCODE_MINUS, ZOOM_DIRECTION_OUT, EXTERNAL_DISPLAY_ID);
     }
 
     @Test
@@ -246,13 +288,13 @@ public class MagnificationKeyHandlerTest {
 
     }
 
-    private void testPanMagnification(int keyCode, int panDirection) {
+    private void testPanMagnification(int keyCode, int panDirection, int displayId) {
         final KeyEvent downEvent = new KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0,
                 KeyEvent.META_META_ON | KeyEvent.META_ALT_ON);
         mMkh.onKeyEvent(downEvent, 0);
 
         // Pan started.
-        verify(mCallback, times(1)).onPanMagnificationStart(Display.DEFAULT_DISPLAY, panDirection);
+        verify(mCallback, times(1)).onPanMagnificationStart(displayId, panDirection);
         verify(mCallback, times(0)).onPanMagnificationStop(anyInt());
 
         Mockito.clearInvocations(mCallback);
@@ -262,7 +304,7 @@ public class MagnificationKeyHandlerTest {
         mMkh.onKeyEvent(upEvent, 0);
 
         // Pan ended.
-        verify(mCallback, times(0)).onPanMagnificationStart(Display.DEFAULT_DISPLAY, panDirection);
+        verify(mCallback, times(0)).onPanMagnificationStart(displayId, panDirection);
         verify(mCallback, times(1)).onPanMagnificationStop(panDirection);
 
         // Scale callbacks were not called.
@@ -273,13 +315,13 @@ public class MagnificationKeyHandlerTest {
         verify(mNextHandler, times(0)).onKeyEvent(any(), anyInt());
     }
 
-    private void testScaleMagnification(int keyCode, int zoomDirection) {
+    private void testScaleMagnification(int keyCode, int zoomDirection, int displayId) {
         final KeyEvent downEvent = new KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0,
                 KeyEvent.META_META_ON | KeyEvent.META_ALT_ON);
         mMkh.onKeyEvent(downEvent, 0);
 
         // Scale started.
-        verify(mCallback, times(1)).onScaleMagnificationStart(Display.DEFAULT_DISPLAY,
+        verify(mCallback, times(1)).onScaleMagnificationStart(displayId,
                 zoomDirection);
         verify(mCallback, times(0)).onScaleMagnificationStop(anyInt());
 
@@ -290,7 +332,7 @@ public class MagnificationKeyHandlerTest {
         mMkh.onKeyEvent(upEvent, 0);
 
         // Scale ended.
-        verify(mCallback, times(0)).onScaleMagnificationStart(Display.DEFAULT_DISPLAY,
+        verify(mCallback, times(0)).onScaleMagnificationStart(displayId,
                 zoomDirection);
         verify(mCallback, times(1)).onScaleMagnificationStop(zoomDirection);
 

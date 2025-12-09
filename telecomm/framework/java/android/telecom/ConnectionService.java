@@ -1891,7 +1891,15 @@ public abstract class ConnectionService extends Service {
         }
 
         @Override
-        public void onConferenceableConnectionsChanged(
+        public void onConferenceablesChanged(
+                Conference conference, List<Conferenceable> conferenceables) {
+            mAdapter.setConferenceableConnections(
+                    mIdByConference.get(conference),
+                    createIdList(conferenceables));
+        }
+
+        @Override
+        public void onConferenceableConnectionsChangedLegacy(
                 Conference conference, List<Connection> conferenceableConnections) {
             mAdapter.setConferenceableConnections(
                     mIdByConference.get(conference),
@@ -2037,6 +2045,12 @@ public abstract class ConnectionService extends Service {
                     break;
                 case Connection.STATE_RINGING:
                     mAdapter.setRinging(id);
+                    break;
+                case Connection.STATE_AUDIO_PROCESSING:
+                    mAdapter.setAudioProcessing(id, c.getAudioProcessingUseCase());
+                    break;
+                case Connection.STATE_SIMULATED_RINGING:
+                    mAdapter.setSimulatedRinging(id);
                     break;
             }
         }
@@ -2745,10 +2759,17 @@ public abstract class ConnectionService extends Service {
                     // Call 2 is a connection so merge via call 1 (conference).
                     conference1.onMerge(connection2);
                 } else {
-                    // Call 2 is ALSO a conference; this should never happen.
-                    Log.wtf(this, "There can only be one conference and an attempt was made to " +
-                            "merge two conferences.");
-                    return;
+                    if (Flags.multiPartyAnchorConf()) {
+                        // Call 2 is ALSO a conference, so merge together.
+                        Log.i(this, "conference: merging 2 conferences into a "
+                                + "multi-party anchor conference call. conference1 = [%s] "
+                                + "conference2 = [%s]");
+                        conference1.onMerge(conference2);
+                    } else {
+                        Log.wtf(this, "There can only be one conference and an "
+                                + "attempt was made to merge two conferences.");
+                        return;
+                    }
                 }
             }
         } else {
@@ -3068,6 +3089,7 @@ public abstract class ConnectionService extends Service {
             // Conduct cleanup by getting rid of the original connection in Telecom here:
             mConnectionById.remove(id);
             mIdByConnection.remove(originalConnection);
+            onConnectionRemoved(originalConnection);
         } else {
             Log.w(this, "addConferenceFromConnection: Original connection not "
                     + "found in CS.");
@@ -3714,12 +3736,12 @@ public abstract class ConnectionService extends Service {
         return mIdByConference.containsKey(conference);
     }
 
-    /** {@hide} */
+    /** @hide */
     void addRemoteConference(RemoteConference remoteConference) {
         onRemoteConferenceAdded(remoteConference);
     }
 
-    /** {@hide} */
+    /** @hide */
     void addRemoteExistingConnection(RemoteConnection remoteConnection) {
         onRemoteExistingConnectionAdded(remoteConnection);
     }
@@ -3770,7 +3792,7 @@ public abstract class ConnectionService extends Service {
         onConnectionAdded(connection);
     }
 
-    /** {@hide} */
+    /** @hide */
     protected void removeConnection(Connection connection) {
         connection.unsetConnectionService(this);
         connection.removeConnectionListener(mConnectionListener);

@@ -68,6 +68,7 @@ import libcore.util.HexEncoding;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -173,9 +174,24 @@ class SyntheticPasswordManager {
     // The security strength of the synthetic password, in bytes
     private static final int SYNTHETIC_PASSWORD_SECURITY_STRENGTH = 256 / 8;
 
-    private static final int PASSWORD_SCRYPT_LOG_N = 11;
+    /*
+     * These scrypt parameters are chosen to keep the scrypt time below 50ms or so, even in the
+     * worst case (e.g., a watch form-factor device with the scrypt code running on an
+     * energy-efficient CPU at a reduced frequency).
+     *
+     * The purpose of the scrypt step is just to slow down brute-force attacks on high-entropy
+     * LSKFs. In practice, LSKFs are usually low-entropy, e.g. 4 or 6-digit PINs. With that little
+     * entropy, the scrypt step provides no meaningful security benefit anyway, and the real
+     * security comes from the "hardware" rate-limiting done by Gatekeeper or Weaver.
+     *
+     * Thus, while scrypt is still done to provide some value for rare high-entropy LSKFs, it's
+     * tuned to always be quick enough so that users barely feel the cost.
+     */
+    private static final int PASSWORD_SCRYPT_LOG_N = 9;
+    private static final int PASSWORD_SCRYPT_LOG_N__OLD = 11;
     private static final int PASSWORD_SCRYPT_LOG_R = 3;
     private static final int PASSWORD_SCRYPT_LOG_P = 1;
+
     private static final int PASSWORD_SALT_LENGTH = 16;
     private static final int STRETCHED_LSKF_LENGTH = 32;
     private static final String TAG = "SyntheticPasswordManager";
@@ -384,7 +400,11 @@ class SyntheticPasswordManager {
 
         public static PasswordData create(int credentialType, int pinLength) {
             PasswordData result = new PasswordData();
-            result.scryptLogN = PASSWORD_SCRYPT_LOG_N;
+            if (android.security.Flags.scryptParameterChange()) {
+                result.scryptLogN = PASSWORD_SCRYPT_LOG_N;
+            } else {
+                result.scryptLogN = PASSWORD_SCRYPT_LOG_N__OLD;
+            }
             result.scryptLogR = PASSWORD_SCRYPT_LOG_R;
             result.scryptLogP = PASSWORD_SCRYPT_LOG_P;
             result.credentialType = credentialType;
@@ -701,19 +721,6 @@ class SyntheticPasswordManager {
     }
 
     /**
-     * Create a VerifyCredentialResponse from a timeout base on the WeaverReadResponse.
-     * This checks the received timeout(long) to make sure it sure it fits in an int before
-     * using it. If it doesn't fit, we use Integer.MAX_VALUE.
-     */
-    private static VerifyCredentialResponse responseFromTimeout(WeaverReadResponse response) {
-        int timeout =
-                response.timeout > Integer.MAX_VALUE || response.timeout < 0
-                ? Integer.MAX_VALUE
-                : (int) response.timeout;
-        return VerifyCredentialResponse.fromTimeout(timeout);
-    }
-
-    /**
      * Translate a {@link WeaverReadResponse} to a {@link VerifyCredentialResponse}.
      *
      * <p>This isn't a static method in {@link VerifyCredentialResponse} because {@link
@@ -721,32 +728,31 @@ class SyntheticPasswordManager {
      */
     private static VerifyCredentialResponse verifyCredentialResponseFromWeaverResponse(
             WeaverReadResponse weaverResponse) {
-        switch (weaverResponse.status) {
-            case WeaverReadStatus.OK:
-                return VerifyCredentialResponse.OK;
-            case WeaverReadStatus.THROTTLE:
-                // Either the credential could not be verified because a timeout is still active, or
-                // the credential was incorrect and there is a timeout before the next attempt will
-                // be allowed. INCORRECT_KEY is preferred in the latter case to avoid the ambiguity,
-                // but we still have to support implementations that use THROTTLE for both cases.
-                return responseFromTimeout(weaverResponse);
-            case WeaverReadStatus.INCORRECT_KEY:
-                if (weaverResponse.timeout != 0) {
-                    // The credential was incorrect, and there is a timeout until the next attempt
-                    // will be allowed. This is reached if the Weaver implementation returns
-                    // INCORRECT_KEY in this case instead of THROTTLE.
-                    //
-                    // TODO(b/395976735): use RESPONSE_CRED_INCORRECT in this case, and update users
-                    // of VerifyCredentialResponse to be compatible with that.
-                    return responseFromTimeout(weaverResponse);
-                }
+        return switch (weaverResponse.status) {
+            case WeaverReadStatus.OK -> VerifyCredentialResponse.OK;
+            case WeaverReadStatus.THROTTLE ->
+                    // Either the credential could not be verified because a timeout is still
+                    // active, or the credential was incorrect and there is a timeout before the
+                    // next attempt will be allowed. INCORRECT_KEY is preferred in the latter case
+                    // to avoid the ambiguity, but we still have to support implementations that use
+                    // THROTTLE for both cases.
+                    VerifyCredentialResponse.fromTimeout(Duration.ofMillis(weaverResponse.timeout));
+            case WeaverReadStatus.INCORRECT_KEY -> {
+                // The credential was incorrect. There may be a timeout until the next attempt is
+                // allowed; that occurs when the Weaver implementation returns INCORRECT_KEY in this
+                // case instead of THROTTLE.
                 if (android.security.Flags.softwareRatelimiter()) {
-                    return VerifyCredentialResponse.fromError(
-                            VerifyCredentialResponse.RESPONSE_CRED_INCORRECT);
+                    yield VerifyCredentialResponse.credIncorrect(
+                            Duration.ofMillis(weaverResponse.timeout));
                 }
-                break;
-        }
-        return VerifyCredentialResponse.OTHER_ERROR;
+                if (weaverResponse.timeout != 0) {
+                    yield VerifyCredentialResponse.fromTimeout(
+                            Duration.ofMillis(weaverResponse.timeout));
+                }
+                yield VerifyCredentialResponse.OTHER_ERROR;
+            }
+            default -> VerifyCredentialResponse.OTHER_ERROR;
+        };
     }
 
     /**
@@ -1833,6 +1839,7 @@ class SyntheticPasswordManager {
         destroyProtectorCommon(protectorId, userId);
         destroyState(PASSWORD_DATA_NAME, protectorId, userId);
         destroyState(PASSWORD_METRICS_NAME, protectorId, userId);
+        destroyState(FAILURE_COUNTER_NAME, protectorId, userId);
     }
 
     private void destroyProtectorCommon(long protectorId, int userId) {

@@ -73,7 +73,6 @@ import androidx.test.filters.SmallTest;
 
 import com.android.internal.widget.LockPatternUtils;
 import com.android.systemui.LauncherProxyService;
-import com.android.systemui.flags.SceneContainerFlagParameterizationKt;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.deviceentry.domain.interactor.DeviceUnlockedInteractor;
@@ -82,6 +81,7 @@ import com.android.systemui.dump.DumpManager;
 import com.android.systemui.flags.DisableSceneContainer;
 import com.android.systemui.flags.EnableSceneContainer;
 import com.android.systemui.flags.FakeFeatureFlagsClassic;
+import com.android.systemui.flags.SceneContainerFlagParameterizationKt;
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor;
 import com.android.systemui.plugins.statusbar.StatusBarStateController;
 import com.android.systemui.settings.UserTracker;
@@ -90,7 +90,6 @@ import com.android.systemui.statusbar.notification.collection.NotificationEntry;
 import com.android.systemui.statusbar.notification.collection.NotificationEntryBuilder;
 import com.android.systemui.statusbar.notification.collection.notifcollection.CommonNotifCollection;
 import com.android.systemui.statusbar.notification.collection.render.NotificationVisibilityProvider;
-import com.android.systemui.statusbar.notification.row.shared.LockscreenOtpRedaction;
 import com.android.systemui.statusbar.pipeline.wifi.data.repository.WifiRepository;
 import com.android.systemui.statusbar.pipeline.wifi.shared.model.WifiNetworkModel;
 import com.android.systemui.statusbar.policy.DeviceProvisionedController;
@@ -226,6 +225,8 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
         when(mUserManager.getProfilesIncludingCommunal(currentUserId)).thenReturn(
                 Lists.newArrayList(mCurrentUser, mWorkUser, mCommunalUser));
         when(mUserManager.getUsers()).thenReturn(Lists.newArrayList(
+                mCurrentUser, mWorkUser, mSecondaryUser, mCommunalUser));
+        when(mUserManager.getAliveUsers()).thenReturn(Lists.newArrayList(
                 mCurrentUser, mWorkUser, mSecondaryUser, mCommunalUser));
         when(mUserManager.getProfiles(mSecondaryUser.id)).thenReturn(Lists.newArrayList(
                 mSecondaryUser));
@@ -548,7 +549,6 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     public void testHasSensitiveContent_notRedactedIfNotLocked() {
         // Allow private notifications for this user
         mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,
@@ -569,7 +569,6 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     public void testHasSensitiveContent_notRedactedIfUnlockedSinceReceipt() {
         // Allow private notifications for this user
         mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,
@@ -589,7 +588,6 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     public void testHasSensitiveContent_notRedactedIfNotLockedForLongEnough() {
         // Allow private notifications for this user
         mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,
@@ -609,7 +607,6 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     public void testHasSensitiveContent_notRedactedIfOnWifi() {
         // Allow private notifications for this user
         mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,
@@ -630,7 +627,6 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     public void testHasSensitiveContent_notRedactedIfConnectedToWifiSinceReceiving() {
         // Allow private notifications for this user
         mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,
@@ -651,25 +647,6 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
     }
 
     @Test
-    @DisableFlags(LockscreenOtpRedaction.FLAG_NAME)
-    public void testHasSensitiveContent_notRedactedIfFlagDisabled() {
-        // Allow private notifications for this user
-        mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,
-                mCurrentUser.id);
-        changeSetting(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS);
-        // Claim the device was last locked 1 day ago
-        mLockscreenUserManager.mLastLockTime
-                .set(mSensitiveNotifPostTime - TimeUnit.DAYS.toMillis(1));
-        mLockscreenUserManager.mLocked.set(true);
-        mLockscreenUserManager.mConnectedToWifi.set(false);
-
-        // Sensitive Content notifications are always redacted
-        assertEquals(REDACTION_TYPE_NONE,
-                mLockscreenUserManager.getRedactionType(mSensitiveContentNotif));
-    }
-
-    @Test
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     public void testNewSensitiveNotification_notRedactedIfOldCreationTime() {
         // Allow private notifications for this user
         mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,
@@ -686,7 +663,6 @@ public class NotificationLockscreenUserManagerTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(LockscreenOtpRedaction.FLAG_NAME)
     public void testHasSensitiveContent_redacted() {
         // Allow private notifications for this user
         mSettings.putIntForUser(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS, 1,

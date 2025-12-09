@@ -22,6 +22,7 @@ import android.companion.datatransfer.continuity.RemoteTask;
 
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
+import android.annotation.RequiresPermission;
 import android.annotation.SystemApi;
 import android.annotation.SystemService;
 import android.annotation.NonNull;
@@ -103,6 +104,12 @@ public class TaskContinuityManager {
      */
     public static final int HANDOFF_REQUEST_RESULT_FAILURE_DEVICE_NOT_FOUND = 5;
 
+    /**
+     * Indicates a request for handoff failed because of an internal error outside of Handoff's data
+     * transfer flow.
+     */
+    public static final int HANDOFF_REQUEST_RESULT_FAILURE_OTHER_INTERNAL_ERROR = 6;
+
     /** @hide */
     public TaskContinuityManager(
         @NonNull Context context,
@@ -144,25 +151,14 @@ public class TaskContinuityManager {
     }
 
     /**
-     * Returns a list of tasks currently running on the remote devices owned by the user.
-     */
-    @NonNull
-    public List<RemoteTask> getRemoteTasks() {
-        // TODO: joeantonetti - Optimize this call by caching the most recent state pushed to
-        // mListenerHolder.
-        try {
-            return mService.getRemoteTasks();
-        } catch (RemoteException e) {
-            throw e.rethrowFromSystemServer();
-        }
-    }
-
-    /**
      * Registers a listener to be notified when the list of remote tasks changes.
      *
      * @param executor The executor to be used to invoke the listener.
      * @param listener The listener to be registered.
+     * @throws SecurityException if the caller does not hold the
+     *      {@link android.Manifest.permission#READ_REMOTE_TASKS} permission.
      */
+    @RequiresPermission(android.Manifest.permission.READ_REMOTE_TASKS)
     public void registerRemoteTaskListener(
         @NonNull Executor executor,
         @NonNull RemoteTaskListener listener) {
@@ -184,7 +180,10 @@ public class TaskContinuityManager {
      * {@link #registerRemoteTaskListener}.
      *
      * @param listener The listener to be unregistered.
+     * @throws SecurityException if the caller does not hold the
+     *      {@link android.Manifest.permission#READ_REMOTE_TASKS} permission.
      */
+    @RequiresPermission(android.Manifest.permission.READ_REMOTE_TASKS)
     public void unregisterRemoteTaskListener(@NonNull RemoteTaskListener listener) {
         Objects.requireNonNull(listener);
 
@@ -203,7 +202,10 @@ public class TaskContinuityManager {
      * @param remoteTaskId The remote task to hand off.
      * @param executor The executor to be used to invoke the callback.
      * @param callback The callback to be invoked when the handoff request is finished.
+     * @throws SecurityException if the caller does not hold the
+     *      {@link android.Manifest.permission#REQUEST_TASK_HANDOFF} permission.
      */
+    @RequiresPermission(android.Manifest.permission.REQUEST_TASK_HANDOFF)
     public void requestHandoff(
         int associationId,
         int remoteTaskId,
@@ -258,6 +260,9 @@ public class TaskContinuityManager {
         @GuardedBy("mListeners")
         private boolean mRegistered = false;
 
+        @GuardedBy("mListeners")
+        private final List<RemoteTask> mLastReceivedRemoteTasks = new ArrayList<>();
+
         public RemoteTaskListenerHolder(ITaskContinuityManager service) {}
 
         /**
@@ -277,6 +282,10 @@ public class TaskContinuityManager {
                 if (!mRegistered) {
                     mService.registerRemoteTaskListener(this);
                     mRegistered = true;
+                } else {
+                    executor.execute(() ->
+                        listener.onRemoteTasksChanged(mLastReceivedRemoteTasks)
+                    );
                 }
 
                 mListeners.put(listener, executor);
@@ -305,6 +314,9 @@ public class TaskContinuityManager {
         @Override
         public void onRemoteTasksChanged(List<RemoteTask> remoteTasks) throws RemoteException {
             synchronized(mListeners) {
+                mLastReceivedRemoteTasks.clear();
+                mLastReceivedRemoteTasks.addAll(remoteTasks);
+
                 for (Map.Entry<RemoteTaskListener, Executor> entry : mListeners.entrySet()) {
                     RemoteTaskListener listener = entry.getKey();
                     Executor executor = entry.getValue();

@@ -62,7 +62,7 @@ import com.android.systemui.log.LogBuffer
 import com.android.systemui.log.core.Logger
 import com.android.systemui.log.dagger.KeyguardBlueprintLog
 import com.android.systemui.plugins.FalsingManager
-import com.android.systemui.plugins.clocks.ClockViewIds
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockViewIds
 import com.android.systemui.res.R
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
@@ -78,7 +78,6 @@ import com.android.systemui.util.ui.AnimatedValue
 import com.android.systemui.util.ui.isAnimating
 import com.android.systemui.util.ui.stopAnimating
 import com.android.systemui.util.ui.value
-import com.android.systemui.wallpapers.ui.viewmodel.WallpaperFocalAreaViewModel
 import com.google.android.msdl.data.model.MSDLToken
 import com.google.android.msdl.domain.MSDLPlayer
 import kotlin.math.min
@@ -108,7 +107,6 @@ object KeyguardRootViewBinder {
         mainImmediateDispatcher: CoroutineDispatcher,
         msdlPlayer: MSDLPlayer?,
         @KeyguardBlueprintLog blueprintLog: LogBuffer,
-        wallpaperFocalAreaViewModel: WallpaperFocalAreaViewModel,
     ): DisposableHandle {
         val disposables = DisposableHandles()
         val childViews = mutableMapOf<Int, View>()
@@ -204,6 +202,18 @@ object KeyguardRootViewBinder {
                             childViews[burnInLayerId]?.alpha = alpha
                             childViews[sliceViewId]?.alpha = alpha
                             childViews[weatherAreaId]?.alpha = alpha
+                        }
+                    }
+
+                    if (Flags.newDozingKeyguardStates()) {
+                        launch("$TAG#nonAuthUIAlpha") {
+                            viewModel.nonAuthUIAlpha.collect { alpha ->
+                                for (childView in childViews) {
+                                    if (!authUiIds.contains(childView.key)) {
+                                        childView.value.alpha = alpha
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -359,12 +369,6 @@ object KeyguardRootViewBinder {
                     }
 
                     launch { burnInParams.collect { viewModel.updateBurnInParams(it) } }
-
-                    launch {
-                        wallpaperFocalAreaViewModel.wallpaperFocalAreaBounds.collect {
-                            wallpaperFocalAreaViewModel.setFocalAreaBounds(it)
-                        }
-                    }
                 }
             }
 
@@ -597,6 +601,7 @@ object KeyguardRootViewBinder {
     private val deviceEntryIcon = R.id.device_entry_icon_view
     private val nsslPlaceholderId = R.id.nssl_placeholder
     private val authInteractionProperties = AuthInteractionProperties()
+    private val authUiIds = setOf(deviceEntryIcon, indicationArea)
 
     private const val ID = "occluding_app_device_entry_unlock_msg"
     private const val AOD_ICONS_APPEAR_DURATION: Long = 200

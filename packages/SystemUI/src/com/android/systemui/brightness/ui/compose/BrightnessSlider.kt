@@ -96,10 +96,12 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -120,8 +122,11 @@ import com.android.systemui.brightness.ui.compose.Dimensions.IconPadding
 import com.android.systemui.brightness.ui.compose.Dimensions.IconSize
 import com.android.systemui.brightness.ui.compose.Dimensions.SliderBackgroundFrameSize
 import com.android.systemui.brightness.ui.compose.Dimensions.SliderBackgroundRoundedCorner
+import com.android.systemui.brightness.ui.compose.Dimensions.ThumbHeight
 import com.android.systemui.brightness.ui.compose.Dimensions.SliderTrackRoundedCorner
 import com.android.systemui.brightness.ui.compose.Dimensions.ThumbTrackGapSize
+import com.android.systemui.brightness.ui.compose.Dimensions.ThumbWidth
+import com.android.systemui.brightness.ui.compose.Dimensions.TrackHeight
 import com.android.systemui.brightness.ui.viewmodel.BrightnessSliderViewModel
 import com.android.systemui.brightness.ui.viewmodel.Drag
 import com.android.systemui.common.shared.model.Icon
@@ -341,7 +346,7 @@ fun BrightnessSlider(
                 SliderDefaults.Thumb(
                     interactionSource = interactionSource,
                     enabled = enabled,
-                    thumbSize = DpSize(4.dp, 52.dp),
+                    thumbSize = DpSize(ThumbWidth, ThumbHeight),
                     colors = colors,
                 )
             },
@@ -386,7 +391,7 @@ fun BrightnessSlider(
                                 iconInactiveAlphaAnimatable.value exportAs
                                     BrightnessSliderMotionTestKeys.InactiveIconAlpha
                             }
-                            .height(40.dp)
+                            .height(TrackHeight)
                             .drawWithContent {
                                 drawContent()
 
@@ -634,6 +639,24 @@ private object Dimensions {
     val IconSize = DpSize(28.dp, 28.dp)
     val IconPadding = 6.dp
     val ThumbTrackGapSize = 6.dp
+
+    val ThumbHeight : Dp
+        @Composable
+        @ReadOnlyComposable
+        get() =
+            dimensionResource(id = R.dimen.overlay_qs_layout_brightness_thumb_height)
+
+    val ThumbWidth : Dp
+        @Composable
+        @ReadOnlyComposable
+        get() =
+            dimensionResource(id = R.dimen.overlay_qs_layout_brightness_thumb_width)
+
+    val TrackHeight: Dp
+        @Composable
+        @ReadOnlyComposable
+        get() =
+            dimensionResource(id = R.dimen.overlay_qs_layout_brightness_track_height)
 }
 
 private object AnimationSpecs {

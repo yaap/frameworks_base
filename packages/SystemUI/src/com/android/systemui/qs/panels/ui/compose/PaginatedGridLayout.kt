@@ -30,7 +30,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -41,14 +40,12 @@ import androidx.compose.ui.res.integerResource
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.android.compose.animation.scene.ContentScope
-import com.android.compose.animation.scene.content.state.TransitionState
 import com.android.compose.modifiers.padding
 import com.android.systemui.common.ui.compose.PagerDots
 import com.android.systemui.compose.modifiers.sysuiResTag
 import com.android.systemui.development.ui.compose.BuildNumber
 import com.android.systemui.development.ui.viewmodel.BuildNumberViewModel
 import com.android.systemui.lifecycle.rememberViewModel
-import com.android.systemui.qs.composefragment.SceneKeys
 import com.android.systemui.qs.panels.dagger.PaginatedBaseLayoutType
 import com.android.systemui.qs.panels.ui.compose.Dimensions.FooterHeight
 import com.android.systemui.qs.panels.ui.compose.Dimensions.InterPageSpacing
@@ -70,6 +67,7 @@ constructor(
         tiles: List<TileViewModel>,
         modifier: Modifier,
         listening: () -> Boolean,
+        enableRevealEffect: Boolean,
     ) {
         val viewModel =
             rememberViewModel(traceName = "PaginatedGridLayout-TileGrid") {
@@ -141,17 +139,21 @@ constructor(
             ) {
                 val page = pages[it]
 
-                with(delegateGridLayout) { TileGrid(tiles = page, modifier = Modifier, listening) }
+                with(delegateGridLayout) {
+                    TileGrid(
+                        tiles = page,
+                        modifier = Modifier,
+                        listening = listening,
+                        enableRevealEffect = false,
+                    )
+                }
             }
             FooterBar(
                 buildNumberViewModelFactory = viewModel.buildNumberViewModelFactory,
                 pagerState = pagerState,
+                showArrowsInPager = viewModel.showArrowsInPagerDots,
                 editButtonViewModelFactory = viewModel.editModeButtonViewModelFactory,
-                isVisible = {
-                    with(layoutState.transitionState) {
-                        currentScene == SceneKeys.QuickSettings && this is TransitionState.Idle
-                    }
-                },
+                isVisible = { listening() && layoutState.isIdle() },
             )
         }
     }
@@ -166,6 +168,7 @@ private object Dimensions {
 private fun FooterBar(
     buildNumberViewModelFactory: BuildNumberViewModel.Factory,
     pagerState: PagerState,
+    showArrowsInPager: Boolean,
     editButtonViewModelFactory: EditModeButtonViewModel.Factory,
     isVisible: () -> Boolean = { true },
 ) {
@@ -196,6 +199,7 @@ private fun FooterBar(
             activeColor = MaterialTheme.colorScheme.onSurfaceVariant,
             nonActiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .5f),
             modifier = Modifier.wrapContentWidth(),
+            showArrows = showArrowsInPager,
         )
         Row(Modifier.weight(1f)) {
             Spacer(modifier = Modifier.weight(1f))

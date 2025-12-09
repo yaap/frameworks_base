@@ -87,6 +87,8 @@
     <string name="bluetooth_connecting" msgid="5871702668260192755">"በማገናኘት ላይ…"</string>
     <string name="bluetooth_connected" msgid="8065345572198502293">"ተገናኝቷል<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_pairing" msgid="4269046942588193600">"በማገናኘት ላይ..."</string>
+    <string name="bluetooth_pairing_failure" msgid="6914444518793157913">"ማጣመር አልተቻለም።"</string>
+    <string name="bluetooth_connection_failure" msgid="384203214661155324">"ማገናኘት አልተቻለም"</string>
     <string name="bluetooth_connected_no_headset" msgid="2224101138659967604">"ተገናኝቷል (ምንም ስልክ የለም)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_a2dp" msgid="8566874395813947092">"ተገናኝቷል (ምንም ማህደረ መረጃ የለም)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_headset_no_a2dp" msgid="2893204819854215433">"ተገናኝቷል (ምንም ስልክ ወይም ማህደረ መረጃ የለም)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
@@ -103,6 +105,11 @@
     <string name="bluetooth_battery_level_untethered" msgid="1616774716076301755">"ግ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>፣ ቀ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> ባትሪ።"</string>
     <string name="bluetooth_battery_level_untethered_left" msgid="5725764679536058365">"ግራ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> ባትሪ"</string>
     <string name="bluetooth_battery_level_untethered_right" msgid="8377995536997790142">"ቀኝ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> ባትሪ"</string>
+    <string name="bluetooth_battery_level_untethered_case" msgid="6783758530890124772">"መያዣ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> ባትሪ"</string>
+    <string name="bluetooth_battery_level_untethered_left_case" msgid="7676759299091682229">"ግራ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>፣ መያዣ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> ባትሪ"</string>
+    <string name="bluetooth_battery_level_untethered_right_case" msgid="1299184574560442389">"ቀኝ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>፣ መያዣ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> ባትሪ"</string>
+    <string name="bluetooth_battery_level_untethered_left_right" msgid="6953449613092012043">"ግራ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>፣ ቀኝ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> ባትሪ"</string>
+    <string name="bluetooth_battery_level_untethered_left_case_right" msgid="5434524614259536880">"ግ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>፣ መ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>፣ ቀ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_2">%3$s</xliff:g> ባትሪ"</string>
     <string name="tv_bluetooth_battery_level_untethered_left" msgid="337629670583744410">"ግራ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_right" msgid="8610019317279155595">"ቀኝ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_active_no_battery_level" msgid="4155462233006205630">"ንቁ"</string>
@@ -111,6 +118,8 @@
     <string name="bluetooth_hearing_aid_right_active" msgid="2244728507170385397">"ገቢር (ቀኝ ብቻ)"</string>
     <string name="bluetooth_hearing_aid_left_and_right_active" msgid="4294571497939983181">"ገቢር (ግራ እና ቀኝ)"</string>
     <string name="bluetooth_hearing_device_ambient_error" msgid="6035857289108813878">"በዙሪያ ያሉትን ማዘመን አልተቻለም"</string>
+    <string name="bluetooth_hearing_aids_presets_error" msgid="4523942574698610976">"ቅድመ-ቅምጥን ማዘመን አልተቻለም"</string>
+    <string name="hearing_device_spinner_item_selected" msgid="3884049360428514878">"ተመርጧል"</string>
     <string name="bluetooth_active_media_only_battery_level" msgid="7772517511061834073">"ገቢር (ሚዲያ ብቻ)። <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> ባትሪ።"</string>
     <string name="bluetooth_active_media_only_battery_level_untethered" msgid="7444753133664620926">"ገቢር (ሚዲያ ብቻ)። ግ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>፣ ቀ፦ <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g> ባትሪ።"</string>
     <string name="bluetooth_guest_battery_level" msgid="2820003593899467676">"የእንግዳ መሣሪያ። <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g> ባትሪ።"</string>
@@ -207,7 +216,7 @@
     <string name="launch_defaults_some" msgid="3631650616557252926">"አንዳንድ ነባሪዎ ተዘጋጅተዋል"</string>
     <string name="launch_defaults_none" msgid="8049374306261262709">"ምንም ነባሪዎች አልተዘጋጁም"</string>
     <string name="tts_settings" msgid="8130616705989351312">"ጽሁፍ-ወደ-ንግግር ቅንብሮች"</string>
-    <string name="tts_settings_title" msgid="7602210956640483039">"የፅሁፍ- ወደ- ንግግር ውፅዓት"</string>
+    <string name="tts_settings_title" msgid="7602210956640483039">"የፅሑፍ- ወደ- ንግግር ውፅዓት"</string>
     <string name="tts_default_rate_title" msgid="3964187817364304022">" የንግግር ደረጃ"</string>
     <string name="tts_default_rate_summary" msgid="3781937042151716987">"የተነገረበትን ጽሁፍ አፍጥን"</string>
     <string name="tts_default_pitch_title" msgid="6988592215554485479">"ቅላፄ"</string>
@@ -340,7 +349,7 @@
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"ይህ ሁነታ ሲነቃ የዚህ መሣሪያ የማክ አድራሻ የዘፈቀደ የማክ አድራሻ ከነቃለት አውታረ መረብ ጋር በተገናኘ ጊዜ ሁሉ ሊቀየር ይችላል።"</string>
     <string name="wifi_metered_label" msgid="8737187690304098638">"የሚለካ"</string>
     <string name="wifi_unmetered_label" msgid="6174142840934095093">"ያልተለካ"</string>
-    <string name="select_logd_size_title" msgid="1604578195914595173">"የምዝግብ ማስታወሻ ያዥ መጠኖች"</string>
+    <string name="select_logd_size_title" msgid="4393502933789367691">"የምዝግብ ማስታወሻ ያዠ የማቋት መጠን"</string>
     <string name="select_logd_size_dialog_title" msgid="2105401994681013578">"በአንድ ምዝግብ ማስታወሻ ቋጥ የሚኖረው የምዝግብ ማስታወሻ ያዥ መጠኖች ይምረጡ"</string>
     <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"የምዝግብ ማስታወሻ ያዢ ቋሚ ማከማቻ ይጽዳ?"</string>
     <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"ከእንግዲህ በቋሚ ምዝግብ ማስታወሻ ያዢው በማንከታተልበት ጊዜ በመሣሪያዎ ላይ የሚኖረው የምዝግብ ማስታወሻ ውሂብ መደምሰስ ይፈለግብናል።"</string>

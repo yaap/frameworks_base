@@ -64,15 +64,20 @@ import android.annotation.Nullable;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.TaskDescription;
+import android.app.HandoffActivityData;
+import android.app.HandoffFailureCode;
 import android.app.IApplicationThread;
+import android.app.IHandoffTaskDataReceiver;
 import android.app.PictureInPictureParams;
 import android.app.servertransaction.ClientTransactionItem;
 import android.app.servertransaction.EnterPipRequestedItem;
+import android.content.ComponentName;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.os.Binder;
+import android.os.IBinder;
 import android.os.LocaleList;
 import android.os.PowerManagerInternal;
 import android.os.RemoteException;
@@ -139,6 +144,49 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
 
         @Override
         public void onDisplayRemoveSystemDecorations(int displayId) {}
+
+        @Override
+        public void onDisplayAnimationsDisabledChanged(int displayId, boolean disabled) {}
+    }
+
+    private static class TestHandoffTaskDataReceiver extends IHandoffTaskDataReceiver.Stub {
+
+        private final List<Integer> receivedTaskIds = new ArrayList<>();
+        private final List<List<HandoffActivityData>> receivedHandoffActivityData =
+                new ArrayList<>();
+        private final List<Integer> receivedErrorCodes = new ArrayList<>();
+
+        @Override
+        public void onHandoffTaskDataRequestSucceeded(
+            int taskId,
+            List<HandoffActivityData> handoffActivityData
+        ) {
+            receivedTaskIds.add(taskId);
+            receivedHandoffActivityData.add(handoffActivityData);
+        }
+
+        @Override
+        public void onHandoffTaskDataRequestFailed(int taskId, int errorCode) {
+            receivedTaskIds.add(taskId);
+            receivedErrorCodes.add(errorCode);
+        }
+
+        public void verifySucceeded(
+            int expectedTaskId,
+            HandoffActivityData expectedHandoffActivityData) {
+            assertEquals(receivedTaskIds.size(), 1);
+            assertEquals((int) receivedTaskIds.get(0), expectedTaskId);
+            assertEquals(receivedHandoffActivityData.size(), 1);
+            assertEquals(receivedHandoffActivityData.get(0).size(), 1);
+            assertEquals(receivedHandoffActivityData.get(0).get(0), expectedHandoffActivityData);
+        }
+
+        public void verifyFailed(int expectedTaskId, int expectedErrorCode) {
+            assertEquals(receivedTaskIds.size(), 1);
+            assertEquals((int) receivedTaskIds.get(0), expectedTaskId);
+            assertEquals(receivedErrorCodes.size(), 1);
+            assertEquals((int) receivedErrorCodes.get(0), expectedErrorCode);
+        }
     }
 
     @Before
@@ -204,6 +252,254 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
         mAtm.mActivityClientController.requestPictureInPictureMode(activity);
 
         verify(mClientLifecycleManager, never()).scheduleTransactionItem(any(), any());
+    }
+
+    @Test
+    public void testAddHandoffEnablementListener_doesNotNotifyIfFlagDisabled() {
+        ActivityTaskManagerInternal.HandoffEnablementListener handoffEnablementListener =
+                mock(ActivityTaskManagerInternal.HandoffEnablementListener.class);
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        mAtm.getAtmInternal().registerHandoffEnablementListener(handoffEnablementListener);
+        activity.setHandoffEnabled(true, true);
+        verify(handoffEnablementListener, never())
+            .onHandoffEnabledChanged(activity.getRootTaskId(), true);
+        activity.setHandoffEnabled(false, true);
+        verify(handoffEnablementListener, never())
+            .onHandoffEnabledChanged(activity.getRootTaskId(), false);
+    }
+
+    @Test
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    public void testRegisterHandoffEnablementListener_notifiesListenerOnChange() {
+        ActivityTaskManagerInternal.HandoffEnablementListener handoffEnablementListener =
+                mock(ActivityTaskManagerInternal.HandoffEnablementListener.class);
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        mAtm.getAtmInternal().registerHandoffEnablementListener(handoffEnablementListener);
+        activity.setHandoffEnabled(true, true);
+        verify(handoffEnablementListener)
+            .onHandoffEnabledChanged(anyInt(), anyBoolean());
+        activity.setHandoffEnabled(false, true);
+        verify(handoffEnablementListener)
+            .onHandoffEnabledChanged(activity.getRootTaskId(), false);
+    }
+
+    @Test
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    public void testUnregisterHandoffEnablementListener_doesNotNotifyListenerOnChange() {
+        ActivityTaskManagerInternal.HandoffEnablementListener handoffEnablementListener =
+                mock(ActivityTaskManagerInternal.HandoffEnablementListener.class);
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        mAtm.getAtmInternal().registerHandoffEnablementListener(handoffEnablementListener);
+        mAtm.getAtmInternal().unregisterHandoffEnablementListener(handoffEnablementListener);
+        activity.setHandoffEnabled(true, true);
+        verify(handoffEnablementListener, never())
+            .onHandoffEnabledChanged(activity.getRootTaskId(), true);
+        activity.setHandoffEnabled(false, true);
+        verify(handoffEnablementListener, never())
+            .onHandoffEnabledChanged(activity.getRootTaskId(), false);
+    }
+
+    @Test
+    public void testIsHandoffEnabledForTask_returnsFalseIfFlagDisabled() {
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        doReturn(true).when(activity).isHandoffEnabled();
+        assertFalse(mAtm.getAtmInternal().isHandoffEnabledForTask(task.getRootTaskId()));
+    }
+
+    @Test
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    public void testIsHandoffEnabledForTask_returnsTrueIfHandoffEnabled() {
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        activity.setHandoffEnabled(true, true);
+        assertTrue(mAtm.getAtmInternal().isHandoffEnabledForTask(task.getRootTaskId()));
+        activity.setHandoffEnabled(false, true);
+        assertFalse(mAtm.getAtmInternal().isHandoffEnabledForTask(task.getRootTaskId()));
+    }
+
+    @Test
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    public void testIsHandoffEnabledForTask_returnsFalseIfNoSuchTask() {
+        assertFalse(mAtm.getAtmInternal().isHandoffEnabledForTask(1000));
+    }
+
+    @Test
+    public void testRequestHandoffTaskData_failsIfFlagDisabled() {
+        // Create a test task.
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+
+        // Setup a fake receiver to receive the result.
+        TestHandoffTaskDataReceiver receiver = new TestHandoffTaskDataReceiver();
+
+        // Request Handoff
+        mAtm.requestHandoffTaskData(task.getRootTaskId(), receiver);
+
+        // Verify that the result code is failure.
+        receiver.verifyFailed(task.getRootTaskId(),
+                HandoffFailureCode.HANDOFF_FAILURE_UNSUPPORTED_DEVICE);
+    }
+
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    @Test
+    public void testRequestHandoffTaskData_failsIfNoTaskWithId() {
+        // Setup a fake receiver to receive the result.
+        TestHandoffTaskDataReceiver receiver = new TestHandoffTaskDataReceiver();
+
+        // Request Handoff
+        mAtm.requestHandoffTaskData(0, receiver);
+
+        // Verify that the result code is failure.
+        receiver.verifyFailed(0, HandoffFailureCode.HANDOFF_FAILURE_UNKNOWN_TASK);
+    }
+
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    @Test
+    public void testRequestHandoffTaskData_failsIfNoActivityInTask() {
+        // Create a test task.
+        final Task task = new TaskBuilder(mSupervisor).build();
+
+        // Setup a fake receiver to receive the result.
+        TestHandoffTaskDataReceiver receiver = new TestHandoffTaskDataReceiver();
+
+        // Request Handoff
+        mAtm.requestHandoffTaskData(task.getRootTaskId(), receiver);
+
+        // Verify that the result code is failure.
+        receiver.verifyFailed(
+            task.getRootTaskId(),
+            HandoffFailureCode.HANDOFF_FAILURE_EMPTY_TASK);
+    }
+
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    @Test
+    public void testRequestHandoffTaskData_failsIfHandoffDisabledForActivity() {
+        // Create a test task.
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        doReturn(false).when(activity).isHandoffEnabled();
+
+        // Setup a fake receiver to receive the result.
+        TestHandoffTaskDataReceiver receiver = new TestHandoffTaskDataReceiver();
+
+        // Request Handoff
+        mAtm.requestHandoffTaskData(task.getRootTaskId(), receiver);
+
+        // Verify that the result code is failure.
+        receiver.verifyFailed(
+            task.getRootTaskId(),
+            HandoffFailureCode.HANDOFF_FAILURE_UNSUPPORTED_TASK);
+    }
+
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    @Test
+    public void testRequestHandoffTaskData_succeedsWithActivityInForeground()
+        throws Exception{
+        // Create a test task.
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        doReturn(true).when(activity).attachedToProcess();
+        doReturn(true).when(activity).isState(RESUMED);
+        WindowProcessController mockWindowProcessController = mock(WindowProcessController.class);
+        activity.app = mockWindowProcessController;
+        IApplicationThread mockThread = mock(IApplicationThread.class);
+        doReturn(mockThread).when(mockWindowProcessController).getThread();
+        doReturn(true).when(activity).isProcessRunning();
+        doReturn(true).when(activity).isHandoffEnabled();
+
+        // Setup a fake receiver to receive the result.
+        TestHandoffTaskDataReceiver receiver = new TestHandoffTaskDataReceiver();
+
+        // Request Handoff
+        mAtm.requestHandoffTaskData(task.getRootTaskId(), receiver);
+
+        ArgumentCaptor<IBinder> requestTokenCaptor = ArgumentCaptor.forClass(IBinder.class);
+        ArgumentCaptor<List<IBinder>> activityTokenCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockThread).requestHandoffActivityData(
+            requestTokenCaptor.capture(),
+            activityTokenCaptor.capture());
+
+        // Finish the request
+        HandoffActivityData handoffActivityData
+            = new HandoffActivityData.Builder(new ComponentName("pkg", "cls"))
+                .build();
+
+        mAtm.reportHandoffActivityData(
+            requestTokenCaptor.getValue(),
+            List.of(handoffActivityData));
+
+        // Verify that the result code is success.
+        receiver.verifySucceeded(task.getRootTaskId(), handoffActivityData);
+    }
+
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    @Test
+    public void testRequestHandoffTaskData_succeedsWithActivityInBackground()
+        throws Exception{
+        // Create a test task.
+        final HandoffActivityData handoffActivityData
+            = new HandoffActivityData.Builder(new ComponentName("pkg", "cls"))
+                .build();
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        doReturn(false).when(activity).attachedToProcess();
+        doReturn(handoffActivityData).when(activity).getHandoffActivityData();
+        doReturn(false).when(activity).isProcessRunning();
+        doReturn(true).when(activity).isHandoffEnabled();
+
+        // Setup a fake receiver to receive the result.
+        final TestHandoffTaskDataReceiver receiver = new TestHandoffTaskDataReceiver();
+
+        // Request Handoff
+        mAtm.requestHandoffTaskData(task.getRootTaskId(), receiver);
+
+        // Verify that the result code is success.
+        receiver.verifySucceeded(task.getRootTaskId(), handoffActivityData);
+    }
+
+    @EnableFlags(android.companion.Flags.FLAG_ENABLE_TASK_CONTINUITY)
+    @Test
+    public void testRequestHandoffTaskData_failsIfNoDataReturned()
+        throws Exception{
+        // Create a test task.
+        final Task task = new TaskBuilder(mSupervisor).setCreateActivity(true).build();
+        final ActivityRecord activity = task.getTopNonFinishingActivity();
+        doReturn(true).when(activity).attachedToProcess();
+        WindowProcessController mockWindowProcessController = mock(WindowProcessController.class);
+        activity.app = mockWindowProcessController;
+        IApplicationThread mockThread = mock(IApplicationThread.class);
+        doReturn(mockThread).when(mockWindowProcessController).getThread();
+        doReturn(true).when(activity).isProcessRunning();
+        doReturn(true).when(activity).isHandoffEnabled();
+        doReturn(true).when(activity).isState(RESUMED);
+
+        // Setup a fake receiver to receive the result.
+        TestHandoffTaskDataReceiver receiver = new TestHandoffTaskDataReceiver();
+
+        // Request Handoff
+        mAtm.requestHandoffTaskData(task.getRootTaskId(), receiver);
+
+        ArgumentCaptor<IBinder> requestTokenCaptor = ArgumentCaptor.forClass(IBinder.class);
+        ArgumentCaptor<List<IBinder>> activityTokenCaptor
+            = ArgumentCaptor.forClass(List.class);
+        verify(mockThread).requestHandoffActivityData(
+            requestTokenCaptor.capture(),
+            activityTokenCaptor.capture());
+
+        // Finish the request
+        List<HandoffActivityData> handoffActivityDataList = new ArrayList<>();
+        handoffActivityDataList.add(null);
+        mAtm.reportHandoffActivityData(
+            requestTokenCaptor.getValue(),
+            handoffActivityDataList);
+
+        // Verify that the result code is failure.
+        receiver.verifyFailed(
+            task.getRootTaskId(),
+            HandoffFailureCode.HANDOFF_FAILURE_APP_DID_NOT_REPORT_HANDOFF_DATA);
     }
 
     @Test
@@ -274,13 +570,13 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
         // Check adding decoration
         doReturn(true).when(newDisp1).allowContentModeSwitch();
         doReturn(true).when(newDisp1).isSystemDecorationsSupported();
-        mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, true);
+        mAtm.mWindowManager.mDisplayWindowSettings.setShouldShowSystemDecorsLocked(newDisp1, true);
         assertEquals(1, desktopModeEligibleChanged.size());
         assertEquals(newDisp1.mDisplayId, (int) desktopModeEligibleChanged.get(0));
         desktopModeEligibleChanged.clear();
         // Check removing decoration
         doReturn(false).when(newDisp1).isSystemDecorationsSupported();
-        mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, false);
+        mAtm.mWindowManager.mDisplayWindowSettings.setShouldShowSystemDecorsLocked(newDisp1, false);
         assertEquals(1, desktopModeEligibleChanged.size());
         assertEquals(newDisp1.mDisplayId, (int) desktopModeEligibleChanged.get(0));
         desktopModeEligibleChanged.clear();
@@ -307,14 +603,14 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
 
         // Check adding decoration
         doReturn(true).when(newDisp1).isSystemDecorationsSupported();
-        mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, true);
+        mAtm.mWindowManager.mDisplayWindowSettings.setShouldShowSystemDecorsLocked(newDisp1, true);
         assertEquals(1, displayAddSystemDecorations.size());
         assertEquals(newDisp1.mDisplayId, (int) displayAddSystemDecorations.get(0));
         displayAddSystemDecorations.clear();
 
         // Check removing decoration
         doReturn(false).when(newDisp1).isSystemDecorationsSupported();
-        mAtm.mWindowManager.setShouldShowSystemDecors(newDisp1.mDisplayId, false);
+        mAtm.mWindowManager.mDisplayWindowSettings.setShouldShowSystemDecorsLocked(newDisp1, false);
         assertEquals(1, displayRemoveSystemDecorations.size());
         assertEquals(newDisp1.mDisplayId, (int) displayRemoveSystemDecorations.get(0));
         displayRemoveSystemDecorations.clear();
@@ -353,19 +649,31 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
     @Test
     public void testSetLockScreenShownWithAlwaysUnlockedVirtualDisplay() {
         assertEquals(Display.DEFAULT_DISPLAY, mRootWindowContainer.getChildAt(0).getDisplayId());
+        final KeyguardController keyguardController = mSupervisor.getKeyguardController();
 
+        // The default display is locked before creating the virtual display
+        mAtm.setLockScreenShown(true, true);
+
+        // Create the virtual display
         DisplayInfo displayInfo = new DisplayInfo();
         displayInfo.copyFrom(mDisplayInfo);
         displayInfo.type = Display.TYPE_VIRTUAL;
         displayInfo.displayGroupId = Display.DEFAULT_DISPLAY_GROUP + 1;
         displayInfo.flags = Display.FLAG_OWN_DISPLAY_GROUP | Display.FLAG_ALWAYS_UNLOCKED;
         DisplayContent newDisplay = createNewDisplay(displayInfo);
-        final KeyguardController keyguardController = mSupervisor.getKeyguardController();
 
-        // Make sure we're starting out with 2 unlocked displays
         assertEquals(2, mRootWindowContainer.getChildCount());
+        assertTrue(mDefaultDisplay.isKeyguardLocked());
+        assertFalse(newDisplay.isKeyguardLocked());
+
+        // Unlock the default display (this should have no effect for FLAG_ALWAYS_UNLOCKED)
+        mAtm.keyguardGoingAway(0x0);
+        mAtm.setLockScreenShown(false, false);
+
+        // Make sure we now have both displays unlocked
         mRootWindowContainer.forAllDisplays(displayContent -> {
             assertFalse(displayContent.isKeyguardLocked());
+            assertFalse(displayContent.isKeyguardGoingAway());
             assertFalse(keyguardController.isAodShowing(displayContent.mDisplayId));
         });
 
@@ -546,7 +854,7 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
         doReturn(true).when(topRootTask).goToSleepIfPossible(anyBoolean());
         topActivity.setState(STOPPING, "test");
         topActivity.activityStopped(null /* newIcicle */, null /* newPersistentState */,
-                null /* description */);
+                null /* handoffActivityData */, null /* description */);
         verify(mSupervisor.mGoingToSleepWakeLock).release();
 
         // Move the current top to back, the top app should update to the next activity.
@@ -792,9 +1100,20 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
 
     @Test
     public void testPackageConfigUpdate_locales_successfullyApplied() {
-        Configuration config = mAtm.getGlobalConfiguration();
+        registerTestTransitionPlayer();
+        addNewDisplayContentAt(DisplayContent.POSITION_TOP);
+        final DisplayContent dc0 = mRootWindowContainer.getChildAt(0);
+        final DisplayContent dc1 = mRootWindowContainer.getChildAt(1);
+        dc0.setLastHasContent();
+        dc1.setLastHasContent();
+        final Configuration config = new Configuration();
         config.setLocales(LocaleList.forLanguageTags("en-XC"));
-        mAtm.updateGlobalConfigurationLocked(config, true, true, DEFAULT_USER_ID);
+        mAtm.updateConfigurationLocked(config, true /* initLocale */, true /* persistent */,
+                DEFAULT_USER_ID);
+
+        assertTrue(dc0.inTransition());
+        assertTrue(dc1.inTransition());
+
         mAtm.mProcessMap.put(Binder.getCallingPid(), createWindowProcessController(
                 DEFAULT_PACKAGE_NAME, DEFAULT_USER_ID));
 
@@ -1361,18 +1680,22 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
     @EnableFlags(FLAG_ENABLE_WINDOW_REPOSITIONING_API)
     @Test
     public void testIsTaskMoveAllowedOnDisplay_permissionGranted() {
-        final int displayId = 73;
+        final int displayId = Display.DEFAULT_DISPLAY;
+        final DisplayContent dc = mRootWindowContainer.getDisplayContent(displayId);
 
         MockitoSession session =
                 mockitoSession().spyStatic(ActivityTaskManagerService.class).startMocking();
         try {
-            doReturn(true).when(mRootWindowContainer).isTaskMoveAllowedOnDisplay(displayId);
             doReturn(PERMISSION_GRANTED).when(() -> {
                 return ActivityTaskManagerService.checkPermission(
                         eq(REPOSITION_SELF_WINDOWS), anyInt(), anyInt());
             });
 
+            doReturn(true).when(dc).isTaskMoveAllowedOnDisplay();
             assertTrue(mAtm.isTaskMoveAllowedOnDisplay(displayId));
+
+            doReturn(false).when(dc).isTaskMoveAllowedOnDisplay();
+            assertFalse(mAtm.isTaskMoveAllowedOnDisplay(displayId));
         } finally {
             session.finishMocking();
         }
@@ -1381,17 +1704,21 @@ public class ActivityTaskManagerServiceTests extends WindowTestsBase {
     @EnableFlags(FLAG_ENABLE_WINDOW_REPOSITIONING_API)
     @Test
     public void testIsTaskMoveAllowedOnDisplay_permissionDenied() {
-        final int displayId = 73;
+        final int displayId = Display.DEFAULT_DISPLAY;
+        final DisplayContent dc = mRootWindowContainer.getDisplayContent(displayId);
 
         MockitoSession session =
                 mockitoSession().spyStatic(ActivityTaskManagerService.class).startMocking();
         try {
-            doReturn(true).when(mRootWindowContainer).isTaskMoveAllowedOnDisplay(displayId);
             doReturn(PERMISSION_DENIED).when(() -> {
                 return ActivityTaskManagerService.checkPermission(
                         eq(REPOSITION_SELF_WINDOWS), anyInt(), anyInt());
             });
 
+            doReturn(true).when(dc).isTaskMoveAllowedOnDisplay();
+            assertFalse(mAtm.isTaskMoveAllowedOnDisplay(displayId));
+
+            doReturn(false).when(dc).isTaskMoveAllowedOnDisplay();
             assertFalse(mAtm.isTaskMoveAllowedOnDisplay(displayId));
         } finally {
             session.finishMocking();

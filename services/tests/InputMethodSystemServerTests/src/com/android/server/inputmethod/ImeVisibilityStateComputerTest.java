@@ -26,23 +26,19 @@ import static android.view.WindowManager.DISPLAY_IME_POLICY_LOCAL;
 import static android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED;
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
-import static com.android.internal.inputmethod.SoftInputShowHideReason.HIDE_WHEN_INPUT_TARGET_INVISIBLE;
 import static com.android.server.inputmethod.ImeVisibilityStateComputer.ImeTargetWindowState;
-import static com.android.server.inputmethod.ImeVisibilityStateComputer.ImeVisibilityResult;
-import static com.android.server.inputmethod.ImeVisibilityStateComputer.STATE_HIDE_IME_EXPLICIT;
 import static com.android.server.inputmethod.InputMethodManagerService.FALLBACK_DISPLAY_ID;
 import static com.android.server.inputmethod.InputMethodManagerService.ImeDisplayValidator;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
 
 import android.annotation.UserIdInt;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.RemoteException;
-import android.view.inputmethod.ImeTracker;
-import android.view.inputmethod.InputMethodManager;
 
 import androidx.annotation.NonNull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -100,8 +96,7 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
     public void testRequestImeVisibility_showImplicit() {
         synchronized (ImfLock.class) {
             initImeTargetWindowState(mWindowToken);
-            boolean res = mComputer.onImeShowFlags(ImeTracker.Token.empty(),
-                    InputMethodManager.SHOW_IMPLICIT);
+            boolean res = mComputer.isAllowedByAccessibilityAndDisplayPolicy();
             mComputer.requestImeVisibility(mWindowToken, res);
 
             final ImeTargetWindowState state = mComputer.getWindowStateOrNull(mWindowToken);
@@ -109,8 +104,6 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             assertThat(state.hasEditorFocused()).isTrue();
             assertThat(state.getSoftInputModeState()).isEqualTo(SOFT_INPUT_STATE_UNCHANGED);
             assertThat(state.isRequestedImeVisible()).isTrue();
-
-            assertThat(mComputer.mRequestedShowExplicitly).isFalse();
         }
     }
 
@@ -118,7 +111,7 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
     public void testRequestImeVisibility_showExplicit() {
         synchronized (ImfLock.class) {
             initImeTargetWindowState(mWindowToken);
-            boolean res = mComputer.onImeShowFlags(ImeTracker.Token.empty(), 0 /* showFlags */);
+            boolean res = mComputer.isAllowedByAccessibilityAndDisplayPolicy();
             mComputer.requestImeVisibility(mWindowToken, res);
 
             final ImeTargetWindowState state = mComputer.getWindowStateOrNull(mWindowToken);
@@ -126,40 +119,6 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             assertThat(state.hasEditorFocused()).isTrue();
             assertThat(state.getSoftInputModeState()).isEqualTo(SOFT_INPUT_STATE_UNCHANGED);
             assertThat(state.isRequestedImeVisible()).isTrue();
-
-            assertThat(mComputer.mRequestedShowExplicitly).isTrue();
-        }
-    }
-
-    /**
-     * This checks that the state after an explicit show request does not get reset during
-     * a subsequent implicit show request, without an intermediary hide request.
-     */
-    @Test
-    public void testRequestImeVisibility_showExplicit_thenShowImplicit() {
-        synchronized (ImfLock.class) {
-            initImeTargetWindowState(mWindowToken);
-            mComputer.onImeShowFlags(ImeTracker.Token.empty(), 0 /* showFlags */);
-            assertThat(mComputer.mRequestedShowExplicitly).isTrue();
-
-            mComputer.onImeShowFlags(null, InputMethodManager.SHOW_IMPLICIT);
-            assertThat(mComputer.mRequestedShowExplicitly).isTrue();
-        }
-    }
-
-    /**
-     * This checks that the state after a forced show request does not get reset during
-     * a subsequent explicit show request, without an intermediary hide request.
-     */
-    @Test
-    public void testRequestImeVisibility_showForced_thenShowExplicit() {
-        synchronized (ImfLock.class) {
-            initImeTargetWindowState(mWindowToken);
-            mComputer.onImeShowFlags(ImeTracker.Token.empty(), InputMethodManager.SHOW_FORCED);
-            assertThat(mComputer.mShowForced).isTrue();
-
-            mComputer.onImeShowFlags(ImeTracker.Token.empty(), 0 /* showFlags */);
-            assertThat(mComputer.mShowForced).isTrue();
         }
     }
 
@@ -170,8 +129,7 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             mComputer.getImePolicy().setA11yRequestNoSoftKeyboard(SHOW_MODE_HIDDEN);
 
             initImeTargetWindowState(mWindowToken);
-            boolean res = mComputer.onImeShowFlags(ImeTracker.Token.empty(),
-                    InputMethodManager.SHOW_IMPLICIT);
+            boolean res = mComputer.isAllowedByAccessibilityAndDisplayPolicy();
             mComputer.requestImeVisibility(mWindowToken, res);
 
             final ImeTargetWindowState state = mComputer.getWindowStateOrNull(mWindowToken);
@@ -179,8 +137,6 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             assertThat(state.hasEditorFocused()).isTrue();
             assertThat(state.getSoftInputModeState()).isEqualTo(SOFT_INPUT_STATE_UNCHANGED);
             assertThat(state.isRequestedImeVisible()).isFalse();
-
-            assertThat(mComputer.mRequestedShowExplicitly).isFalse();
         }
     }
 
@@ -191,8 +147,7 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             mComputer.getImePolicy().setImeHiddenByDisplayPolicy(true);
 
             initImeTargetWindowState(mWindowToken);
-            boolean res = mComputer.onImeShowFlags(ImeTracker.Token.empty(),
-                    InputMethodManager.SHOW_IMPLICIT);
+            boolean res = mComputer.isAllowedByAccessibilityAndDisplayPolicy();
             mComputer.requestImeVisibility(mWindowToken, res);
 
             final ImeTargetWindowState state = mComputer.getWindowStateOrNull(mWindowToken);
@@ -200,8 +155,6 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             assertThat(state.hasEditorFocused()).isTrue();
             assertThat(state.getSoftInputModeState()).isEqualTo(SOFT_INPUT_STATE_UNCHANGED);
             assertThat(state.isRequestedImeVisible()).isFalse();
-
-            assertThat(mComputer.mRequestedShowExplicitly).isFalse();
         }
     }
 
@@ -212,8 +165,6 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             mComputer.setInputShown(true);
 
             initImeTargetWindowState(mWindowToken);
-            assertThat(mComputer.canHideIme(ImeTracker.Token.empty(),
-                    InputMethodManager.HIDE_NOT_ALWAYS)).isTrue();
             mComputer.requestImeVisibility(mWindowToken, false);
 
             final ImeTargetWindowState state = mComputer.getWindowStateOrNull(mWindowToken);
@@ -310,18 +261,14 @@ public class ImeVisibilityStateComputerTest extends InputMethodManagerServiceTes
             mComputer.setHasVisibleImeLayeringOverlay(true /* visibleAndNotRemoved */);
             mComputer.onImeInputTargetVisibilityChanged(testImeInputTarget,
                     false /* visibleAndNotRemoved */);
-            final ArgumentCaptor<ImeVisibilityResult> resultCaptor = ArgumentCaptor.forClass(
-                    ImeVisibilityResult.class);
-            final ArgumentCaptor<Integer> userIdCaptor = ArgumentCaptor.forClass(Integer.class);
-            verify(mInputMethodManagerService).onApplyImeVisibilityFromComputerLocked(
-                    notNull() /* statsToken */, resultCaptor.capture(), userIdCaptor.capture());
-            final ImeVisibilityResult result = resultCaptor.getValue();
-            final int userId = userIdCaptor.getValue();
+            final ArgumentCaptor<UserData> userDataCaptor = ArgumentCaptor.forClass(UserData.class);
+            verify(mInputMethodManagerService).setImeVisibilityOnFocusedWindowClient(
+                    eq(false) /* visible */, userDataCaptor.capture(), notNull() /* statsToken */);
+            final UserData userData = userDataCaptor.getValue();
 
             // Verify the computer will callback hiding IME state to IMMS.
-            assertThat(result.getState()).isEqualTo(STATE_HIDE_IME_EXPLICIT);
-            assertThat(result.getReason()).isEqualTo(HIDE_WHEN_INPUT_TARGET_INVISIBLE);
-            assertThat(userId).isEqualTo(mUserId);
+            assertThat(userData).isNotNull();
+            assertThat(userData.mUserId).isEqualTo(mUserId);
         }
     }
 

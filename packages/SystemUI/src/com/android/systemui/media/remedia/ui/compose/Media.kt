@@ -66,6 +66,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -76,6 +77,7 @@ import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -94,8 +96,8 @@ import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -108,21 +110,27 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.node.Ref
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.compose.ui.util.fastRoundToInt
 import com.android.compose.PlatformButton
 import com.android.compose.PlatformIconButton
 import com.android.compose.PlatformOutlinedButton
+import com.android.compose.animation.Expandable
+import com.android.compose.animation.rememberExpandableController
 import com.android.compose.animation.scene.ContentScope
 import com.android.compose.animation.scene.ElementKey
 import com.android.compose.animation.scene.SceneKey
@@ -132,14 +140,17 @@ import com.android.compose.animation.scene.transitions
 import com.android.compose.gesture.effect.rememberOffsetOverscrollEffect
 import com.android.compose.gesture.overscrollToDismiss
 import com.android.compose.modifiers.thenIf
-import com.android.compose.theme.LocalAndroidColorScheme
 import com.android.compose.ui.graphics.painter.rememberDrawablePainter
-import com.android.mechanics.spec.builder.rememberMotionBuilderContext
+import com.android.systemui.animation.Expandable
 import com.android.systemui.common.shared.model.Icon
+import com.android.systemui.common.shared.model.asImageBitmap
 import com.android.systemui.common.ui.compose.Icon
 import com.android.systemui.common.ui.compose.PagerDots
+import com.android.systemui.common.ui.compose.byLayoutId
 import com.android.systemui.common.ui.compose.load
+import com.android.systemui.common.ui.compose.singleton
 import com.android.systemui.communal.ui.compose.extensions.detectLongPressGesture
+import com.android.systemui.compose.modifiers.sysuiResTag
 import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.media.remedia.shared.model.MediaCardActionButtonLayout
 import com.android.systemui.media.remedia.shared.model.MediaColorScheme
@@ -225,8 +236,12 @@ private fun CardCarouselContent(
     modifier: Modifier = Modifier,
 ) {
     val pagerState = rememberPagerState { viewModel.cards.size }
+    LaunchedEffect(viewModel.currentIndex) {
+        if (viewModel.currentIndex != pagerState.currentPage) {
+            pagerState.scrollToPage(viewModel.currentIndex)
+        }
+    }
     LaunchedEffect(pagerState.currentPage) { viewModel.onCardSelected(pagerState.currentPage) }
-
     var isFalseTouchDetected: Boolean by
         remember(behavior.isCarouselScrollFalseTouch) { mutableStateOf(false) }
     val isSwipingEnabled = behavior.isCarouselScrollingEnabled && !isFalseTouchDetected
@@ -235,7 +250,7 @@ private fun CardCarouselContent(
 
     Box(
         modifier =
-            modifier.padding(8.dp).clip(roundedCornerShape).pointerInput(behavior) {
+            modifier.clip(roundedCornerShape).pointerInput(behavior) {
                 if (behavior.isCarouselScrollFalseTouch != null) {
                     awaitEachGesture {
                         awaitFirstDown(false, PointerEventPass.Initial)
@@ -246,9 +261,10 @@ private fun CardCarouselContent(
     ) {
         @Composable
         fun PagerContent(overscrollEffect: OverscrollEffect? = null) {
-            Box {
+            Box(modifier = Modifier.sysuiResTag(MediaRes.MEDIA_CAROUSEL_SCROLLER)) {
                 HorizontalPager(
                     state = pagerState,
+                    modifier = Modifier.sysuiResTag(MediaRes.MEDIA_CAROUSEL),
                     userScrollEnabled = isSwipingEnabled,
                     pageSpacing = 8.dp,
                     beyondViewportPageCount = 1,
@@ -258,7 +274,8 @@ private fun CardCarouselContent(
                     Card(
                         viewModel = viewModel.cards[pageIndex],
                         presentationStyle = presentationStyle,
-                        modifier = Modifier.clip(roundedCornerShape),
+                        modifier =
+                            Modifier.clip(roundedCornerShape).sysuiResTag(MediaRes.MEDIA_CONTROLS),
                     )
                 }
 
@@ -279,7 +296,6 @@ private fun CardCarouselContent(
             Box(
                 modifier =
                     Modifier.overscrollToDismiss(
-                        rememberMotionBuilderContext(),
                         orientation = Orientation.Horizontal,
                         enabled = isSwipingEnabled,
                         onDismissed = onDismissed,
@@ -302,6 +318,13 @@ private fun CardCarouselContent(
             )
         }
     }
+
+    LaunchedEffect(viewModel.scrollToFirst) {
+        if (viewModel.scrollToFirst && viewModel.cards.isNotEmpty()) {
+            pagerState.animateScrollToPage(0)
+            viewModel.onScrollToFirstCard()
+        }
+    }
 }
 
 /** Renders the UI of a single media card. */
@@ -317,6 +340,8 @@ private fun Card(
             transitions = Media.Transitions,
         )
 
+    val colorScheme = rememberAnimatedColorScheme(viewModel.colorScheme)
+
     // Each time the presentation style changes, animate to the corresponding scene.
     LaunchedEffect(presentationStyle) {
         stlState.setTargetScene(targetScene = presentationStyle.toScene(), animationScope = this)
@@ -324,20 +349,54 @@ private fun Card(
 
     Box(modifier) {
         if (stlState.currentScene != Media.Scenes.Compact) {
-            CardBackground(image = viewModel.background, modifier = Modifier.matchParentSize())
+            CardBackground(
+                image = viewModel.background,
+                colorScheme = colorScheme,
+                modifier = Modifier.matchParentSize().sysuiResTag(MediaRes.BACKGROUND),
+            )
         }
 
-        key(stlState) {
-            SceneTransitionLayout(state = stlState) {
-                scene(Media.Scenes.Default) {
-                    CardForeground(viewModel = viewModel, threeRows = true, fillHeight = false)
-                }
+        Expandable(
+            controller =
+                rememberExpandableController(color = Color.Transparent, shape = RectangleShape),
+            useModifierBasedImplementation = true,
+        ) {
+            key(stlState) {
+                SceneTransitionLayout(state = stlState) {
+                    scene(Media.Scenes.Default) {
+                        CardForeground(
+                            expandable = it,
+                            viewModel = viewModel,
+                            colorScheme = colorScheme,
+                            threeRows = true,
+                            fillHeight = false,
+                        )
+                    }
 
-                scene(Media.Scenes.Compressed) {
-                    CardForeground(viewModel = viewModel, threeRows = false, fillHeight = false)
-                }
+                    scene(Media.Scenes.Large) {
+                        CardForeground(
+                            expandable = it,
+                            viewModel = viewModel,
+                            colorScheme = colorScheme,
+                            threeRows = true,
+                            fillHeight = true,
+                        )
+                    }
 
-                scene(Media.Scenes.Compact) { CompactCardForeground(viewModel = viewModel) }
+                    scene(Media.Scenes.Compressed) {
+                        CardForeground(
+                            expandable = it,
+                            viewModel = viewModel,
+                            colorScheme = colorScheme,
+                            threeRows = false,
+                            fillHeight = false,
+                        )
+                    }
+
+                    scene(Media.Scenes.Compact) {
+                        CompactCardForeground(expandable = it, viewModel = viewModel)
+                    }
+                }
             }
         }
     }
@@ -345,10 +404,12 @@ private fun Card(
 
 @Composable
 private fun rememberAnimatedColorScheme(colorScheme: MediaColorScheme?): AnimatedColorScheme {
-    val primaryColor = colorScheme?.primary ?: LocalAndroidColorScheme.current.primaryFixed
-    val onPrimaryColor = colorScheme?.onPrimary ?: LocalAndroidColorScheme.current.onPrimaryFixed
+    val primaryColor = colorScheme?.primary ?: MaterialTheme.colorScheme.primaryFixed
+    val onPrimaryColor = colorScheme?.onPrimary ?: MaterialTheme.colorScheme.onPrimaryFixed
+    val backgroundColor = colorScheme?.background ?: MaterialTheme.colorScheme.onSurface
     val animatedPrimary by animateColorAsState(targetValue = primaryColor)
     val animatedOnPrimary by animateColorAsState(targetValue = onPrimaryColor)
+    val animatedBackground by animateColorAsState(targetValue = backgroundColor)
 
     return remember {
         object : AnimatedColorScheme {
@@ -357,6 +418,9 @@ private fun rememberAnimatedColorScheme(colorScheme: MediaColorScheme?): Animate
 
             override val onPrimary: Color
                 get() = animatedOnPrimary
+
+            override val background: Color
+                get() = animatedBackground
         }
     }
 }
@@ -372,7 +436,9 @@ private fun rememberAnimatedColorScheme(colorScheme: MediaColorScheme?): Animate
  */
 @Composable
 private fun ContentScope.CardForeground(
+    expandable: Expandable,
     viewModel: MediaCardViewModel,
+    colorScheme: AnimatedColorScheme,
     threeRows: Boolean,
     fillHeight: Boolean,
     modifier: Modifier = Modifier,
@@ -383,20 +449,19 @@ private fun ContentScope.CardForeground(
     val isGutsVisible = viewModel.guts.isVisible
     LaunchedEffect(isGutsVisible) { gutsAlphaAnimatable.animateTo(if (isGutsVisible) 1f else 0f) }
 
-    val colorScheme = rememberAnimatedColorScheme(viewModel.colorScheme)
-
     // Use a custom layout to measure the content even if the content is being hidden because the
     // internal guts are showing. This is needed because only the content knows the size the of the
     // card and the guts are set to be the same size of the content.
     Layout(
         content = {
             CardForegroundContent(
+                expandable = expandable,
                 viewModel = viewModel,
                 threeRows = threeRows,
                 fillHeight = fillHeight,
                 colorScheme = colorScheme,
                 modifier =
-                    Modifier.graphicsLayer {
+                    Modifier.layoutId(Media.LayoutId.CardForeground).graphicsLayer {
                         compositingStrategy = CompositingStrategy.ModulateAlpha
                         alpha = 1f - gutsAlphaAnimatable.value
                     },
@@ -406,7 +471,7 @@ private fun ContentScope.CardForeground(
                 viewModel = viewModel.guts,
                 colorScheme = colorScheme,
                 modifier =
-                    Modifier.graphicsLayer {
+                    Modifier.layoutId(Media.LayoutId.CardGuts).graphicsLayer {
                         compositingStrategy = CompositingStrategy.ModulateAlpha
                         alpha = gutsAlphaAnimatable.value
                     },
@@ -414,12 +479,13 @@ private fun ContentScope.CardForeground(
         },
         modifier = modifier,
     ) { measurables, constraints ->
-        check(measurables.size == 2)
-        val contentPlaceable = measurables[0].measure(constraints)
+        val measurableByLayoutId = measurables.byLayoutId<Media.LayoutId>()
+        val contentPlaceable =
+            measurableByLayoutId[Media.LayoutId.CardForeground]!!.measure(constraints)
         // Guts should always have the exact dimensions as the content, even if we don't show the
         // content.
         val gutsPlaceable =
-            measurables[1].measure(
+            measurableByLayoutId[Media.LayoutId.CardGuts]!!.measure(
                 Constraints.fixed(contentPlaceable.width, contentPlaceable.height)
             )
 
@@ -436,16 +502,18 @@ private fun ContentScope.CardForeground(
 
 @Composable
 private fun ContentScope.CardForegroundContent(
+    expandable: Expandable,
     viewModel: MediaCardViewModel,
     threeRows: Boolean,
     fillHeight: Boolean,
     colorScheme: AnimatedColorScheme,
     modifier: Modifier = Modifier,
 ) {
+
     Column(
         modifier =
             modifier.combinedClickable(
-                onClick = viewModel.onClick,
+                onClick = { viewModel.onClick(expandable) },
                 onLongClick = viewModel.onLongClick,
                 onClickLabel = viewModel.onClickLabel,
             )
@@ -468,11 +536,11 @@ private fun ContentScope.CardForegroundContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier =
                     Modifier.align(Alignment.TopEnd)
-                        // Output switcher chip must be limited to at most 40% of the maximum width
-                        // of the card.
+                        // Output switcher chip must be limited to at most 40% of the maximum
+                        // width of the card.
                         //
-                        // This saves the maximum possible width of the card so it can be referred
-                        // to by child custom layout code below.
+                        // This saves the maximum possible width of the card so it can be
+                        // referred to by child custom layout code below.
                         //
                         // The assumption is that the row can be as wide as the entire card.
                         .layout { measurable, constraints ->
@@ -500,9 +568,10 @@ private fun ContentScope.CardForegroundContent(
                                 ),
                             modifier =
                                 Modifier.fractionalMaxWidth(
-                                    containerMaxWidth = cardMaxWidth,
-                                    fraction = 0.5f,
-                                ),
+                                        containerMaxWidth = cardMaxWidth,
+                                        fraction = 0.5f,
+                                    )
+                                    .sysuiResTag(MediaRes.SUGGESTED_DEVICE_CHIP),
                         )
                     }
                 }
@@ -522,7 +591,8 @@ private fun ContentScope.CardForegroundContent(
                             // chip with text and one more icon-only chip. Only the one with
                             // text can ever end up being too wide.
                             .fractionalMaxWidth(containerMaxWidth = cardMaxWidth, fraction = 0.4f)
-                            .padding(end = 16.dp),
+                            .padding(end = 16.dp)
+                            .sysuiResTag(MediaRes.OUTPUT_CHIP),
                 )
             }
         }
@@ -540,7 +610,7 @@ private fun ContentScope.CardForegroundContent(
             // Second row.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp),
             ) {
                 Metadata(
                     title = viewModel.title,
@@ -549,41 +619,43 @@ private fun ContentScope.CardForegroundContent(
                     modifier = Modifier.weight(1f).padding(end = 8.dp),
                 )
 
-                val playPauseSize = DpSize(width = 48.dp, height = 48.dp)
                 if (viewModel.actionButtonLayout == MediaCardActionButtonLayout.WithPlayPause) {
                     AnimatedVisibility(visible = viewModel.playPauseAction != null) {
                         PlayPauseAction(
-                            viewModel = checkNotNull(viewModel.playPauseAction),
-                            buttonSize = playPauseSize,
+                            viewModel = viewModel.playPauseAction,
                             buttonColor = colorScheme.primary,
                             iconColor = colorScheme.onPrimary,
                             buttonCornerRadius = { isPlaying -> if (isPlaying) 16.dp else 48.dp },
                         )
                     }
                 } else {
-                    Spacer(Modifier.size(playPauseSize))
+                    Spacer(Modifier.size(width = 0.dp, height = 48.dp))
                 }
             }
 
             // Third row.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 16.dp),
-            ) {
-                Navigation(
-                    viewModel = viewModel.navigation,
-                    isSeekBarVisible = true,
-                    areActionsVisible =
-                        viewModel.actionButtonLayout == MediaCardActionButtonLayout.WithPlayPause,
-                    modifier = Modifier.weight(1f),
-                )
-
-                viewModel.additionalActions.fastForEachIndexed { index, action ->
-                    SecondaryAction(
-                        viewModel = action,
-                        element = Media.Elements.additionalActionButton(index),
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                ) {
+                    Navigation(
+                        viewModel = viewModel.navigation,
+                        isSeekBarVisible = true,
+                        areActionsVisible =
+                            viewModel.actionButtonLayout ==
+                                MediaCardActionButtonLayout.WithPlayPause,
+                        modifier = Modifier.weight(1f),
                     )
+
+                    viewModel.additionalActions.fastForEachIndexed { index, action ->
+                        SecondaryAction(
+                            viewModel = action,
+                            resId = "action$index",
+                            element = Media.Elements.additionalActionButton(index),
+                        )
+                    }
                 }
             }
         } else {
@@ -592,7 +664,7 @@ private fun ContentScope.CardForegroundContent(
             // Bottom row.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 16.dp, top = 36.dp, end = 16.dp, bottom = 16.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
             ) {
                 Metadata(
                     title = viewModel.title,
@@ -601,39 +673,42 @@ private fun ContentScope.CardForegroundContent(
                     modifier = Modifier.weight(1f).padding(end = 8.dp),
                 )
 
-                Navigation(
-                    viewModel = viewModel.navigation,
-                    isSeekBarVisible = false,
-                    areActionsVisible =
-                        viewModel.actionButtonLayout == MediaCardActionButtonLayout.WithPlayPause,
-                    modifier = Modifier.padding(end = 8.dp),
-                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Navigation(
+                        viewModel = viewModel.navigation,
+                        isSeekBarVisible = false,
+                        areActionsVisible =
+                            viewModel.actionButtonLayout ==
+                                MediaCardActionButtonLayout.WithPlayPause,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
 
-                if (
-                    viewModel.actionButtonLayout == MediaCardActionButtonLayout.SecondaryActionsOnly
-                ) {
-                    viewModel.additionalActions.fastForEachIndexed { index, action ->
-                        SecondaryAction(
-                            viewModel = action,
-                            element = Media.Elements.additionalActionButton(index),
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
+                    if (
+                        viewModel.actionButtonLayout ==
+                            MediaCardActionButtonLayout.SecondaryActionsOnly
+                    ) {
+                        viewModel.additionalActions.fastForEachIndexed { index, action ->
+                            SecondaryAction(
+                                viewModel = action,
+                                resId = "action$index",
+                                element = Media.Elements.additionalActionButton(index),
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                        }
                     }
                 }
 
-                val playPauseSize = DpSize(width = 48.dp, height = 48.dp)
                 if (viewModel.actionButtonLayout == MediaCardActionButtonLayout.WithPlayPause) {
                     AnimatedVisibility(visible = viewModel.playPauseAction != null) {
                         PlayPauseAction(
-                            viewModel = checkNotNull(viewModel.playPauseAction),
-                            buttonSize = playPauseSize,
+                            viewModel = viewModel.playPauseAction,
                             buttonColor = colorScheme.primary,
                             iconColor = colorScheme.onPrimary,
                             buttonCornerRadius = { isPlaying -> if (isPlaying) 16.dp else 48.dp },
                         )
                     }
                 } else {
-                    Spacer(Modifier.size(playPauseSize))
+                    Spacer(Modifier.size(width = 0.dp, height = 48.dp))
                 }
             }
         }
@@ -646,6 +721,7 @@ private fun ContentScope.CardForegroundContent(
  */
 @Composable
 private fun ContentScope.CompactCardForeground(
+    expandable: Expandable,
     viewModel: MediaCardViewModel,
     modifier: Modifier = Modifier,
 ) {
@@ -654,7 +730,10 @@ private fun ContentScope.CompactCardForeground(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
-                .clickable(onClick = viewModel.onClick, onClickLabel = viewModel.onClickLabel)
+                .clickable(
+                    onClick = { viewModel.onClick(expandable) },
+                    onClickLabel = viewModel.onClickLabel,
+                )
                 .background(MaterialTheme.colorScheme.surfaceContainer)
                 .padding(16.dp),
     ) {
@@ -673,6 +752,7 @@ private fun ContentScope.CompactCardForeground(
 
         SecondaryAction(
             viewModel = viewModel.outputSwitcherChipButton,
+            resId = MediaRes.OUTPUT_CHIP,
             element = Media.Elements.OutputSwitcherButton,
             iconColor = MaterialTheme.colorScheme.onSurface,
         )
@@ -681,6 +761,7 @@ private fun ContentScope.CompactCardForeground(
         if (rightAction != null) {
             SecondaryAction(
                 viewModel = rightAction,
+                resId = MediaRes.NEXT_BTN,
                 element = Media.Elements.NextButton,
                 iconColor = MaterialTheme.colorScheme.onSurface,
             )
@@ -688,8 +769,7 @@ private fun ContentScope.CompactCardForeground(
 
         AnimatedVisibility(visible = viewModel.playPauseAction != null) {
             PlayPauseAction(
-                viewModel = checkNotNull(viewModel.playPauseAction),
-                buttonSize = DpSize(width = 72.dp, height = 48.dp),
+                viewModel = viewModel.playPauseAction,
                 buttonColor = MaterialTheme.colorScheme.primaryContainer,
                 iconColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 buttonCornerRadius = { isPlaying -> if (isPlaying) 16.dp else 24.dp },
@@ -700,13 +780,18 @@ private fun ContentScope.CompactCardForeground(
 
 /** Renders the background of a card, loading the artwork and showing an overlay on top of it. */
 @Composable
-private fun CardBackground(image: ImageBitmap?, modifier: Modifier = Modifier) {
+private fun CardBackground(
+    image: Icon?,
+    colorScheme: AnimatedColorScheme,
+    modifier: Modifier = Modifier,
+) {
     Crossfade(targetState = image, modifier = modifier) { imageOrNull ->
-        if (imageOrNull != null) {
+        val backgroundImage = imageOrNull?.let { (it as Icon.Loaded).asImageBitmap() }
+        if (backgroundImage != null) {
             // Loaded art.
-            val gradientBaseColor = MaterialTheme.colorScheme.onSurface
+            val gradientBaseColor = colorScheme.background
             Image(
-                bitmap = imageOrNull,
+                bitmap = backgroundImage,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier =
@@ -730,7 +815,7 @@ private fun CardBackground(image: ImageBitmap?, modifier: Modifier = Modifier) {
             )
         } else {
             // Placeholder.
-            Box(Modifier.background(MaterialTheme.colorScheme.onSurface).fillMaxSize())
+            Box(Modifier.background(colorScheme.background).fillMaxSize())
         }
     }
 }
@@ -761,7 +846,11 @@ private fun ContentScope.Navigation(
                 modifier = modifier,
             ) {
                 if (areActionsVisible) {
-                    SecondaryAction(viewModel = viewModel.left, element = Media.Elements.PrevButton)
+                    SecondaryAction(
+                        viewModel = viewModel.left,
+                        modifier = Modifier.sysuiResTag(MediaRes.PREV_BTN),
+                        element = Media.Elements.PrevButton,
+                    )
                 }
 
                 val interactionSource = remember { MutableInteractionSource() }
@@ -845,6 +934,7 @@ private fun ContentScope.Navigation(
                 if (areActionsVisible) {
                     SecondaryAction(
                         viewModel = viewModel.right,
+                        modifier = Modifier.sysuiResTag(MediaRes.NEXT_BTN),
                         element = Media.Elements.NextButton,
                     )
                 }
@@ -1009,6 +1099,7 @@ private fun CardGuts(
                 Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 16.dp).clickable {
                     viewModel.settingsButton.onClick()
                 },
+            tint = Color.White,
         )
 
         //  Content.
@@ -1016,11 +1107,16 @@ private fun CardGuts(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier =
-                Modifier.align(Alignment.BottomCenter)
+                Modifier.align(Alignment.Center)
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 32.dp, bottom = 40.dp),
+                    .padding(start = 16.dp, end = 32.dp, top = 16.dp),
         ) {
-            Text(text = viewModel.text, color = Color.White)
+            Text(
+                text = viewModel.text,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontSize = 14.sp,
+            )
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1028,20 +1124,28 @@ private fun CardGuts(
             ) {
                 PlatformButton(
                     onClick = viewModel.primaryAction.onClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                    modifier = Modifier.sysuiResTag(MediaRes.HIDE_BTN),
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary),
                 ) {
                     Text(
                         text = checkNotNull(viewModel.primaryAction.text),
                         color = colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 14.sp,
                     )
                 }
 
                 viewModel.secondaryAction?.let { button ->
                     PlatformOutlinedButton(
                         onClick = button.onClick,
-                        border = BorderStroke(width = 1.dp, color = Color.White),
+                        border = BorderStroke(width = 1.dp, color = colorScheme.primary),
                     ) {
-                        Text(text = checkNotNull(button.text), color = Color.White)
+                        Text(
+                            text = checkNotNull(button.text),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontSize = 14.sp,
+                        )
                     }
                 }
             }
@@ -1050,6 +1154,7 @@ private fun CardGuts(
 }
 
 /** Renders the metadata labels of a track. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ContentScope.Metadata(
     title: String,
@@ -1065,7 +1170,8 @@ private fun ContentScope.Metadata(
             Column {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.sysuiResTag(MediaRes.TITLE),
+                    style = MaterialTheme.typography.titleMediumEmphasized,
                     color = color,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1073,6 +1179,7 @@ private fun ContentScope.Metadata(
 
                 Text(
                     text = subtitle,
+                    modifier = Modifier.sysuiResTag(MediaRes.ARTIST),
                     style = MaterialTheme.typography.bodyMedium,
                     color = color,
                     maxLines = 1,
@@ -1100,53 +1207,63 @@ private fun DeviceChip(
     // The inner composable consumes the user events from the InteractionSource and feeds them into
     // its indication.
     val clickInteractionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier =
-            modifier
-                .heightIn(min = 48.dp)
-                .clickable(interactionSource = clickInteractionSource, indication = null) {
-                    viewModel.onClick()
-                }
-                .padding(top = 16.dp, bottom = 8.dp)
+    Expandable(
+        controller =
+            rememberExpandableController(
+                color = Color.Transparent,
+                shape = RoundedCornerShape(12.dp),
+            ),
+        modifier = modifier.padding(top = 16.dp, bottom = 0.dp),
+        useModifierBasedImplementation = true,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
             modifier =
-                Modifier.clip(RoundedCornerShape(12.dp))
-                    .background(style.fillColor)
-                    .thenIf(style.borderColor != null) {
-                        Modifier.border(
-                            width = 1.dp,
-                            color = style.borderColor!!,
-                            shape = RoundedCornerShape(12.dp),
+                Modifier.heightIn(min = 48.dp).clickable(
+                    interactionSource = clickInteractionSource,
+                    indication = null,
+                ) {
+                    viewModel.onClick(it)
+                }
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier.clip(RoundedCornerShape(12.dp))
+                        .background(style.fillColor)
+                        .thenIf(style.borderColor != null) {
+                            Modifier.border(
+                                width = 1.dp,
+                                color = style.borderColor!!,
+                                shape = RoundedCornerShape(12.dp),
+                            )
+                        }
+                        .indication(clickInteractionSource, ripple())
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                if (viewModel.isConnecting) {
+                    CircularProgressIndicator(
+                        color = style.contentColor,
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.dp,
+                    )
+                } else {
+                    Icon(
+                        icon = viewModel.icon,
+                        tint = style.contentColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                AnimatedVisibility(visible = viewModel.text != null) {
+                    rememberLastNonNull(viewModel.text)?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = style.contentColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 4.dp),
                         )
                     }
-                    .indication(clickInteractionSource, ripple())
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            if (viewModel.isConnecting) {
-                CircularProgressIndicator(
-                    color = style.contentColor,
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.dp,
-                )
-            } else {
-                Icon(
-                    icon = viewModel.icon,
-                    tint = style.contentColor,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            AnimatedVisibility(visible = viewModel.text != null) {
-                rememberLastNonNull(viewModel.text)?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = style.contentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
                 }
             }
         }
@@ -1156,13 +1273,15 @@ private fun DeviceChip(
 /** Renders the primary action of media controls: the play/pause button. */
 @Composable
 private fun ContentScope.PlayPauseAction(
-    viewModel: MediaPlayPauseActionViewModel,
-    buttonSize: DpSize,
+    viewModel: MediaPlayPauseActionViewModel?,
     buttonColor: Color,
     iconColor: Color,
     buttonCornerRadius: (isPlaying: Boolean) -> Dp,
     modifier: Modifier = Modifier,
 ) {
+    if (viewModel == null) return
+
+    val buttonSize = DpSize(width = 72.dp, height = 48.dp)
     val cornerRadius: Dp by
         animateDpAsState(
             targetValue = buttonCornerRadius(viewModel.state != MediaSessionState.Paused),
@@ -1188,7 +1307,7 @@ private fun ContentScope.PlayPauseAction(
                                 rememberAnimatedVectorPainter(
                                     animatedImageVector =
                                         AnimatedImageVector.animatedVectorResource(
-                                            id = viewModel.icon.res
+                                            id = viewModel.icon.resId
                                         ),
                                     atEnd = viewModel.state == MediaSessionState.Playing,
                                 )
@@ -1200,7 +1319,7 @@ private fun ContentScope.PlayPauseAction(
                             painter = painter,
                             contentDescription = viewModel.icon?.contentDescription?.load(),
                             tint = iconColor,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(24.dp).sysuiResTag(MediaRes.PLAY_PAUSE_BTN),
                         )
                     }
                 }
@@ -1222,15 +1341,21 @@ private fun ContentScope.PlayPauseAction(
 private fun ContentScope.SecondaryAction(
     viewModel: MediaSecondaryActionViewModel,
     modifier: Modifier = Modifier,
+    resId: String = MediaRes.EMPTY_STRING,
     element: ElementKey? = null,
     iconColor: Color = Color.White,
 ) {
     if (viewModel !is MediaSecondaryActionViewModel.None && element != null) {
         Element(key = element, modifier = modifier) {
-            SecondaryActionContent(viewModel = viewModel, iconColor = iconColor)
+            SecondaryActionContent(viewModel = viewModel, iconColor = iconColor, resId = resId)
         }
     } else {
-        SecondaryActionContent(viewModel = viewModel, iconColor = iconColor, modifier = modifier)
+        SecondaryActionContent(
+            viewModel = viewModel,
+            iconColor = iconColor,
+            resId = resId,
+            modifier = modifier,
+        )
     }
 }
 
@@ -1239,19 +1364,33 @@ private fun ContentScope.SecondaryAction(
 private fun SecondaryActionContent(
     viewModel: MediaSecondaryActionViewModel,
     iconColor: Color,
+    resId: String,
     modifier: Modifier = Modifier,
 ) {
     val sharedModifier = modifier.size(48.dp).padding(13.dp)
     when (viewModel) {
         is MediaSecondaryActionViewModel.Action ->
-            PlatformIconButton(
-                onClick = viewModel.onClick ?: {},
-                iconResource = (viewModel.icon as Icon.Resource).res,
-                contentDescription = viewModel.icon.contentDescription?.load(),
-                colors = IconButtonDefaults.iconButtonColors(contentColor = iconColor),
-                enabled = viewModel.onClick != null,
-                modifier = sharedModifier,
-            )
+            when (viewModel.icon) {
+                is Icon.Resource ->
+                    PlatformIconButton(
+                        onClick = viewModel.onClick ?: {},
+                        modifier = sharedModifier.sysuiResTag(resId),
+                        enabled = viewModel.onClick != null,
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = iconColor),
+                        iconResource = viewModel.icon.resId,
+                        contentDescription = viewModel.icon.contentDescription?.load(),
+                    )
+
+                is Icon.Loaded ->
+                    PlatformIconButton(
+                        onClick = viewModel.onClick ?: {},
+                        modifier = sharedModifier.sysuiResTag(resId),
+                        enabled = viewModel.onClick != null,
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = iconColor),
+                        iconDrawable = viewModel.icon.drawable,
+                        contentDescription = viewModel.icon.contentDescription?.load(),
+                    )
+            }
 
         is MediaSecondaryActionViewModel.ReserveSpace -> Spacer(modifier = sharedModifier)
 
@@ -1283,7 +1422,8 @@ private fun RevealedContent(
             Icon(
                 icon = viewModel.icon,
                 modifier =
-                    Modifier.size(48.dp)
+                    Modifier.layoutId(Media.LayoutId.CardRevealedContent)
+                        .size(48.dp)
                         .padding(12.dp)
                         .graphicsLayer {
                             alpha = abs(revealAmount()).fastCoerceIn(0f, 1f)
@@ -1294,8 +1434,9 @@ private fun RevealedContent(
         },
         modifier = modifier,
     ) { measurables, constraints ->
-        check(measurables.size == 1)
-        val placeable = measurables[0].measure(constraints)
+        val placeable =
+            measurables.singleton(Media.LayoutId.CardRevealedContent).measure(constraints)
+
         val totalWidth =
             min(horizontalPadding.roundToPx() * 2 + placeable.measuredWidth, constraints.maxWidth)
 
@@ -1322,6 +1463,8 @@ private fun RevealedContent(
 enum class MediaPresentationStyle {
     /** The "normal" 3-row carousel look. */
     Default,
+    /** Similar to [Default] but with full height. Used in communal hub. */
+    Large,
     /** Similar to [Default] but not as tall (2-row carousel look). */
     Compressed,
     /** A special single-row treatment that fits nicely in quick settings. */
@@ -1344,9 +1487,26 @@ data class MediaUiBehavior(
 private interface AnimatedColorScheme {
     val primary: Color
     val onPrimary: Color
+    val background: Color
 }
 
-private object Media {
+private object MediaRes {
+    const val EMPTY_STRING = ""
+    const val BACKGROUND = "album_art"
+    const val PLAY_PAUSE_BTN = "actionPlayPause"
+    const val NEXT_BTN = "actionNext"
+    const val PREV_BTN = "actionPrev"
+    const val MEDIA_CAROUSEL_SCROLLER = "media_carousel_scroller"
+    const val MEDIA_CAROUSEL = "media_carousel"
+    const val MEDIA_CONTROLS = "qs_media_controls"
+    const val OUTPUT_CHIP = "media_seamless"
+    const val SUGGESTED_DEVICE_CHIP = "device_suggestion_button"
+    const val TITLE = "header_title"
+    const val ARTIST = "header_artist"
+    const val HIDE_BTN = "dismiss"
+}
+
+object Media {
 
     /**
      * Scenes.
@@ -1359,6 +1519,8 @@ private object Media {
     object Scenes {
         /** The "normal" 3-row carousel look. */
         val Default = SceneKey("default")
+        /** Similar to [Default] but with full height. Used in communal hub. */
+        val Large = SceneKey("large")
         /** Similar to [Default] but not as tall (2-row carousel look). */
         val Compressed = SceneKey("compressed")
         /** A special single-row treatment that fits nicely in quick settings. */
@@ -1368,6 +1530,7 @@ private object Media {
     /** Definitions of how scene changes are transition-animated. */
     val Transitions = transitions {
         from(Scenes.Default, to = Scenes.Compact) {}
+        from(Scenes.Default, to = Scenes.Large) {}
         from(Scenes.Default, to = Scenes.Compressed) { fade(Elements.SeekBarSlider) }
         from(Scenes.Compact, to = Scenes.Compressed) { fade(Elements.SeekBarSlider) }
     }
@@ -1389,16 +1552,25 @@ private object Media {
         val NextButton = ElementKey("next")
         val SeekBarSlider = ElementKey("seek_bar_slider")
         val OutputSwitcherButton = ElementKey("output_switcher")
+        val mediaCarousel = ElementKey("media_carousel")
 
         fun additionalActionButton(index: Int): ElementKey {
-            return ElementKey("additional_action_$index")
+            val name = "additional_action_$index"
+            return ElementKey(debugName = name, identity = name)
         }
+    }
+
+    enum class LayoutId {
+        CardForeground,
+        CardGuts,
+        CardRevealedContent,
     }
 }
 
 private fun MediaPresentationStyle.toScene(): SceneKey {
     return when (this) {
         MediaPresentationStyle.Default -> Media.Scenes.Default
+        MediaPresentationStyle.Large -> Media.Scenes.Large
         MediaPresentationStyle.Compressed -> Media.Scenes.Compressed
         MediaPresentationStyle.Compact -> Media.Scenes.Compact
     }

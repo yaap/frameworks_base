@@ -28,7 +28,6 @@ import static android.view.WindowManager.LayoutParams.PRIVATE_FLAG_IS_ROUNDED_CO
 import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION_STARTING;
 import static android.view.WindowManager.LayoutParams.TYPE_BASE_APPLICATION;
 import static android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD;
-import static android.view.WindowManager.TRANSIT_OLD_NONE;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_ANIM;
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_DRAW;
@@ -386,8 +385,7 @@ class WindowStateAnimator {
                 logWithStack(TAG, "Window " + this + " destroying surface "
                         + mSurfaceControl + ", session " + mSession);
             }
-            ProtoLog.i(WM_SHOW_SURFACE_ALLOC, "SURFACE DESTROY: %s. %s",
-                    mWin, new RuntimeException());
+            ProtoLog.i(WM_SHOW_SURFACE_ALLOC, "SURFACE DESTROY: %s", mWin);
             destroySurface(t);
             if (mWallpaperControllerLocked.isWallpaperTarget(mWin)) {
                 mWin.requestUpdateWallpaperIfNeeded();
@@ -551,7 +549,7 @@ class WindowStateAnimator {
                 }
                 if (attr >= 0) {
                     a = mWin.mDisplayContent.mTransitionAnimation.loadAnimationAttr(
-                            mWin.mAttrs, attr, TRANSIT_OLD_NONE);
+                            mWin.mAttrs, attr);
                 }
             }
             if (ProtoLog.isEnabled(WM_DEBUG_ANIM, LogLevel.VERBOSE)) {

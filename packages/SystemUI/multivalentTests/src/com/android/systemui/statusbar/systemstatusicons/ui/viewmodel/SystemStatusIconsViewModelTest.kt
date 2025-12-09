@@ -22,21 +22,26 @@ import android.bluetooth.BluetoothProfile
 import android.content.testableContext
 import android.media.AudioManager
 import android.platform.test.annotations.EnableFlags
-import android.view.Display
+import android.view.Display.TYPE_EXTERNAL
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import com.android.settingslib.bluetooth.CachedBluetoothDevice
 import com.android.settingslib.notification.modes.TestModeBuilder
 import com.android.settingslib.volume.shared.model.RingerMode
 import com.android.systemui.SysuiTestCase
+import com.android.systemui.authentication.data.repository.fakeAuthenticationRepository
+import com.android.systemui.authentication.shared.model.AuthenticationMethodModel
+import com.android.systemui.deviceentry.data.repository.fakeDeviceEntryRepository
 import com.android.systemui.display.data.repository.display
 import com.android.systemui.display.data.repository.displayRepository
-import com.android.systemui.keyguard.data.repository.fakeKeyguardRepository
 import com.android.systemui.kosmos.Kosmos
 import com.android.systemui.kosmos.runTest
 import com.android.systemui.kosmos.testScope
 import com.android.systemui.kosmos.useUnconfinedTestDispatcher
 import com.android.systemui.lifecycle.activateIn
+import com.android.systemui.scene.domain.interactor.sceneInteractor
+import com.android.systemui.scene.domain.startable.sceneContainerStartable
+import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.statusbar.core.NewStatusBarIcons
 import com.android.systemui.statusbar.pipeline.airplane.data.repository.airplaneModeRepository
 import com.android.systemui.statusbar.pipeline.shared.data.repository.connectivityRepository
@@ -45,8 +50,13 @@ import com.android.systemui.statusbar.pipeline.wifi.data.repository.fakeWifiRepo
 import com.android.systemui.statusbar.pipeline.wifi.shared.model.WifiNetworkModel
 import com.android.systemui.statusbar.policy.bluetooth.data.repository.bluetoothRepository
 import com.android.systemui.statusbar.policy.data.repository.fakeZenModeRepository
+import com.android.systemui.statusbar.policy.fakeDataSaverController
 import com.android.systemui.statusbar.policy.fakeHotspotController
 import com.android.systemui.statusbar.policy.fakeNextAlarmController
+import com.android.systemui.statusbar.policy.profile.data.repository.managedProfileRepository
+import com.android.systemui.statusbar.policy.profile.shared.model.ProfileInfo
+import com.android.systemui.statusbar.policy.vpn.data.repository.vpnRepository
+import com.android.systemui.statusbar.policy.vpn.shared.model.VpnState
 import com.android.systemui.statusbar.systemstatusicons.SystemStatusIconsInCompose
 import com.android.systemui.statusbar.systemstatusicons.data.repository.statusBarConfigIconSlotNames
 import com.android.systemui.testKosmos
@@ -74,11 +84,14 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
     private lateinit var slotAirplane: String
     private lateinit var slotBluetooth: String
     private lateinit var slotConnectedDisplay: String
+    private lateinit var slotDataSaver: String
     private lateinit var slotEthernet: String
     private lateinit var slotHotspot: String
+    private lateinit var slotManagedProfile: String
     private lateinit var slotMute: String
     private lateinit var slotNextAlarm: String
     private lateinit var slotVibrate: String
+    private lateinit var slotVpn: String
     private lateinit var slotWifi: String
     private lateinit var slotZen: String
 
@@ -88,17 +101,21 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
         slotBluetooth = context.getString(com.android.internal.R.string.status_bar_bluetooth)
         slotConnectedDisplay =
             context.getString(com.android.internal.R.string.status_bar_connected_display)
+        slotDataSaver = context.getString(com.android.internal.R.string.status_bar_data_saver)
         slotEthernet = context.getString(com.android.internal.R.string.status_bar_ethernet)
         slotHotspot = context.getString(com.android.internal.R.string.status_bar_hotspot)
+        slotManagedProfile =
+            context.getString(com.android.internal.R.string.status_bar_managed_profile)
         slotMute = context.getString(com.android.internal.R.string.status_bar_mute)
         slotNextAlarm = context.getString(com.android.internal.R.string.status_bar_alarm_clock)
         slotVibrate = context.getString(com.android.internal.R.string.status_bar_volume)
+        slotVpn = context.getString(com.android.internal.R.string.status_bar_vpn)
         slotWifi = context.getString(com.android.internal.R.string.status_bar_wifi)
         slotZen = context.getString(com.android.internal.R.string.status_bar_zen)
     }
 
     @Test
-    fun iconViewModels_initiallyEmpty_whenNoIconIsActive() =
+    fun iconViewModels_noIconIsActive_initiallyEmpty() =
         kosmos.runTest { assertThat(underTest.activeSlotNames).isEmpty() }
 
     @Test
@@ -141,7 +158,7 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
         }
 
     @Test
-    fun iconViewModels_updatesWhenIndividualIconStateChanges_becomesActive() =
+    fun iconViewModels_individualIconStateChanges_becomesActive() =
         kosmos.runTest {
             statusBarConfigIconSlotNames = arrayOf(slotAirplane)
 
@@ -153,7 +170,7 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
         }
 
     @Test
-    fun iconViewModels_updatesWhenIndividualIconStateChanges_becomesInactive() =
+    fun iconViewModels_individualIconStateChanges_becomesInactive() =
         kosmos.runTest {
             statusBarConfigIconSlotNames = arrayOf(slotAirplane)
             showAirplaneMode()
@@ -186,24 +203,38 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
         kosmos.runTest {
             statusBarConfigIconSlotNames = emptyArray()
 
+            // GIVEN the device is entered (unlocked). This is required for some icons to show.
+            kosmos.sceneContainerStartable.start()
+            kosmos.fakeAuthenticationRepository.setAuthenticationMethod(
+                AuthenticationMethodModel.None
+            )
+            kosmos.fakeDeviceEntryRepository.setLockscreenEnabled(false)
+            kosmos.sceneInteractor.changeScene(Scenes.Gone, "SystemStatusIconsViewModelTest")
+
             showZenMode()
             showBluetooth()
             showConnectedDisplay()
+            showDataSaver()
             showAirplaneMode()
             showNextAlarm()
             showEthernet()
             showVibrate()
             showHotspot()
+            showVpn()
+            showManagedProfile()
 
             assertThat(underTest.activeSlotNames)
                 .containsExactly(
                     slotAirplane,
                     slotBluetooth,
                     slotConnectedDisplay,
+                    slotDataSaver,
                     slotEthernet,
                     slotHotspot,
+                    slotManagedProfile,
                     slotNextAlarm,
                     slotVibrate,
+                    slotVpn,
                     slotZen,
                 )
                 .inOrder()
@@ -218,9 +249,12 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
                     slotAirplane,
                     slotBluetooth,
                     slotConnectedDisplay,
+                    slotDataSaver,
                     slotHotspot,
+                    slotManagedProfile,
                     slotMute,
                     slotNextAlarm,
+                    slotVpn,
                     slotWifi,
                     slotZen,
                 )
@@ -228,7 +262,7 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
         }
 
     private val SystemStatusIconsViewModel.activeSlotNames: List<String>
-        get() = this.iconViewModels.filter { it.icon != null }.map { it.slotName }
+        get() = this.iconViewModels.filter { it.visible }.map { it.slotName }
 
     private suspend fun Kosmos.showAirplaneMode() {
         airplaneModeRepository.setIsAirplaneMode(true)
@@ -249,17 +283,8 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
         )
     }
 
-    private suspend fun Kosmos.showConnectedDisplay(isSecure: Boolean = false) {
-        fakeKeyguardRepository.setKeyguardShowing(!isSecure)
-        displayRepository.setDefaultDisplayOff(false)
-        val flags = if (isSecure) Display.FLAG_SECURE else 0
-        displayRepository.addDisplay(
-            display(
-                type = Display.TYPE_EXTERNAL,
-                flags = flags,
-                id = (displayRepository.displays.value.maxOfOrNull { it.displayId } ?: 0) + 1,
-            )
-        )
+    private suspend fun Kosmos.showConnectedDisplay() {
+        displayRepository.addDisplay(display(type = TYPE_EXTERNAL, id = 1))
     }
 
     private fun Kosmos.showEthernet() {
@@ -303,5 +328,18 @@ class SystemStatusIconsViewModelTest : SysuiTestCase() {
 
     private fun Kosmos.showHotspot() {
         fakeHotspotController.isHotspotEnabled = true
+    }
+
+    private fun Kosmos.showDataSaver() {
+        fakeDataSaverController.setDataSaverEnabled(true)
+    }
+
+    private fun Kosmos.showVpn() {
+        vpnRepository.vpnState.value = VpnState(isEnabled = true)
+    }
+
+    private fun Kosmos.showManagedProfile() {
+        managedProfileRepository.currentProfileInfo.value =
+            ProfileInfo(userId = 10, iconResId = 12345, contentDescription = "Work profile")
     }
 }

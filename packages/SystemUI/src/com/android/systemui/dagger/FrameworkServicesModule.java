@@ -80,6 +80,7 @@ import android.media.session.MediaSessionManager;
 import android.nearby.NearbyManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkScoreManager;
+import android.net.VpnManager;
 import android.net.wifi.WifiManager;
 import android.os.BatteryStats;
 import android.os.IDeviceIdleController;
@@ -92,6 +93,7 @@ import android.os.Vibrator;
 import android.os.storage.StorageManager;
 import android.permission.PermissionManager;
 import android.safetycenter.SafetyCenterManager;
+import android.security.authenticationpolicy.AuthenticationPolicyManager;
 import android.service.dreams.DreamService;
 import android.service.dreams.IDreamManager;
 import android.service.vr.IVrManager;
@@ -111,6 +113,7 @@ import android.view.accessibility.CaptioningManager;
 import android.view.autofill.AutofillManager;
 import android.view.inputmethod.InputMethodManager;
 import android.view.textclassifier.TextClassificationManager;
+import android.window.TaskSnapshotManager;
 
 import androidx.asynclayoutinflater.view.AsyncLayoutInflater;
 import androidx.core.app.NotificationManagerCompat;
@@ -195,6 +198,13 @@ public class FrameworkServicesModule {
 
     @Provides
     @Singleton
+    @Nullable
+    static AuthenticationPolicyManager provideAuthenticationPolicyManager(Context context) {
+        return context.getSystemService(AuthenticationPolicyManager.class);
+    }
+
+    @Provides
+    @Singleton
     static CaptioningManager provideCaptioningManager(Context context) {
         return context.getSystemService(CaptioningManager.class);
     }
@@ -216,6 +226,12 @@ public class FrameworkServicesModule {
     @Singleton
     static ConnectivityManager provideConnectivityManagager(Context context) {
         return context.getSystemService(ConnectivityManager.class);
+    }
+
+    @Provides
+    @Singleton
+    static VpnManager provideVpnManager(Context context) {
+        return context.getSystemService(VpnManager.class);
     }
 
     @Provides
@@ -291,6 +307,12 @@ public class FrameworkServicesModule {
     @Singleton
     static IActivityTaskManager provideIActivityTaskManager() {
         return ActivityTaskManager.getService();
+    }
+
+    @Provides
+    @Singleton
+    static TaskSnapshotManager provideTaskSnapshotManager() {
+        return TaskSnapshotManager.getInstance();
     }
 
     @Provides
@@ -554,6 +576,12 @@ public class FrameworkServicesModule {
     @Singleton
     static UiModeManager provideUiModeManager(Context context) {
         return context.getSystemService(UiModeManager.class);
+    }
+
+    @Provides
+    @Singleton
+    static UserScopedService<UiModeManager> provideUserScopedUiModeManager(Context context) {
+        return new UserScopedServiceImpl<>(context, UiModeManager.class);
     }
 
     /** */

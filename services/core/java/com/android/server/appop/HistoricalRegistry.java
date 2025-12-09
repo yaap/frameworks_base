@@ -25,6 +25,7 @@ import static android.app.AppOpsManager.OP_CAMERA;
 import static android.app.AppOpsManager.OP_COARSE_LOCATION;
 import static android.app.AppOpsManager.OP_EMERGENCY_LOCATION;
 import static android.app.AppOpsManager.OP_FINE_LOCATION;
+import static android.app.AppOpsManager.OP_FLAGS_ALL;
 import static android.app.AppOpsManager.OP_FLAG_SELF;
 import static android.app.AppOpsManager.OP_FLAG_TRUSTED_PROXIED;
 import static android.app.AppOpsManager.OP_FLAG_TRUSTED_PROXY;
@@ -59,6 +60,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Process;
 import android.os.RemoteCallback;
+import android.os.Trace;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
 import android.util.ArraySet;
@@ -72,8 +74,11 @@ import java.io.File;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
+import java.util.function.Predicate;
 
 
 /**
@@ -236,16 +241,28 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
                 mHistoryRetentionMillis);
         // migrate discrete ops from xml or sqlite to unified-schema sqlite database.
         if (DiscreteOpsXmlRegistry.getDiscreteOpsDir().exists()) {
-            DiscreteOpsXmlRegistry xmlRegistry = new DiscreteOpsXmlRegistry(mContext);
+            Slog.i(TAG, "migrate discrete ops from xml to unified sqlite.");
+            // We don't really need to use AppOpsService lock here as this is a one time migration.
+            Object lock = new Object();
+            DiscreteOpsXmlRegistry xmlRegistry = new DiscreteOpsXmlRegistry(lock);
             DiscreteOpsMigrationHelper.migrateFromXmlToUnifiedSchemaSqlite(
                     xmlRegistry, mShortIntervalHistoryHelper);
         } else if (DiscreteOpsDbHelper.getDatabaseFile().exists()) {
+            Slog.i(TAG, "migrate discrete ops from sqlite to unified sqlite.");
             DiscreteOpsSqlRegistry sqlRegistry = new DiscreteOpsSqlRegistry(mContext);
             DiscreteOpsMigrationHelper.migrateFromSqliteToUnifiedSchemaSqlite(
                     sqlRegistry, mShortIntervalHistoryHelper);
         }
 
+        if (LegacyHistoricalRegistry.historicalOpsDirExist()) {
+            LegacyHistoricalRegistry.deleteHistoricalOpsDir();
+        }
+
         mChainIdOffset = mShortIntervalHistoryHelper.getLargestAttributionChainId();
+
+        // Set up listener for quantization, op flags or app ops list config for testing
+        DeviceConfig.addOnPropertiesChangedListener(DeviceConfig.NAMESPACE_PRIVACY,
+                AsyncTask.THREAD_POOL_EXECUTOR, this::setHistoryParameters);
         // Set up a listener to refresh history mode for testing.
         final Uri uri = Settings.Global.getUriFor(Settings.Global.APPOP_HISTORY_PARAMETERS);
         resolver.registerContentObserver(uri, false, new ContentObserver(
@@ -284,12 +301,9 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
         if (modeValue != null) {
             int oldMode = mMode;
             mMode = AppOpsManager.parseHistoricalMode(modeValue);
-            if (oldMode != mMode && mMode == AppOpsManager.HISTORICAL_MODE_ENABLED_ACTIVE) {
-                mIsReady = true;
-            }
             if (oldMode != mMode && mMode == AppOpsManager.HISTORICAL_MODE_DISABLED) {
+                Slog.i(TAG, "Historical registry mode is disabled, clearing history.");
                 clearAllHistory();
-                mIsReady = false;
             }
         }
     }
@@ -331,9 +345,6 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
             mShortIntervalAppOpsArray = getShortIntervalAppOpsList();
         }
         Arrays.sort(mShortIntervalAppOpsArray);
-
-        DeviceConfig.addOnPropertiesChangedListener(DeviceConfig.NAMESPACE_PRIVACY,
-                AsyncTask.THREAD_POOL_EXECUTOR, this::setHistoryParameters);
     }
 
     /**
@@ -368,7 +379,7 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
 
     @Override
     public void shutdown() {
-        if (!mIsReady || mMode == AppOpsManager.HISTORICAL_MODE_DISABLED) {
+        if (isNotReadyOrDisabled()) {
             return;
         }
         mShortIntervalHistoryHelper.shutdown();
@@ -380,6 +391,9 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
             @Nullable String filterAttributionTag, int filterOp, int filter,
             @NonNull SimpleDateFormat sdf, @NonNull Date date, boolean includeDiscreteOps,
             int limit, boolean dumpHistory) {
+        if (isNotReadyOrDisabled()) {
+            return;
+        }
         pw.println();
         pw.print(prefix);
         pw.print("History:");
@@ -471,7 +485,7 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
     public void increaseOpAccessDuration(int op, int uid, @NonNull String packageName,
             @NonNull String deviceId, @Nullable String attributionTag, int uidState, int flags,
             long accessTime, long duration, int attributionFlags, int attributionChainId) {
-        if (!mIsReady || mMode != AppOpsManager.HISTORICAL_MODE_ENABLED_ACTIVE) {
+        if (isNotReadyOrDisabled()) {
             return;
         }
         if (DEBUG) {
@@ -506,7 +520,7 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
             @NonNull String deviceId, @Nullable String attributionTag, int uidState, int flags,
             long accessTime, int attributionFlags, int attributionChainId, int accessCount,
             boolean isStartOrResume) {
-        if (!mIsReady || mMode != AppOpsManager.HISTORICAL_MODE_ENABLED_ACTIVE) {
+        if (isNotReadyOrDisabled()) {
             return;
         }
         if (DEBUG) {
@@ -541,7 +555,7 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
     public void incrementOpRejectedCount(int op, int uid, @NonNull String packageName,
             @NonNull String deviceId, @Nullable String attributionTag, int uidState,
             int flags, long rejectTime, int rejectCount) {
-        if (!mIsReady || mMode != AppOpsManager.HISTORICAL_MODE_ENABLED_ACTIVE) {
+        if (isNotReadyOrDisabled()) {
             return;
         }
         if (DEBUG) {
@@ -589,36 +603,85 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
             @Nullable String attributionTag, @Nullable String[] opNames, int historyFlags,
             int filter, long beginTimeMillis, long endTimeMillis, int flags,
             @Nullable String[] attributionExemptPkgs, @NonNull RemoteCallback callback) {
-        final long currentTimeMillis = System.currentTimeMillis();
-        if (endTimeMillis == Long.MAX_VALUE) {
-            endTimeMillis = currentTimeMillis;
-        }
-        final AppOpsManager.HistoricalOps result =
-                new AppOpsManager.HistoricalOps(beginTimeMillis, endTimeMillis);
+        Trace.traceBegin(Trace.TRACE_TAG_SYSTEM_SERVER, "AppOpHistory#SQLiteGetHistoricalOps");
+        try {
+            final long currentTimeMillis = System.currentTimeMillis();
+            if (endTimeMillis == Long.MAX_VALUE) {
+                endTimeMillis = currentTimeMillis;
+            }
+            final AppOpsManager.HistoricalOps result =
+                    new AppOpsManager.HistoricalOps(beginTimeMillis, endTimeMillis);
+            final Bundle payload = new Bundle();
 
-        mShortIntervalHistoryHelper.addShortIntervalOpsToHistoricalOpsResult(result,
-                beginTimeMillis, endTimeMillis, filter, uid, packageName, opNames,
-                attributionTag, flags, new ArraySet<>(attributionExemptPkgs), historyFlags);
-        if ((historyFlags & HISTORY_FLAG_AGGREGATE) != 0) {
-            mLongIntervalHistoryHelper.addLongIntervalOpsToHistoricalOpsResult(result,
+            if (isNotReadyOrDisabled()) {
+                payload.putParcelable(AppOpsManager.KEY_HISTORICAL_OPS, result);
+                callback.sendResult(payload);
+                return;
+            }
+
+            mShortIntervalHistoryHelper.addShortIntervalOpsToHistoricalOpsResult(result,
                     beginTimeMillis, endTimeMillis, filter, uid, packageName, opNames,
-                    attributionTag, flags);
+                    attributionTag, flags, new ArraySet<>(attributionExemptPkgs), historyFlags);
+            if ((historyFlags & HISTORY_FLAG_AGGREGATE) != 0) {
+                mLongIntervalHistoryHelper.addLongIntervalOpsToHistoricalOpsResult(result,
+                        beginTimeMillis, endTimeMillis, filter, uid, packageName, opNames,
+                        attributionTag, flags);
+            }
+            // Send back the result.
+            payload.putParcelable(AppOpsManager.KEY_HISTORICAL_OPS, result);
+            callback.sendResult(payload);
+        } finally {
+            Trace.traceEnd(Trace.TRACE_TAG_SYSTEM_SERVER);
         }
+    }
 
-        // Send back the result.
-        final Bundle payload = new Bundle();
-        payload.putParcelable(AppOpsManager.KEY_HISTORICAL_OPS, result);
-        callback.sendResult(payload);
+    @Override
+    @NonNull
+    public ArraySet<String> getRecentlyUsedPackageNames(@NonNull String[] opNames, int historyFlags,
+            int filter, long beginTimeMillis, long endTimeMillis, int opFlags) {
+        ArraySet<String> packageNames = new ArraySet<>();
+
+        if ((historyFlags & AppOpsManager.HISTORY_FLAG_DISCRETE) != 0) {
+            String[] shortIntervalOps = filterOpNames(opNames,
+                    op -> isOpCapturedInShortIntervalDatabase(AppOpsManager.strOpToOp(op),
+                            OP_FLAGS_ALL));
+            packageNames.addAll(mShortIntervalHistoryHelper.getRecentlyUsedPackageNames(
+                    shortIntervalOps, filter, beginTimeMillis, endTimeMillis, opFlags));
+        }
+        if ((historyFlags & HISTORY_FLAG_AGGREGATE) != 0) {
+            String[] longIntervalOps = filterOpNames(opNames,
+                    op -> !isOpCapturedInShortIntervalDatabase(AppOpsManager.strOpToOp(op),
+                            OP_FLAGS_ALL));
+            packageNames.addAll(mLongIntervalHistoryHelper.getRecentlyUsedPackageNames(
+                    longIntervalOps, filter, beginTimeMillis, endTimeMillis, opFlags));
+        }
+        return packageNames;
+    }
+
+    private String[] filterOpNames(@NonNull String[] opNames, @NonNull Predicate<String> filter) {
+        List<String> filteredOpNames = new ArrayList<>();
+        for (String op : opNames) {
+            if (filter.test(op)) {
+                filteredOpNames.add(op);
+            }
+        }
+        return filteredOpNames.toArray(new String[0]);
     }
 
     @Override
     public void clearHistory(int uid, String packageName) {
+        if (isNotReadyOrDisabled()) {
+            return;
+        }
         mShortIntervalHistoryHelper.clearHistory(uid, packageName);
         mLongIntervalHistoryHelper.clearHistory(uid, packageName);
     }
 
     @Override
     public void clearAllHistory() {
+        if (isNotReadyOrDisabled()) {
+            return;
+        }
         mShortIntervalHistoryHelper.clearHistory();
         mLongIntervalHistoryHelper.clearHistory();
     }
@@ -653,8 +716,11 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
 
     @Override
     public void persistPendingHistory() {
-        mLongIntervalHistoryHelper.shutdown();
-        mShortIntervalHistoryHelper.shutdown();
+        if (isNotReadyOrDisabled()) {
+            return;
+        }
+        mLongIntervalHistoryHelper.persistPendingHistory();
+        mShortIntervalHistoryHelper.persistPendingHistory();
     }
 
     @Override
@@ -666,9 +732,6 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
         }
         if (mode == AppOpsManager.HISTORICAL_MODE_DISABLED) {
             clearAllHistory();
-            mIsReady = false;
-        } else {
-            mIsReady = true;
         }
         mMode = mode;
     }
@@ -676,7 +739,15 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
     @Override
     public void resetHistoryParameters() {
         mMode = AppOpsManager.HISTORICAL_MODE_ENABLED_ACTIVE;
-        mIsReady = true;
+    }
+
+
+    static boolean historicalOpsDbExist() {
+        return getDatabaseFile(LONG_INTERVAL_DATABASE_FILE).exists();
+    }
+
+    static void deleteHistoricalOpsDb(Context context) {
+        context.deleteDatabase(getDatabaseFile(LONG_INTERVAL_DATABASE_FILE).getAbsolutePath());
     }
 
     @NonNull
@@ -734,6 +805,10 @@ public class HistoricalRegistry implements HistoricalRegistryInterface {
             Slog.d(TAG, "History retention millis: " + historyRetentionMillis);
         }
         return historyRetentionMillis;
+    }
+
+    private boolean isNotReadyOrDisabled() {
+        return !mIsReady || mMode != AppOpsManager.HISTORICAL_MODE_ENABLED_ACTIVE;
     }
 
     @NonNull

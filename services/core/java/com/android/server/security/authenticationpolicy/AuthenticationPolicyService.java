@@ -18,13 +18,21 @@ package com.android.server.security.authenticationpolicy;
 
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.Manifest.permission.MANAGE_SECURE_LOCK_DEVICE;
+import static android.Manifest.permission.TEST_BIOMETRIC;
 import static android.Manifest.permission.USE_BIOMETRIC_INTERNAL;
+import static android.hardware.biometrics.BiometricConstants.BIOMETRIC_ERROR_LOCKOUT;
+import static android.hardware.biometrics.BiometricConstants.BIOMETRIC_ERROR_LOCKOUT_PERMANENT;
 import static android.security.Flags.disableAdaptiveAuthCounterLock;
 import static android.security.Flags.failedAuthLockToggle;
+import static android.security.Flags.secureLockDevice;
+import static android.security.Flags.secureLockdown;
 
+import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE;
 import static com.android.internal.widget.LockPatternUtils.StrongAuthTracker.SOME_AUTH_REQUIRED_AFTER_ADAPTIVE_AUTH_REQUEST;
 
 import android.annotation.EnforcePermission;
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -44,14 +52,18 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
+import android.os.Process;
+import android.os.ResultReceiver;
+import android.os.ShellCallback;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.Settings;
+import android.provider.Settings.SettingNotFoundException;
 import android.proximity.IProximityResultCallback;
 import android.security.authenticationpolicy.AuthenticationPolicyManager;
 import android.security.authenticationpolicy.AuthenticationPolicyManager.DisableSecureLockDeviceRequestStatus;
 import android.security.authenticationpolicy.AuthenticationPolicyManager.EnableSecureLockDeviceRequestStatus;
-import android.security.authenticationpolicy.AuthenticationPolicyManager.IsSecureLockDeviceAvailableRequestStatus;
+import android.security.authenticationpolicy.AuthenticationPolicyManager.GetSecureLockDeviceAvailabilityRequestStatus;
 import android.security.authenticationpolicy.DisableSecureLockDeviceParams;
 import android.security.authenticationpolicy.EnableSecureLockDeviceParams;
 import android.security.authenticationpolicy.IAuthenticationPolicyService;
@@ -59,8 +71,6 @@ import android.security.authenticationpolicy.ISecureLockDeviceStatusListener;
 import android.util.Slog;
 import android.util.SparseIntArray;
 import android.util.SparseLongArray;
-
-import androidx.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.FrameworkStatsLog;
@@ -72,6 +82,7 @@ import com.android.server.locksettings.LockSettingsStateListener;
 import com.android.server.pm.UserManagerInternal;
 import com.android.server.wm.WindowManagerInternal;
 
+import java.io.FileDescriptor;
 import java.util.Objects;
 
 /**
@@ -81,11 +92,10 @@ public class AuthenticationPolicyService extends SystemService {
     private static final String TAG = "AuthenticationPolicyService";
     private static final boolean DEBUG = Build.IS_DEBUGGABLE;
 
-    @VisibleForTesting
-    static final int MAX_ALLOWED_FAILED_AUTH_ATTEMPTS = 5;
-    private static final boolean DEFAULT_DISABLE_ADAPTIVE_AUTH_LIMIT_LOCK = false;
     private static final int MSG_REPORT_PRIMARY_AUTH_ATTEMPT = 1;
-    private static final int MSG_REPORT_BIOMETRIC_AUTH_ATTEMPT = 2;
+    private static final int MSG_REPORT_BIOMETRIC_AUTH_SUCCESS = 2;
+    private static final int MSG_REPORT_BIOMETRIC_AUTH_FAILURE = 3;
+    private static final int MSG_REPORT_BIOMETRIC_AUTH_ERROR = 4;
     private static final int AUTH_SUCCESS = 1;
     private static final int AUTH_FAILURE = 0;
     private static final int TYPE_PRIMARY_AUTH = 0;
@@ -97,6 +107,9 @@ public class AuthenticationPolicyService extends SystemService {
     private final KeyguardManager mKeyguardManager;
     private final WindowManagerInternal mWindowManager;
     private final UserManagerInternal mUserManager;
+    private final boolean mEnableFailedAuthLock;
+    private final int mMaxAllowedFailedAuthAttempts;
+    private final boolean mEnableFailedAuthLockToggle;
     private SecureLockDeviceServiceInternal mSecureLockDeviceService;
     private WatchRangingServiceInternal mWatchRangingService;
     @VisibleForTesting
@@ -119,7 +132,7 @@ public class AuthenticationPolicyService extends SystemService {
         mWindowManager = Objects.requireNonNull(
                 LocalServices.getService(WindowManagerInternal.class));
         mUserManager = Objects.requireNonNull(LocalServices.getService(UserManagerInternal.class));
-        if (android.security.Flags.secureLockdown()) {
+        if (secureLockdown()) {
             mSecureLockDeviceService = Objects.requireNonNull(
                     LocalServices.getService(SecureLockDeviceServiceInternal.class));
         }
@@ -127,6 +140,12 @@ public class AuthenticationPolicyService extends SystemService {
             mWatchRangingService = Objects.requireNonNull(LocalServices.getService(
                     WatchRangingServiceInternal.class));
         }
+        mEnableFailedAuthLock = context.getResources().getBoolean(
+                com.android.internal.R.bool.config_enableFailedAuthLock);
+        mMaxAllowedFailedAuthAttempts = context.getResources().getInteger(
+                com.android.internal.R.integer.config_maxAllowedFailedAuthAttempts);
+        mEnableFailedAuthLockToggle = context.getResources().getBoolean(
+                com.android.internal.R.bool.config_enableFailedAuthLockToggle);
     }
 
     @Override
@@ -142,10 +161,49 @@ public class AuthenticationPolicyService extends SystemService {
         }
     }
 
+    @Override
+    public void onUserSwitching(@Nullable TargetUser from, @NonNull TargetUser to) {
+        if (failedAuthLockToggle() && mEnableFailedAuthLock && mEnableFailedAuthLockToggle) {
+            mayInitiateFailedAuthLockSettings(to.getUserIdentifier());
+        }
+    }
+
     @VisibleForTesting
     void init() {
         mLockSettings.registerLockSettingsStateListener(mLockSettingsStateListener);
         mBiometricManager.registerAuthenticationStateListener(mAuthenticationStateListener);
+
+        if (failedAuthLockToggle() && mEnableFailedAuthLock && mEnableFailedAuthLockToggle) {
+            final int mainUserId = mUserManager.getMainUserId();
+            if (mainUserId != UserHandle.USER_NULL) {
+                mayInitiateFailedAuthLockSettings(mainUserId);
+            } else {
+                Slog.w(TAG, "No main user exists so use user 0 instead");
+                mayInitiateFailedAuthLockSettings(UserHandle.USER_SYSTEM);
+            }
+        }
+    }
+
+    private void mayInitiateFailedAuthLockSettings(int userId) {
+        // If userId is a profile, check its parent's settings
+        final int parentUserId = mUserManager.getProfileParentId(userId);
+        try {
+            // Attempt to get the settings without specifying the default value
+            Settings.Secure.getIntForUser(
+                    getContext().getContentResolver(),
+                    Settings.Secure.DISABLE_ADAPTIVE_AUTH_LIMIT_LOCK,
+                    parentUserId);
+        } catch (SettingNotFoundException e) {
+            // If the settings does not exist yet, set it to the default value for the main user, so
+            // that other components can start populating the settings value accordingly (e.g. for
+            // showing the failed auth lock toggle)
+            Slog.i(TAG, "Initiate the failed auth lock settings for userId=" + parentUserId);
+            Settings.Secure.putIntForUser(
+                    getContext().getContentResolver(),
+                    Settings.Secure.DISABLE_ADAPTIVE_AUTH_LIMIT_LOCK,
+                    mEnableFailedAuthLock ? 0 : 1,
+                    parentUserId);
+        }
     }
 
     private final LockSettingsStateListener mLockSettingsStateListener =
@@ -173,13 +231,17 @@ public class AuthenticationPolicyService extends SystemService {
                 public void onAuthenticationAcquired(AuthenticationAcquiredInfo authInfo) {}
 
                 @Override
-                public void onAuthenticationError(AuthenticationErrorInfo authInfo) {}
+                public void onAuthenticationError(AuthenticationErrorInfo authInfo) {
+                    Slog.i(TAG, "AuthenticationStateListener#onAuthenticationError");
+                    mHandler.obtainMessage(
+                            MSG_REPORT_BIOMETRIC_AUTH_ERROR, authInfo).sendToTarget();
+                }
 
                 @Override
                 public void onAuthenticationFailed(AuthenticationFailedInfo authInfo) {
                     Slog.i(TAG, "AuthenticationStateListener#onAuthenticationFailed");
-                    mHandler.obtainMessage(MSG_REPORT_BIOMETRIC_AUTH_ATTEMPT, AUTH_FAILURE,
-                            authInfo.getUserId()).sendToTarget();
+                    mHandler.obtainMessage(
+                            MSG_REPORT_BIOMETRIC_AUTH_FAILURE, authInfo).sendToTarget();
                 }
 
                 @Override
@@ -196,8 +258,8 @@ public class AuthenticationPolicyService extends SystemService {
                     if (DEBUG) {
                         Slog.d(TAG, "AuthenticationStateListener#onAuthenticationSucceeded");
                     }
-                    mHandler.obtainMessage(MSG_REPORT_BIOMETRIC_AUTH_ATTEMPT, AUTH_SUCCESS,
-                            authInfo.getUserId()).sendToTarget();
+                    mHandler.obtainMessage(
+                            MSG_REPORT_BIOMETRIC_AUTH_SUCCESS, authInfo).sendToTarget();
                 }
             };
 
@@ -208,8 +270,17 @@ public class AuthenticationPolicyService extends SystemService {
                 case MSG_REPORT_PRIMARY_AUTH_ATTEMPT:
                     handleReportPrimaryAuthAttempt(msg.arg1 != AUTH_FAILURE, msg.arg2);
                     break;
-                case MSG_REPORT_BIOMETRIC_AUTH_ATTEMPT:
-                    handleReportBiometricAuthAttempt(msg.arg1 != AUTH_FAILURE, msg.arg2);
+                case MSG_REPORT_BIOMETRIC_AUTH_SUCCESS:
+                    AuthenticationSucceededInfo successInfo = (AuthenticationSucceededInfo) msg.obj;
+                    handleReportBiometricAuthSuccess(successInfo);
+                    break;
+                case MSG_REPORT_BIOMETRIC_AUTH_FAILURE:
+                    AuthenticationFailedInfo failInfo = (AuthenticationFailedInfo) msg.obj;
+                    handleReportBiometricAuthFailure(failInfo.getUserId());
+                    break;
+                case MSG_REPORT_BIOMETRIC_AUTH_ERROR:
+                    AuthenticationErrorInfo errorInfo = (AuthenticationErrorInfo) msg.obj;
+                    handleReportBiometricAuthError(errorInfo);
                     break;
             }
         }
@@ -223,15 +294,63 @@ public class AuthenticationPolicyService extends SystemService {
         reportAuthAttempt(TYPE_PRIMARY_AUTH, success, userId);
     }
 
-    private void handleReportBiometricAuthAttempt(boolean success, int userId) {
+    private void handleReportBiometricAuthSuccess(AuthenticationSucceededInfo successInfo) {
+        boolean isStrongBiometric = successInfo.isIsStrongBiometric();
+        int userId = successInfo.getUserId();
+
         if (DEBUG) {
-            Slog.d(TAG, "handleReportBiometricAuthAttempt: success=" + success
-                    + ", userId=" + userId);
+            Slog.d(TAG, "handleReportBiometricAuthSuccess: isStrongBiometric="
+                    + isStrongBiometric + ", userId=" + userId);
         }
-        reportAuthAttempt(TYPE_BIOMETRIC_AUTH, success, userId);
+        if (secureLockDevice() && secureLockdown() && isStrongBiometric
+                && mSecureLockDeviceService.isSecureLockDeviceEnabled()) {
+            // After successful strong biometric auth during secure lock device, notify
+            // SecureLockDeviceService
+            mSecureLockDeviceService.onStrongBiometricAuthenticationSuccess(UserHandle.of(userId));
+        }
+        reportAuthAttempt(TYPE_BIOMETRIC_AUTH, /* success */ true, userId);
+    }
+
+    private void handleReportBiometricAuthFailure(int userId) {
+        if (DEBUG) {
+            Slog.d(TAG, "handleReportBiometricAuthFailure: userId=" + userId);
+        }
+        reportAuthAttempt(TYPE_BIOMETRIC_AUTH, /* success */ false, userId);
+    }
+
+    private void handleReportBiometricAuthError(AuthenticationErrorInfo errorInfo) {
+        if (DEBUG) {
+            Slog.d(TAG, "handleReportBiometricAuthError: "
+                    + "biometricSourceType=" + errorInfo.getBiometricSourceType()  + ", "
+                    + "requestReason=" + errorInfo.getRequestReason()  + ", "
+                    + "errCode=" + errorInfo.getErrCode()  + ", "
+                    + "errString=" + errorInfo.getErrString()
+            );
+        }
+
+        // BIOMETRIC_ERROR_LOCKOUT == FACE_ERROR_LOCKOUT == FINGERPRINT_ERROR_LOCKOUT
+        boolean isLockout = errorInfo.getErrCode() == BIOMETRIC_ERROR_LOCKOUT
+                || errorInfo.getErrCode() == BIOMETRIC_ERROR_LOCKOUT_PERMANENT;
+
+        boolean secureLockDeviceEnabled = secureLockDevice() && secureLockdown()
+                && mSecureLockDeviceService.isSecureLockDeviceEnabled();
+        if (secureLockDeviceEnabled && isLockout) {
+            // On biometric lockout when secure lock device is enabled, reset authentication
+            // progress and return to step 1 of the two-factor authentication - credential
+            // auth on the bouncer
+            mLockPatternUtils.requireStrongAuth(PRIMARY_AUTH_REQUIRED_FOR_SECURE_LOCK_DEVICE,
+                    UserHandle.USER_ALL);
+        }
     }
 
     private void reportAuthAttempt(int authType, boolean success, int userId) {
+        // Do not report auth attempts and do not proceed to lock the device if the failed auth lock
+        // feature (aka adaptive auth) is completely disabled by the device manufacturer
+        if (failedAuthLockToggle() && !mEnableFailedAuthLock) {
+            Slog.v(TAG, "Failed auth lock is disabled by the device manufacturer");
+            return;
+        }
+
         // Disable adaptive auth for automotive devices by default
         if (getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
             return;
@@ -266,14 +385,16 @@ public class AuthenticationPolicyService extends SystemService {
             return;
         }
 
-        if (numFailedAttempts < MAX_ALLOWED_FAILED_AUTH_ATTEMPTS) {
+        if (numFailedAttempts < mMaxAllowedFailedAuthAttempts) {
             Slog.d(TAG, "Not locking the device because the number of failed attempts is below"
                     + " the threshold.");
             return;
         }
 
-        //TODO(b/421051706): Remove the condition Build.IS_DEBUGGABLE after flags are ramped up
-        if (failedAuthLockToggle()
+        // If a user toggle is enabled by the device manufacturer on 25Q4+ builds, or if it's
+        // debuggable 25Q3+ builds, then failed auth lock can be enabled or disabled by
+        // users in settings
+        if ((failedAuthLockToggle() && mEnableFailedAuthLockToggle)
                 || (disableAdaptiveAuthCounterLock() && Build.IS_DEBUGGABLE)) {
             // If userId is a profile, use its parent's settings to determine whether failed auth
             // lock is enabled or disabled for the profile, irrespective of the profile's own
@@ -283,7 +404,8 @@ public class AuthenticationPolicyService extends SystemService {
             final boolean disabled = Settings.Secure.getIntForUser(
                     getContext().getContentResolver(),
                     Settings.Secure.DISABLE_ADAPTIVE_AUTH_LIMIT_LOCK,
-                    DEFAULT_DISABLE_ADAPTIVE_AUTH_LIMIT_LOCK ? 1 : 0, parentUserId) != 0;
+                    mEnableFailedAuthLock ? 0 : 1,
+                    parentUserId) != 0;
             if (disabled) {
                 Slog.i(TAG, "userId=" + userId + ", parentUserId=" + parentUserId
                         + ", failed auth lock is disabled by user in settings");
@@ -297,7 +419,7 @@ public class AuthenticationPolicyService extends SystemService {
 
     private static void collectTimeElapsedSinceLastLocked(long lastLockedTime, long authTime,
             int authType) {
-        final int unlockType =  switch (authType) {
+        final int unlockType = switch (authType) {
             case TYPE_PRIMARY_AUTH -> FrameworkStatsLog
                     .ADAPTIVE_AUTH_UNLOCK_AFTER_LOCK_REPORTED__UNLOCK_TYPE__PRIMARY_AUTH;
             case TYPE_BIOMETRIC_AUTH -> FrameworkStatsLog
@@ -368,23 +490,23 @@ public class AuthenticationPolicyService extends SystemService {
 
     private final IBinder mService = new IAuthenticationPolicyService.Stub() {
         /**
-         * @see AuthenticationPolicyManager#isSecureLockDeviceAvailable()
+         * @see AuthenticationPolicyManager#getSecureLockDeviceAvailability()
          * @param user user associated with the calling context to check for secure lock device
          *             availability
-         * @return {@link IsSecureLockDeviceAvailableRequestStatus} int indicating whether secure
-         * lock device is available for the calling user
+         * @return {@link GetSecureLockDeviceAvailabilityRequestStatus} int indicating whether
+         * secure lock device is available for the calling user
          */
         @Override
         @EnforcePermission(MANAGE_SECURE_LOCK_DEVICE)
-        @IsSecureLockDeviceAvailableRequestStatus
-        public int isSecureLockDeviceAvailable(UserHandle user) {
-            isSecureLockDeviceAvailable_enforcePermission();
-            enforceCrossUserPermission(user, TAG + "#isSecureLockDeviceAvailable");
+        @GetSecureLockDeviceAvailabilityRequestStatus
+        public int getSecureLockDeviceAvailability(UserHandle user) {
+            getSecureLockDeviceAvailability_enforcePermission();
+            enforceCrossUserPermission(user, TAG + "#getSecureLockDeviceAvailability");
 
             // Required for internal service to acquire necessary system permissions
             final long identity = Binder.clearCallingIdentity();
             try {
-                return mSecureLockDeviceService.isSecureLockDeviceAvailable(user);
+                return mSecureLockDeviceService.getSecureLockDeviceAvailability(user);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }
@@ -433,7 +555,12 @@ public class AuthenticationPolicyService extends SystemService {
             // Required for internal service to acquire necessary system permissions
             final long identity = Binder.clearCallingIdentity();
             try {
-                return mSecureLockDeviceService.disableSecureLockDevice(user, params);
+                boolean authenticationComplete =
+                        mSecureLockDeviceService.hasUserCompletedTwoFactorAuthentication(user);
+                Slog.d(TAG, "Disabling secure lock device: "
+                        + "user " + user + ", authenticationComplete " + authenticationComplete);
+                return mSecureLockDeviceService.disableSecureLockDevice(user, params,
+                        /* authenticationComplete = */ authenticationComplete);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }
@@ -501,6 +628,17 @@ public class AuthenticationPolicyService extends SystemService {
             }
         }
 
+        /**
+         * @see AuthenticationPolicyManager#setSecureLockDeviceTestStatus(boolean)
+         * @param isTestMode boolean indicating whether to enable test mode for secure lock device
+         */
+        @Override
+        @EnforcePermission(TEST_BIOMETRIC)
+        public void setSecureLockDeviceTestStatus(boolean isTestMode) {
+            setSecureLockDeviceTestStatus_enforcePermission();
+            mSecureLockDeviceService.setSecureLockDeviceTestStatus(isTestMode);
+        }
+
         @Override
         @EnforcePermission(USE_BIOMETRIC_INTERNAL)
         public void startWatchRangingForIdentityCheck(long authenticationRequestId,
@@ -517,6 +655,31 @@ public class AuthenticationPolicyService extends SystemService {
             cancelWatchRangingForRequestId_enforcePermission();
 
             mWatchRangingService.cancelWatchRangingForRequestId(authenticationRequestId);
+        }
+
+        @Override
+        @EnforcePermission(USE_BIOMETRIC_INTERNAL)
+        public void isWatchRangingAvailable(
+                @NonNull IProximityResultCallback proximityResultCallback) {
+            isWatchRangingAvailable_enforcePermission();
+
+            mWatchRangingService.isWatchRangingAvailable(proximityResultCallback);
+        }
+
+        @Override
+        public void onShellCommand(FileDescriptor in, FileDescriptor out, FileDescriptor err,
+                @NonNull String[] args, ShellCallback callback,
+                @NonNull ResultReceiver resultReceiver) {
+            if (Build.IS_DEBUGGABLE) {
+                if (Binder.getCallingUid() != Process.SHELL_UID) {
+                    Slog.e(TAG, "Shell command called from non-shell UID: "
+                            + Binder.getCallingUid());
+                    resultReceiver.send(-1, null);
+                    return;
+                }
+                (new AuthenticationPolicyServiceShellCommand(this, getContext()))
+                        .exec(this, in, out, err, args, callback, resultReceiver);
+            }
         }
     };
 }

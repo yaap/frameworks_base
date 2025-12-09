@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -37,12 +38,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -77,7 +84,7 @@ private fun TopRow(viewModel: BundleHeaderGutsViewModel, modifier: Modifier = Mo
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier.padding(vertical = 16.dp),
     ) {
-        BundleIcon(viewModel.bundleIcon, modifier = Modifier.padding(end = 16.dp))
+        BundleIcon(viewModel.bundleIcon, large = true, modifier = Modifier.padding(end = 16.dp))
         Text(
             text = stringResource(viewModel.titleText),
             style = MaterialTheme.typography.titleMediumEmphasized,
@@ -113,7 +120,14 @@ private fun ContentRow(viewModel: BundleHeaderGutsViewModel, modifier: Modifier 
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = RoundedCornerShape(size = 20.dp),
                 )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .minimumInteractiveComponentSize()
+                .clickable { viewModel.switchState = !viewModel.switchState }
+                .semantics(mergeDescendants = true) {
+                    role = Role.Switch
+                    toggleableState =
+                        if (viewModel.switchState) ToggleableState.On else ToggleableState.Off
+                },
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -137,15 +151,25 @@ private fun ContentRow(viewModel: BundleHeaderGutsViewModel, modifier: Modifier 
 
         Switch(
             checked = viewModel.switchState,
-            onCheckedChange = { viewModel.switchState = !viewModel.switchState },
-            thumbContent = {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(SwitchDefaults.IconSize),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            },
+            onCheckedChange = null, // handled at the Row level above
+            thumbContent =
+                if (viewModel.switchState) {
+                    {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(SwitchDefaults.IconSize),
+                        )
+                    }
+                } else {
+                    {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(SwitchDefaults.IconSize),
+                        )
+                    }
+                },
         )
     }
 }

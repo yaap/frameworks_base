@@ -36,6 +36,8 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.MediaRecorder;
 
+import androidx.annotation.Nullable;
+
 import com.android.settingslib.testutils.shadow.ShadowRouter2Manager;
 
 import org.junit.Before;
@@ -60,6 +62,7 @@ public class InputRouteManagerTest {
     private static final int INPUT_USB_HEADSET_ID = 4;
     private static final int INPUT_USB_ACCESSORY_ID = 5;
     private static final int HDMI_ID = 6;
+    private static final int INPUT_USB_DEVICE_2_ID = 7;
     private static final int MAX_VOLUME = 1;
     private static final int CURRENT_VOLUME = 0;
     private static final boolean VOLUME_FIXED_TRUE = true;
@@ -67,6 +70,8 @@ public class InputRouteManagerTest {
     private static final String PRODUCT_NAME_WIRED_HEADSET = "My Wired Headset";
     private static final String PRODUCT_NAME_USB_HEADSET = "My USB Headset";
     private static final String PRODUCT_NAME_USB_DEVICE = "My USB Device";
+    private static final String PRODUCT_NAME_USB_DEVICE_1 = "USB Device 1";
+    private static final String PRODUCT_NAME_USB_DEVICE_2 = "USB Device 2";
     private static final String PRODUCT_NAME_USB_ACCESSORY = "My USB Accessory";
     private static final String PRODUCT_NAME_HDMI_DEVICE = "HDMI device";
 
@@ -103,6 +108,18 @@ public class InputRouteManagerTest {
         when(info.getId()).thenReturn(INPUT_USB_DEVICE_ID);
         when(info.getAddress()).thenReturn("");
         when(info.getProductName()).thenReturn(PRODUCT_NAME_USB_DEVICE);
+        when(info.isSource()).thenReturn(true);
+        when(info.isSink()).thenReturn(false);
+        return info;
+    }
+
+    private AudioDeviceInfo mockUsbDeviceInfoWithAddress(
+            int id, String address, String productName) {
+        final AudioDeviceInfo info = mock(AudioDeviceInfo.class);
+        when(info.getType()).thenReturn(AudioDeviceInfo.TYPE_USB_DEVICE);
+        when(info.getId()).thenReturn(id);
+        when(info.getAddress()).thenReturn(address);
+        when(info.getProductName()).thenReturn(productName);
         when(info.isSource()).thenReturn(true);
         when(info.isSink()).thenReturn(false);
         return info;
@@ -171,6 +188,11 @@ public class InputRouteManagerTest {
                 AudioDeviceAttributes.ROLE_INPUT,
                 AudioDeviceInfo.TYPE_USB_HEADSET,
                 /* address= */ "");
+    }
+
+    private AudioDeviceAttributes getUsbDeviceAttributesWithAddress(String address) {
+        return new AudioDeviceAttributes(
+                AudioDeviceAttributes.ROLE_INPUT, AudioDeviceInfo.TYPE_USB_DEVICE, address);
     }
 
     private AudioDeviceAttributes getHdmiDeviceAttributes() {
@@ -256,9 +278,7 @@ public class InputRouteManagerTest {
         onPreferredDevicesForCapturePresetChanged();
 
         // The selected input device has the same type as the one returned from AudioManager.
-        InputMediaDevice selectedInputDevice =
-                (InputMediaDevice) mInputRouteManager.getSelectedInputDevice();
-        assertThat(selectedInputDevice.getAudioDeviceInfoType())
+        assertThat(getSelectedInputDevice().getAudioDeviceInfoType())
                 .isEqualTo(AudioDeviceInfo.TYPE_WIRED_HEADSET);
     }
 
@@ -278,9 +298,7 @@ public class InputRouteManagerTest {
         onPreferredDevicesForCapturePresetChanged();
 
         // The selected input device has the same type as the first one returned from AudioManager.
-        InputMediaDevice selectedInputDevice =
-                (InputMediaDevice) mInputRouteManager.getSelectedInputDevice();
-        assertThat(selectedInputDevice.getAudioDeviceInfoType())
+        assertThat(getSelectedInputDevice().getAudioDeviceInfoType())
                 .isEqualTo(AudioDeviceInfo.TYPE_WIRED_HEADSET);
     }
 
@@ -297,9 +315,7 @@ public class InputRouteManagerTest {
         onPreferredDevicesForCapturePresetChanged();
 
         // The selected input device has default type AudioDeviceInfo.TYPE_BUILTIN_MIC.
-        InputMediaDevice selectedInputDevice =
-                (InputMediaDevice) mInputRouteManager.getSelectedInputDevice();
-        assertThat(selectedInputDevice.getAudioDeviceInfoType())
+        assertThat(getSelectedInputDevice().getAudioDeviceInfoType())
                 .isEqualTo(AudioDeviceInfo.TYPE_BUILTIN_MIC);
     }
 
@@ -314,13 +330,55 @@ public class InputRouteManagerTest {
                         MAX_VOLUME,
                         CURRENT_VOLUME,
                         VOLUME_FIXED_TRUE,
+                        /* isSelected= */ false,
                         PRODUCT_NAME_BUILTIN_MIC);
+        mInputRouteManager.mInputMediaDevices.add(builtinMicDevice);
         mInputRouteManager.selectDevice(builtinMicDevice);
 
         for (@MediaRecorder.Source int preset : PRESETS) {
             verify(mAudioManager, atLeastOnce())
                     .setPreferredDeviceForCapturePreset(preset, getBuiltinMicDeviceAttributes());
         }
+    }
+
+    @Test
+    public void selectDevice_withAddress_updatesSelectionCorrectly() {
+        // 1. Setup: Create devices with same type but different addresses.
+        final AudioDeviceInfo builtinMicInfo = mockBuiltinMicInfo();
+        final AudioDeviceInfo usbDevice1Info =
+                mockUsbDeviceInfoWithAddress(
+                        INPUT_USB_DEVICE_ID, "address1", PRODUCT_NAME_USB_DEVICE_1);
+        final AudioDeviceInfo usbDevice2Info =
+                mockUsbDeviceInfoWithAddress(
+                        INPUT_USB_DEVICE_2_ID, "address2", PRODUCT_NAME_USB_DEVICE_2);
+
+        AudioDeviceInfo[] devices = {builtinMicInfo, usbDevice1Info, usbDevice2Info};
+        when(mAudioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)).thenReturn(devices);
+
+        // Initial state: Built-in mic is selected by default.
+        when(mAudioManager.getDevicesForAttributes(INPUT_ATTRIBUTES))
+                .thenReturn(Collections.singletonList(getBuiltinMicDeviceAttributes()));
+        mInputRouteManager = new InputRouteManager(mContext, mAudioManager, mInfoMediaManager);
+        onPreferredDevicesForCapturePresetChanged();
+
+        assertThat(getSelectedInputDevice().getAudioDeviceInfoType())
+                .isEqualTo(AudioDeviceInfo.TYPE_BUILTIN_MIC);
+
+        // 2. Action: Select the first USB device.
+        MediaDevice usbDevice1 = getInputDeviceById(INPUT_USB_DEVICE_ID);
+        mInputRouteManager.selectDevice(usbDevice1);
+        onPreferredDevicesForCapturePresetChanged(); // This triggers dispatchInputDeviceListUpdate.
+
+        // 3. Assertions.
+        // Verify the selected device in the list is correct.
+        InputMediaDevice selectedDevice = getSelectedInputDevice();
+        assertThat(selectedDevice.getId()).isEqualTo(String.valueOf(INPUT_USB_DEVICE_ID));
+
+        // Verify other devices are not selected.
+        assertThat(getInputDeviceById(INPUT_USB_DEVICE_2_ID).isSelected())
+                .isFalse();
+        assertThat(getInputDeviceById(BUILTIN_MIC_ID).isSelected())
+                .isFalse();
     }
 
     @Test
@@ -429,6 +487,7 @@ public class InputRouteManagerTest {
                         MAX_VOLUME,
                         CURRENT_VOLUME,
                         VOLUME_FIXED_TRUE,
+                        /* isSelected= */ false,
                         PRODUCT_NAME_USB_ACCESSORY);
         AudioDeviceInfo[] devices = {mockUsbHeadsetInfo()};
 
@@ -519,6 +578,21 @@ public class InputRouteManagerTest {
                 MAX_VOLUME,
                 CURRENT_VOLUME,
                 VOLUME_FIXED_TRUE,
+                /* isSelected= */ false,
                 info.getProductName() == null ? null : info.getProductName().toString());
+    }
+
+    @Nullable
+    private InputMediaDevice getSelectedInputDevice() {
+        return (InputMediaDevice) mInputRouteManager.mInputMediaDevices.stream().filter(
+                MediaDevice::isSelected).findFirst().orElse(null);
+    }
+
+    @Nullable
+    private InputMediaDevice getInputDeviceById(int deviceId) {
+        return (InputMediaDevice) mInputRouteManager.mInputMediaDevices.stream()
+                        .filter(d -> d.getId().equals(String.valueOf(deviceId)))
+                        .findFirst()
+                        .orElse(null);
     }
 }

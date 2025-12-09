@@ -19,7 +19,6 @@ package android.content;
 import static android.content.ContentProvider.maybeAddUserId;
 import static android.content.flags.Flags.FLAG_STOP_VOICE_COMMAND;
 import static android.os.Flags.FLAG_ALLOW_PRIVATE_PROFILE;
-import static android.security.Flags.FLAG_FRP_ENFORCEMENT;
 import static android.security.Flags.FLAG_PREVENT_INTENT_REDIRECT;
 import static android.security.Flags.preventIntentRedirect;
 
@@ -1523,6 +1522,17 @@ public class Intent implements Parcelable, Cloneable {
             "android.intent.extra.ASSIST_INPUT_DEVICE_ID";
 
     /**
+     * An optional field on {@link #ACTION_ASSIST} containing the display id
+     * that should be used to invoke the assist. If not set, invoke the assist on the default
+     * display is suggested.
+     *
+     * @hide
+     */
+    @FlaggedApi(com.android.window.flags.Flags.FLAG_SUPPORT_GEMINI_ON_MULTI_DISPLAY)
+    public static final String EXTRA_ASSIST_DISPLAY_ID =
+            "android.intent.extra.ASSIST_DISPLAY_ID";
+
+    /**
      * Activity Action: List all available applications.
      * <p>Input: Nothing.
      * <p>Output: nothing.
@@ -2747,6 +2757,13 @@ public class Intent implements Parcelable, Cloneable {
      * To receive this broadcast, your receiver component must be marked as
      * being {@link ComponentInfo#directBootAware}.
      * <p class="note">
+     *
+     * <p>
+     * Starting from Android {@link Build.VERSION_CODES#VANILLA_ICE_CREAM}, this broadcast is
+     * not only sent after the device boots but also delivered to an app when it is
+     * removed from the {@link ApplicationInfo#FLAG_STOPPED Stopped} state, such as the first
+     * launch after force-stopping the app.
+     *
      * This is a protected intent that can only be sent by the system.
      *
      * @see Context#createDeviceProtectedStorageContext()
@@ -2770,6 +2787,13 @@ public class Intent implements Parcelable, Cloneable {
      * their lock pattern or PIN for the first time), you can listen for the
      * {@link #ACTION_LOCKED_BOOT_COMPLETED} broadcast.
      * <p class="note">
+     *
+     * <p>
+     * Starting from Android {@link Build.VERSION_CODES#VANILLA_ICE_CREAM}, this broadcast is
+     * not only sent after the device boots but also delivered to an app when it is
+     * removed from the {@link ApplicationInfo#FLAG_STOPPED Stopped} state and the user is
+     * unlocked, such as the first launch after force-stopping the app.
+     *
      * This is a protected intent that can only be sent by the system.
      */
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
@@ -3562,7 +3586,7 @@ public class Intent implements Parcelable, Cloneable {
      * <p class="note">This is a protected intent that can only be sent
      * by the system.
      *
-     * {@hide}
+     * @hide
      */
     public static final String ACTION_REQUEST_SHUTDOWN
             = "com.android.internal.intent.action.REQUEST_SHUTDOWN";
@@ -3730,7 +3754,7 @@ public class Intent implements Parcelable, Cloneable {
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
     public static final String ACTION_MEDIA_UNMOUNTABLE = "android.intent.action.MEDIA_UNMOUNTABLE";
 
-   /**
+    /**
      * Broadcast Action:  User has expressed the desire to remove the external storage media.
      * Applications should close all files they have open within the mount point when they receive this intent.
      * The path to the mount point for the media to be ejected is contained in the Intent.mData field.
@@ -3745,7 +3769,7 @@ public class Intent implements Parcelable, Cloneable {
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
     public static final String ACTION_MEDIA_SCANNER_STARTED = "android.intent.action.MEDIA_SCANNER_STARTED";
 
-   /**
+    /**
      * Broadcast Action:  The media scanner has finished scanning a directory.
      * The path to the scanned directory is contained in the Intent.mData field.
      */
@@ -3766,7 +3790,7 @@ public class Intent implements Parcelable, Cloneable {
     @Deprecated
     public static final String ACTION_MEDIA_SCANNER_SCAN_FILE = "android.intent.action.MEDIA_SCANNER_SCAN_FILE";
 
-   /**
+    /**
      * Broadcast Action:  The "Media Button" was pressed.  Includes a single
      * extra field, {@link #EXTRA_KEY_EVENT}, containing the key event that
      * caused the broadcast.
@@ -4054,7 +4078,6 @@ public class Intent implements Parcelable, Cloneable {
      *
      * @hide
      */
-    @FlaggedApi(FLAG_FRP_ENFORCEMENT)
     @SystemApi
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
     @BroadcastBehavior(protectedBroadcast = true)
@@ -4677,11 +4700,23 @@ public class Intent implements Parcelable, Cloneable {
      *
      * <p class="note">This is a protected intent that can only be sent by the system.</p>
      *
-     * {@hide}
+     * @hide
      */
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
     public static final String
             ACTION_DYNAMIC_SENSOR_CHANGED = "android.intent.action.DYNAMIC_SENSOR_CHANGED";
+
+    /**
+     * Activity Action: Launch an eye dropper. It allows the user to pick a pixel on the display.
+     * The color of the selected pixel is returned to the requesting activity as an activity result.
+     * Pixels from secure windows and protected buffers are blacked out.
+     * <p>
+     * Output: {@link #EXTRA_COLOR getIntExtra(EXTRA_COLOR)} is the color of the selected pixel in
+     * ARGB format (0xFFRRGGBB).
+     */
+    @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
+    @FlaggedApi(com.android.eyedropper.Flags.FLAG_ENABLE_EYE_DROPPER_API)
+    public static final String ACTION_OPEN_EYE_DROPPER = "android.intent.action.OPEN_EYE_DROPPER";
 
     /**
      * Deprecated - use ACTION_FACTORY_RESET instead.
@@ -4725,7 +4760,7 @@ public class Intent implements Parcelable, Cloneable {
      *
      * @see #EXTRA_FORCE_FACTORY_RESET
      *
-     * {@hide}
+     * @hide
      */
     @SystemApi
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
@@ -4760,7 +4795,7 @@ public class Intent implements Parcelable, Cloneable {
      * @see #EXTRA_SETTING_PREVIOUS_VALUE
      * @see #EXTRA_SETTING_NEW_VALUE
      * @see #EXTRA_SETTING_RESTORED_FROM_SDK_INT
-     * {@hide}
+     * @hide
      */
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     @SuppressLint("ActionValue")
@@ -4769,7 +4804,7 @@ public class Intent implements Parcelable, Cloneable {
     /**
      * String intent extra to be used with {@link ACTION_SETTING_RESTORED}.
      * Contain the name of the restored setting.
-     * {@hide}
+     * @hide
      */
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     @SuppressLint("ActionValue")
@@ -4779,7 +4814,7 @@ public class Intent implements Parcelable, Cloneable {
      * String intent extra to be used with {@link ACTION_SETTING_RESTORED}.
      * Contain the value of the {@link EXTRA_SETTING_NAME} settings entry prior to the restore
      * operation.
-     * {@hide}
+     * @hide
      */
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     @SuppressLint("ActionValue")
@@ -4788,7 +4823,7 @@ public class Intent implements Parcelable, Cloneable {
     /**
      * String intent extra to be used with {@link ACTION_SETTING_RESTORED}.
      * Contain the value of the {@link EXTRA_SETTING_NAME} settings entry being restored.
-     * {@hide}
+     * @hide
      */
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     @SuppressLint("ActionValue")
@@ -4798,7 +4833,7 @@ public class Intent implements Parcelable, Cloneable {
      * Int intent extra to be used with {@link ACTION_SETTING_RESTORED}.
      * Contain the version of the SDK that the setting has been restored from (corresponds to
      * {@link android.os.Build.VERSION#SDK_INT}).
-     * {@hide}
+     * @hide
      */
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
     @SuppressLint("ActionValue")
@@ -5326,32 +5361,32 @@ public class Intent implements Parcelable, Cloneable {
     /**
      * Broadcast action: reports when a new thermal event has been reached. When the device
      * is reaching its maximum temperatue, the thermal level reported
-     * {@hide}
+     * @hide
      */
     @SdkConstant(SdkConstantType.ACTIVITY_INTENT_ACTION)
     public static final String ACTION_THERMAL_EVENT = "android.intent.action.THERMAL_EVENT";
 
-    /** {@hide} */
+    /** @hide */
     public static final String EXTRA_THERMAL_STATE = "android.intent.extra.THERMAL_STATE";
 
     /**
      * Thermal state when the device is normal. This state is sent in the
      * {@link #ACTION_THERMAL_EVENT} broadcast as {@link #EXTRA_THERMAL_STATE}.
-     * {@hide}
+     * @hide
      */
     public static final int EXTRA_THERMAL_STATE_NORMAL = 0;
 
     /**
      * Thermal state where the device is approaching its maximum threshold. This state is sent in
      * the {@link #ACTION_THERMAL_EVENT} broadcast as {@link #EXTRA_THERMAL_STATE}.
-     * {@hide}
+     * @hide
      */
     public static final int EXTRA_THERMAL_STATE_WARNING = 1;
 
     /**
      * Thermal state where the device has reached its maximum threshold. This state is sent in the
      * {@link #ACTION_THERMAL_EVENT} broadcast as {@link #EXTRA_THERMAL_STATE}.
-     * {@hide}
+     * @hide
      */
     public static final int EXTRA_THERMAL_STATE_EXCEEDED = 2;
 
@@ -6596,7 +6631,7 @@ public class Intent implements Parcelable, Cloneable {
      * Set to true in {@link #ACTION_REQUEST_SHUTDOWN} to request confirmation from the user
      * before shutting down.
      *
-     * {@hide}
+     * @hide
      */
     public static final String EXTRA_KEY_CONFIRM = "android.intent.extra.KEY_CONFIRM";
 
@@ -6604,7 +6639,7 @@ public class Intent implements Parcelable, Cloneable {
      * Set to true in {@link #ACTION_REQUEST_SHUTDOWN} to indicate that the shutdown is
      * requested by the user.
      *
-     * {@hide}
+     * @hide
      */
     public static final String EXTRA_USER_REQUESTED_SHUTDOWN =
             "android.intent.extra.USER_REQUESTED_SHUTDOWN";
@@ -6981,13 +7016,13 @@ public class Intent implements Parcelable, Cloneable {
     public static final String EXTRA_SHOW_WIPE_PROGRESS = "android.intent.extra.SHOW_WIPE_PROGRESS";
 
     /**
-     * {@hide}
+     * @hide
      * This extra will be send together with {@link #ACTION_FACTORY_RESET}
      */
     public static final String EXTRA_WIPE_EXTERNAL_STORAGE = "android.intent.extra.WIPE_EXTERNAL_STORAGE";
 
     /**
-     * {@hide}
+     * @hide
      * This extra will be set to true when the user choose to wipe the data on eSIM during factory
      * reset for the device with eSIM. This extra will be sent together with
      * {@link #ACTION_FACTORY_RESET}
@@ -7131,6 +7166,14 @@ public class Intent implements Parcelable, Cloneable {
      */
     public static final String EXTRA_IS_RESTORE =
             "android.intent.extra.IS_RESTORE";
+
+    /**
+     * An int extra to hold a color in ARGB format (0xAARRGGBB).
+     *
+     * @see #ACTION_OPEN_EYE_DROPPER
+     */
+    @FlaggedApi(com.android.eyedropper.Flags.FLAG_ENABLE_EYE_DROPPER_API)
+    public static final String EXTRA_COLOR = "android.intent.extra.COLOR";
 
     // ---------------------------------------------------------------------
     // ---------------------------------------------------------------------
@@ -7349,7 +7392,7 @@ public class Intent implements Parcelable, Cloneable {
      */
     public static final int FLAG_DIRECT_BOOT_AUTO = 0x00000100;
 
-    /** {@hide} */
+    /** @hide */
     @Deprecated
     public static final int FLAG_DEBUG_TRIAGED_MISSING = FLAG_DIRECT_BOOT_AUTO;
 
@@ -9466,7 +9509,7 @@ public class Intent implements Parcelable, Cloneable {
         return mExtras != null && mExtras.hasFileDescriptors();
     }
 
-    /** {@hide} */
+    /** @hide */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
     public void setAllowFds(boolean allowFds) {
         if (mExtras != null) {
@@ -9474,7 +9517,7 @@ public class Intent implements Parcelable, Cloneable {
         }
     }
 
-    /** {@hide} */
+    /** @hide */
     public void setDefusable(boolean defusable) {
         if (mExtras != null) {
             mExtras.setDefusable(defusable);
@@ -12999,7 +13042,7 @@ public class Intent implements Parcelable, Cloneable {
         if (mComponent != null) {
             out.attribute(null, ATTR_COMPONENT, mComponent.flattenToShortString());
         }
-        if (android.content.flags.Flags.intentSaveToXmlPackage() && mPackage != null) {
+        if (mPackage != null) {
             out.attribute(null, ATTR_PACKAGE, mPackage);
         }
         out.attribute(null, ATTR_FLAGS, Integer.toHexString(getFlags()));
@@ -13035,8 +13078,7 @@ public class Intent implements Parcelable, Cloneable {
                 intent.setComponent(ComponentName.unflattenFromString(attrValue));
             } else if (ATTR_FLAGS.equals(attrName)) {
                 intent.setFlags(Integer.parseInt(attrValue, 16));
-            } else if (android.content.flags.Flags.intentSaveToXmlPackage()
-                    && ATTR_PACKAGE.equals(attrName)) {
+            } else if (ATTR_PACKAGE.equals(attrName)) {
                 intent.setPackage(attrValue);
             } else {
                 Log.e(TAG, "restoreFromXml: unknown attribute=" + attrName);

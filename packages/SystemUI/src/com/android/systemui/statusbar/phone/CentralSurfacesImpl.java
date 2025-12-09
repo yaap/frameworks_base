@@ -32,7 +32,6 @@ import static androidx.lifecycle.Lifecycle.State.RESUMED;
 
 import static com.android.systemui.Dependency.TIME_TICK_HANDLER_NAME;
 import static com.android.systemui.Flags.keyboardShortcutHelperRewrite;
-import static com.android.systemui.Flags.statusBarSignalPolicyRefactor;
 import static com.android.systemui.charging.WirelessChargingAnimation.UNKNOWN_BATTERY_LEVEL;
 import static com.android.systemui.flags.Flags.SHORTCUT_LIST_SEARCH_LAYOUT;
 import static com.android.systemui.shared.Flags.ambientAod;
@@ -100,6 +99,7 @@ import androidx.annotation.NonNull;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleRegistry;
 
+import com.android.app.displaylib.PerDisplayRepository;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.colorextraction.ColorExtractor;
 import com.android.internal.logging.MetricsLogger;
@@ -140,6 +140,7 @@ import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.dagger.qualifiers.UiBackground;
 import com.android.systemui.demomode.DemoMode;
 import com.android.systemui.demomode.DemoModeController;
+import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent;
 import com.android.systemui.emergency.EmergencyGesture;
 import com.android.systemui.emergency.EmergencyGestureModule.EmergencyGestureIntentFactory;
 import com.android.systemui.flags.FeatureFlags;
@@ -245,7 +246,6 @@ import com.android.systemui.statusbar.window.StatusBarWindowControllerStore;
 import com.android.systemui.statusbar.window.StatusBarWindowStateController;
 import com.android.systemui.surfaceeffects.ripple.RippleShader.RippleShape;
 import com.android.systemui.topui.TopUiController;
-import com.android.systemui.topui.TopUiControllerRefactor;
 import com.android.systemui.util.DumpUtilsKt;
 import com.android.systemui.util.WallpaperController;
 import com.android.systemui.util.concurrency.DelayableExecutor;
@@ -313,7 +313,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 public void onKeyguardShowingChanged() {
                     boolean occluded = mKeyguardStateController.isOccluded();
                     mStatusBarHideIconsForBouncerManager.setIsOccludedAndTriggerUpdate(occluded);
-                    mScrimController.setKeyguardOccluded(occluded);
+                    if (!SceneContainerFlag.isEnabled()) {
+                        mScrimController.setKeyguardOccluded(occluded);
+                    }
                 }
             };
 
@@ -660,7 +662,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             AutoHideController autoHideController,
             StatusBarInitializer statusBarInitializer,
             StatusBarWindowControllerStore statusBarWindowControllerStore,
-            StatusBarWindowStateController statusBarWindowStateController,
+            PerDisplayRepository<SystemUIDisplaySubcomponent> perDisplaySubcomponentRepository,
             StatusBarModeRepositoryStore statusBarModeRepository,
             KeyguardUpdateMonitor keyguardUpdateMonitor,
             StatusBarSignalPolicy statusBarSignalPolicy,
@@ -710,7 +712,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             Lazy<NotificationActivityStarter> notificationActivityStarterLazy,
             NotificationLaunchAnimatorControllerProvider notifTransitionAnimatorControllerProvider,
             DozeParameters dozeParameters,
-            ScrimController scrimController,
+            Lazy<ScrimController> scrimController,
             Lazy<BiometricUnlockController> biometricUnlockControllerLazy,
             AuthRippleController authRippleController,
             DozeServiceHost dozeServiceHost,
@@ -828,7 +830,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mDozeServiceHost = dozeServiceHost;
         mPowerManager = powerManager;
         mDozeParameters = dozeParameters;
-        mScrimController = scrimController;
+        mScrimController = SceneContainerFlag.isEnabled() ? null : scrimController.get();
         mDozeScrimController = dozeScrimController;
         mBiometricUnlockControllerLazy = biometricUnlockControllerLazy;
         mAuthRippleController = authRippleController;
@@ -875,6 +877,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mDreamManager = dreamManager;
         lockscreenShadeTransitionController.setCentralSurfaces(this);
         if (!StatusBarConnectedDisplays.isEnabled()) {
+            SystemUIDisplaySubcomponent displaySubcomponent = perDisplaySubcomponentRepository.get(
+                    Display.DEFAULT_DISPLAY);
+            StatusBarWindowStateController statusBarWindowStateController =
+                    displaySubcomponent.getStatusBarWindowStateController();
             statusBarWindowStateController.addListener(this::onStatusBarWindowStateChanged);
         }
         mScreenOffAnimationController = screenOffAnimationController;
@@ -941,10 +947,6 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         mUiModeManager = mContext.getSystemService(UiModeManager.class);
         mBubblesOptional.ifPresent(this::initBubbles);
         mKeyguardBypassController.listenForQsExpandedChange();
-
-        if (!statusBarSignalPolicyRefactor()) {
-            mStatusBarSignalPolicy.init();
-        }
 
         mKeyguardIndicationController.init();
 
@@ -1167,14 +1169,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 }, OverlayPlugin.class, true /* Allow multiple plugins */);
 
         mStartingSurfaceOptional.ifPresent(startingSurface -> startingSurface.setSysuiProxy(
-                (requestTopUi, componentTag) -> mMainExecutor.execute(() -> {
-                            if (TopUiControllerRefactor.isEnabled()) {
-                                mTopUiController.setRequestTopUi(requestTopUi, componentTag);
-                            } else {
-                                mNotificationShadeWindowController.setRequestTopUi(requestTopUi,
-                                        componentTag);
-                            }
-                        }
+                (requestTopUi, componentTag) -> mMainExecutor.execute(
+                        () -> mTopUiController.setRequestTopUi(requestTopUi, componentTag)
                 )));
     }
 
@@ -1357,10 +1353,12 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 .findViewById(R.id.scrim_notifications);
         ScrimView scrimInFront = getNotificationShadeWindowView().findViewById(R.id.scrim_in_front);
 
-        mScrimController.setScrimVisibleListener(scrimsVisible -> {
-            mNotificationShadeWindowController.setScrimsVisibility(scrimsVisible);
-        });
-        mScrimController.attachViews(scrimBehind, notificationsScrim, scrimInFront);
+        if (!SceneContainerFlag.isEnabled()) {
+            mScrimController.setScrimVisibleListener(scrimsVisible -> {
+                mNotificationShadeWindowController.setScrimsVisibility(scrimsVisible);
+            });
+            mScrimController.attachViews(scrimBehind, notificationsScrim, scrimInFront);
+        }
 
         mLightRevealScrim.setScrimOpaqueChangedListener((opaque) -> {
             Runnable updateOpaqueness = () -> {
@@ -1618,7 +1616,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     protected View.OnTouchListener getStatusBarWindowTouchListener() {
         return (v, event) -> {
             mAutoHideController.checkUserAutoHide(event);
-            mRemoteInputManager.checkRemoteInputOutside(event);
+            if (!SceneContainerFlag.isEnabled()) {
+                // handled by SceneContainerViewModel#onEmptySpaceMotionEvent with SceneContainer
+                mRemoteInputManager.checkRemoteInputOutside(event);
+            }
             if (mQsController.isCustomizing()) {
                 // When the user is editing QS tiles they need to be able to touch outside the
                 // customizer to close it, such as on the status or nav bar.
@@ -1814,20 +1815,12 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                 new WirelessChargingAnimation.Callback() {
                     @Override
                     public void onAnimationStarting() {
-                        if (TopUiControllerRefactor.isEnabled()) {
-                            mTopUiController.setRequestTopUi(true, TAG);
-                        } else {
-                            mNotificationShadeWindowController.setRequestTopUi(true, TAG);
-                        }
+                        mTopUiController.setRequestTopUi(true, TAG);
                     }
 
                     @Override
                     public void onAnimationEnded() {
-                        if (TopUiControllerRefactor.isEnabled()) {
-                            mTopUiController.setRequestTopUi(false, TAG);
-                        } else {
-                            mNotificationShadeWindowController.setRequestTopUi(false, TAG);
-                        }
+                        mTopUiController.setRequestTopUi(false, TAG);
                     }
                 }, /* isDozing= */ false, RippleShape.CIRCLE,
                 sUiEventLogger, mWindowManager, mWindowManagerProvider).show(animationDelay);
@@ -2232,16 +2225,10 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
             //  * When phone is unlocked: we still don't want to execute hiding of the keyguard
             //    as the animation could prepare 'fake AOD' interface (without actually
             //    transitioning to keyguard state) and this might reset the view states
-            // Log for b/290627350
-            Log.d(TAG, "!shouldBeKeyguard mStatusBarStateController.isKeyguardRequested() "
-                    + mStatusBarStateController.isKeyguardRequested() + " keyguardForDozing "
-                    + keyguardForDozing + " wakeAndUnlocking " + wakeAndUnlocking
-                    + " isWakingAndOccluded " + isWakingAndOccluded);
             if (!mScreenOffAnimationController.isKeyguardHideDelayed()
                     // If we're animating occluded, there's an activity launching over the keyguard
                     // UI. Wait to hide it until after the animation concludes.
                     && !mKeyguardViewMediator.isOccludeAnimationPlaying()) {
-                Log.d(TAG, "hideKeyguardImpl " + forceStateChange);
                 return hideKeyguardImpl(forceStateChange);
             }
         }
@@ -2352,6 +2339,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
      */
     @Override
     public boolean hideKeyguardImpl(boolean forceStateChange) {
+        if (SceneContainerFlag.isEnabled()) return false;
+
         Trace.beginSection("CentralSurfaces#hideKeyguard");
         boolean staying = mStatusBarStateController.leaveOpenOnKeyguardHide();
         int previousState = mStatusBarStateController.getState();
@@ -2435,7 +2424,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
     @Override
     public void finishKeyguardFadingAway() {
         mKeyguardStateController.notifyKeyguardDoneFading();
-        mScrimController.setExpansionAffectsAlpha(true);
+        if (!SceneContainerFlag.isEnabled()) {
+            mScrimController.setExpansionAffectsAlpha(true);
+        }
 
         // If the device was re-locked while unlocking, we might have a pending lock that was
         // delayed because the keyguard was in the middle of going away.
@@ -2446,22 +2437,24 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
      * Switches theme from light to dark and vice-versa.
      */
     protected void updateTheme() {
-        // Set additional scrim only if the lock and system wallpaper are different to prevent
-        // applying the dimming effect twice.
-        mUiBgExecutor.execute(() -> {
-            float dimAmount = 0f;
-            // Note that access to WallpaperManager APIs should be guarded by a check into
-            // WallpaperManager#isWallpaperSupported. Form factors that do not use wallpaper
-            // may crash SysUI during improper access. ref: b/355307617
-            if (!mWallpaperSupported || mWallpaperManager.lockScreenWallpaperExists()) {
-                dimAmount = mWallpaperManager.getWallpaperDimAmount();
-            }
-            final float scrimDimAmount = dimAmount;
-            mMainExecutor.execute(() -> {
-                mScrimController.setAdditionalScrimBehindAlphaKeyguard(scrimDimAmount);
-                mScrimController.applyCompositeAlphaOnScrimBehindKeyguard();
+        if (!SceneContainerFlag.isEnabled()) {
+            // Set additional scrim only if the lock and system wallpaper are different to prevent
+            // applying the dimming effect twice.
+            mUiBgExecutor.execute(() -> {
+                float dimAmount = 0f;
+                // Note that access to WallpaperManager APIs should be guarded by a check into
+                // WallpaperManager#isWallpaperSupported. Form factors that do not use wallpaper
+                // may crash SysUI during improper access. ref: b/355307617
+                if (!mWallpaperSupported || mWallpaperManager.lockScreenWallpaperExists()) {
+                    dimAmount = mWallpaperManager.getWallpaperDimAmount();
+                }
+                final float scrimDimAmount = dimAmount;
+                mMainExecutor.execute(() -> {
+                    mScrimController.setAdditionalScrimBehindAlphaKeyguard(scrimDimAmount);
+                    mScrimController.applyCompositeAlphaOnScrimBehindKeyguard();
+                });
             });
-        });
+        }
 
         // Lock wallpaper defines the color of the majority of the views, hence we'll use it
         // to set our default theme.
@@ -2515,7 +2508,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
      */
     @Override
     public boolean shouldKeyguardHideImmediately() {
-        return mScrimController.getState() == ScrimState.BOUNCER_SCRIMMED;
+        return !SceneContainerFlag.isEnabled()
+                && mScrimController.getState() == ScrimState.BOUNCER_SCRIMMED;
     }
 
     private void showBouncerOrLockScreenIfKeyguard() {
@@ -2830,7 +2824,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         @Override
         public void onScreenTurnedOn() {
             if (SceneContainerFlag.isEnabled()) {
-                // Already handled in ScrimStartable when the scene framework is enabled.
+                // Scrims handled in Compose when the scene framework is enabled.
                 return;
             }
 
@@ -2875,6 +2869,12 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
 
     @Override
     public void notifyBiometricAuthModeChanged() {
+        if (Flags.updateKeyguardOnWakeAndUnlockEarlier()) {
+            if (mBiometricUnlockController.isWakeAndUnlock()) {
+                // If we're wake and unlocking we should hide the keyguard ASAP if necessary.
+                updateIsKeyguard();
+            }
+        }
         mDozeServiceHost.updateDozing();
         if (mBiometricUnlockController.getMode()
                 == BiometricUnlockController.MODE_DISMISS_BOUNCER) {
@@ -2901,7 +2901,9 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
      */
     @Override
     public void setPrimaryBouncerHiddenFraction(float expansion) {
-        mScrimController.setBouncerHiddenFraction(expansion);
+        if (!SceneContainerFlag.isEnabled()) {
+            mScrimController.setBouncerHiddenFraction(expansion);
+        }
     }
 
     @Override
@@ -3459,10 +3461,12 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
                     mDozeServiceHost.updateDozing();
                     updateScrimController();
 
-                    if (mBiometricUnlockController.isWakeAndUnlock()) {
-                        // Usually doze changes are to/from lockscreen/AOD, but if we're wake and
-                        // unlocking we should hide the keyguard ASAP if necessary.
-                        updateIsKeyguard();
+                    if (!Flags.updateKeyguardOnWakeAndUnlockEarlier()) {
+                        if (mBiometricUnlockController.isWakeAndUnlock()) {
+                            // Usually doze changes are to/from lockscreen/AOD, but if we're wake
+                            // and unlocking we should hide the keyguard ASAP if necessary.
+                            updateIsKeyguard();
+                        }
                     }
 
                     updateReportRejectedTouchVisibility();

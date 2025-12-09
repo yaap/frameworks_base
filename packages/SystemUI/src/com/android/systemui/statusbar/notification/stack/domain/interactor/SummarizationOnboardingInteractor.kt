@@ -18,9 +18,11 @@ package com.android.systemui.statusbar.notification.stack.domain.interactor
 
 import android.app.INotificationManager
 import android.service.notification.Adjustment.KEY_SUMMARIZATION
+import android.util.Log
 import androidx.core.content.edit
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.statusbar.notification.data.repository.ActiveNotificationListRepository
+import com.android.systemui.statusbar.notification.shared.NotifStyle
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor
 import com.android.systemui.util.kotlin.BooleanFlowOperators.allOf
 import com.android.systemui.util.kotlin.SharedPreferencesExt.observeBoolean
@@ -46,7 +48,10 @@ constructor(
 ) {
     private val notifsPresent: Flow<Boolean> =
         notifListRepo.activeNotifications
-            .map { store -> store.renderList.isNotEmpty() }
+            .map { store ->
+                store.renderList.isNotEmpty() &&
+                    store.individuals.any { (_, notif) -> notif.style is NotifStyle.Messaging }
+            }
             .distinctUntilChanged()
 
     private val onboardingUnseen: Flow<Boolean> =
@@ -60,14 +65,24 @@ constructor(
         userInteractor.selectedUser.mapLatestConflated { userId -> isAvailableAndDisabled(userId) }
 
     val onboardingNeeded: Flow<Boolean> =
-        allOf(onboardingUnseen, summarizationAvailableAndDisabled, notifsPresent)
+        allOf(onboardingUnseen, summarizationAvailableAndDisabled)
+            .distinctUntilChanged()
+            .flatMapLatestConflated { if (it) notifsPresent else flowOf(false) }
             .distinctUntilChanged()
             .flowOn(bgDispatcher)
 
     fun markOnboardingDismissed() {
+        Log.i(TAG, "dismissing onboarding")
         sharedPreferencesInteractor.sharedPreferences.value?.edit {
             putBoolean(KEY_SHOW_SUMMARIZATION_ONBOARDING, false)
-        }
+        } ?: Log.e(TAG, "Could not write to shared preferences")
+    }
+
+    fun resurrectOnboarding() {
+        Log.i(TAG, "reviving onboarding")
+        sharedPreferencesInteractor.sharedPreferences.value?.edit {
+            putBoolean(KEY_SHOW_SUMMARIZATION_ONBOARDING, true)
+        } ?: Log.e(TAG, "Could not write to shared preferences")
     }
 
     private suspend fun isAvailableAndDisabled(userId: Int): Boolean =
@@ -78,4 +93,5 @@ constructor(
         }
 }
 
+private const val TAG = "NotifSummaries"
 private const val KEY_SHOW_SUMMARIZATION_ONBOARDING = "show_summarization_onboarding"

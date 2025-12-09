@@ -71,7 +71,6 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.findRootCoordinates
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.node.DrawModifierNode
@@ -89,6 +88,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.android.compose.modifiers.animatedBackground
 import com.android.compose.modifiers.thenIf
 import com.android.compose.ui.graphics.FullScreenComposeViewInOverlay
+import com.android.systemui.Flags.expandableUseModifierImplementation
 import com.android.systemui.animation.ComposableControllerFactory
 import com.android.systemui.animation.Expandable
 import com.android.systemui.animation.TransitionAnimator
@@ -147,9 +147,7 @@ fun Expandable(
     onLongClick: ((Expandable) -> Unit)? = null,
     onClickLabel: String? = null,
     interactionSource: MutableInteractionSource? = null,
-    // TODO(b/285250939): Default this to true then remove once the Compose QS expandables have
-    // proven that the new implementation is robust.
-    useModifierBasedImplementation: Boolean = false,
+    useModifierBasedImplementation: Boolean = expandableUseModifierImplementation(),
     defaultMinSize: Boolean = true,
     transitionControllerFactory: ComposableControllerFactory? = null,
     content: @Composable (Expandable) -> Unit,
@@ -320,7 +318,11 @@ fun Expandable(
                     .then(clickModifier(controller, onClick, onLongClick, onClickLabel, interactionSource=interactionSource))
                     .animatedBackground(color, shape = shape)
                     .border(controller)
-                    .onGloballyPositioned { controller.boundsInComposeViewRoot = it.boundsInRoot() }
+                    .onGloballyPositioned {
+                        if (it.isAttached) {
+                            controller.boundsInComposeViewRoot = it.boundsInRoot()
+                        }
+                    }
             ) {
                 wrappedContent(controller.expandable)
             }
@@ -387,7 +389,12 @@ private fun Modifier.expandable(
                 .then(clickModifier(controller, onClick, onLongClick, onClickLabel, interactionSource=interactionSource))
                 .animatedBackground(controller.color, shape = controller.shape)
         }
-        .onPlaced { controller.boundsInComposeViewRoot = it.boundsInRoot() }
+        .onPlaced { coords ->
+            // TODO(b/415570057): Remove this check.
+            if (coords.isAttached) {
+                controller.boundsInComposeViewRoot = coords.boundsInRoot()
+            }
+        }
         .drawWithContent {
             graphicsLayer.record { this@drawWithContent.drawContent() }
 

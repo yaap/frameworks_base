@@ -18,10 +18,12 @@ package com.android.systemui.qs.panels.ui.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -55,6 +57,7 @@ import org.junit.runner.RunWith
 @SmallTest
 @RunWith(AndroidJUnit4::class)
 class ResizingTest : SysuiTestCase() {
+
     @get:Rule val composeRule = createComposeRule()
 
     private val kosmos = testKosmos()
@@ -74,6 +77,7 @@ class ResizingTest : SysuiTestCase() {
                 allTiles = listState.tiles.filterIsInstance<TileGridCell>().map { it.tile },
                 modifier = Modifier.fillMaxSize(),
                 snapshotViewModel = remember { snapshotViewModelFactory.create() },
+                topBarActions = remember { mutableStateListOf() },
                 onStopEditing = {},
             ) { action ->
                 when (action) {
@@ -90,13 +94,22 @@ class ResizingTest : SysuiTestCase() {
         }
     }
 
+    private fun ComposeContentTestRule.setEditContent(
+        listState: EditTileListState,
+        tiles: List<EditTileViewModel> = TestEditTiles,
+        largeTiles: Set<TileSpec> = TestLargeTilesSpecs,
+        onResize: (EditAction.ResizeTile) -> Unit = {},
+    ) {
+        setContent { EditTileGridUnderTest(listState, tiles, largeTiles, onResize) }
+        waitForIdle()
+    }
+
     @Test
     fun toggleIconTileWithA11yAction_shouldBeLarge() {
         val listState =
             EditTileListState(TestEditTiles, TestLargeTilesSpecs, columns = 4, largeTilesSpan = 2)
         var resizedAction: EditAction.ResizeTile? = null
-        composeRule.setContent { EditTileGridUnderTest(listState) { resizedAction = it } }
-        composeRule.waitForIdle()
+        composeRule.setEditContent(listState) { resizedAction = it }
 
         composeRule
             .onNodeWithContentDescription("tileA")
@@ -114,8 +127,7 @@ class ResizingTest : SysuiTestCase() {
         val listState =
             EditTileListState(TestEditTiles, TestLargeTilesSpecs, columns = 4, largeTilesSpan = 2)
         var resizedAction: EditAction.ResizeTile? = null
-        composeRule.setContent { EditTileGridUnderTest(listState) { resizedAction = it } }
-        composeRule.waitForIdle()
+        composeRule.setEditContent(listState) { resizedAction = it }
 
         composeRule
             .onNodeWithContentDescription("tileD_large")
@@ -133,8 +145,7 @@ class ResizingTest : SysuiTestCase() {
         val listState =
             EditTileListState(TestEditTiles, TestLargeTilesSpecs, columns = 4, largeTilesSpan = 2)
         var resizedAction: EditAction.ResizeTile? = null
-        composeRule.setContent { EditTileGridUnderTest(listState) { resizedAction = it } }
-        composeRule.waitForIdle()
+        composeRule.setEditContent(listState) { resizedAction = it }
 
         composeRule
             .onNodeWithContentDescription("tileA")
@@ -154,8 +165,7 @@ class ResizingTest : SysuiTestCase() {
         val listState =
             EditTileListState(TestEditTiles, TestLargeTilesSpecs, columns = 4, largeTilesSpan = 2)
         var resizedAction: EditAction.ResizeTile? = null
-        composeRule.setContent { EditTileGridUnderTest(listState) { resizedAction = it } }
-        composeRule.waitForIdle()
+        composeRule.setEditContent(listState) { resizedAction = it }
 
         composeRule
             .onNodeWithContentDescription("tileD_large")
@@ -175,8 +185,7 @@ class ResizingTest : SysuiTestCase() {
         val listState =
             EditTileListState(TestEditTiles, TestLargeTilesSpecs, columns = 4, largeTilesSpan = 2)
         var resizedAction: EditAction.ResizeTile? = null
-        composeRule.setContent { EditTileGridUnderTest(listState) { resizedAction = it } }
-        composeRule.waitForIdle()
+        composeRule.setEditContent(listState) { resizedAction = it }
 
         composeRule
             .onNodeWithContentDescription("tileA")
@@ -196,8 +205,7 @@ class ResizingTest : SysuiTestCase() {
         val listState =
             EditTileListState(TestEditTiles, TestLargeTilesSpecs, columns = 4, largeTilesSpan = 2)
         var resizedAction: EditAction.ResizeTile? = null
-        composeRule.setContent { EditTileGridUnderTest(listState) { resizedAction = it } }
-        composeRule.waitForIdle()
+        composeRule.setEditContent(listState) { resizedAction = it }
 
         composeRule
             .onNodeWithContentDescription("tileD_large")
@@ -224,10 +232,7 @@ class ResizingTest : SysuiTestCase() {
         val listState = EditTileListState(testTiles, emptySet(), columns = 4, largeTilesSpan = 2)
         var resizedAction: EditAction.ResizeTile? = null
 
-        composeRule.setContent {
-            EditTileGridUnderTest(listState, testTiles) { resizedAction = it }
-        }
-        composeRule.waitForIdle()
+        composeRule.setEditContent(listState, testTiles) { resizedAction = it }
 
         composeRule
             .onNodeWithContentDescription("tileD")
@@ -250,6 +255,7 @@ class ResizingTest : SysuiTestCase() {
     }
 
     companion object {
+
         private fun createEditTile(tileSpec: String): EditTileViewModel {
             return EditTileViewModel(
                 tileSpec = TileSpec.create(tileSpec),

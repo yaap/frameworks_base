@@ -18,6 +18,7 @@ package com.android.systemui.statusbar.notification.row.icon
 
 import android.annotation.WorkerThread
 import android.app.Flags
+import android.app.Notification
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.os.UserManager
@@ -49,12 +50,6 @@ interface NotificationIconStyleProvider {
     fun shouldShowAppIcon(notification: StatusBarNotification, context: Context): Boolean
 
     /**
-     * Whether the [notification] is coming from a work profile app, and therefore should display
-     * the briefcase badge.
-     */
-    fun shouldShowWorkProfileBadge(notification: StatusBarNotification, context: Context): Boolean
-
-    /**
      * Mark all the entries in the cache that are NOT in [wantedPackages] to be cleared. If they're
      * still not needed on the next call of this method (made after a timeout of 1s, in case they
      * happen more frequently than that), they will be purged. This can be done from any thread.
@@ -77,6 +72,15 @@ constructor(
     private val cache = NotifCollectionCache<Boolean>(systemClock = systemClock)
 
     override fun shouldShowAppIcon(notification: StatusBarNotification, context: Context): Boolean {
+        return !prefersSmallIcon(notification.notification) &&
+            packageHasAppIcon(notification, context)
+    }
+
+    private fun prefersSmallIcon(notification: Notification): Boolean {
+        return notification.extras.getBoolean(Notification.EXTRA_PREFER_SMALL_ICON)
+    }
+
+    private fun packageHasAppIcon(notification: StatusBarNotification, context: Context): Boolean {
         return cache.getOrFetch(notification.packageName) {
             val packageContext = notification.getPackageContext(context)
             !belongsToHeadlessSystemApp(packageContext)
@@ -108,15 +112,6 @@ constructor(
         }
     }
 
-    override fun shouldShowWorkProfileBadge(
-        notification: StatusBarNotification,
-        context: Context,
-    ): Boolean {
-        val packageContext = notification.getPackageContext(context)
-        // UserManager already caches this, so we don't need to.
-        return userManager.isManagedProfile(packageContext.userId)
-    }
-
     override fun purgeCache(wantedPackages: Collection<String>) {
         cache.purge(wantedPackages)
     }
@@ -140,14 +135,6 @@ class NoOpIconStyleProvider : NotificationIconStyleProvider {
     override fun shouldShowAppIcon(notification: StatusBarNotification, context: Context): Boolean {
         Log.wtf(TAG, "NoOpIconStyleProvider should not be used anywhere.")
         return true
-    }
-
-    override fun shouldShowWorkProfileBadge(
-        notification: StatusBarNotification,
-        context: Context,
-    ): Boolean {
-        Log.wtf(TAG, "NoOpIconStyleProvider should not be used anywhere.")
-        return false
     }
 
     override fun purgeCache(wantedPackages: Collection<String>) {

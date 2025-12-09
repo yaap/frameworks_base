@@ -35,11 +35,31 @@ flag {
 }
 
 flag {
+    name: "notification_top_line_margin_fix"
+    namespace: "systemui"
+    description: "Fixes a small bug where the timestamp had an unnecessary margin in grouped notifications."
+    bug: "417196998"
+    metadata {
+       purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
   name: "api_metric_style"
   is_exported: true
   namespace: "notifications"
   description: "This flag adds a new Notification.MetricStyle"
   bug: "415827681"
+}
+
+flag {
+  name: "metric_style_unit_in_label"
+  namespace: "notifications"
+  description: "In MetricStyle, concatenate the unit of the MetricValue to the label, instead of displaying it next to the value. This flag is only for prototyping; either the flag-on or flag-off path will be inlined once the behavior is decided."
+  bug: "434910979"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
 }
 
 flag {
@@ -87,26 +107,6 @@ flag {
 }
 
 flag {
-  name: "notif_channel_crop_vibration_effects"
-  namespace: "systemui"
-  description: "Limits the size of vibration effects that can be stored in a NotificationChannel"
-  bug: "345881518"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
-  name: "notif_channel_estimate_effect_size"
-  namespace: "systemui"
-  description: "When reading vibration effects from parcel, estimate size instead of unnecessarily serializing to XML"
-  bug: "391908451"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
   name: "evenly_divided_call_style_action_layout"
   namespace: "systemui"
   description: "Evenly divides horizontal space for action buttons in CallStyle notifications."
@@ -135,33 +135,6 @@ flag {
   namespace: "systemui"
   description: "Removes all custom views"
   bug: "342602960"
-}
-
-flag {
-  name: "redact_sensitive_content_notifications_on_lockscreen"
-  namespace: "systemui"
-  description: "redacts notifications on the lockscreen if they have the 'sensitiveContent' flag"
-  bug: "343631648"
-}
-
-flag {
-  name: "expanding_public_view"
-  namespace: "systemui"
-  description: "enables user expanding the public view of a notification"
-  bug: "398853084"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-flag {
-  name: "notif_entry_creation_time_use_elapsed_realtime"
-  namespace: "systemui"
-  description: "makes the notification entry expect its creation time to be elapsedRealtime, not uptimeMillis"
-  bug: "389606876"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
 }
 
 flag {
@@ -197,16 +170,6 @@ flag {
   namespace: "systemui"
   description: "Rate-limit calls to enqueueNotificationWithTag client-side"
   bug: "362981561"
-}
-
-flag {
-  name: "nm_binder_perf_log_nm_throttling"
-  namespace: "systemui"
-  description: "Log throttled operations (notify, cancel) to statsd. This flag will NOT be pushed past Trunkfood."
-  bug: "389918945"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
 }
 
 flag {
@@ -253,6 +216,15 @@ flag {
   }
 }
 
+flag {
+  name: "notification_update_shedding_allow_progress_completion"
+  namespace: "systemui"
+  description: "When throttling notification updates, specifically allow the progress -> no_progress transition"
+  bug: "425364383"
+  metadata {
+    purpose: PURPOSE_BUGFIX
+  }
+}
 
 # Start: exported flags that cannot be removed
 
@@ -344,6 +316,44 @@ flag {
   description: "Allows an application running a foreground service to hide the notification icon from the status bar"
   bug: "416192314"
   is_exported: true
+}
+
+flag {
+  name: "notification_is_animated_action_api"
+  namespace: "systemui"
+  description: "This flag enables the API to define if an action requires special visual treatment."
+  bug: "417509471"
+  metadata {
+    purpose: PURPOSE_FEATURE
+  }
+}
+
+flag {
+  name: "nm_summarization_all"
+  namespace: "notifications"
+  description: "Allows the NAS to summarize notifications of any type"
+  bug: "430487852"
+}
+
+flag {
+  name: "nm_highlights"
+  namespace: "notifications"
+  description: "Allows the NAS to highlight notifications"
+  bug: "438704838"
+}
+
+flag {
+  name: "nm_insights"
+  namespace: "notifications"
+  description: "Shows insights derived from notifications"
+  bug: "438705144"
+}
+
+flag {
+  name: "nm_contextual_display"
+  namespace: "notifications"
+  description: "Changes notification appearance based on user created rules"
+  bug: "438704204"
 }
 
 # End: exported flags that cannot be removed

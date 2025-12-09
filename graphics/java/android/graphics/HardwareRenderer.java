@@ -34,6 +34,8 @@ import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.Trace;
+import android.ravenwood.annotation.RavenwoodIgnore;
+import android.ravenwood.annotation.RavenwoodKeepPartialClass;
 import android.util.Log;
 import android.util.TimeUtils;
 import android.view.Display;
@@ -82,7 +84,8 @@ import sun.misc.Cleaner;
  * Failure to do so will cause the render thread to stall on that surface, blocking all
  * HardwareRenderer instances.</p>
  */
-@android.ravenwood.annotation.RavenwoodKeepWholeClass
+@RavenwoodKeepPartialClass(comment =
+        "Hardware graphics not supported. Keeping minimal surface enough for Choreographer")
 public class HardwareRenderer {
     private static final String LOG_TAG = "HardwareRenderer";
 
@@ -179,8 +182,9 @@ public class HardwareRenderer {
     /**
      * Name of the file that holds the shaders cache.
      */
-    private static final String CACHE_PATH_SHADERS = "com.android.opengl.shaders_cache";
-    private static final String CACHE_PATH_SKIASHADERS = "com.android.skia.shaders_cache";
+    private static final String CACHE_PATH_OPENGL_SHADERS = "com.android.opengl.shaders_cache";
+    private static final String CACHE_PATH_SKIA_SHADERS = "com.android.skia.shaders_cache";
+    private static final String CACHE_PATH_SKIA_PIPELINES = "com.android.skia.pipelines_cache";
 
     private static int sDensityDpi = 0;
 
@@ -1145,6 +1149,7 @@ public class HardwareRenderer {
      *
      * @hide
      */
+    @RavenwoodIgnore
     public static void setFPSDivisor(int divisor) {
         nSetRtAnimationsEnabled(divisor <= 1);
     }
@@ -1292,8 +1297,10 @@ public class HardwareRenderer {
      * @hide
      */
     public static void setupDiskCache(File cacheDir) {
-        setupShadersDiskCache(new File(cacheDir, CACHE_PATH_SHADERS).getAbsolutePath(),
-                new File(cacheDir, CACHE_PATH_SKIASHADERS).getAbsolutePath());
+        setupPersistentGraphicsCache(
+            new File(cacheDir, CACHE_PATH_OPENGL_SHADERS).getAbsolutePath(),
+            new File(cacheDir, CACHE_PATH_SKIA_SHADERS).getAbsolutePath(),
+            new File(cacheDir, CACHE_PATH_SKIA_PIPELINES).getAbsolutePath());
     }
 
     /** @hide */
@@ -1565,9 +1572,11 @@ public class HardwareRenderer {
      * its first frame adds directly to user-visible app launch latency.
      *
      * Should only be called after GraphicsEnvironment.chooseDriver().
+     *
+     * @return the tid of the RenderThread.
      * @hide
      */
-    public static native void preload();
+    public static native int preload();
 
     /**
      * Initialize the Buffer Allocator singleton
@@ -1587,7 +1596,8 @@ public class HardwareRenderer {
     protected static native boolean isWebViewOverlaysEnabled();
 
     /** @hide */
-    protected static native void setupShadersDiskCache(String cacheFile, String skiaCacheFile);
+    protected static native void setupPersistentGraphicsCache(
+            String openglShaderCachePath, String skiaShaderCachePath, String skiaPipelineCachePath);
 
     private static native void nRotateProcessStatsBuffer();
 

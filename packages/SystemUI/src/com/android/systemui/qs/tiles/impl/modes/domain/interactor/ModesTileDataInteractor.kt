@@ -20,14 +20,12 @@ import android.app.Flags
 import android.content.Context
 import android.os.UserHandle
 import com.android.app.tracing.coroutines.flow.flowName
-import com.android.settingslib.notification.modes.ZenIcon
 import com.android.settingslib.notification.modes.ZenMode
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.keyguard.data.repository.KeyguardRepository
 import com.android.systemui.keyguard.shared.model.StatusBarState
-import com.android.systemui.qs.flags.QsInCompose
 import com.android.systemui.qs.tiles.ModesTile
 import com.android.systemui.qs.tiles.base.domain.interactor.QSTileDataInteractor
 import com.android.systemui.qs.tiles.base.domain.model.DataUpdateTrigger
@@ -112,10 +110,10 @@ constructor(
 
         val icon =
             if (mainActiveMode != null) {
-                zenModeInteractor.getModeIcon(mainActiveMode).toTileIcon()
+                zenModeInteractor.getModeIcon(mainActiveMode)
             } else {
-                if (QsInCompose.isEnabled && quickMode != null) {
-                    zenModeInteractor.getModeIcon(quickMode).toTileIcon()
+                if (quickMode != null) {
+                    zenModeInteractor.getModeIcon(quickMode)
                 } else {
                     getDefaultTileIcon()
                 }
@@ -153,7 +151,7 @@ constructor(
     }
 
     fun setQuickModeOverride(deactivatedModeIds: List<String>) {
-        if (!QsInCompose.isEnabled || !Flags.modesUiTileReactivatesLast()) {
+        if (!Flags.modesUiTileReactivatesLast()) {
             return
         }
 
@@ -184,25 +182,9 @@ constructor(
     private fun buildTileDataLegacy(activeModes: ActiveZenModes): ModesTileModel {
         return ModesTileModel(
             isActivated = activeModes.isAnyActive(),
-            activeModes = activeModes.modeNames.map { ModesTileModel.ActiveMode(null, it) },
-            icon =
-                if (activeModes.mainMode != null) activeModes.mainMode.icon.toTileIcon()
-                else getDefaultTileIcon(),
+            activeModes = activeModes.names.map { ModesTileModel.ActiveMode(null, it) },
+            icon = if (activeModes.main != null) activeModes.main.icon else getDefaultTileIcon(),
             quickMode = null,
-        )
-    }
-
-    private fun ZenIcon.toTileIcon(): Icon.Loaded {
-        // ZenIconKey.resPackage is null if its resId is a system icon.
-        return Icon.Loaded(
-            drawable,
-            contentDescription = null,
-            res =
-                if (key.resPackage == null) {
-                    key.resId
-                } else {
-                    null
-                },
         )
     }
 
@@ -210,7 +192,7 @@ constructor(
         Icon.Loaded(
             context.getDrawable(ModesTile.ICON_RES_ID)!!,
             contentDescription = null,
-            res = ModesTile.ICON_RES_ID,
+            resId = ModesTile.ICON_RES_ID,
         )
 
     override fun availability(user: UserHandle): Flow<Boolean> = flowOf(true)

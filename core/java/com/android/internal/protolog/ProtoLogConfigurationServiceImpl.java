@@ -31,7 +31,10 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemService;
 import android.content.Context;
+import android.os.Binder;
+import android.os.DeadObjectException;
 import android.os.IBinder;
+import android.os.Process;
 import android.os.RemoteException;
 import android.os.ResultReceiver;
 import android.os.ShellCallback;
@@ -258,6 +261,12 @@ public class ProtoLogConfigurationServiceImpl extends IProtoLogConfigurationServ
     public void onShellCommand(@Nullable FileDescriptor in, @Nullable FileDescriptor out,
             @Nullable FileDescriptor err, @NonNull String[] args, @Nullable ShellCallback callback,
             @NonNull ResultReceiver resultReceiver) throws RemoteException {
+        final int callingUid = Binder.getCallingUid();
+        if (callingUid != Process.ROOT_UID && callingUid != Process.SHELL_UID) {
+            resultReceiver.send(-1, null);
+            throw new SecurityException("Shell commands are only callable by ADB");
+        }
+
         new ProtoLogCommandHandler(this)
                 .exec(this, in, out, err, args, callback, resultReceiver);
     }
@@ -367,10 +376,17 @@ public class ProtoLogConfigurationServiceImpl extends IProtoLogConfigurationServ
     ) {
         // For each client, if its groups intersect the given list, send the command to toggle.
         synchronized (mConfigLock) {
+            final String[] groupsToToggle;
+            if (groups.length == 0) {
+                groupsToToggle = mRegisteredGroups.toArray(new String[0]);
+            } else {
+                groupsToToggle = groups;
+            }
+
             for (var clientRecord : mClientRecords.values()) {
                 final ArraySet<String> affectedGroups;
                 affectedGroups = new ArraySet<>(clientRecord.groups);
-                affectedGroups.retainAll(Arrays.asList(groups));
+                affectedGroups.retainAll(Arrays.asList(groupsToToggle));
 
                 if (!affectedGroups.isEmpty()) {
                     final var clientGroups = affectedGroups.toArray(new String[0]);
@@ -380,8 +396,12 @@ public class ProtoLogConfigurationServiceImpl extends IProtoLogConfigurationServ
                                 + String.join(", ", clientGroups) + "]");
                         clientRecord.client.toggleLogcat(enabled, clientGroups);
                         pw.println("- Done");
+                    } catch (DeadObjectException e) {
+                        pw.println("- Failed (client may have died)");
+                        Log.w(LOG_TAG, "Failed to toggle logcat status for groups on client "
+                                + clientRecord.client + ", it likely has died", e);
                     } catch (RemoteException e) {
-                        pw.println("- Failed");
+                        pw.println("- Failed (unexpected RemoteException)");
                         throw new RuntimeException(
                                 "Failed to toggle logcat status for groups on client", e);
                     }
@@ -389,7 +409,7 @@ public class ProtoLogConfigurationServiceImpl extends IProtoLogConfigurationServ
             }
 
             // Groups that actually have no clients associated indicate some kind of a bug.
-            Set<String> noOpGroups = new ArraySet<>(groups);
+            Set<String> noOpGroups = new ArraySet<>(Arrays.asList(groupsToToggle));
             mClientRecords.forEach((k, r) -> noOpGroups.removeAll(r.groups));
 
             // Send out a warning in logcat and the PrintWriter for unrecognized groups.
@@ -401,7 +421,7 @@ public class ProtoLogConfigurationServiceImpl extends IProtoLogConfigurationServ
             }
 
             // Flip the status of the groups in our record-keeping.
-            for (String group : groups) {
+            for (String group : groupsToToggle) {
                 mLogGroupToLogcatStatus.put(group, enabled);
             }
         }

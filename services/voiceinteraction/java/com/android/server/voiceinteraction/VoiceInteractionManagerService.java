@@ -91,7 +91,7 @@ import android.util.ArraySet;
 import android.util.Log;
 import android.util.Slog;
 import android.window.DesktopExperienceFlags;
-import android.window.ScreenCapture;
+import android.window.ScreenCaptureInternal;
 
 import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
@@ -876,9 +876,9 @@ public class VoiceInteractionManagerService extends SystemService {
                 Slog.w(TAG, "no available voice interaction services found for user " + user);
                 return null;
             }
-            // Find first system package.  We never want to allow third party services to
-            // be automatically selected, because those require approval of the user.
-            VoiceInteractionServiceInfo foundInfo = null;
+            final String defaultAssistant = getDefaultAssistant();
+            // Assign to the first available system voice interactor that is part of either
+            // the default assistant or the passed package
             for (int i = 0; i < numAvailable; i++) {
                 ServiceInfo cur = available.get(i).serviceInfo;
                 if ((cur.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
@@ -890,19 +890,22 @@ public class VoiceInteractionManagerService extends SystemService {
                     Slog.w(TAG,
                             "Bad interaction service " + cur.packageName + "/"
                                     + cur.name + ": " + info.getParseError());
-                } else if (foundInfo == null) {
-                    foundInfo = info;
-                } else {
-                    Slog.w(TAG, "More than one voice interaction service, "
-                            + "picking first "
-                            + new ComponentName(
-                            foundInfo.getServiceInfo().packageName,
-                            foundInfo.getServiceInfo().name)
-                            + " over "
-                            + new ComponentName(cur.packageName, cur.name));
+                } else if (!info.getSupportsAssist()) {
+                    // skip if it doesn't support assistant
+                    Slog.i(TAG, "Interaction service "
+                            + cur.packageName + "/" + cur.name + " doesn't support assistant");
+                } else if (cur.packageName.equals(defaultAssistant)
+                            || cur.packageName.equals(packageName)) {
+                    return info;
                 }
             }
-            return foundInfo;
+            return null;
+        }
+
+        @Nullable
+        public String getDefaultAssistant() {
+            String assistant = mContext.getString(R.string.config_defaultAssistant);
+            return TextUtils.isEmpty(assistant) ? null : assistant;
         }
 
         ComponentName getCurInteractor(int userHandle) {
@@ -955,12 +958,20 @@ public class VoiceInteractionManagerService extends SystemService {
                         }
                     }
                 }
-                if (numAvailable > 1) {
-                    Slog.w(TAG, "more than one voice recognition service found, picking first");
+
+                // If prefPackage isn't found then only default to system recognizer.
+                // prefPackage could be either the current recognizer or the default recognizer.
+                for (int i = 0; i < numAvailable; i++) {
+                    ServiceInfo serviceInfo = available.get(i).getServiceInfo();
+                    if ((serviceInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
+                        continue;
+                    }
+                    return new ComponentName(serviceInfo.packageName, serviceInfo.name);
                 }
 
-                ServiceInfo serviceInfo = available.get(0).getServiceInfo();
-                return new ComponentName(serviceInfo.packageName, serviceInfo.name);
+                Slog.w(TAG, "no auto selectable voice recognition services found for user "
+                        + userHandle);
+                return null;
             }
         }
 
@@ -2341,6 +2352,10 @@ public class VoiceInteractionManagerService extends SystemService {
             synchronized (this) {
                 enforceIsCurrentVoiceInteractionService();
 
+                final boolean enableAssistStructure = hints.getBoolean("enable_assist_structure");
+                if (mImpl != null) {
+                    mImpl.setEnableAssistStructure(enableAssistStructure);
+                }
                 final int size = mVoiceInteractionSessionListeners.beginBroadcast();
                 for (int i = 0; i < size; ++i) {
                     final IVoiceInteractionSessionListener listener =
@@ -2717,10 +2732,11 @@ public class VoiceInteractionManagerService extends SystemService {
                                 switchImplementationIfNeededLocked(true);
                             }
                         }
-                        return;
                     }
 
-                    if (curAssistant != null) {
+                    // If interactor isn't null, then we would have done the needed checks already
+                    // in the above code.
+                    if (curInteractor == null && curAssistant != null) {
                         int change = isPackageDisappearing(curAssistant.getPackageName());
                         if (change == PACKAGE_PERMANENT_CHANGE) {
                             // If the currently set assistant is being removed, then we should
@@ -2788,7 +2804,8 @@ public class VoiceInteractionManagerService extends SystemService {
                     isManagedProfileVisible = true;
                 }
             }
-            final ScreenCapture.ScreenshotHardwareBuffer shb = mWmInternal.takeAssistScreenshot();
+            final ScreenCaptureInternal.ScreenshotHardwareBuffer shb =
+                    mWmInternal.takeAssistScreenshot();
             final Bitmap bm = shb != null ? shb.asBitmap() : null;
             // Now that everything is fetched, putting it in the launchIntent.
             if (bm != null) {

@@ -89,6 +89,11 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
         assertTrue(task.hasChild());
         assertTrue(activity.finishing);
 
+        if (Flags.polishCloseWallpaperIncludesOpenChange()) {
+            // Simulate idle to destroy mFinishingActivities
+            mSupervisor.processStoppingAndFinishingActivities(null /* launchedActivity */,
+                    false /* processPausingActivities */, "test");
+        }
         activity.destroyed("testRemoveContainer");
         // Assert that the container was removed after the activity is destroyed.
         assertNull(task.getParent());
@@ -116,6 +121,11 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
         assertTrue(task.hasChild());
         assertTrue(activity.finishing);
 
+        if (Flags.polishCloseWallpaperIncludesOpenChange()) {
+            // Simulate idle to destroy mFinishingActivities.
+            mSupervisor.processStoppingAndFinishingActivities(null /* launchedActivity */,
+                    false /* processPausingActivities */, "test");
+        }
         activity.destroyed("testRemoveRootTask");
         // Assert that the container was removed after the activity is destroyed.
         assertNull(task.getParent());
@@ -219,7 +229,7 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testSetSafeRegionBoundsOnTaskDisplayArea() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -239,7 +249,7 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testSetSafeRegionBoundsOnRootTask() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -259,7 +269,7 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testSetSafeRegionBoundsOnTask() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -279,7 +289,7 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testSetSafeRegionBoundsOnTask_resetSafeRegionBounds() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -308,7 +318,7 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testSetSafeRegionBoundsOnRootTaskAndTask() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -331,7 +341,7 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING)
+    @EnableFlags(Flags.FLAG_SAFE_REGION_LETTERBOXING_V1)
     public void testSetSafeRegionBoundsOnRootTaskAndTask_resetSafeRegionBoundsOnTask() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -365,7 +375,6 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_EXCLUDE_TASK_FROM_RECENTS)
     public void testSetTaskForceExcludedFromRecents() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -379,7 +388,6 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_EXCLUDE_TASK_FROM_RECENTS)
     public void testSetTaskForceExcludedFromRecents_resetsTaskForceExcludedFromRecents() {
         final Task rootTask = createTask(mDisplayContent);
         final Task task = createTaskInRootTask(rootTask, 0 /* userId */);
@@ -542,6 +550,32 @@ public class WindowContainerTransactionTests extends WindowTestsBase {
         applyTransaction(wct);
 
         assertFalse(task.getIsTaskMoveAllowed());
+    }
+
+    @Test
+    public void testSetDisallowOverrideBoundsForChildren() {
+        final Rect overrideBounds = new Rect(10, 10, 100, 100);
+        final Rect emptyBounds = new Rect();
+        final Task parentTask = createTask(mDisplayContent);
+        final Task childTask = new TaskBuilder(mSupervisor)
+                .setTaskDisplayArea(parentTask.getTaskDisplayArea())
+                .setParentTask(parentTask)
+                .build();
+        parentTask.mCreatedByOrganizer = true;
+
+        // Verifies the override bounds once set.
+        childTask.setBounds(overrideBounds);
+        assertEquals(overrideBounds, childTask.getRequestedOverrideBounds());
+
+        // Verifies the override bounds are cleared if the ancestor disallowed.
+        WindowContainerTransaction wct = new WindowContainerTransaction();
+        wct.setDisallowOverrideBoundsForChildren(parentTask.getTaskInfo().token, true);
+        applyTransaction(wct);
+        assertEquals(emptyBounds, childTask.getRequestedOverrideBounds());
+
+        // Verifies the override bounds cannot be set if the ancestor disallowed.
+        childTask.setBounds(overrideBounds);
+        assertEquals(emptyBounds, childTask.getRequestedOverrideBounds());
     }
 
     private Task createTask(int taskId) {

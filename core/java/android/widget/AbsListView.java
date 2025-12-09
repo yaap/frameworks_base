@@ -511,6 +511,14 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
     private OnScrollListener mOnScrollListener;
 
     /**
+     * Optional callback to notify client when scroll state has changed. This is used internally
+     * to track state changes for Jank metrics. A separate OnScrollListener is used in order to
+     * avoid overwriting any existing OnScrollListener apps may have set.
+     */
+    @UnsupportedAppUsage
+    private OnScrollListener mOnScrollStateChangeListener;
+
+    /**
      * Keeps track of our accessory window
      */
     @UnsupportedAppUsage
@@ -652,6 +660,12 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
      * The last scroll state reported to clients through {@link OnScrollListener}.
      */
     private int mLastScrollState = OnScrollListener.SCROLL_STATE_IDLE;
+
+    /**
+     * The last scroll state reported to {@link #mOnScrollStateChangeListener}, used for internal
+     * tracking of scroll state changes.
+     */
+    private int mPreviousOnScrollListenerState = OnScrollListener.SCROLL_STATE_IDLE;
 
     /**
      * Indicates that reporting positions of child views to content capture is enabled via
@@ -1609,6 +1623,15 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
         }
         // placeholder values, View's implementation does not use these.
         onScrollChanged(0, 0, 0, 0);
+    }
+
+    /**
+     * Set the listener that will receive notifications only when scroll state changes.
+     *
+     * @hide
+     */
+    protected void setOnScrollStateChangeListener(OnScrollListener listener) {
+        mOnScrollStateChangeListener = listener;
     }
 
     /**
@@ -2990,10 +3013,10 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
 
             final boolean longClickable = isLongClickable();
             Drawable d = selector.getCurrent();
+            final int longPressTimeoutMillis = getLongPressTimeoutMillis();
             if (d != null && d instanceof TransitionDrawable) {
                 if (longClickable) {
-                    ((TransitionDrawable) d).startTransition(
-                            ViewConfiguration.getLongPressTimeout());
+                    ((TransitionDrawable) d).startTransition(longPressTimeoutMillis);
                 } else {
                     ((TransitionDrawable) d).resetTransition();
                 }
@@ -3003,7 +3026,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
                     mPendingCheckForKeyLongPress = new CheckForKeyLongPress();
                 }
                 mPendingCheckForKeyLongPress.rememberWindowAttachCount();
-                postDelayed(mPendingCheckForKeyLongPress, ViewConfiguration.getLongPressTimeout());
+                postDelayed(mPendingCheckForKeyLongPress, longPressTimeoutMillis);
             }
         }
     }
@@ -3605,14 +3628,14 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
                         positionSelector(mMotionPosition, child);
                         refreshDrawableState();
 
-                        final int longPressTimeout = ViewConfiguration.getLongPressTimeout();
                         final boolean longClickable = isLongClickable();
-
+                        final int longPressTimeoutMillis = getLongPressTimeoutMillis();
                         if (mSelector != null) {
                             final Drawable d = mSelector.getCurrent();
                             if (d != null && d instanceof TransitionDrawable) {
                                 if (longClickable) {
-                                    ((TransitionDrawable) d).startTransition(longPressTimeout);
+                                    ((TransitionDrawable) d).startTransition(
+                                            longPressTimeoutMillis);
                                 } else {
                                     ((TransitionDrawable) d).resetTransition();
                                 }
@@ -3626,7 +3649,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
                             }
                             mPendingCheckForLongPress.setCoords(x, y);
                             mPendingCheckForLongPress.rememberWindowAttachCount();
-                            postDelayed(mPendingCheckForLongPress, longPressTimeout);
+                            postDelayed(mPendingCheckForLongPress, longPressTimeoutMillis);
                         } else {
                             mTouchMode = TOUCH_MODE_DONE_WAITING;
                         }
@@ -4919,6 +4942,11 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
                 mLastScrollState = newState;
                 mOnScrollListener.onScrollStateChanged(this, newState);
             }
+        }
+
+        if (newState != mPreviousOnScrollListenerState && mOnScrollStateChangeListener != null) {
+            mPreviousOnScrollListenerState = newState;
+            mOnScrollStateChangeListener.onScrollStateChanged(this, newState);
         }
 
         // When scrolling, we want to report changes in the active children to Content Capture,

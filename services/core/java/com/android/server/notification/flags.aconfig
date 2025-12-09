@@ -51,13 +51,6 @@ flag {
 }
 
 flag {
-  name: "notification_test"
-  namespace: "systemui"
-  description: "Timing test, no functionality"
-  bug: "316931130"
-}
-
-flag {
   name: "notification_custom_view_uri_restriction"
   namespace: "systemui"
   description: "This flag enables memory restriction of notifications holding custom views with Uri Bitmaps"
@@ -171,10 +164,24 @@ flag {
 }
 
 flag {
+  name: "strict_zen_rule_component_validation"
+  namespace: "systemui"
+  description: "Properly validate both CPS and configActivity in both add and update paths"
+  bug: "420605963"
+}
+
+flag {
   name: "managed_services_concurrent_multiuser"
   namespace: "systemui"
   description: "Enables ManagedServices to support Concurrent multi user environment"
   bug: "380297485"
+}
+
+flag {
+  name: "allow_freezing_idle_nls"
+  namespace: "backstage_power"
+  description: "Allows freezing idle notification listener services"
+  bug: "344050265"
 }
 
 flag {
@@ -187,24 +194,41 @@ flag {
   }
 }
 
+
+
 flag {
-  name: "log_visually_changed_updates"
+  name: "random_conversation_ids"
   namespace: "systemui"
-  description: "Logs a notification update if it is visually changed"
-  bug: "420989666"
+  description: "Use random ids for new conversation channels, instead of concatenating parent id and conversation id"
+  bug: "432250872"
+}
+
+flag {
+  name: "show_noisy_bundled_notifications"
+  namespace: "notifications"
+  description: "If a classification arrived late and the notification made noise, show the notification as unclassified temporarily"
+  bug: "430573835"
+  metadata {
+      purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+  name: "use_on_binding_died"
+  namespace: "notifications"
+  description: "Prefer onBindingDied for package updates to avoid duplicate service bindings"
+  bug: "434679743"
+  metadata {
+      purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+  name: "limit_managed_services_count"
+  namespace: "systemui"
+  description: "Enforce a maximum number of allowed components in ManagedServices"
+  bug: "428701593"
   metadata {
     purpose: PURPOSE_BUGFIX
   }
 }
-
-flag {
-  name: "skip_policy_access_nls_check"
-  namespace: "systemui"
-  description: "When querying whether a caller has Notification Policy Access, don't explicitly look in the NLSes list. All NLSes are also ConditionProviders so this is unnecessary."
-  bug: "390441924"
-  metadata {
-    purpose: PURPOSE_BUGFIX
-  }
-}
-
-

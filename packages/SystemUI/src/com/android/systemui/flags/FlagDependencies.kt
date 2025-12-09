@@ -22,11 +22,7 @@ import com.android.server.notification.Flags.FLAG_VIBRATE_WHILE_UNLOCKED
 import com.android.server.notification.Flags.crossAppPoliteNotifications
 import com.android.server.notification.Flags.politeNotifications
 import com.android.server.notification.Flags.vibrateWhileUnlocked
-import com.android.systemui.Flags.FLAG_COMMUNAL_HUB
-import com.android.systemui.Flags.communalHub
 import com.android.systemui.dagger.SysUISingleton
-import com.android.systemui.statusbar.notification.interruption.VisualInterruptionRefactor
-import com.android.systemui.statusbar.notification.shared.NotificationAvalancheSuppression
 import com.android.systemui.statusbar.notification.shared.NotificationMinimalism
 import com.android.systemui.statusbar.notification.shared.NotificationThrottleHun
 import javax.inject.Inject
@@ -41,7 +37,6 @@ class FlagDependencies @Inject constructor(featureFlags: FeatureFlagsClassic, ha
         vibrateWhileUnlockedToken dependsOn politeNotifications
 
         // Internal notification frontend dependencies
-        NotificationAvalancheSuppression.token dependsOn VisualInterruptionRefactor.token
         NotificationMinimalism.token dependsOn NotificationThrottleHun.token
     }
 
@@ -53,7 +48,4 @@ class FlagDependencies @Inject constructor(featureFlags: FeatureFlagsClassic, ha
 
     private inline val vibrateWhileUnlockedToken: FlagToken
         get() = FlagToken(FLAG_VIBRATE_WHILE_UNLOCKED, vibrateWhileUnlocked())
-
-    private inline val communalHub
-        get() = FlagToken(FLAG_COMMUNAL_HUB, communalHub())
 }

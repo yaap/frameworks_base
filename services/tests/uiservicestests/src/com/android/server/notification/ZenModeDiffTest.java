@@ -76,12 +76,7 @@ public class ZenModeDiffTest extends UiServiceTestCase {
     // version is not included in the diff; manual & automatic rules have special handling;
     // deleted rules are not included in the diff.
     public static final Set<String> ZEN_MODE_CONFIG_EXEMPT_FIELDS =
-            Set.of("version", "manualRule", "automaticRules", "deletedRules",
-                    // TODO: b/368247671 - Delete these exemptions once fields are gone.
-                    "allowAlarms", "allowMedia", "allowSystem", "allowCalls", "allowReminders",
-                    "allowEvents", "allowRepeatCallers", "allowMessages", "allowConversations",
-                    "allowCallsFrom", "allowMessagesFrom", "allowConversationsFrom",
-                    "suppressedVisualEffects");
+            Set.of("version", "manualRule", "automaticRules", "deletedRules");
 
     @Rule
     public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
@@ -229,7 +224,7 @@ public class ZenModeDiffTest extends UiServiceTestCase {
                                 + "mMinimizeRadioUsage:true->false, "
                                 + "mMaximizeDoze:true->false, "
                                 + "mNightLight:true->false, "
-                                + "mBrightnessCap:50.0->40.0, "
+                                + "mBrightnessCap:0.5->0.4, "
                                 + "mExtraEffects:[effect1]->[effect2]}, "
                                 + "triggerDescription:string1->string2, "
                                 + "type:2->1, "
@@ -477,7 +472,7 @@ public class ZenModeDiffTest extends UiServiceTestCase {
                                 + "mMinimizeRadioUsage:true->false, "
                                 + "mMaximizeDoze:true->false, "
                                 + "mNightLight:true->false, "
-                                + "mBrightnessCap:50.0->40.0, "
+                                + "mBrightnessCap:0.5->0.4, "
                                 + "mExtraEffects:[effect1]->[effect2]}");
     }
 
@@ -948,10 +943,10 @@ public class ZenModeDiffTest extends UiServiceTestCase {
                 f.set(b, "string2");
                 expectedB.put(f.getName(), "string2");
             } else if (Float.class.equals(t)) {
-                f.set(a, 50f);
-                expectedA.put(f.getName(), 50f);
-                f.set(b, 40f);
-                expectedB.put(f.getName(), 40f);
+                f.set(a, 0.5f);
+                expectedA.put(f.getName(), 0.5f);
+                f.set(b, 0.4f);
+                expectedB.put(f.getName(), 0.4f);
             } else if (Set.class.equals(t)) {
                 Set<String> aSet = Set.of("effect1");
                 Set<String> bSet = Set.of("effect2");

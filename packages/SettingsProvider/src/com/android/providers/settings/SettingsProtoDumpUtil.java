@@ -1117,9 +1117,6 @@ class SettingsProtoDumpUtil {
                 Settings.Global.SMART_REPLIES_IN_NOTIFICATIONS_FLAGS,
                 GlobalSettingsProto.Notification.SMART_REPLIES_IN_NOTIFICATIONS_FLAGS);
         dumpSetting(s, p,
-                Settings.Global.SMART_SUGGESTIONS_IN_NOTIFICATIONS_FLAGS,
-                GlobalSettingsProto.Notification.SMART_SUGGESTIONS_IN_NOTIFICATIONS_FLAGS);
-        dumpSetting(s, p,
                 Settings.Global.DISABLE_SCREEN_SHARE_PROTECTIONS_FOR_APPS_AND_NOTIFICATIONS,
                 GlobalSettingsProto.Notification
                         .DISABLE_SCREEN_SHARE_PROTECTIONS_FOR_APPS_AND_NOTIFICATIONS);
@@ -2401,8 +2398,8 @@ class SettingsProtoDumpUtil {
                 Settings.Secure.NAV_BAR_KIDS_MODE,
                 SecureSettingsProto.NavBar.NAV_BAR_KIDS_MODE);
         dumpSetting(s, p,
-                Settings.Secure.NAV_BAR_ORDER,
-                SecureSettingsProto.NavBar.NAV_BAR_ORDER);
+                Settings.Secure.NAVIGATIONBAR_KEY_ORDER,
+                SecureSettingsProto.NavBar.NAVIGATIONBAR_KEY_ORDER);
         p.end(navBar);
 
         dumpSetting(s, p,
@@ -2849,6 +2846,17 @@ class SettingsProtoDumpUtil {
         dumpSetting(s, p,
                 Settings.System.ADVANCED_SETTINGS,
                 SystemSettingsProto.ADVANCED_SETTINGS);
+
+        final long a11yToken = p.start(SystemSettingsProto.ACCESSIBILITY);
+        dumpSetting(s, p,
+                Settings.System.ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_ENABLE,
+                SystemSettingsProto.Accessibility
+                        .ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_ENABLE);
+        dumpSetting(s, p,
+                Settings.System.ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_DISABLE,
+                SystemSettingsProto.Accessibility
+                        .ACCESSIBILITY_FORCE_INVERT_COLOR_OVERRIDE_PACKAGES_TO_DISABLE);
+        p.end(a11yToken);
 
         final long alarmToken = p.start(SystemSettingsProto.ALARM);
         dumpSetting(s, p,

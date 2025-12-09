@@ -87,6 +87,8 @@
     <string name="bluetooth_connecting" msgid="5871702668260192755">"Menghubungkan…"</string>
     <string name="bluetooth_connected" msgid="8065345572198502293">"Terhubung<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_pairing" msgid="4269046942588193600">"Menyambungkan..."</string>
+    <string name="bluetooth_pairing_failure" msgid="6914444518793157913">"Tidak dapat tersambung"</string>
+    <string name="bluetooth_connection_failure" msgid="384203214661155324">"Tidak dapat terhubung"</string>
     <string name="bluetooth_connected_no_headset" msgid="2224101138659967604">"Terhubung (tanpa ponsel)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_a2dp" msgid="8566874395813947092">"Terhubung (tanpa media)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
     <string name="bluetooth_connected_no_headset_no_a2dp" msgid="2893204819854215433">"Terhubung (tanpa ponsel atau media)<xliff:g id="ACTIVE_DEVICE">%1$s</xliff:g>"</string>
@@ -103,6 +105,11 @@
     <string name="bluetooth_battery_level_untethered" msgid="1616774716076301755">"Baterai L: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, R: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>."</string>
     <string name="bluetooth_battery_level_untethered_left" msgid="5725764679536058365">"Kiri: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_battery_level_untethered_right" msgid="8377995536997790142">"Kanan: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_case" msgid="6783758530890124772">"Casing: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_left_case" msgid="7676759299091682229">"Kiri: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Casing: Baterai<xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_right_case" msgid="1299184574560442389">"Kanan: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Casing: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_left_right" msgid="6953449613092012043">"Kiri: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, Kanan: baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>"</string>
+    <string name="bluetooth_battery_level_untethered_left_case_right" msgid="5434524614259536880">"L: Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, C: Baterai<xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>, R: Baterai<xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_2">%3$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_left" msgid="337629670583744410">"Kiri <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="tv_bluetooth_battery_level_untethered_right" msgid="8610019317279155595">"Kanan <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>"</string>
     <string name="bluetooth_active_no_battery_level" msgid="4155462233006205630">"Aktif"</string>
@@ -111,6 +118,8 @@
     <string name="bluetooth_hearing_aid_right_active" msgid="2244728507170385397">"Aktif (hanya kanan)"</string>
     <string name="bluetooth_hearing_aid_left_and_right_active" msgid="4294571497939983181">"Aktif (kiri dan kanan)"</string>
     <string name="bluetooth_hearing_device_ambient_error" msgid="6035857289108813878">"Tidak dapat memperbarui suara sekitar"</string>
+    <string name="bluetooth_hearing_aids_presets_error" msgid="4523942574698610976">"Tidak dapat memperbarui preset"</string>
+    <string name="hearing_device_spinner_item_selected" msgid="3884049360428514878">"Dipilih"</string>
     <string name="bluetooth_active_media_only_battery_level" msgid="7772517511061834073">"Aktif (hanya media). Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>."</string>
     <string name="bluetooth_active_media_only_battery_level_untethered" msgid="7444753133664620926">"Aktif (hanya media). Baterai L: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_0">%1$s</xliff:g>, R: <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE_1">%2$s</xliff:g>."</string>
     <string name="bluetooth_guest_battery_level" msgid="2820003593899467676">"Perangkat tamu. Baterai <xliff:g id="BATTERY_LEVEL_AS_PERCENTAGE">%1$s</xliff:g>."</string>
@@ -269,7 +278,7 @@
     <string name="adb_pair_method_qrcode_summary" msgid="7130694277228970888">"Sambungkan perangkat baru menggunakan pemindai kode QR"</string>
     <string name="adb_pair_method_code_title" msgid="1122590300445142904">"Sambungkan perangkat dengan kode penyambungan"</string>
     <string name="adb_pair_method_code_summary" msgid="6370414511333685185">"Sambungkan perangkat baru menggunakan kode enam digit"</string>
-    <string name="adb_paired_devices_title" msgid="5268997341526217362">"Perangkat disambungkan"</string>
+    <string name="adb_paired_devices_title" msgid="5268997341526217362">"Perangkat yang tersambung"</string>
     <string name="adb_wireless_device_connected_summary" msgid="3039660790249148713">"Saat ini terhubung"</string>
     <string name="adb_wireless_device_details_title" msgid="7129369670526565786">"Detail perangkat"</string>
     <string name="adb_device_forget" msgid="193072400783068417">"Lupakan"</string>
@@ -331,16 +340,16 @@
     <string name="select_private_dns_configuration_dialog_title" msgid="3731422918335951912">"Pilih Mode DNS Pribadi"</string>
     <string name="private_dns_mode_off" msgid="7065962499349997041">"Nonaktif"</string>
     <string name="private_dns_mode_opportunistic" msgid="1947864819060442354">"Otomatis"</string>
-    <string name="private_dns_mode_provider" msgid="3619040641762557028">"Hostname penyedia DNS pribadi"</string>
+    <string name="private_dns_mode_provider" msgid="3619040641762557028">"Nama host penyedia DNS pribadi"</string>
     <string name="private_dns_mode_provider_hostname_hint" msgid="6564868953748514595">"Masukkan hostname penyedia DNS"</string>
     <string name="private_dns_mode_provider_failure" msgid="8356259467861515108">"Tidak dapat terhubung"</string>
     <string name="wifi_display_certification_summary" msgid="8111151348106907513">"Tampilkan opsi untuk sertifikasi layar nirkabel"</string>
     <string name="wifi_verbose_logging_summary" msgid="4993823188807767892">"Tingkatkan level pencatatan log Wi-Fi, tampilkan per SSID RSSI di Pemilih Wi‑Fi"</string>
     <string name="wifi_scan_throttling_summary" msgid="2577105472017362814">"Memperlambat konsumsi daya baterai &amp; meningkatkan performa jaringan"</string>
     <string name="wifi_non_persistent_mac_randomization_summary" msgid="2159794543105053930">"Jika mode ini diaktifkan, alamat MAC perangkat ini mungkin berubah setiap kali terhubung ke jaringan yang mengaktifkan pengacakan MAC"</string>
-    <string name="wifi_metered_label" msgid="8737187690304098638">"Berbayar"</string>
+    <string name="wifi_metered_label" msgid="8737187690304098638">"Berkuota"</string>
     <string name="wifi_unmetered_label" msgid="6174142840934095093">"Tidak berbayar"</string>
-    <string name="select_logd_size_title" msgid="1604578195914595173">"Ukuran buffer pencatat log"</string>
+    <string name="select_logd_size_title" msgid="4393502933789367691">"Ukuran buffer logger"</string>
     <string name="select_logd_size_dialog_title" msgid="2105401994681013578">"Ukuran Pencatat Log per buffer log"</string>
     <string name="dev_logpersist_clear_warning_title" msgid="8631859265777337991">"Hapus penyimpanan tetap pencatat log?"</string>
     <string name="dev_logpersist_clear_warning_message" msgid="6447590867594287413">"Jika kami tidak memantau lagi dengan pencatat log tetap, kami diwajibkan menghapus data pencatat log yang ada di perangkat Anda."</string>
@@ -612,7 +621,7 @@
     <string name="media_transfer_this_device_name_tv" msgid="8508713779441163887">"TV ini"</string>
     <string name="media_transfer_dock_speaker_device_name" msgid="2856219597113881950">"Speaker dok"</string>
     <string name="media_transfer_external_device_name" msgid="2588672258721846418">"Perangkat Eksternal"</string>
-    <string name="media_transfer_default_device_name" msgid="4315604017399871828">"Perangkat yang terhubung"</string>
+    <string name="media_transfer_default_device_name" msgid="4315604017399871828">"Perangkat terhubung"</string>
     <string name="media_transfer_this_phone" msgid="7194341457812151531">"Ponsel ini"</string>
     <string name="media_transfer_digital_line_name" msgid="312091711951124301">"S/PDIF"</string>
     <string name="media_transfer_analog_line_name" msgid="1841163866716302104">"Analog"</string>
@@ -695,7 +704,7 @@
     <string name="not_grant_admin" msgid="3557849576157702485">"Tidak, jangan jadikan sebagai admin"</string>
     <string name="guest_exit_dialog_button" msgid="1736401897067442044">"Keluar"</string>
     <string name="guest_exit_dialog_title_non_ephemeral" msgid="7675327443743162986">"Simpan aktivitas tamu?"</string>
-    <string name="guest_exit_dialog_message_non_ephemeral" msgid="223385323235719442">"Anda bisa menyimpan aktivitas sesi saat ini atau menghapus semua aplikasi &amp; data"</string>
+    <string name="guest_exit_dialog_message_non_ephemeral" msgid="223385323235719442">"Anda dapat menyimpan aktivitas sesi ini atau menghapus semua aplikasi dan data"</string>
     <string name="guest_exit_clear_data_button" msgid="3425812652180679014">"Hapus"</string>
     <string name="guest_exit_save_data_button" msgid="3690974510644963547">"Simpan"</string>
     <string name="guest_exit_button" msgid="5774985819191803960">"Keluar dari mode tamu"</string>
@@ -703,7 +712,7 @@
     <string name="guest_exit_quick_settings_button" msgid="1912362095913765471">"Keluar dari mode tamu"</string>
     <string name="guest_notification_ephemeral" msgid="7263252466950923871">"Semua aktivitas akan dihapus saat Anda keluar"</string>
     <string name="guest_notification_non_ephemeral" msgid="6843799963012259330">"Anda dapat menyimpan atau menghapus aktivitas saat keluar"</string>
-    <string name="guest_notification_non_ephemeral_non_first_login" msgid="8009307983766934876">"Reset untuk hapus aktivitas sesi sekarang, atau simpan atau hapus aktivitas saat keluar"</string>
+    <string name="guest_notification_non_ephemeral_non_first_login" msgid="8009307983766934876">"Reset untuk menghapus aktivitas sesi sekarang, atau simpan atau hapus aktivitas saat keluar"</string>
     <string name="user_image_photo_selector" msgid="433658323306627093">"Pilih foto"</string>
     <string name="failed_attempts_now_wiping_device" msgid="4016329172216428897">"Terlalu banyak percobaan yang salah. Data perangkat ini akan dihapus."</string>
     <string name="failed_attempts_now_wiping_user" msgid="469060411789668050">"Terlalu banyak percobaan yang salah. Pengguna ini akan dihapus."</string>

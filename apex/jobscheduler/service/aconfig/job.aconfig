@@ -40,27 +40,10 @@ flag {
 }
 
 flag {
-   name: "create_work_chain_by_default"
-   namespace: "backstage_power"
-   description: "Create a workchain by default when acquiring a wakelock"
-   bug: "352676818"
-   metadata {
-       purpose: PURPOSE_BUGFIX
-   }
-}
-
-flag {
    name: "remove_user_during_user_switch"
    namespace: "backstage_power"
    description: "Remove started user if user will be stopped due to user switch"
    bug: "337077643"
-}
-
-flag {
-   name: "enforce_quota_policy_to_fgs_jobs"
-   namespace: "backstage_power"
-   description: "Applies the normal quota policy to FGS jobs"
-   bug: "341201311"
 }
 
 flag {
@@ -97,43 +80,34 @@ flag {
     }
 }
 
+
+
 flag {
-    name: "additional_quota_for_system_installer"
+    name: "fix_reporting_active_jobs"
     namespace: "backstage_power"
-    description: "Offer additional quota for system installer"
-    bug: "398264531"
+    description: "Correctly report the active jobs to idle controller"
+    bug: "425761099"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
 }
 
 flag {
-    name: "tune_quota_window_default_parameters"
+    name: "allow_cmp_exemption_for_restricted_bucket"
     namespace: "backstage_power"
-    description: "Tune default active/exempted bucket quota parameters"
-    bug: "401767691"
+    description: "Allow CMP exemption for apps in Restricted bucket due to timeout reason"
+    bug: "409606405"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
 }
 
 flag {
-    name: "deviceidlejobcontroller_off_main_thread"
+    name: "update_media_backup_exemption_policy"
     namespace: "backstage_power"
-    description: "Move the broadcast receiver in DeviceIdleJobController off the main thread."
-    bug: "414140833"
+    description: "Update the criteria for media backup job exemption"
+    bug: "436531976"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
 }
-
-flag {
-    name: "fix_deadline_delay_job_stall"
-    namespace: "backstage_power"
-    description: "Fix deadline and delay job stall due to a incorrect time check in TimeController"
-    bug: "400440145"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-

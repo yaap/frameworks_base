@@ -11,6 +11,13 @@ flag {
 }
 
 flag {
+  name: "bluetooth_permission_use_module_protection_level"
+  namespace: "bluetooth"
+  description: "Flag for change to all the Bluetooth ROLE permissions to be provided by the module instead"
+  bug: "395709071"
+}
+
+flag {
     name: "voice_activation_permission_apis"
     is_exported: true
     namespace: "permissions"
@@ -373,13 +380,6 @@ flag {
 }
 
 flag {
-    name: "use_system_selection_toolbar_in_sysui"
-    namespace: "permissions"
-    description: "Uses the SysUi process to host the SelectionToolbarRenderService."
-    bug: "363318732"
-}
-
-flag {
     name: "note_op_batching_enabled"
     is_fixed_read_only: true
     is_exported: true
@@ -580,4 +580,69 @@ flag {
     namespace: "privacy_infra_policy"
     description: "This flag is used to read cell information from TelephonyManager"
     bug: "391621017"
+}
+
+flag {
+    name: "limit_sensor_privacy_listeners"
+    is_fixed_read_only: true
+    namespace: "permissions"
+    description: "Limit the number of sensor privacy listeners allowed per uid"
+    bug: "400358935"
+}
+
+flag {
+    name: "open_safety_center_apis"
+    is_exported: true
+    namespace: "safety_center"
+    description: "This flag is used to flag opening up and extending Safety Center APIs"
+    bug: "425924062"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "deprecate_default_permission_pregrant_policy"
+    namespace: "permissions"
+    description: "Add support for deprecating unused Default Permission Pregrant Policy"
+    bug: "420985100"
+}
+
+flag {
+    name: "app_ops_cell_reporting"
+    namespace: "permissions"
+    description: "This flags app ops cell reporting tied to ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION"
+    bug: "420985100"
+}
+
+flag {
+    name: "check_package_caching_enabled"
+    is_fixed_read_only: true
+    namespace: "permissions"
+    description: "Enable checkPackage caching in AppOpsManager"
+    bug: "423030916"
+}
+
+flag {
+    name: "watch_face_role_enabled"
+    is_exported: true
+    namespace: "wear_watchfaces"
+    description: "This flag enables watchface roles support and API"
+    bug: "399850691"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "access_local_network_permission_enabled"
+    is_exported: true
+    is_fixed_read_only: true
+    namespace: "android_core_networking"
+    description: "This flag is used to enable the new ACCESS_LOCAL_NETWORK runtime permission. When enabled, this permission will be used for local network protection, replacing NEARBY_WIFI_DEVICES for this purpose."
+    bug: "388774939"
+}
+
+flag {
+    name: "content_restriction_role_enabled"
+    is_exported: true
+    namespace: "content_restriction"
+    description: "This flag is used to enable the content restriction role"
+    bug: "441559663"
 }

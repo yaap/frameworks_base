@@ -16,7 +16,6 @@
 
 package com.android.server.wm;
 
-import static android.app.WindowConfiguration.ROTATION_UNDEFINED;
 import static android.app.WindowConfiguration.WINDOWING_MODE_FREEFORM;
 import static android.content.res.Configuration.UI_MODE_TYPE_MASK;
 import static android.content.res.Configuration.UI_MODE_TYPE_VR_HEADSET;
@@ -139,7 +138,7 @@ final class AppCompatUtils {
             @Nullable ActivityRecord top) {
         final AppCompatTaskInfo appCompatTaskInfo = info.appCompatTaskInfo;
         clearAppCompatTaskInfo(appCompatTaskInfo);
-
+        appCompatTaskInfo.setIsLeafTask(task.isLeafTask());
         if (top == null) {
             return;
         }
@@ -187,14 +186,18 @@ final class AppCompatUtils {
                 top.getAppCompatDisplayInsets() != null
                         ? top.getAppCompatDisplayInsets().mAspectRatio
                         : TaskInfo.PROPERTY_VALUE_UNSET;
-        final boolean isTopActivityLetterboxed = top.areBoundsLetterboxed();
+        final AppCompatLetterboxPolicy letterboxPolicy =
+                top.mAppCompatController.getLetterboxPolicy();
+        final boolean isTopActivityLetterboxed = letterboxPolicy.isRunning();
         appCompatTaskInfo.setTopActivityLetterboxed(isTopActivityLetterboxed);
         if (isTopActivityLetterboxed) {
-            final Rect bounds = top.getBounds();
-            appCompatTaskInfo.topActivityLetterboxWidth = bounds.width();
-            appCompatTaskInfo.topActivityLetterboxHeight = bounds.height();
             // TODO(b/379824541) Remove duplicate information.
-            appCompatTaskInfo.topActivityLetterboxBounds = bounds;
+            appCompatTaskInfo.topActivityLetterboxBounds = new Rect();
+            letterboxPolicy.getLetterboxInnerBounds(appCompatTaskInfo.topActivityLetterboxBounds);
+            appCompatTaskInfo.topActivityLetterboxWidth =
+                    appCompatTaskInfo.topActivityLetterboxBounds.width();
+            appCompatTaskInfo.topActivityLetterboxHeight =
+                    appCompatTaskInfo.topActivityLetterboxBounds.height();
             // We need to consider if letterboxed or pillarboxed.
             // TODO(b/336807329) Encapsulate reachability logic
             appCompatTaskInfo.setLetterboxDoubleTapEnabled(reachabilityOverrides
@@ -225,11 +228,13 @@ final class AppCompatUtils {
                 !info.isTopActivityTransparent && !appCompatTaskInfo.isTopActivityInSizeCompat()
                         && aspectRatioOverrides.shouldEnableUserAspectRatioSettings();
         appCompatTaskInfo.setEligibleForUserAspectRatioButton(eligibleForAspectRatioButton);
-        appCompatTaskInfo.cameraCompatTaskInfo.freeformCameraCompatMode =
-                AppCompatCameraPolicy.getCameraCompatFreeformMode(top);
-        appCompatTaskInfo.cameraCompatTaskInfo.displayRotation =
-                Flags.enableCameraCompatCheckDeviceRotationBugfix()
-                        ? AppCompatCameraPolicy.getCameraDeviceRotation(top) : ROTATION_UNDEFINED;
+        // Obsolete way of sending camera compat mode data to CameraManager.
+        if (!Flags.enableCameraCompatCompatibilityInfoRotateAndCropBugfix()) {
+            appCompatTaskInfo.cameraCompatTaskInfo.cameraCompatMode =
+                    AppCompatCameraPolicy.getCameraCompatSimReqOrientationMode(top);
+            appCompatTaskInfo.cameraCompatTaskInfo.displayRotation =
+                    AppCompatCameraPolicy.getCameraDeviceRotation(top);
+        }
         appCompatTaskInfo.setHasMinAspectRatioOverride(top.mAppCompatController
                 .getDesktopAspectRatioPolicy().hasMinAspectRatioOverride(task));
         appCompatTaskInfo.setOptOutEdgeToEdge(top.mOptOutEdgeToEdge);
@@ -313,6 +318,14 @@ final class AppCompatUtils {
     }
 
     /**
+     * Return {@code true} if the given display area is desktop-first.
+     */
+    static boolean isDesktopFirst(@Nullable TaskDisplayArea taskDisplayArea) {
+        return taskDisplayArea != null
+                && taskDisplayArea.getWindowingMode() == WINDOWING_MODE_FREEFORM;
+    }
+
+    /**
      * Creates a {@link AppCompatTransitionInfo} which encapsulate the letterbox
      * information if needed.
      *
@@ -323,8 +336,12 @@ final class AppCompatUtils {
     @Nullable
     static AppCompatTransitionInfo createAppCompatTransitionInfo(
             @NonNull ActivityRecord activityRecord) {
-        if (activityRecord.areBoundsLetterboxed()) {
-            return new AppCompatTransitionInfo(new Rect(activityRecord.getBounds()));
+        final AppCompatLetterboxPolicy letterboxPolicy =
+                activityRecord.mAppCompatController.getLetterboxPolicy();
+        if (letterboxPolicy.isRunning()) {
+            final Rect letterboxBounds = new Rect();
+            letterboxPolicy.getLetterboxInnerBounds(letterboxBounds);
+            return new AppCompatTransitionInfo(letterboxBounds);
         }
         return null;
     }
@@ -336,8 +353,8 @@ final class AppCompatUtils {
         info.topActivityLetterboxHeight = TaskInfo.PROPERTY_VALUE_UNSET;
         info.topActivityAppBounds.setEmpty();
         info.topActivityLetterboxBounds = null;
-        info.cameraCompatTaskInfo.freeformCameraCompatMode =
-                CameraCompatTaskInfo.CAMERA_COMPAT_FREEFORM_UNSPECIFIED;
+        info.cameraCompatTaskInfo.cameraCompatMode =
+                CameraCompatTaskInfo.CAMERA_COMPAT_UNSPECIFIED;
         info.topNonResizableActivityAspectRatio = TaskInfo.PROPERTY_VALUE_UNSET;
         info.clearTopActivityFlags();
     }

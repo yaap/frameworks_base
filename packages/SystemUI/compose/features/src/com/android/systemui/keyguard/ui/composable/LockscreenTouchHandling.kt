@@ -31,42 +31,40 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.android.systemui.communal.ui.compose.extensions.detectLongPressGesture
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardTouchHandlingViewModel
 import com.android.systemui.lifecycle.rememberViewModel
+import com.android.systemui.plugins.keyguard.VRectF
 
 /** Container for lockscreen content that handles inputs including long-press and double tap. */
 @Composable
 fun LockscreenTouchHandling(
     viewModelFactory: KeyguardTouchHandlingViewModel.Factory,
     modifier: Modifier = Modifier,
-    content: @Composable BoxScope.(onSettingsMenuPlaces: (coordinates: Rect?) -> Unit) -> Unit,
+    content: @Composable BoxScope.(onSettingsMenuPlaces: (coordinates: VRectF) -> Unit) -> Unit,
 ) {
     val viewModel = rememberViewModel("LockscreenLongPress") { viewModelFactory.create() }
-    val (settingsMenuBounds, setSettingsMenuBounds) = remember { mutableStateOf<Rect?>(null) }
+    val (settingsMenuBounds, setSettingsMenuBounds) = remember { mutableStateOf(VRectF.ZERO) }
     val interactionSource = remember { MutableInteractionSource() }
 
     Box(
         modifier =
             modifier
                 .pointerInput(viewModel.isLongPressHandlingEnabled) {
-                    if (viewModel.isLongPressHandlingEnabled) {
-                        detectLongPressGesture { viewModel.onLongPress(isA11yAction = false) }
-                    }
-                }
-                .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = { viewModel.onClick(it.x, it.y) },
                         onDoubleTap = { viewModel.onDoubleClick() },
+                        onLongPress = {
+                            if (viewModel.isLongPressHandlingEnabled) {
+                                viewModel.onLongPress(isA11yAction = false)
+                            }
+                        },
                     )
                 }
                 .pointerInput(settingsMenuBounds) {
                     awaitEachGesture {
                         val pointerInputChange = awaitFirstDown()
-                        if (settingsMenuBounds?.contains(pointerInputChange.position) == false) {
+                        if (!settingsMenuBounds.contains(pointerInputChange.position)) {
                             viewModel.onTouchedOutside()
                         }
                     }

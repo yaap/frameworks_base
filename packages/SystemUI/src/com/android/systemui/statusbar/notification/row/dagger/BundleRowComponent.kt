@@ -28,10 +28,8 @@ interface BundleRowComponent {
 
     fun bundleViewModelFactory(): BundleHeaderViewModel.Factory
 
-    @Subcomponent.Builder
-    interface Builder {
-        @BindsInstance fun bindBundleRepository(repository: BundleRepository): Builder
-
-        fun build(): BundleRowComponent
+    @Subcomponent.Factory
+    interface Factory {
+        fun create(@BindsInstance repository: BundleRepository): BundleRowComponent
     }
 }

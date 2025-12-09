@@ -54,7 +54,6 @@ import com.android.packageinstaller.v2.model.PackageUtil.getMaxTargetSdkVersionF
 import com.android.packageinstaller.v2.model.PackageUtil.getPackageNameForUid
 import com.android.packageinstaller.v2.model.PackageUtil.isPermissionGranted
 import com.android.packageinstaller.v2.model.PackageUtil.isProfileOfOrSame
-import com.android.packageinstaller.v2.model.UninstallAborted.Companion.ABORT_REASON_UNINSTALL_DONE
 import android.content.pm.Flags as PmFlags
 import android.multiuser.Flags as MultiuserFlags
 
@@ -134,30 +133,6 @@ class UninstallRepository(private val context: Context) {
             return UninstallAborted(UninstallAborted.ABORT_REASON_APP_UNAVAILABLE)
         }
 
-        uninstallFromAllUsers = intent.getBooleanExtra(Intent.EXTRA_UNINSTALL_ALL_USERS, false)
-        if (uninstallFromAllUsers && !userManager!!.isAdminUser) {
-            Log.e(LOG_TAG, "Only admin user can request uninstall for all users")
-            return UninstallAborted(UninstallAborted.ABORT_REASON_USER_NOT_ALLOWED)
-        }
-
-        uninstalledUser = intent.getParcelableExtra(Intent.EXTRA_USER, UserHandle::class.java)
-        if (uninstalledUser == null) {
-            uninstalledUser = Process.myUserHandle()
-        } else {
-            if (uninstalledUser!! != Process.myUserHandle()) {
-                val isCurrentUserProfileOwner =
-                    Process.myUserHandle() == userManager!!.getProfileParent(uninstalledUser!!)
-                if (!isCurrentUserProfileOwner) {
-                    Log.e(
-                        LOG_TAG,
-                        "User " + Process.myUserHandle() + " can't request uninstall " +
-                                "for user " + uninstalledUser
-                    )
-                    return UninstallAborted(UninstallAborted.ABORT_REASON_USER_NOT_ALLOWED)
-                }
-            }
-        }
-
         callback = intent.getParcelableExtra(
             PackageInstaller.EXTRA_CALLBACK, PackageManager.UninstallCompleteCallback::class.java
         )
@@ -177,6 +152,36 @@ class UninstallRepository(private val context: Context) {
         if (targetAppInfo == null) {
             Log.e(LOG_TAG, "Invalid packageName: $targetPackageName")
             return UninstallAborted(UninstallAborted.ABORT_REASON_APP_UNAVAILABLE)
+        }
+
+        uninstallFromAllUsers = intent.getBooleanExtra(Intent.EXTRA_UNINSTALL_ALL_USERS, false)
+        if (uninstallFromAllUsers && !userManager!!.isAdminUser) {
+            Log.e(LOG_TAG, "Only admin user can request uninstall for all users")
+            return UninstallAborted(
+                UninstallAborted.ABORT_REASON_USER_NOT_ALLOWED,
+                getAppSnippet(context, targetAppInfo!!)
+            )
+        }
+
+        uninstalledUser = intent.getParcelableExtra(Intent.EXTRA_USER, UserHandle::class.java)
+        if (uninstalledUser == null) {
+            uninstalledUser = Process.myUserHandle()
+        } else {
+            if (uninstalledUser!! != Process.myUserHandle()) {
+                val isCurrentUserProfileOwner =
+                    Process.myUserHandle() == userManager!!.getProfileParent(uninstalledUser!!)
+                if (!isCurrentUserProfileOwner) {
+                    Log.e(
+                        LOG_TAG,
+                        "User " + Process.myUserHandle() + " can't request uninstall " +
+                                "for user " + uninstalledUser
+                    )
+                    return UninstallAborted(
+                        UninstallAborted.ABORT_REASON_USER_NOT_ALLOWED,
+                        getAppSnippet(context, targetAppInfo!!)
+                    )
+                }
+            }
         }
 
         // The class name may have been specified (e.g. when deleting an app from all apps)
@@ -215,9 +220,10 @@ class UninstallRepository(private val context: Context) {
     }
 
     fun generateUninstallDetails(): UninstallStage {
-        val messageBuilder = StringBuilder()
-        var dialogTitle = context.getString(R.string.title_uninstall)
-        var positiveButtonText = context.getString(R.string.button_uninstall)
+        var messageResId: Int? = null
+        var dialogTitleResId = R.string.title_uninstall
+        var positiveButtonResId = R.string.button_uninstall
+        var isDifferentActivityName = false
 
         targetAppLabel = targetAppInfo!!.loadSafeLabel(packageManager)
 
@@ -226,12 +232,9 @@ class UninstallRepository(private val context: Context) {
         if (targetActivityInfo != null) {
             val activityLabel = targetActivityInfo!!.loadSafeLabel(packageManager)
             if (!activityLabel.contentEquals(targetAppLabel)) {
-                messageBuilder.append(
-                    context.getString(
-                        R.string.message_uninstall_activity,
-                        activityLabel, targetAppLabel)
-                )
-                dialogTitle = context.getString(R.string.title_uninstall)
+                isDifferentActivityName = true
+                messageResId = R.string.message_uninstall_activity
+                dialogTitleResId = R.string.title_uninstall
             }
         }
 
@@ -242,43 +245,30 @@ class UninstallRepository(private val context: Context) {
         val myUserHandle = Process.myUserHandle()
         val isSingleUserOnDevice = isSingleUserOnDevice()
 
+        var isOtherUser = false
+        var userName: String? = null
+
         if (isUpdatedSystemApp) {
-            var messageString = ""
             if (isSingleUserOnDevice) {
-                dialogTitle = context.getString(
-                    R.string.title_uninstall_updates_system_app)
-                messageString = context.getString(
-                    R.string.message_uninstall_updates_system_app)
+                dialogTitleResId = R.string.title_uninstall_updates_system_app
+                messageResId = R.string.message_uninstall_updates_system_app
             } else {
-                dialogTitle = context.getString(
-                    R.string.title_uninstall_updates_system_app_all_users)
-                messageString = context.getString(
-                    R.string.message_uninstall_updates_system_app_all_users)
+                dialogTitleResId = R.string.title_uninstall_updates_system_app_all_users
+                messageResId = R.string.message_uninstall_updates_system_app_all_users
             }
-            positiveButtonText = context.getString(
-                R.string.button_uninstall_updates_system_app)
-
-            if (messageString.isNotEmpty()) {
-                messageBuilder.append(messageString)
-            }
+            positiveButtonResId = R.string.button_uninstall_updates_system_app
         } else if (uninstallFromAllUsers && !isSingleUserOnDevice) {
-            var messageString = ""
             if (isArchive) {
-                messageString = context.getString(R.string.message_archive_all_users)
-                dialogTitle = context.getString(R.string.title_archive_all_users)
+                messageResId = R.string.message_archive_all_users
+                dialogTitleResId = R.string.title_archive_all_users
             } else {
-                dialogTitle = context.getString(R.string.title_uninstall_all_users)
-            }
-
-            if (messageString.isNotEmpty()) {
-                messageBuilder.append(messageString)
+                dialogTitleResId = R.string.title_uninstall_all_users
             }
         } else if (myUserHandle == UserHandle.SYSTEM &&
             hasClonedInstance(targetAppInfo!!.packageName, uninstalledUser!!)
         ) {
-            dialogTitle = context.getString(R.string.title_uninstall)
-            messageBuilder.append(context.getString(
-                R.string.message_uninstall_with_clone_instance))
+            dialogTitleResId = R.string.title_uninstall
+            messageResId = R.string.message_uninstall_with_clone_instance
         } else {
             val isCrossUserUninstalledRequest = myUserHandle != uninstalledUser
             val isSameProfileGroup =
@@ -291,64 +281,56 @@ class UninstallRepository(private val context: Context) {
             val isPrivateSpaceFeatureEnabled = Flags.allowPrivateProfile()
                     && MultiuserFlags.enablePrivateSpaceFeatures()
 
-            var messageString = ""
             if ((isPrivateSpaceFeatureEnabled)
                 && (userManager.isPrivateProfile
                         || (isTargetUserAProfile && userManagerForTargetUser.isPrivateProfile))) {
                 if (isArchive) {
-                    messageString = context.getString(R.string.message_archive_private_space)
-                    dialogTitle = context.getString(R.string.title_archive)
+                    messageResId = R.string.message_archive_private_space
+                    dialogTitleResId = R.string.title_archive
                 } else {
-                    messageString = context.getString(R.string.message_uninstall_private_space)
-                    dialogTitle = context.getString(R.string.title_uninstall)
+                    messageResId = R.string.message_uninstall_private_space
+                    dialogTitleResId = R.string.title_uninstall
                 }
             } else if (userManager.isManagedProfile
                     || (isTargetUserAProfile && userManagerForTargetUser.isManagedProfile)) {
                 if (isArchive) {
-                    messageString = context.getString(R.string.message_archive_work_profile)
-                    dialogTitle = context.getString(R.string.title_archive)
+                    messageResId = R.string.message_archive_work_profile
+                    dialogTitleResId = R.string.title_archive
                 } else {
-                    messageString = context.getString(R.string.message_uninstall_work_profile)
-                    dialogTitle = context.getString(R.string.title_uninstall)
+                    messageResId = R.string.message_uninstall_work_profile
+                    dialogTitleResId = R.string.title_uninstall
                 }
             } else if (userManager.isCloneProfile
                     || (isTargetUserAProfile && userManagerForTargetUser.isCloneProfile)) {
                 isClonedApp = true
-                messageString = context.getString(R.string.message_delete_clone_app,
-                    targetAppLabel)
-                dialogTitle = context.getString(R.string.title_uninstall_clone)
-                positiveButtonText = context.getString(R.string.button_delete)
+                messageResId = R.string.message_delete_clone_app
+                dialogTitleResId = R.string.title_uninstall_clone
+                positiveButtonResId = R.string.button_delete
             } else if (isCrossUserUninstalledRequest && !isTargetUserAProfile) {
                 // App is being uninstalled from a different, but non-profile user
-                val userName = userManagerForTargetUser!!.userName
+                userName = userManagerForTargetUser!!.userName
+                isOtherUser = true
                 if (isArchive) {
-                    messageString = context.getString(R.string.message_archive_other_user)
-                    dialogTitle = context.getString(R.string.title_archive_other_user,
-                        userName)
+                    messageResId = R.string.message_archive_other_user
+                    dialogTitleResId = R.string.title_archive_other_user
                 } else {
-                    dialogTitle = context.getString(R.string.title_uninstall_other_user,
-                        userName)
+                    dialogTitleResId = R.string.title_uninstall_other_user
                 }
             } else if (isArchive) {
-                dialogTitle = context.getString(R.string.title_archive)
-                positiveButtonText = context.getString(R.string.button_archive)
-                messageString = context.getString(R.string.message_archive)
-            }
-
-            if (messageString.isNotEmpty()) {
-                messageBuilder.append(messageString)
+                dialogTitleResId = R.string.title_archive
+                messageResId = R.string.message_archive
             }
         }
 
-        val message = if (messageBuilder.isNotEmpty()) {
-            messageBuilder.toString()
-        } else {
-            null
+        if (isArchive) {
+            positiveButtonResId = R.string.button_archive
         }
 
         val pkgInfo = try {
             packageManager.getPackageInfo(
-                targetPackageName!!, PackageInfoFlags.of(PackageManager.MATCH_ARCHIVED_PACKAGES)
+                targetPackageName!!, PackageInfoFlags.of(
+                    PackageManager.MATCH_ANY_USER.toLong() or
+                        PackageManager.MATCH_ARCHIVED_PACKAGES)
             )
         } catch (e: PackageManager.NameNotFoundException) {
             Log.e(LOG_TAG, "Cannot get packageInfo for $targetPackageName", e)
@@ -359,11 +341,6 @@ class UninstallRepository(private val context: Context) {
         // correctly badged icon (e.g badging for work profile, private space)
         val userContext = context.createContextAsUser(uninstalledUser!!, 0)
         val appSnippet: PackageUtil.AppSnippet? = pkgInfo?.let { getAppSnippet(userContext, it) }
-        appSnippet?.label = if (isClonedApp) {
-            context.getString(R.string.string_cloned_app_label, targetAppLabel)
-        } else {
-            targetAppLabel.toString()
-        }
 
         var suggestToKeepAppData = pkgInfo?.applicationInfo != null
                 && (pkgInfo.applicationInfo?.hasFragileUserData() == true)
@@ -377,7 +354,19 @@ class UninstallRepository(private val context: Context) {
             )
         }
 
-        return UninstallUserActionRequired(dialogTitle, message, positiveButtonText, appDataSize, appSnippet)
+        return UninstallUserActionRequired(
+            dialogTitleResId,
+            messageResId,
+            positiveButtonResId,
+            appDataSize,
+            appSnippet,
+            isClonedApp,
+            isDifferentActivityName,
+            isOtherUser,
+            userName,
+            targetAppInfo!!,
+            targetActivityInfo
+        )
     }
 
     /**
@@ -521,14 +510,15 @@ class UninstallRepository(private val context: Context) {
         status: Int,
         legacyStatus: Int,
         message: String?,
-        serviceId: Int
+        serviceId: Int,
+        hasDeveloperVerificationFailure: Boolean = false
     ) {
         if (callback != null) {
             // The caller will be informed about the result via a callback
             callback!!.onUninstallComplete(targetPackageName!!, legacyStatus, message)
 
             // Since the caller already received the results, just finish the app at this point
-            uninstallResult.value = UninstallAborted(ABORT_REASON_UNINSTALL_DONE)
+            uninstallResult.value = UninstallAborted(UninstallAborted.ABORT_REASON_UNINSTALL_DONE)
             return
         }
         val returnResult = intent.getBooleanExtra(Intent.EXTRA_RETURN_RESULT, false)
@@ -538,7 +528,8 @@ class UninstallRepository(private val context: Context) {
             intent.putExtra(Intent.EXTRA_INSTALL_RESULT, legacyStatus)
             if (status == PackageInstaller.STATUS_SUCCESS) {
                 uninstallResult.setValue(
-                    UninstallSuccess(resultIntent = intent, activityResultCode = Activity.RESULT_OK)
+                    UninstallSuccess(appInfo = targetAppInfo!!, resultIntent = intent,
+                        activityResultCode = Activity.RESULT_OK)
                 )
             } else {
                 uninstallResult.setValue(
@@ -554,16 +545,15 @@ class UninstallRepository(private val context: Context) {
 
         // Caller did not want the result back. So, we either show a Toast, or a Notification.
         if (status == PackageInstaller.STATUS_SUCCESS) {
-            val statusMessage = if (isClonedApp) {
-                context.getString(
-                R.string.uninstall_done_clone_app,
-                    targetAppLabel
-            )
+            val messageResId = if (isClonedApp) {
+                R.string.uninstall_done_clone_app
             } else {
-                context.getString(R.string.uninstall_done_app, targetAppLabel)
+                R.string.uninstall_done_app
             }
-            uninstallResult.setValue(
-                UninstallSuccess(activityResultCode = legacyStatus, message = statusMessage)
+            uninstallResult.value = UninstallSuccess(
+                appInfo = targetAppInfo!!,
+                activityResultCode = legacyStatus,
+                messageResId = messageResId
             )
         } else {
             val uninstallFailureChannel = NotificationChannel(

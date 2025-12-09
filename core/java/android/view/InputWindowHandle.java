@@ -16,8 +16,6 @@
 
 package android.view;
 
-import static com.android.window.flags.Flags.surfaceTrustedOverlay;
-
 import android.annotation.IntDef;
 import android.annotation.Nullable;
 import android.graphics.Matrix;
@@ -127,6 +125,9 @@ public final class InputWindowHandle {
     // security concerns
     public int touchOcclusionMode = TouchOcclusionMode.BLOCK_UNTRUSTED;
 
+    // Globally unique layer ID for the surface / window.
+    public int layerId;
+
     // Id of process and user that owns the window.
     public int ownerPid;
     public int ownerUid;
@@ -189,6 +190,7 @@ public final class InputWindowHandle {
         // Do not copy ptr to prevent this copy from sharing the same native object.
         ptr = 0;
         inputApplicationHandle = new InputApplicationHandle(other.inputApplicationHandle);
+        layerId = other.layerId;
         token = other.token;
         windowToken = other.windowToken;
         name = other.name;
@@ -294,10 +296,6 @@ public final class InputWindowHandle {
 
     public void setTrustedOverlay(SurfaceControl.Transaction t, SurfaceControl sc,
             boolean isTrusted) {
-        if (surfaceTrustedOverlay()) {
-            t.setTrustedOverlay(sc, isTrusted);
-        } else if (isTrusted) {
-            inputConfig |= InputConfig.TRUSTED_OVERLAY;
-        }
+        t.setTrustedOverlay(sc, isTrusted);
     }
 }

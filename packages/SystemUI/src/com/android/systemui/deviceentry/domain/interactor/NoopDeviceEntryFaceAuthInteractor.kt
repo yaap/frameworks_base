@@ -70,6 +70,14 @@ class NoopDeviceEntryFaceAuthInteractor @Inject constructor() : DeviceEntryFaceA
 
     override fun onSwipeUpOnBouncer() {}
 
+    override fun onSecureLockDeviceBiometricAuthRequested() {}
+
+    override fun onSecureLockDeviceBiometricAuthHidden() {}
+
+    override fun onSecureLockDeviceConfirmButtonShowingChanged(isShowingConfirmButton: Boolean) {}
+
+    override fun onSecureLockDeviceTryAgainButtonShowingChanged(isShowingTryAgainButton: Boolean) {}
+
     override fun onPrimaryBouncerUserInput() {}
 
     override fun onAccessibilityAction() {}

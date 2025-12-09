@@ -54,11 +54,13 @@ import androidx.annotation.WorkerThread;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.android.settingslib.bluetooth.AmbientVolumeUiController;
 import com.android.settingslib.bluetooth.BluetoothCallback;
 import com.android.settingslib.bluetooth.CachedBluetoothDevice;
 import com.android.settingslib.bluetooth.LocalBluetoothManager;
 import com.android.settingslib.bluetooth.LocalBluetoothProfileManager;
+import com.android.settingslib.bluetooth.hearingdevices.ui.AmbientVolumeUiController;
+import com.android.settingslib.bluetooth.hearingdevices.ui.HearingDevicesSpinnerAdapter;
+import com.android.settingslib.bluetooth.hearingdevices.ui.PresetUiController;
 import com.android.systemui.Flags;
 import com.android.systemui.accessibility.hearingaid.HearingDevicesListAdapter.HearingDeviceItemCallback;
 import com.android.systemui.animation.ActivityTransitionAnimator;
@@ -75,6 +77,7 @@ import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.qs.shared.QSSettingsPackageRepository;
 import com.android.systemui.res.R;
+import com.android.systemui.shade.domain.interactor.ShadeDialogContextInteractor;
 import com.android.systemui.statusbar.phone.SystemUIDialog;
 
 import dagger.assisted.Assisted;
@@ -125,8 +128,8 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
     private HearingDevicesSpinnerAdapter mPresetInfoAdapter;
 
     private View mInputRoutingLayout;
-    private Spinner mInputRoutingSpinner;
-    private HearingDevicesInputRoutingController.Factory mInputRoutingControllerFactory;
+    private final HearingDevicesInputRoutingController.Factory mInputRoutingControllerFactory;
+    private final ShadeDialogContextInteractor mShadeDialogContextInteractor;
     private HearingDevicesInputRoutingController mInputRoutingController;
     private HearingDevicesSpinnerAdapter mInputRoutingAdapter;
 
@@ -148,7 +151,8 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
                 }
             };
 
-    private AmbientVolumeUiController mAmbientController;
+    private PresetUiController mPresetUiController;
+    private AmbientVolumeUiController mAmbientUiController;
 
     private final List<DeviceItemFactory> mHearingDeviceItemFactoryList = List.of(
             new ActiveHearingDeviceItemFactory(),
@@ -179,7 +183,8 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
             AudioManager audioManager,
             HearingDevicesUiEventLogger uiEventLogger,
             QSSettingsPackageRepository qsSettingsPackageRepository,
-            HearingDevicesInputRoutingController.Factory inputRoutingControllerFactory) {
+            HearingDevicesInputRoutingController.Factory inputRoutingControllerFactory,
+            ShadeDialogContextInteractor shadeDialogContextInteractor) {
         mShowPairNewDevice = showPairNewDevice;
         mSystemUIDialogFactory = systemUIDialogFactory;
         mActivityStarter = activityStarter;
@@ -193,11 +198,13 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
         mLaunchSourceId = launchSourceId;
         mQSSettingsPackageRepository = qsSettingsPackageRepository;
         mInputRoutingControllerFactory = inputRoutingControllerFactory;
+        mShadeDialogContextInteractor = shadeDialogContextInteractor;
     }
 
     @Override
     public SystemUIDialog createDialog() {
-        SystemUIDialog dialog = mSystemUIDialogFactory.create(this);
+        SystemUIDialog dialog = mSystemUIDialogFactory.create(this,
+                mShadeDialogContextInteractor.getContext());
         dismissDialogIfExists();
         mDialog = dialog;
 
@@ -255,8 +262,11 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
                         available -> mMainExecutor.execute(() -> mInputRoutingLayout.setVisibility(
                                 available ? VISIBLE : GONE)));
             }
-            if (mAmbientController != null) {
-                mAmbientController.loadDevice(device);
+            if (mPresetUiController != null) {
+                mPresetUiController.loadDevice(device);
+            }
+            if (mAmbientUiController != null) {
+                mAmbientUiController.loadDevice(device);
             }
         });
     }
@@ -325,7 +335,11 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
             mMainExecutor.execute(() -> {
                 setupDeviceListView(dialog, hearingDeviceItemList);
                 setupPairNewDeviceButton(dialog);
-                setupPresetSpinner(dialog, activeHearingDevice);
+                if (com.android.settingslib.flags.Flags.hearingDevicesSeparatedPresetControl()) {
+                    setupPresetControls(activeHearingDevice);
+                } else {
+                    setupPresetSpinner(dialog, activeHearingDevice);
+                }
                 if (com.android.settingslib.flags.Flags.hearingDevicesInputRoutingControl()) {
                     setupInputRoutingSpinner(dialog, activeHearingDevice);
                 }
@@ -346,8 +360,11 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
             if (mPresetController != null) {
                 mPresetController.unregisterHapCallback();
             }
-            if (mAmbientController != null) {
-                mAmbientController.stop();
+            if (mPresetUiController != null) {
+                mPresetUiController.stop();
+            }
+            if (mAmbientUiController != null) {
+                mAmbientUiController.stop();
             }
         });
     }
@@ -402,18 +419,27 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
         mBgExecutor.execute(() -> mPresetController.registerHapCallback());
     }
 
+    private void setupPresetControls(CachedBluetoothDevice activeHearingDevice) {
+        final PresetLayout presetLayout = mDialog.requireViewById(R.id.preset_layout_new);
+        presetLayout.setUiEventLogger(mUiEventLogger, mLaunchSourceId);
+        mPresetUiController = new PresetUiController(mDialog.getContext(), mLocalBluetoothManager,
+                presetLayout);
+        mPresetUiController.loadDevice(activeHearingDevice);
+        mBgExecutor.execute(() -> mPresetUiController.start());
+    }
+
     private void setupInputRoutingSpinner(SystemUIDialog dialog,
             CachedBluetoothDevice activeHearingDevice) {
         mInputRoutingController = mInputRoutingControllerFactory.create(dialog.getContext());
         mInputRoutingController.setDevice(activeHearingDevice);
 
-        mInputRoutingSpinner = dialog.requireViewById(R.id.input_routing_spinner);
+        Spinner inputRoutingSpinner = dialog.requireViewById(R.id.input_routing_spinner);
         mInputRoutingAdapter = new HearingDevicesSpinnerAdapter(dialog.getContext());
         mInputRoutingAdapter.addAll(
                 HearingDevicesInputRoutingController.getInputRoutingOptions(dialog.getContext()));
-        mInputRoutingSpinner.setAdapter(mInputRoutingAdapter);
+        inputRoutingSpinner.setAdapter(mInputRoutingAdapter);
         // Disable redundant Touch & Hold accessibility action for Switch Access
-        mInputRoutingSpinner.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+        inputRoutingSpinner.setAccessibilityDelegate(new View.AccessibilityDelegate() {
             @Override
             public void onInitializeAccessibilityNodeInfo(@NonNull View host,
                     @NonNull AccessibilityNodeInfo info) {
@@ -425,9 +451,9 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
         // to avoid extra onItemSelected() get called when first register the listener.
         final int initialPosition =
                 mInputRoutingController.getUserPreferredInputRoutingValue();
-        mInputRoutingSpinner.setSelection(initialPosition, false);
+        inputRoutingSpinner.setSelection(initialPosition, false);
         mInputRoutingAdapter.setSelected(initialPosition);
-        mInputRoutingSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        inputRoutingSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 mInputRoutingAdapter.setSelected(position);
@@ -451,11 +477,11 @@ public class HearingDevicesDialogDelegate implements SystemUIDialog.Delegate,
     private void setupAmbientControls(CachedBluetoothDevice activeHearingDevice) {
         final AmbientVolumeLayout ambientLayout = mDialog.requireViewById(R.id.ambient_layout);
         ambientLayout.setUiEventLogger(mUiEventLogger, mLaunchSourceId);
-        mAmbientController = new AmbientVolumeUiController(
+        mAmbientUiController = new AmbientVolumeUiController(
                 mDialog.getContext(), mLocalBluetoothManager, ambientLayout);
-        mAmbientController.setShowUiWhenLocalDataExist(false);
-        mAmbientController.loadDevice(activeHearingDevice);
-        mBgExecutor.execute(() -> mAmbientController.start());
+        mAmbientUiController.setShowUiWhenLocalDataExist(false);
+        mAmbientUiController.loadDevice(activeHearingDevice);
+        mBgExecutor.execute(() -> mAmbientUiController.start());
     }
 
     private void setupPairNewDeviceButton(SystemUIDialog dialog) {

@@ -20,6 +20,7 @@ import android.content.ComponentName
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.compose.animation.scene.SceneKey
 import com.android.systemui.Flags
+import com.android.systemui.Flags.hubEditModeTransition
 import com.android.systemui.classifier.Classifier
 import com.android.systemui.classifier.domain.interactor.FalsingInteractor
 import com.android.systemui.communal.dagger.CommunalModule.Companion.SWIPE_TO_HUB
@@ -32,6 +33,7 @@ import com.android.systemui.communal.shared.log.CommunalMetricsLogger
 import com.android.systemui.communal.shared.log.CommunalSceneLogger
 import com.android.systemui.communal.shared.model.CommunalBackgroundType
 import com.android.systemui.communal.shared.model.CommunalScenes
+import com.android.systemui.communal.shared.model.EditModeState
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Background
@@ -43,18 +45,21 @@ import com.android.systemui.keyguard.ui.transitions.BlurConfig
 import com.android.systemui.log.LogBuffer
 import com.android.systemui.log.core.Logger
 import com.android.systemui.log.dagger.CommunalLog
+import com.android.systemui.media.controls.domain.pipeline.interactor.MediaCarouselInteractor
 import com.android.systemui.media.controls.ui.controller.MediaCarouselController
-import com.android.systemui.media.controls.ui.controller.MediaHierarchyManager
 import com.android.systemui.media.controls.ui.view.MediaHost
-import com.android.systemui.media.controls.ui.view.MediaHostState
 import com.android.systemui.media.dagger.MediaModule
+import com.android.systemui.media.remedia.shared.flag.MediaControlsInComposeFlag
+import com.android.systemui.media.remedia.ui.viewmodel.MediaViewModel
 import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
 import com.android.systemui.statusbar.KeyguardIndicationController
 import com.android.systemui.util.kotlin.BooleanFlowOperators.allOf
 import com.android.systemui.util.kotlin.BooleanFlowOperators.not
+import com.android.systemui.util.kotlin.getValue
 import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import com.android.systemui.utils.coroutines.flow.flatMapLatestConflated
+import dagger.Lazy
 import javax.inject.Inject
 import javax.inject.Named
 import kotlinx.coroutines.CoroutineDispatcher
@@ -101,37 +106,60 @@ constructor(
     @Named(SWIPE_TO_HUB) private val swipeToHub: Boolean,
     private val communalSceneLogger: CommunalSceneLogger,
     private val falsingInteractor: FalsingInteractor,
+    mediaViewModelFactory: MediaViewModel.Factory,
+    mediaCarouselInteractorLazy: Lazy<MediaCarouselInteractor>,
 ) :
     BaseCommunalViewModel(
         communalSceneInteractor,
         communalInteractor,
         mediaHost,
         mediaCarouselController,
+        mediaViewModelFactory,
+        mediaCarouselInteractorLazy,
     ) {
 
     private val logger = Logger(logBuffer, "CommunalViewModel")
 
+    private val mediaCarouselInteractor by mediaCarouselInteractorLazy
+
     private val isMediaHostVisible =
-        conflatedCallbackFlow {
-                val callback = { visible: Boolean ->
-                    trySend(visible)
-                    Unit
+        if (MediaControlsInComposeFlag.isEnabled) {
+            combine(
+                mediaCarouselInteractor.isLockedAndHidden,
+                mediaCarouselInteractor.hasActiveMedia,
+            ) { isLockedAndHidden, hasActiveMedia ->
+                if (isLockedAndHidden) {
+                    false
+                } else {
+                    hasActiveMedia
                 }
-                mediaHost.addVisibilityChangeListener(callback)
-                awaitClose { mediaHost.removeVisibilityChangeListener(callback) }
             }
-            .onStart {
-                // Ensure the visibility state is correct when the hub is opened and this flow is
-                // started so that the UMO is shown when needed. The visibility state in MediaHost
-                // is not updated once its view has been detached, aka the hub is closed, which can
-                // result in this getting stuck as False and never being updated as the UMO is not
-                // shown.
-                mediaHost.updateViewVisibility()
-                emit(mediaHost.visible)
-            }
-            .distinctUntilChanged()
-            .onEach { logger.d({ "_isMediaHostVisible: $bool1" }) { bool1 = it } }
-            .flowOn(mainDispatcher)
+        } else {
+            conflatedCallbackFlow {
+                    val callback = { visible: Boolean ->
+                        trySend(visible)
+                        Unit
+                    }
+                    mediaHost.addVisibilityChangeListener(callback)
+                    awaitClose { mediaHost.removeVisibilityChangeListener(callback) }
+                }
+                .onStart {
+                    // Ensure the visibility state is correct when the hub is opened and this flow
+                    // is
+                    // started so that the UMO is shown when needed. The visibility state in
+                    // MediaHost
+                    // is not updated once its view has been detached, aka the hub is closed, which
+                    // can
+                    // result in this getting stuck as False and never being updated as the UMO is
+                    // not
+                    // shown.
+                    mediaHost.updateViewVisibility()
+                    emit(mediaHost.visible)
+                }
+                .distinctUntilChanged()
+                .onEach { logger.d({ "_isMediaHostVisible: $bool1" }) { bool1 = it } }
+                .flowOn(mainDispatcher)
+        }
 
     /** Communal content saved from the previous emission when the flow is active (not "frozen"). */
     private var frozenCommunalContent: List<CommunalContentModel>? = null
@@ -139,7 +167,9 @@ constructor(
     private val ongoingContent =
         isMediaHostVisible.flatMapLatest { isMediaHostVisible ->
             communalInteractor.ongoingContent(isMediaHostVisible).onEach {
-                mediaHost.updateViewVisibility()
+                if (!MediaControlsInComposeFlag.isEnabled) {
+                    mediaHost.updateViewVisibility()
+                }
             }
         }
 
@@ -162,7 +192,7 @@ constructor(
                 logger.d({ "Content updated: $str1" }) { str1 = models.joinToString { it.key } }
             }
 
-    override val isCommunalContentVisible: Flow<Boolean> = MutableStateFlow(true)
+    override val isCommunalContentVisible: Flow<Boolean> = flowOf(true)
 
     /**
      * Freeze the content flow, when an activity is about to show, like starting a timer via voice:
@@ -229,6 +259,14 @@ constructor(
     val isEnableWorkProfileDialogShowing: Flow<Boolean> =
         _isEnableWorkProfileDialogShowing.asStateFlow()
 
+    // SystemUI begins animating to the edit mode layout (e.g., pushing down widgets) as soon as the
+    // transition to edit mode starts. It then animates back to the original layout before the edit
+    // mode activity fully finishes, ensuring a smooth visual transition.
+    override val shouldShowEditModeLayout: Flow<Boolean> =
+        if (hubEditModeTransition())
+            communalSceneInteractor.editModeState.map { it != null && it > EditModeState.STARTING }
+        else flowOf(false)
+
     private val isUiBlurredByBouncer =
         if (Flags.bouncerUiRevamp()) {
             keyguardInteractor.primaryBouncerShowing
@@ -251,29 +289,9 @@ constructor(
 
     val blurRadiusPx: Float = blurConfig.maxBlurRadiusPx
 
-    init {
-        // Initialize our media host for the UMO. This only needs to happen once and must be done
-        // before the MediaHierarchyManager attempts to move the UMO to the hub.
-        with(mediaHost) {
-            expansion = MediaHostState.EXPANDED
-            expandedMatchesParentHeight = true
-            if (v2FlagEnabled()) {
-                // Only show active media to match lock screen, not resumable media, which can
-                // persist
-                // for up to 2 days.
-                showsOnlyActiveMedia = true
-            } else {
-                // Maintain old behavior on tablet until V2 flag rolls out.
-                showsOnlyActiveMedia = false
-            }
-            falsingProtectionNeeded = false
-            disableScrolling = true
-            init(MediaHierarchyManager.LOCATION_COMMUNAL_HUB)
-        }
-    }
-
     override fun onOpenWidgetEditor(shouldOpenWidgetPickerOnStart: Boolean) {
-        persistScrollPosition()
+        // Persist scroll position in glanceable hub so we end up in the same position in edit mode.
+        persistScrollPosition("open widget editor")
         communalInteractor.showWidgetEditor(shouldOpenWidgetPickerOnStart)
     }
 
@@ -422,6 +440,17 @@ constructor(
     val communalBackground: Flow<CommunalBackgroundType> =
         communalSettingsInteractor.communalBackground
 
+    /**
+     * Whether to show a temporary background for edit mode transition.
+     *
+     * This is for coordinating the transition to and from edit mode; the background hides the
+     * activity entry and exit animations below the SystemUI window.
+     */
+    val showBackgroundForEditModeTransition: Flow<Boolean> =
+        if (Flags.hubEditModeTransition())
+            communalSceneInteractor.editModeState.map { it != null && it > EditModeState.STARTING }
+        else flowOf(false)
+
     /** See [CommunalSettingsInteractor.isV2FlagEnabled] */
     fun v2FlagEnabled(): Boolean = communalSettingsInteractor.isV2FlagEnabled()
 
@@ -438,7 +467,11 @@ constructor(
                 keyguardTransitionInteractor.startedKeyguardTransitionStep.map {
                     it.to == KeyguardState.LOCKSCREEN || it.to == KeyguardState.GLANCEABLE_HUB
                 }
-            allOf(inAllowedDeviceState, inAllowedKeyguardState)
+            allOf(
+                inAllowedDeviceState,
+                inAllowedKeyguardState,
+                not(shadeInteractor.isAnyFullyExpanded),
+            )
         } else {
             inAllowedDeviceState
         }

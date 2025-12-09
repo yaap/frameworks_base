@@ -19,8 +19,8 @@ package com.android.systemui.keyguard.data.repository
 import com.android.keyguard.ClockEventController
 import com.android.systemui.keyguard.shared.model.ClockSize
 import com.android.systemui.keyguard.shared.model.ClockSizeSetting
-import com.android.systemui.plugins.clocks.ClockController
-import com.android.systemui.plugins.clocks.ClockId
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockController
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockId
 import com.android.systemui.shared.clocks.DEFAULT_CLOCK_ID
 import com.android.systemui.util.mockito.mock
 import dagger.Binds
@@ -33,6 +33,9 @@ class FakeKeyguardClockRepository() : KeyguardClockRepository {
 
     private val _clockSize = MutableStateFlow(ClockSize.LARGE)
     override val clockSize: StateFlow<ClockSize> = _clockSize
+
+    private var _forcedClockSize: MutableStateFlow<ClockSize?> = MutableStateFlow(null)
+    override val forcedClockSize: Flow<ClockSize?> = _forcedClockSize
 
     private val _selectedClockSize = MutableStateFlow(ClockSizeSetting.DYNAMIC)
     override val selectedClockSize = _selectedClockSize
@@ -49,13 +52,9 @@ class FakeKeyguardClockRepository() : KeyguardClockRepository {
 
     override val clockEventController: ClockEventController = mock()
 
-    override val shouldForceSmallClock: Boolean
-        get() = _shouldForceSmallClock
-
-    private var _shouldForceSmallClock: Boolean = false
-
     override fun setClockSize(size: ClockSize) {
         _clockSize.value = size
+        _forcedClockSize.value = size
     }
 
     fun setSelectedClockSize(size: ClockSizeSetting) {
@@ -67,8 +66,8 @@ class FakeKeyguardClockRepository() : KeyguardClockRepository {
         _currentClockId.value = clockController.config.id
     }
 
-    fun setShouldForceSmallClock(shouldForceSmallClock: Boolean) {
-        _shouldForceSmallClock = shouldForceSmallClock
+    fun setCurrentClockId(clockId: ClockId) {
+        _currentClockId.value = clockId
     }
 
     fun setCurrentClockId(clockId: ClockId) {

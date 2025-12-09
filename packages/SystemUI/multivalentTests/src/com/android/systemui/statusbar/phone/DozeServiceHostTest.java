@@ -17,7 +17,6 @@
 package com.android.systemui.statusbar.phone;
 
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -31,8 +30,6 @@ import static org.mockito.Mockito.when;
 import android.graphics.Point;
 import android.hardware.display.AmbientDisplayConfiguration;
 import android.os.PowerManager;
-import android.platform.test.annotations.DisableFlags;
-import android.platform.test.annotations.EnableFlags;
 import android.testing.TestableLooper.RunWithLooper;
 import android.view.View;
 
@@ -40,20 +37,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
 import com.android.keyguard.KeyguardUpdateMonitor;
-import com.android.systemui.Flags;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.assist.AssistManager;
 import com.android.systemui.biometrics.AuthController;
-import com.android.systemui.biometrics.shared.model.FingerprintSensorType;
-import com.android.systemui.biometrics.shared.model.SensorStrength;
 import com.android.systemui.doze.DozeHost;
 import com.android.systemui.doze.DozeLog;
 import com.android.systemui.flags.DisableSceneContainer;
+import com.android.systemui.flags.EnableSceneContainer;
 import com.android.systemui.keyguard.WakefulnessLifecycle;
+import com.android.systemui.keyguard.domain.interactor.AodDimInteractor;
 import com.android.systemui.keyguard.domain.interactor.DozeInteractor;
-import com.android.systemui.keyguard.shared.model.ErrorFingerprintAuthenticationStatus;
-import com.android.systemui.keyguard.shared.model.FailFingerprintAuthenticationStatus;
-import com.android.systemui.keyguard.shared.model.HelpFingerprintAuthenticationStatus;
 import com.android.systemui.kosmos.KosmosJavaAdapter;
 import com.android.systemui.shade.NotificationShadeWindowViewController;
 import com.android.systemui.shade.domain.interactor.ShadeLockscreenInteractor;
@@ -75,7 +68,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 
 @SmallTest
@@ -109,6 +101,7 @@ public class DozeServiceHostTest extends SysuiTestCase {
     @Mock private DozeHost.Callback mCallback;
     @Mock private DozeInteractor mDozeInteractor;
     @Mock private AmbientDisplayConfiguration mAmbientDisplayConfiguration;
+    @Mock private AodDimInteractor mAodDimInteractor;
 
     private KosmosJavaAdapter mKosmos;
 
@@ -118,13 +111,14 @@ public class DozeServiceHostTest extends SysuiTestCase {
         mKosmos = new KosmosJavaAdapter(this);
         mDozeServiceHost = new DozeServiceHost(mDozeLog, mPowerManager, mWakefullnessLifecycle,
                 mStatusBarStateController, mDeviceProvisionedController,
-                mHeadsUpManager, mBatteryController, mScrimController,
+                mHeadsUpManager, mBatteryController, () -> mScrimController,
                 () -> mBiometricUnlockController, () -> mAssistManager, mDozeScrimController,
                 mKeyguardUpdateMonitor, mPulseExpansionHandler, mNotificationShadeWindowController,
                 mNotificationWakeUpCoordinator, mAuthController,
                 mShadeLockscreenInteractor, mDozeInteractor,
                 mKosmos.getDeviceEntryFingerprintAuthInteractor(),
-                mKosmos.getTestScope(), mContext, mAmbientDisplayConfiguration);
+                mKosmos.getTestScope(), mContext, mAmbientDisplayConfiguration,
+                mAodDimInteractor);
 
         mDozeServiceHost.initialize(
                 mCentralSurfaces,
@@ -197,13 +191,15 @@ public class DozeServiceHostTest extends SysuiTestCase {
                         DozeLog.REASON_SENSOR_QUICK_PICKUP,
                         DozeLog.PULSE_REASON_FINGERPRINT_ACTIVATED,
                         DozeLog.REASON_SENSOR_TAP,
-                        DozeLog.PULSE_REASON_MINMODE));
+                        DozeLog.PULSE_REASON_MINMODE,
+                        DozeLog.REASON_SENSOR_UDFPS_LONG_PRESS, // auth interrupt occurs elsewhere
+                        DozeLog.PULSE_REASON_FINGERPRINT_PULSE_SHOW_FULL_UI,
+                        DozeLog.PULSE_REASON_FINGERPRINT_PULSE_SHOW_AUTH_UI));
+        // These are full wakeups, not pulses:
         HashSet<Integer> reasonsThatDontPulse = new HashSet<>(
                 Arrays.asList(DozeLog.REASON_SENSOR_PICKUP,
                         DozeLog.REASON_SENSOR_DOUBLE_TAP,
-                        DozeLog.REASON_SENSOR_TAP,
-                        DozeLog.REASON_SENSOR_UDFPS_LONG_PRESS,
-                        DozeLog.REASON_USUDFPS_PULSE));
+                        DozeLog.REASON_SENSOR_TAP));
 
         doAnswer(invocation -> {
             DozeHost.PulseCallback callback = invocation.getArgument(0);
@@ -251,6 +247,7 @@ public class DozeServiceHostTest extends SysuiTestCase {
         mDozeServiceHost.onSlpiTap(100, -2);
         verify(mDozeInteractor, never()).setLastTapToWakePosition(any());
     }
+
     @Test
     public void dozeTimeTickSentToDozeInteractor() {
         // WHEN dozeTimeTick
@@ -261,97 +258,12 @@ public class DozeServiceHostTest extends SysuiTestCase {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_UDFPS_SCREEN_OFF_UNLOCK_FLICKER)
-    public void testCollectingUsUdfpsPulseEvents_shouldNotCollect() {
-        // Should not collect pulse events if not usudfps.
-        mKosmos.getFingerprintPropertyRepository().setProperties(
-                0,
-                SensorStrength.STRONG,
-                FingerprintSensorType.UDFPS_OPTICAL,
-                new HashMap<>()
-        );
-        mKosmos.getTestScope().getTestScheduler().runCurrent();
-        when(mAmbientDisplayConfiguration.screenOffUdfpsEnabled(anyInt())).thenReturn(true);
-        mDozeServiceHost.startDozing();
-        assertFalse(mDozeServiceHost.isCollectingUsUdfpsScreenOffPulseEvents());
-        mDozeServiceHost.stopDozing();
+    @EnableSceneContainer
+    public void setAodDimmingScrim() {
+        // WHEN set aodDimmingScrim
+        mDozeServiceHost.setAodDimmingScrim(.54f);
 
-        // Should not collect pulse events if feature disabled.
-        mKosmos.getFingerprintPropertyRepository().setProperties(
-                0,
-                SensorStrength.STRONG,
-                FingerprintSensorType.UDFPS_ULTRASONIC,
-                new HashMap<>()
-        );
-        mKosmos.getTestScope().getTestScheduler().runCurrent();
-        when(mAmbientDisplayConfiguration.screenOffUdfpsEnabled(anyInt())).thenReturn(false);
-        mDozeServiceHost.startDozing();
-        assertFalse(mDozeServiceHost.isCollectingUsUdfpsScreenOffPulseEvents());
-        mDozeServiceHost.stopDozing();
-    }
-
-    @Test
-    @DisableFlags(Flags.FLAG_UDFPS_SCREEN_OFF_UNLOCK_FLICKER)
-    public void testCollectingUsUdfpsPulseEvents_shouldNotCollect_flagDisabled() {
-        // Should not collect pulse events if the bug flag is disabled.
-        mKosmos.getFingerprintPropertyRepository().setProperties(
-                0,
-                SensorStrength.STRONG,
-                FingerprintSensorType.UDFPS_ULTRASONIC,
-                new HashMap<>()
-        );
-        mKosmos.getTestScope().getTestScheduler().runCurrent();
-        when(mAmbientDisplayConfiguration.screenOffUdfpsEnabled(anyInt())).thenReturn(true);
-        mDozeServiceHost.startDozing();
-        assertFalse(mDozeServiceHost.isCollectingUsUdfpsScreenOffPulseEvents());
-        mDozeServiceHost.stopDozing();
-    }
-
-    @Test
-    @EnableFlags(Flags.FLAG_UDFPS_SCREEN_OFF_UNLOCK_FLICKER)
-    public void testCollectingUsUdfpsPulseEvents() {
-        mKosmos.getFingerprintPropertyRepository().setProperties(
-                0,
-                SensorStrength.STRONG,
-                FingerprintSensorType.UDFPS_ULTRASONIC,
-                new HashMap<>());
-        mKosmos.getTestScope().getTestScheduler().runCurrent();
-
-        when(mAmbientDisplayConfiguration.screenOffUdfpsEnabled(anyInt())).thenReturn(true);
-        assertFalse(mDozeServiceHost.isCollectingUsUdfpsScreenOffPulseEvents());
-        DozeHost.Callback cb = mock(DozeHost.Callback.class);
-        mDozeServiceHost.addCallback(cb);
-        mDozeServiceHost.startDozing();
-
-        // Should collect pulse events if usudfps and feature enabled.
-        assertTrue(mDozeServiceHost.isCollectingUsUdfpsScreenOffPulseEvents());
-
-        // Send events that will trigger callback.
-        mKosmos.getDeviceEntryFingerprintAuthRepository().setAuthenticationStatus(
-                new HelpFingerprintAuthenticationStatus(-1, "Test help"));
-        mKosmos.getTestScope().getTestScheduler().runCurrent();
-
-        // Callback should be invoked.
-        verify(cb).onUltrasonicUdfpsPulseWhileScreenOff(
-                any(HelpFingerprintAuthenticationStatus.class));
-
-        mKosmos.getDeviceEntryFingerprintAuthRepository().setAuthenticationStatus(
-                FailFingerprintAuthenticationStatus.INSTANCE);
-        mKosmos.getTestScope().getTestScheduler().runCurrent();
-
-        verify(cb).onUltrasonicUdfpsPulseWhileScreenOff(
-                FailFingerprintAuthenticationStatus.INSTANCE);
-
-        mKosmos.getDeviceEntryFingerprintAuthRepository().setAuthenticationStatus(
-                new ErrorFingerprintAuthenticationStatus(
-                        -1, "Test error", System.nanoTime()));
-        mKosmos.getTestScope().getTestScheduler().runCurrent();
-
-        verify(cb).onUltrasonicUdfpsPulseWhileScreenOff(
-                any(ErrorFingerprintAuthenticationStatus.class));
-
-        mDozeServiceHost.stopDozing();
-        assertFalse(mDozeServiceHost.isCollectingUsUdfpsScreenOffPulseEvents());
-        mDozeServiceHost.removeCallback(cb);
+        // THEN interactor's dim amount is updated
+        verify(mAodDimInteractor).setDimAmount(eq(.54f));
     }
 }

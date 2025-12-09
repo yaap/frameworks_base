@@ -19,6 +19,7 @@ import android.app.role.OnRoleHoldersChangedListener;
 import android.app.role.RoleManager;
 import android.app.supervision.ISupervisionListener;
 import android.app.supervision.SupervisionAppService;
+import android.app.supervision.SupervisionManagerInternal;
 import android.app.supervision.flags.Flags;
 import android.content.Context;
 import android.content.pm.ServiceInfo;
@@ -31,8 +32,11 @@ import androidx.annotation.Nullable;
 
 import com.android.internal.os.BackgroundThread;
 import com.android.internal.util.CollectionUtils;
+import com.android.server.LocalServices;
 import com.android.server.appbinding.AppBindingConstants;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 /** Finds the @{link SupervisionAppService} implementation within the supervision app. */
@@ -50,8 +54,11 @@ public class SupervisionAppServiceFinder
     }
 
     @Override
-    protected boolean isEnabled(AppBindingConstants constants) {
-        return constants.SUPERVISION_APP_SERVICE_ENABLED && Flags.enableSupervisionAppService();
+    protected boolean isEnabled(AppBindingConstants constants, int userId) {
+        SupervisionManagerInternal smi =
+                LocalServices.getService(SupervisionManagerInternal.class);
+        return constants.SUPERVISION_APP_SERVICE_ENABLED && Flags.enableSupervisionAppService()
+                && smi.isSupervisionEnabledForUser(userId);
     }
 
     @NonNull
@@ -72,11 +79,22 @@ public class SupervisionAppServiceFinder
 
     @Nullable
     @Override
+    @Deprecated
     public String getTargetPackage(int userId) {
         final String ret =
                 CollectionUtils.firstOrNull(
                         mRoleManager.getRoleHoldersAsUser(
                                 RoleManager.ROLE_SYSTEM_SUPERVISION, UserHandle.of(userId)));
+        return ret;
+    }
+
+    @Override
+    public Set<String> getTargetPackages(int userId) {
+        final Set<String> ret = new HashSet<>();
+        ret.addAll(mRoleManager.getRoleHoldersAsUser(
+                RoleManager.ROLE_SYSTEM_SUPERVISION, UserHandle.of(userId)));
+        ret.addAll(mRoleManager.getRoleHoldersAsUser(
+                RoleManager.ROLE_SUPERVISION, UserHandle.of(userId)));
         return ret;
     }
 

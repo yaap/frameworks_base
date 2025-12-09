@@ -149,15 +149,28 @@ object MobileIconBinder {
                                 Pair(shouldRequestLayout, newIcon)
                             }
                             .collect { (shouldRequestLayout, newIcon) ->
-                                viewModel.verboseLogger?.logBinderReceivedSignalIcon(
-                                    view,
-                                    viewModel.subscriptionId,
-                                    newIcon,
-                                )
                                 if (newIcon is SignalIconModel.Cellular) {
+                                    val packedSignalDrawableState = newIcon.toSignalDrawableState()
+                                    viewModel.verboseLogger?.logBinderReceivedSignalCellularIcon(
+                                        parentView = view,
+                                        subId = viewModel.subscriptionId,
+                                        icon = newIcon,
+                                        packedSignalDrawableState = packedSignalDrawableState,
+                                        shouldRequestLayout = shouldRequestLayout,
+                                    )
                                     iconView.setImageDrawable(mobileDrawable)
-                                    mobileDrawable.level = newIcon.toSignalDrawableState()
+                                    mobileDrawable.level = packedSignalDrawableState
+                                    viewModel.verboseLogger?.logBinderSignalIconResult(
+                                        parentView = view,
+                                        subId = viewModel.subscriptionId,
+                                        unpackedLevel = mobileDrawable.unpackLevel(),
+                                    )
                                 } else if (newIcon is SignalIconModel.Satellite) {
+                                    viewModel.verboseLogger?.logBinderReceivedSignalSatelliteIcon(
+                                        parentView = view,
+                                        subId = viewModel.subscriptionId,
+                                        icon = newIcon,
+                                    )
                                     IconViewBinder.bind(newIcon.icon, iconView)
                                 }
 
@@ -195,10 +208,10 @@ object MobileIconBinder {
                     // Set the network type background
                     launch {
                         viewModel.networkTypeBackground.collect { background ->
-                            networkTypeContainer.setBackgroundResource(background?.res ?: 0)
+                            networkTypeContainer.setBackgroundResource(background?.resId ?: 0)
 
                             // Tint will invert when this bit changes
-                            if (background?.res != null) {
+                            if (background?.resId != null) {
                                 networkTypeContainer.backgroundTintList =
                                     ColorStateList.valueOf(iconTint.value.tint)
                                 networkTypeView.imageTintList =

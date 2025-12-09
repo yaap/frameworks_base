@@ -444,6 +444,7 @@ public class LauncherAppsService extends SystemService {
          */
         private void startWatchingPackageBroadcasts() {
             if (!mIsWatchingPackageBroadcasts) {
+                Slog.d(TAG, "Started watching for package broadcasts");
                 final IntentFilter filter = new IntentFilter();
                 filter.addAction(Intent.ACTION_PACKAGE_REMOVED_INTERNAL);
                 filter.addDataScheme("package");
@@ -463,9 +464,7 @@ public class LauncherAppsService extends SystemService {
          * Unregister package broadcast receiver
          */
         private void stopWatchingPackageBroadcasts() {
-            if (DEBUG) {
-                Log.d(TAG, "Stopped watching for packages");
-            }
+            Slog.d(TAG, "Stopped watching for package broadcasts");
             if (mIsWatchingPackageBroadcasts) {
                 mContext.unregisterReceiver(mPackageRemovedListener);
                 mPackageMonitor.unregister();
@@ -523,10 +522,6 @@ public class LauncherAppsService extends SystemService {
         }
 
         private boolean isHiddenProfile(UserHandle targetUser) {
-            if (!Flags.enableLauncherAppsHiddenProfileChecks()) {
-                return false;
-            }
-
             try {
                 UserProperties properties = mUserManagerInternal
                         .getUserProperties(targetUser.getIdentifier());
@@ -595,8 +590,6 @@ public class LauncherAppsService extends SystemService {
 
         private boolean areHiddenApisChecksEnabled() {
             return android.os.Flags.allowPrivateProfile()
-                    && Flags.enableHidingProfiles()
-                    && Flags.enableLauncherAppsHiddenProfileChecks()
                     && Flags.enablePermissionToAccessHiddenProfiles()
                     && Flags.enablePrivateSpaceFeatures();
         }
@@ -1903,9 +1896,6 @@ public class LauncherAppsService extends SystemService {
         @Override
         public ParceledListSlice<AppLaunchInfo> getActivityLaunchIntentForAllApps(
                 String callingPackage, UserHandle user) {
-            if (!android.app.Flags.optimizeGetAppsAndShortcuts()) {
-                return new ParceledListSlice<>(new ArrayList<>());
-            }
             List<AppLaunchInfo> availableApps = new ArrayList<>();
             final int userId = user.getIdentifier();
 
@@ -1955,9 +1945,6 @@ public class LauncherAppsService extends SystemService {
         public ParceledListSlice<ShortcutInfo> getAvailableShortcuts(String callingPackage,
                 UserHandle user) {
             List<ShortcutInfo> availableShortcuts = new ArrayList<>();
-            if (!android.app.Flags.optimizeGetAppsAndShortcuts()) {
-                return new ParceledListSlice<>(availableShortcuts);
-            }
             int userId = user.getIdentifier();
 
             if (!mUserManagerInternal.isUserUnlocked(userId)) {
@@ -2600,6 +2587,7 @@ public class LauncherAppsService extends SystemService {
             @Override
             public void onPackageAdded(String packageName, int uid) {
                 UserHandle user = new UserHandle(getChangingUserId());
+                Slog.d(TAG, "onPackageAdded: user=" + user + ", packageName=" + packageName);
                 final int n = mListeners.beginBroadcast();
                 try {
                     for (int i = 0; i < n; i++) {

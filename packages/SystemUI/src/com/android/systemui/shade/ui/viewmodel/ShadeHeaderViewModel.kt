@@ -18,10 +18,7 @@
 
 package com.android.systemui.shade.ui.viewmodel
 
-import android.content.Context
 import android.content.Intent
-import android.icu.text.DateFormat
-import android.icu.text.DisplayContext
 import android.provider.Settings
 import android.view.ViewGroup
 import androidx.compose.runtime.derivedStateOf
@@ -30,6 +27,7 @@ import androidx.compose.ui.unit.IntRect
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.systemui.battery.BatteryMeterViewController
 import com.android.systemui.clock.domain.interactor.ClockInteractor
+import com.android.systemui.desktop.domain.interactor.DesktopInteractor
 import com.android.systemui.kairos.ExperimentalKairosApi
 import com.android.systemui.kairos.KairosNetwork
 import com.android.systemui.lifecycle.ExclusiveActivatable
@@ -37,43 +35,38 @@ import com.android.systemui.lifecycle.Hydrator
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.privacy.OngoingPrivacyChip
 import com.android.systemui.privacy.PrivacyItem
-import com.android.systemui.res.R
 import com.android.systemui.scene.domain.interactor.DualShadeEducationInteractor
 import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.domain.model.DualShadeEducationModel
 import com.android.systemui.scene.shared.model.DualShadeEducationElement
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.TransitionKeys.SlightlyFasterShadeCollapse
-import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.shade.domain.interactor.PrivacyChipInteractor
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
 import com.android.systemui.shade.domain.interactor.ShadeModeInteractor
+import com.android.systemui.shade.ui.composable.ChipHighlightModel
 import com.android.systemui.statusbar.phone.StatusBarLocation
 import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark
 import com.android.systemui.statusbar.phone.domain.interactor.ShadeDarkIconInteractor
 import com.android.systemui.statusbar.phone.ui.StatusBarIconController
-import com.android.systemui.statusbar.phone.ui.TintedIconManager
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel
 import com.android.systemui.statusbar.pipeline.mobile.domain.interactor.MobileIconsInteractor
 import com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.MobileIconsViewModel
 import com.android.systemui.statusbar.pipeline.mobile.ui.viewmodel.MobileIconsViewModelKairos
+import com.android.systemui.statusbar.systemstatusicons.ui.viewmodel.SystemStatusIconsViewModel
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
-import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 
 /** Models UI state for the shade header. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShadeHeaderViewModel
 @AssistedInject
 constructor(
-    @ShadeDisplayAware private val context: Context,
     private val activityStarter: ActivityStarter,
     private val sceneInteractor: SceneInteractor,
     private val shadeInteractor: ShadeInteractor,
@@ -83,13 +76,14 @@ constructor(
     val mobileIconsViewModel: MobileIconsViewModel,
     private val privacyChipInteractor: PrivacyChipInteractor,
     private val clockInteractor: ClockInteractor,
-    private val tintedIconManagerFactory: TintedIconManager.Factory,
     private val batteryMeterViewControllerFactory: BatteryMeterViewController.Factory,
     val statusBarIconController: StatusBarIconController,
     val batteryViewModelFactory: BatteryViewModel.AlwaysShowPercent.Factory,
+    val systemStatusIconsViewModelFactory: SystemStatusIconsViewModel.Factory,
     val kairosNetwork: KairosNetwork,
     val mobileIconsViewModelKairos: dagger.Lazy<MobileIconsViewModelKairos>,
     private val dualShadeEducationInteractor: DualShadeEducationInteractor,
+    private val desktopInteractor: DesktopInteractor,
 ) : ExclusiveActivatable() {
 
     private val hydrator = Hydrator("ShadeHeaderViewModel.hydrator")
@@ -100,9 +94,6 @@ constructor(
             initialValue = IsAreaDark { true },
             source = shadeDarkIconInteractor.isShadeAreaDark,
         )
-
-    val createTintedIconManager: (ViewGroup, StatusBarLocation) -> TintedIconManager =
-        tintedIconManagerFactory::create
 
     val createBatteryMeterViewController:
         (ViewGroup, StatusBarLocation) -> BatteryMeterViewController =
@@ -164,20 +155,14 @@ constructor(
         get() =
             dualShadeEducationInteractor.education == DualShadeEducationModel.ForQuickSettingsShade
 
-    private val longerPattern = context.getString(R.string.abbrev_wday_month_day_no_year_alarm)
-    private val shorterPattern = context.getString(R.string.abbrev_month_day_no_year)
-
-    private val longerDateFormat: Flow<DateFormat> =
-        clockInteractor.onTimezoneOrLocaleChanged.mapLatest { getFormatFromPattern(longerPattern) }
-    private val shorterDateFormat: Flow<DateFormat> =
-        clockInteractor.onTimezoneOrLocaleChanged.mapLatest { getFormatFromPattern(shorterPattern) }
-
     val longerDateText: String by
         hydrator.hydratedStateOf(
             traceName = "longerDateText",
             initialValue = "",
             source =
-                combine(longerDateFormat, clockInteractor.currentTime) { format, time ->
+                combine(clockInteractor.longerDateFormat, clockInteractor.currentTime) {
+                    format,
+                    time ->
                     format.format(time)
                 },
         )
@@ -187,9 +172,26 @@ constructor(
             traceName = "shorterDateText",
             initialValue = "",
             source =
-                combine(shorterDateFormat, clockInteractor.currentTime) { format, time ->
+                combine(clockInteractor.shorterDateFormat, clockInteractor.currentTime) {
+                    format,
+                    time ->
                     format.format(time)
                 },
+        )
+
+    val inactiveChipHighlight: ChipHighlightModel
+        get() =
+            if (useDesktopStatusBar) {
+                ChipHighlightModel.Transparent
+            } else {
+                ChipHighlightModel.Weak
+            }
+
+    private val useDesktopStatusBar: Boolean by
+        hydrator.hydratedStateOf(
+            traceName = "useDesktopStatusBar",
+            initialValue = desktopInteractor.useDesktopStatusBar.value,
+            source = desktopInteractor.useDesktopStatusBar,
         )
 
     override suspend fun onActivated(): Nothing {
@@ -207,7 +209,7 @@ constructor(
 
     /** Notifies that the clock was clicked. */
     fun onClockClicked() {
-        if (shadeModeInteractor.isDualShade && isDesktopFeatureSetEnabled()) {
+        if (shadeModeInteractor.isDualShade && useDesktopStatusBar) {
             toggleNotificationShade(
                 loggingReason = "ShadeHeaderViewModel.onClockChipClicked",
                 launchClockActivityOnCollapse = false,
@@ -224,12 +226,8 @@ constructor(
         }
         toggleNotificationShade(
             loggingReason = "ShadeHeaderViewModel.onNotificationIconChipClicked",
-            launchClockActivityOnCollapse = !isDesktopFeatureSetEnabled(),
+            launchClockActivityOnCollapse = !useDesktopStatusBar,
         )
-    }
-
-    private fun isDesktopFeatureSetEnabled(): Boolean {
-        return context.resources.getBoolean(R.bool.config_enableDesktopFeatureSet)
     }
 
     private fun toggleNotificationShade(
@@ -284,12 +282,6 @@ constructor(
         bounds: IntRect,
     ) {
         dualShadeEducationInteractor.onDualShadeEducationElementBoundsChange(element, bounds)
-    }
-
-    private fun getFormatFromPattern(pattern: String?): DateFormat {
-        return DateFormat.getInstanceForSkeleton(pattern, Locale.getDefault()).apply {
-            setContext(DisplayContext.CAPITALIZATION_FOR_STANDALONE)
-        }
     }
 
     @AssistedFactory

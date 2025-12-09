@@ -29,11 +29,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import android.animation.ValueAnimator;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.graphics.Rect;
+import android.hardware.input.InputManager;
 import android.os.Handler;
 import android.os.RemoteException;
 import android.platform.test.flag.junit.CheckFlagsRule;
@@ -107,6 +109,8 @@ public class WindowMagnificationAnimationControllerTest extends SysuiTestCase {
     SysUiState mSysUiState;
     @Mock
     SecureSettings mSecureSettings;
+    @Mock
+    InputManager mInputManager;
     private SpyWindowMagnificationController mController;
     private WindowMagnificationController mSpyController;
     private WindowMagnificationAnimationController mWindowMagnificationAnimationController;
@@ -148,6 +152,8 @@ public class WindowMagnificationAnimationControllerTest extends SysuiTestCase {
             return mSurfaceControlViewHost;
         };
 
+        when(mInputManager.getInputDeviceIds()).thenReturn(new int[]{});
+
         mTransaction = spy(new SurfaceControl.Transaction());
         mController = new SpyWindowMagnificationController(
                 mContext,
@@ -160,7 +166,8 @@ public class WindowMagnificationAnimationControllerTest extends SysuiTestCase {
                 mSecureSettings,
                 scvhSupplier,
                 mSfVsyncFrameProvider,
-                mWindowManager);
+                mWindowManager,
+                mInputManager);
 
         mSpyController = mController.getSpyController();
     }
@@ -942,7 +949,8 @@ public class WindowMagnificationAnimationControllerTest extends SysuiTestCase {
                 SecureSettings secureSettings,
                 Supplier<SurfaceControlViewHost> scvhSupplier,
                 SfVsyncFrameCallbackProvider sfVsyncFrameProvider,
-                WindowManager windowManager) {
+                WindowManager windowManager,
+                InputManager inputManager) {
             super(
                     context,
                     handler,
@@ -953,7 +961,8 @@ public class WindowMagnificationAnimationControllerTest extends SysuiTestCase {
                     sysUiState,
                     secureSettings,
                     scvhSupplier,
-                    windowManager);
+                    windowManager,
+                    inputManager);
             mSpyController = Mockito.mock(WindowMagnificationController.class);
         }
 

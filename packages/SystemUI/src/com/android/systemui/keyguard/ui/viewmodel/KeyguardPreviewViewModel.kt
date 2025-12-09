@@ -24,7 +24,7 @@ import android.view.Display
 import com.android.internal.policy.SystemBarUtils
 import com.android.systemui.customization.clocks.R as clocksR
 import com.android.systemui.keyguard.domain.interactor.KeyguardPreviewInteractor
-import com.android.systemui.plugins.clocks.ClockPreviewConfig
+import com.android.systemui.plugins.keyguard.ui.clocks.ClockPreviewConfig
 import com.android.systemui.res.R as SysuiR
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import dagger.assisted.Assisted
@@ -61,15 +61,12 @@ constructor(@Assisted private val interactor: KeyguardPreviewInteractor) {
     val display: Display?
         get() = interactor.display
 
-    val isShadeLayoutWide: Boolean
-        get() = interactor.isShadeLayoutWide
-
     val wallpaperColors: WallpaperColors?
         get() = interactor.wallpaperColors
 
     fun buildPreviewConfig(): ClockPreviewConfig {
         return ClockPreviewConfig(
-            isShadeLayoutWide = isShadeLayoutWide,
+            isFullWidthShade = interactor.isFullWidthShade,
             isSceneContainerFlagEnabled = SceneContainerFlag.isEnabled,
             statusBarHeight = SystemBarUtils.getStatusBarHeight(previewContext),
             splitShadeTopMargin =

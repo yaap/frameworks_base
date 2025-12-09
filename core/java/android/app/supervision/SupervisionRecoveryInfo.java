@@ -33,9 +33,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.Objects;
 
 /**
- * Contains the information needed for recovering the device supervision PIN.
+ * Contains the information needed for recovering the device-wide supervision credentials.
  *
- * <p>Returned by {@link SupervisionManager#getSupervisionRecoveryInfo}.
+ * <p>This is typically returned as an {@link android.content.Intent} extra from the supervision
+ * credentials recovery activity. This activity is hosted by the holder of the
+ * {@code android.app.role.RoleManager#ROLE_SYSTEM_SUPERVISION} role and is generally launched to
+ * set up a recovery method or to reset the supervision credentials.
  *
  * @hide
  */
@@ -48,8 +51,8 @@ public final class SupervisionRecoveryInfo implements Parcelable {
      * <p>The associated value should be a {@link android.app.supervision.SupervisionRecoveryInfo}
      * object.
      *
-     * <p>* This extra is intended for use when launching the PIN recovery activity via {@link
-     * com.android.settingslib.supervision.SupervisionIntentProvider#getPinRecoveryIntent }
+     * <p>This extra is intended to be used by the supervision PIN recovery activity hosted by the
+     * {@code android.app.role.RoleManager#ROLE_SYSTEM_SUPERVISION} role holder.
      */
     public static final String EXTRA_SUPERVISION_RECOVERY_INFO =
             "android.app.supervision.extra.SUPERVISION_RECOVERY_INFO";
@@ -152,18 +155,6 @@ public final class SupervisionRecoveryInfo implements Parcelable {
         parcel.writeString(mAccountType);
         parcel.writePersistableBundle(mAccountData);
         parcel.writeInt(mState);
-    }
-
-    /**
-     * Reads the SupervisionRecoveryInfo object from the given {@link Parcel}.
-     *
-     * @param parcel The {@link Parcel} to read from.
-     */
-    public void readFromParcel(@NonNull Parcel parcel) {
-        mAccountName = Objects.requireNonNull(parcel.readString());
-        mAccountType = Objects.requireNonNull(parcel.readString());
-        mAccountData = parcel.readPersistableBundle(getClass().getClassLoader());
-        mState = parcel.readInt();
     }
 
     @Override

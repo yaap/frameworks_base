@@ -273,7 +273,7 @@ private constructor(
         forEachSchemePolicy { with(it) { onPackageUninstalled(packageName, appId, userId) } }
     }
 
-    fun MutateStateScope.onAgentAllowlistChanged(agentAllowlist: List<SignedPackage>) {
+    fun MutateStateScope.onAgentAllowlistChanged(agentAllowlist: Set<SignedPackage>?) {
         newState.mutateExternalState().apply { setAgentAllowlist(agentAllowlist) }
         forEachSchemePolicy { with(it) { onAgentAllowlistChanged(agentAllowlist) } }
     }
@@ -345,6 +345,7 @@ private constructor(
                             TAG_PACKAGE_VERSIONS -> parsePackageVersions(state, userId)
                             TAG_DEFAULT_PERMISSION_GRANT ->
                                 parseDefaultPermissionGrant(state, userId)
+                            TAG_APP_FUNCTION_PREGRANT -> parseAppFunctionPregrant(state, userId)
                             else -> {
                                 forEachSchemePolicy { with(it) { parseUserState(state, userId) } }
                             }
@@ -396,11 +397,23 @@ private constructor(
         userState.setDefaultPermissionGrantFingerprint(fingerprint)
     }
 
+    private fun BinaryXmlPullParser.parseAppFunctionPregrant(
+        state: MutableAccessState,
+        userId: Int,
+    ) {
+        val userState = state.mutateUserState(userId, WriteMode.NONE)!!
+        val fingerprint = getAttributeValueOrThrow(ATTR_FINGERPRINT).intern()
+        userState.appFunctionAccessPregrantFingerprint = fingerprint
+    }
+
     fun BinaryXmlSerializer.serializeUserState(state: AccessState, userId: Int) {
         tag(TAG_ACCESS) {
             serializePackageVersions(state.userStates[userId]!!.packageVersions)
             serializeDefaultPermissionGrantFingerprint(
                 state.userStates[userId]!!.defaultPermissionGrantFingerprint
+            )
+            serializeAppFunctionAccessPregrantFingerprint(
+                state.userStates[userId]!!.appFunctionAccessPregrantFingerprint
             )
             forEachSchemePolicy { with(it) { serializeUserState(state, userId) } }
         }
@@ -427,6 +440,14 @@ private constructor(
         }
     }
 
+    private fun BinaryXmlSerializer.serializeAppFunctionAccessPregrantFingerprint(
+        fingerprint: String?
+    ) {
+        if (fingerprint != null) {
+            tag(TAG_APP_FUNCTION_PREGRANT) { attributeInterned(ATTR_FINGERPRINT, fingerprint) }
+        }
+    }
+
     private fun getSchemePolicy(subject: AccessUri, `object`: AccessUri): SchemePolicy =
         getSchemePolicy(subject.scheme, `object`.scheme)
 
@@ -443,6 +464,7 @@ private constructor(
 
         private const val TAG_ACCESS = "access"
         private const val TAG_DEFAULT_PERMISSION_GRANT = "default-permission-grant"
+        private const val TAG_APP_FUNCTION_PREGRANT = "app-function-pregrant"
         private const val TAG_PACKAGE_VERSIONS = "package-versions"
         private const val TAG_PACKAGE = "package"
 
@@ -481,7 +503,7 @@ abstract class SchemePolicy {
 
     open fun MutateStateScope.onPackageUninstalled(packageName: String, appId: Int, userId: Int) {}
 
-    open fun MutateStateScope.onAgentAllowlistChanged(agentAllowlist: List<SignedPackage>) {}
+    open fun MutateStateScope.onAgentAllowlistChanged(agentAllowlist: Set<SignedPackage>?) {}
 
     open fun MutateStateScope.onSystemReady() {}
 

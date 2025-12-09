@@ -27,10 +27,12 @@ import com.android.compose.animation.scene.MutableSceneTransitionLayoutState
 import com.android.compose.animation.scene.SceneKey
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.notifications.ui.composable.row.BundleHeader
+import com.android.systemui.res.R
 import com.android.systemui.statusbar.notification.row.dagger.BundleRowScope
 import com.android.systemui.statusbar.notification.row.data.model.AppData
 import com.android.systemui.statusbar.notification.row.data.repository.BundleRepository
 import com.android.systemui.statusbar.notification.row.icon.AppIconProvider
+import com.android.systemui.util.icuMessageFormat
 import com.android.systemui.util.time.SystemClock
 import com.android.systemui.utils.coroutines.flow.mapLatestConflated
 import javax.inject.Inject
@@ -62,20 +64,30 @@ constructor(
     val bundleIcon: Int
         get() = repository.bundleIcon
 
+    val numberOfChildrenContentDescription: String
+        get() =
+            icuMessageFormat(
+                context.resources,
+                R.string.notification_bundle_header_counter,
+                numberOfChildren ?: 0,
+            )
+
+    val headerContentDescription: String
+        get() =
+            context.resources.getString(
+                R.string.notification_bundle_header_joined_description,
+                context.resources.getString(titleText),
+                numberOfChildrenContentDescription,
+            )
+
     /** Filters the list of AppData based on time of last collapse by user. */
     private fun filterByCollapseTime(
         rawAppDataList: List<AppData>,
         collapseTime: Long,
     ): List<AppData> {
-        return if (collapseTime == 0L) {
-            rawAppDataList
-        } else {
-            rawAppDataList.filter { appData ->
-                val addedTime = appData.timeAddedToBundle
-                val shouldKeep = addedTime > collapseTime
-                shouldKeep
-            }
-        }
+        // Always show app icons in bundle header
+        // and keep filtering infra for now
+        return rawAppDataList
     }
 
     /** Converts a list of AppData to a list of Drawables by fetching icons */
@@ -110,11 +122,16 @@ constructor(
             if (isExpanded) BundleHeader.Scenes.Expanded else BundleHeader.Scenes.Collapsed,
             composeScope!!,
         )
+        if (!isExpanded) {
+            repository.lastCollapseTime = systemClock.uptimeMillis()
+        }
     }
 
     fun setTargetScene(scene: SceneKey) {
         state?.setTargetScene(scene, composeScope!!)
-        if (state?.currentScene == BundleHeader.Scenes.Collapsed) {
+
+        // [setTargetScene] does not immediately update [currentScene] so we must check [scene]
+        if (scene == BundleHeader.Scenes.Collapsed) {
             repository.lastCollapseTime = systemClock.uptimeMillis()
         }
     }
@@ -123,11 +140,8 @@ constructor(
         return try {
             appIconProvider.getOrFetchAppIcon(
                 packageName = appData.packageName,
-                // TODO(b/416126107) remove context and withWorkProfileBadge after we add them to
-                //  AppIconProvider
-                context = context,
-                withWorkProfileBadge = false,
-                themed = false,
+                userHandle = appData.user,
+                instanceKey = "bundle:${repository.bundleType}",
             )
         } catch (e: NameNotFoundException) {
             Log.w(TAG, "Failed to load app icon for ${appData.packageName}", e)

@@ -34,7 +34,7 @@ interface IAuthenticationPolicyService {
     int disableSecureLockDevice(in UserHandle user, in DisableSecureLockDeviceParams params);
 
     @EnforcePermission("MANAGE_SECURE_LOCK_DEVICE")
-    int isSecureLockDeviceAvailable(in UserHandle user);
+    int getSecureLockDeviceAvailability(in UserHandle user);
 
     @EnforcePermission("MANAGE_SECURE_LOCK_DEVICE")
     boolean isSecureLockDeviceEnabled();
@@ -46,9 +46,15 @@ interface IAuthenticationPolicyService {
     @EnforcePermission("MANAGE_SECURE_LOCK_DEVICE")
     void unregisterSecureLockDeviceStatusListener(in ISecureLockDeviceStatusListener listener);
 
+    @EnforcePermission("TEST_BIOMETRIC")
+    void setSecureLockDeviceTestStatus(boolean isTestMode);
+
     @EnforcePermission("USE_BIOMETRIC_INTERNAL")
     void startWatchRangingForIdentityCheck(in long authenticationRequestId, in IProximityResultCallback resultCallback);
 
     @EnforcePermission("USE_BIOMETRIC_INTERNAL")
     void cancelWatchRangingForRequestId(in long authenticationRequestId);
+
+    @EnforcePermission("USE_BIOMETRIC_INTERNAL")
+    void isWatchRangingAvailable(in IProximityResultCallback resultCallback);
 }

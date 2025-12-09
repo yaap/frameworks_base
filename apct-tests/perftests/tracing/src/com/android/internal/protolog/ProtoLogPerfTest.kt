@@ -18,7 +18,6 @@ package com.android.internal.protolog
 import android.os.ServiceManager
 import android.perftests.utils.PerfStatusReporter
 import android.platform.test.annotations.Postsubmit
-import android.tools.ScenarioBuilder
 import android.tools.traces.busyWaitForDataSourceRegistration
 import android.tools.traces.busyWaitTracingSessionDoesntExist
 import android.tools.traces.busyWaitTracingSessionExists
@@ -93,7 +92,6 @@ class ProtoLogPerfTest(logType: LogType) {
     @Before
     @Throws(ServiceManager.ServiceNotFoundException::class)
     fun setUp() {
-        TEST_GROUP.isLogToProto = mLogToProto
         TEST_GROUP.isLogToLogcat = mLogToLogcat
 
         mProcessedProtoLogger =
@@ -192,7 +190,7 @@ class ProtoLogPerfTest(logType: LogType) {
     // Helper to create a dummy ResultWriter
     private fun createDummyWriter(scenarioDir: File): ResultWriter {
         return ResultWriter()
-            .forScenario(ScenarioBuilder().forClass("DataSourcePerfTest").build())
+            .withName("DataSourcePerfTest")
             .withOutputDir(scenarioDir)
             .setRunComplete()
     }
@@ -225,7 +223,6 @@ class ProtoLogPerfTest(logType: LogType) {
         val TEST_GROUP =
             object : IProtoLogGroup {
                 private val mEnabled: Boolean = true
-                @field:Volatile private var mLogToProto: Boolean = true
                 @field:Volatile private var mLogToLogcat: Boolean = true
                 private val mTag: String = "WindowManagerProtoLogTest"
 
@@ -233,24 +230,12 @@ class ProtoLogPerfTest(logType: LogType) {
                     return mEnabled
                 }
 
-                override fun isLogToProto(): Boolean {
-                    return mLogToProto
-                }
-
                 override fun isLogToLogcat(): Boolean {
                     return mLogToLogcat
                 }
 
-                override fun isLogToAny(): Boolean {
-                    return mLogToLogcat || mLogToProto
-                }
-
                 override fun getTag(): String? {
                     return mTag
-                }
-
-                override fun setLogToProto(logToProto: Boolean) {
-                    this.mLogToProto = logToProto
                 }
 
                 override fun setLogToLogcat(logToLogcat: Boolean) {

@@ -36,7 +36,9 @@ import com.android.systemui.statusbar.notification.collection.BundleEntry
 import com.android.systemui.statusbar.notification.collection.PipelineDumpable
 import com.android.systemui.statusbar.notification.collection.PipelineDumper
 import com.android.systemui.statusbar.notification.collection.coordinator.BundleCoordinator.Companion.debugBundleLog
+import com.android.systemui.statusbar.notification.icon.IconManager
 import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow
+import com.android.systemui.statusbar.notification.row.ExpandableView
 import com.android.systemui.statusbar.notification.row.RowInflaterTask
 import com.android.systemui.statusbar.notification.row.RowInflaterTaskLogger
 import com.android.systemui.statusbar.notification.row.dagger.BundleRowComponent
@@ -54,7 +56,7 @@ class BundleBarn
 @Inject
 constructor(
     private val rowComponent: ExpandableNotificationRowComponent.Builder,
-    private val bundleRowComponentBuilder: BundleRowComponent.Builder,
+    private val bundleRowComponentFactory: BundleRowComponent.Factory,
     private val rowInflaterTaskProvider: Provider<RowInflaterTask>,
     private val listContainer: NotificationListContainer,
     @ShadeDisplayAware val context: Context,
@@ -62,6 +64,7 @@ constructor(
     val logger: RowInflaterTaskLogger,
     val userTracker: UserTracker,
     private val presenterLazy: Lazy<NotificationPresenter?>? = null,
+    private val iconManager: IconManager,
 ) : PipelineDumpable {
 
     /**
@@ -78,6 +81,7 @@ constructor(
             debugBundleLog(TAG) { "already in map: ${bundleEntry.key}" }
             return
         }
+        iconManager.createIcons(context, bundleEntry)
         val parent: ViewGroup = listContainer.getViewParentForNotification()
         val inflationFinishedListener: (ExpandableNotificationRow) -> Unit = { row ->
             // A subset of NotificationRowBinderImpl.inflateViews
@@ -92,7 +96,14 @@ constructor(
             val controller = component.expandableNotificationRowController
             controller.init(bundleEntry)
             keyToControllerMap[bundleEntry.key] = controller
-            row.repeatWhenAttached { repeatOnLifecycle(Lifecycle.State.CREATED) { row.reset() } }
+            row.repeatWhenAttached {
+                repeatOnLifecycle(Lifecycle.State.CREATED) {
+                    if (!row.isTransient) {
+                        row.updateBackgroundColorsOfSelf()
+                        row.reset()
+                    }
+                }
+            }
             initBundleHeaderView(bundleEntry, row)
         }
         debugBundleLog(TAG) { "calling inflate: ${bundleEntry.key}" }
@@ -104,17 +115,17 @@ constructor(
 
     private fun initBundleHeaderView(bundleEntry: BundleEntry, row: ExpandableNotificationRow) {
         val bundleRowComponent =
-            bundleRowComponentBuilder.bindBundleRepository(bundleEntry.bundleRepository).build()
+            bundleRowComponentFactory.create(repository = bundleEntry.bundleRepository)
         val headerComposeView = ComposeView(context)
         row.setBundleHeaderView(headerComposeView)
+        val viewModelFactory = bundleRowComponent.bundleViewModelFactory()
         headerComposeView.repeatWhenAttached {
             repeatOnLifecycle(Lifecycle.State.CREATED) {
                 headerComposeView.initOnBackPressedDispatcherOwner(lifecycle)
                 headerComposeView.setContent {
                     HeaderComposeViewContent(
                         row = row,
-                        bundleHeaderViewModelFactory =
-                            bundleRowComponent.bundleViewModelFactory()::create,
+                        bundleHeaderViewModelFactory = viewModelFactory::create,
                     )
                 }
             }
@@ -169,12 +180,22 @@ private fun HeaderComposeViewContent(
                 traceName = "BundleHeaderViewModel",
                 factory = bundleHeaderViewModelFactory,
             )
+        BundleHeader(viewModel)
         DisposableEffect(viewModel) {
             row.setBundleHeaderViewModel(viewModel)
-            onDispose { row.setBundleHeaderViewModel(null) }
+            row.setOnClickListener {
+                viewModel.onHeaderClicked()
+                row.expandNotification()
+            }
+            onDispose {
+                row.setOnClickListener(null)
+                row.setBundleHeaderViewModel(null)
+            }
         }
-        BundleHeader(viewModel, onHeaderClicked = { row.expandNotification() })
     }
 }
+
+private inline val ExpandableView.isTransient
+    get() = transientContainer != null
 
 private const val TAG = "BundleBarn"

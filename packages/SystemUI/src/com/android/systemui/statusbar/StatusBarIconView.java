@@ -42,6 +42,7 @@ import android.os.UserHandle;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.FloatProperty;
+import android.util.LayoutDirection;
 import android.util.Log;
 import android.util.Property;
 import android.util.TypedValue;
@@ -59,9 +60,11 @@ import com.android.internal.statusbar.StatusBarIcon;
 import com.android.internal.statusbar.StatusBarIcon.Shape;
 import com.android.internal.util.ContrastColorUtil;
 import com.android.systemui.res.R;
+import com.android.systemui.scene.shared.flag.SceneContainerFlag;
 import com.android.systemui.statusbar.notification.NotificationContentDescription;
 import com.android.systemui.statusbar.notification.NotificationDozeHelper;
 import com.android.systemui.statusbar.notification.NotificationUtils;
+import com.android.systemui.statusbar.notification.collection.BundleEntry;
 import com.android.systemui.util.drawable.DrawableSize;
 
 import java.lang.annotation.Retention;
@@ -143,8 +146,10 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     @VisibleForTesting int mNewStatusBarIconSize = 1;
     @VisibleForTesting float mScaleToFitNewIconSize = 1;
     private StatusBarIcon mIcon;
+    private int mLayoutDirectionForLoadedDrawable = LayoutDirection.UNDEFINED;
     @ViewDebug.ExportedProperty private String mSlot;
-    private StatusBarNotification mNotification;
+    @Nullable private StatusBarNotification mNotification;
+    @Nullable private BundleEntry mBundleEntry;
     private final boolean mBlocked;
     private Configuration mConfiguration;
     private boolean mNightMode;
@@ -185,6 +190,12 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     }
 
     public StatusBarIconView(Context context, String slot, StatusBarNotification sbn,
+            BundleEntry entry) {
+        this(context, slot, sbn, false);
+        mBundleEntry = entry;
+    }
+
+    public StatusBarIconView(Context context, String slot, StatusBarNotification sbn,
             boolean blocked) {
         super(context);
         mDozer = new NotificationDozeHelper();
@@ -207,7 +218,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     public void maybeUpdateIconScaleDimens() {
         // We scale notification icons (on the left) plus icons on the right that explicitly
         // want FIXED_SPACE.
-        boolean useNonSystemIconScaling = isNotification()
+        boolean useNonSystemIconScaling = isShownWithNotifications()
                 || (mIcon != null && mIcon.shape == Shape.FIXED_SPACE);
 
         if (useNonSystemIconScaling) {
@@ -374,6 +385,10 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
         return mNotification != null;
     }
 
+    private boolean isShownWithNotifications() {
+        return mNotification != null || mBundleEntry != null;
+    }
+
     public boolean equalIcons(Icon a, Icon b) {
         if (a == b) return true;
         if (a.getType() != b.getType()) return false;
@@ -445,6 +460,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
             setImageDrawable(null);
         }
         setImageDrawable(drawable);
+        mLayoutDirectionForLoadedDrawable = getLayoutDirection();
         return true;
     }
 
@@ -531,14 +547,17 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     @Override
     public void onRtlPropertiesChanged(int layoutDirection) {
         super.onRtlPropertiesChanged(layoutDirection);
-        updateDrawable();
+        if (!SceneContainerFlag.isEnabled()
+                || mLayoutDirectionForLoadedDrawable != layoutDirection) {
+            updateDrawable();
+        }
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
-        if (!isNotification()) {
+        if (!isShownWithNotifications()) {
             // for system icons, calculated measured width from super is for image drawable real
             // width (17dp). We may scale the image with font scale, so we also need to scale the
             // measured width so that scaled measured width and image width would be fit.
@@ -620,7 +639,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     }
 
     private void initializeDecorColor() {
-        if (isNotification()) {
+        if (isShownWithNotifications()) {
             setDecorColor(getContext().getColor(mNightMode
                     ? com.android.internal.R.color.notification_default_color_dark
                     : com.android.internal.R.color.notification_default_color_light));

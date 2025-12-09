@@ -22,7 +22,6 @@ import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.annotation.TestApi;
 import android.app.ActivityThread;
-import android.app.Instrumentation;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.ravenwood.annotation.RavenwoodKeepWholeClass;
 import android.ravenwood.annotation.RavenwoodRedirect;
@@ -97,32 +96,12 @@ public final class MessageQueue {
     private native static boolean nativeIsPolling(long ptr);
     @RavenwoodRedirect
     private native static void nativeSetFileDescriptorEvents(long ptr, int fd, int events);
+    @RavenwoodRedirect
+    private native static void nativeSetSkipEpollWaitForZeroTimeout(long ptr);
 
     MessageQueue(boolean quitAllowed) {
         mQuitAllowed = quitAllowed;
         mPtr = nativeInit();
-    }
-
-    @android.ravenwood.annotation.RavenwoodReplace
-    private static void throwIfNotTest() {
-        final ActivityThread activityThread = ActivityThread.currentActivityThread();
-        if (activityThread == null) {
-            // Only tests can reach here.
-            return;
-        }
-        final Instrumentation instrumentation = activityThread.getInstrumentation();
-        if (instrumentation == null) {
-            // Only tests can reach here.
-            return;
-        }
-        if (instrumentation.isInstrumenting()) {
-            return;
-        }
-        throw new IllegalStateException("Test-only API called not from a test!");
-    }
-
-    private static void throwIfNotTest$ravenwood() {
-        return;
     }
 
     @Override
@@ -143,8 +122,13 @@ public final class MessageQueue {
         }
     }
 
+    static boolean getUseConcurrent() {
+        return false;
+    }
+
     /**
-     * Returns true if the looper has no pending messages which are due to be processed.
+     * Returns true if the looper has no pending messages which are due to be processed
+     * and is not blocked on sync barrier.
      *
      * <p>This method is safe to call from any thread.
      *
@@ -485,6 +469,66 @@ public final class MessageQueue {
         }
     }
 
+    /**
+     * Returns the last message in the queue in execution order.
+     *
+     * Caller must ensure that this doesn't race 'next' from the Looper thread.
+     * @hide
+     */
+    public @Nullable Message peekLastMessageForTest() {
+        ActivityThread.throwIfNotInstrumenting();
+        synchronized (this) {
+            Message lastMsg = null;
+
+            Message current = mMessages;
+            while (current != null) {
+                if (current.target != null && (lastMsg == null || lastMsg.when <= current.when)) {
+                    lastMsg = current;
+                }
+                current = current.next;
+            }
+
+            return lastMsg;
+        }
+    }
+
+    /**
+     * Resets this queue's state and allows it to continue being used.
+     *
+     * @hide
+     */
+    public void resetForTest() {
+        ActivityThread.throwIfNotInstrumenting();
+        synchronized (this) {
+            // This queue is already quitting, so we can't reset its state and continue using it.
+            if (mQuitting) {
+                return;
+            }
+            mIdleHandlers.clear();
+            removeAllFdRecords();
+            removeAllMessagesLocked();
+            // We reset the sync barrier tokens to reflect the queue's state reset. This helps
+            // ensure that the queue's behavior is deterministic in both individual tests and in a
+            // test suite.
+            resetSyncBarrierTokens();
+            nativeWake(mPtr);
+        }
+    }
+
+    private void removeAllFdRecords() {
+        if (mFileDescriptorRecords != null) {
+            while (mFileDescriptorRecords.size() > 0) {
+                removeOnFileDescriptorEventListener(mFileDescriptorRecords.valueAt(0).mDescriptor);
+            }
+        }
+    }
+
+    private void resetSyncBarrierTokens() {
+        // Legacy MQ doesn't use an atomic integer for barrier tokens.
+        // mNextBarrierTokenAtomic.set(1);
+        mNextBarrierToken = 0;
+    }
+
     void quit(boolean safe) {
         if (!mQuitAllowed) {
             throw new IllegalStateException("Main thread not allowed to quit.");
@@ -758,7 +802,7 @@ public final class MessageQueue {
      */
     @SuppressLint("VisiblySynchronized") // Legacy MessageQueue synchronizes on this
     Long peekWhenForTest() {
-        throwIfNotTest();
+        ActivityThread.throwIfNotInstrumenting();
         Message ret = legacyPeekOrPoll(true);
         return ret != null ? ret.when : null;
     }
@@ -772,7 +816,7 @@ public final class MessageQueue {
     @SuppressLint("VisiblySynchronized") // Legacy MessageQueue synchronizes on this
     @Nullable
     Message pollForTest() {
-        throwIfNotTest();
+        ActivityThread.throwIfNotInstrumenting();
         return legacyPeekOrPoll(false);
     }
 
@@ -784,7 +828,7 @@ public final class MessageQueue {
      * and may not be resumed until after returning from this method.
      */
     boolean isBlockedOnSyncBarrier() {
-        throwIfNotTest();
+        ActivityThread.throwIfNotInstrumenting();
         synchronized (this) {
             Message msg = mMessages;
             return msg != null && msg.target == null;

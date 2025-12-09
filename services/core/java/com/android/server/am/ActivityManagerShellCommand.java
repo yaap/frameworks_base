@@ -1296,7 +1296,7 @@ final class ActivityManagerShellCommand extends ShellCommand {
             if (isFullCompact) {
                 pw.println("Executing full compaction for " + app.mPid);
                 synchronized (mInternal.mProcLock) {
-                    mInternal.mOomAdjuster.mCachedAppOptimizer.compactApp(app,
+                    mInternal.getCachedAppOptimizer().compactApp(app,
                             CachedAppOptimizer.CompactProfile.FULL,
                             CachedAppOptimizer.CompactSource.SHELL, true);
                 }
@@ -1304,7 +1304,7 @@ final class ActivityManagerShellCommand extends ShellCommand {
             } else if (isSomeCompact) {
                 pw.println("Executing some compaction for " + app.mPid);
                 synchronized (mInternal.mProcLock) {
-                    mInternal.mOomAdjuster.mCachedAppOptimizer.compactApp(app,
+                    mInternal.getCachedAppOptimizer().compactApp(app,
                             CachedAppOptimizer.CompactProfile.SOME,
                             CachedAppOptimizer.CompactSource.SHELL, true);
                 }
@@ -1313,7 +1313,7 @@ final class ActivityManagerShellCommand extends ShellCommand {
         } else if (op.equals("system")) {
             pw.println("Executing system compaction");
             synchronized (mInternal.mProcLock) {
-                mInternal.mOomAdjuster.mCachedAppOptimizer.compactAllSystem();
+                mInternal.getCachedAppOptimizer().compactAllSystem();
             }
             pw.println("Finished system compaction");
         } else if (op.equals("native")) {
@@ -1329,10 +1329,10 @@ final class ActivityManagerShellCommand extends ShellCommand {
                 return -1;
             }
             if (isFullCompact) {
-                mInternal.mOomAdjuster.mCachedAppOptimizer.compactNative(
+                mInternal.getCachedAppOptimizer().compactNative(
                         CachedAppOptimizer.CompactProfile.FULL, pid);
             } else if (isSomeCompact) {
-                mInternal.mOomAdjuster.mCachedAppOptimizer.compactNative(
+                mInternal.getCachedAppOptimizer().compactNative(
                         CachedAppOptimizer.CompactProfile.SOME, pid);
             } else {
                 getErrPrintWriter().println("Error: unknown compaction type '" + op + "'");
@@ -1365,9 +1365,9 @@ final class ActivityManagerShellCommand extends ShellCommand {
             synchronized (mInternal.mProcLock) {
                 proc.mOptRecord.setFreezeSticky(isSticky);
                 if (freeze) {
-                    mInternal.mOomAdjuster.mCachedAppOptimizer.forceFreezeAppAsyncLSP(proc);
+                    mInternal.getCachedAppOptimizer().forceFreezeAppAsyncLSP(proc);
                 } else {
-                    mInternal.mOomAdjuster.mCachedAppOptimizer.unfreezeAppLSP(proc, 0, true);
+                    mInternal.getCachedAppOptimizer().unfreezeAppLSP(proc, 0, true);
                 }
             }
         }
@@ -1517,11 +1517,11 @@ final class ActivityManagerShellCommand extends ShellCommand {
         HashMap<Long, Integer> duplicatedBitmaps;
 
         private static final String bitmapInfoHeader =
-          "   Bitmap ID  | Width | Height |   Size   |   Config  | M |   Type   |  Source";
+          "   Bitmap ID  | Width | Height |   Size     |   Config  | M |   Type   |  Source";
         private static final String bitmapInfoSep =
-          "--------------|-------|--------|----------|-----------|---|----------|--------";
+          "--------------|-------|--------|------------|-----------|---|----------|--------";
         private static final String bitmapInfoRowFormat =
-          " %12d | %5d |  %5d | %8d | %9.9s | %s | %8.8s | %12d";
+          " %12d | %5d |  %5d | %,10d | %9.9s | %s | %8.8s | %12d";
 
         private static final String bitmapInfoHeaderCSV =
           "PID, Process Name, Bitmap ID, Width, Height, Size, Config, Mutable, AllocType, Source";
@@ -3113,6 +3113,9 @@ final class ActivityManagerShellCommand extends ShellCommand {
 
     int runLogoutUser(PrintWriter pw) {
         int userId = UserHandle.parseUserArg(getNextArgRequired());
+        if (userId == UserHandle.USER_CURRENT) {
+            userId = mInternal.getCurrentUserId();
+        }
         if (!mInternal.logoutUser(userId)) {
             getErrPrintWriter().println("Failed to logout user: " + userId);
             return -1;
