@@ -106,8 +106,9 @@ class ScreenRecordPermissionContentManager(
         ): ScreenRecordPermissionContentManager
     }
 
-    private val isHEVCAllowed: Boolean = userContextProvider
-        .userContext.resources.getBoolean(R.bool.config_screenRecordHEVC)
+    private val isHEVCAllowed: Boolean by lazy {
+        containerView.context.resources.getBoolean(R.bool.config_screenRecordHEVC)
+    }
     private lateinit var tapsSwitch: CompoundButton
     private lateinit var audioSwitch: CompoundButton
     private lateinit var tapsView: View
@@ -170,6 +171,8 @@ class ScreenRecordPermissionContentManager(
         // within its target region, to meet accessibility requirements
         audioSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
         tapsSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
+        skipTimeSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
+        hevcSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
 
         options = containerView.requireViewById(R.id.screen_recording_options)
         val a: ArrayAdapter<*> =
@@ -224,7 +227,7 @@ class ScreenRecordPermissionContentManager(
             hevcView.visibility = View.GONE
         }
 
-        val userContext = userContextProvider.userContext
+        val userContext = containerView.context
         tapsSwitch.isChecked = Prefs.getInt(userContext, PREF_TAPS, 0) == 1
         lowQualitySpinner.setSelection(Prefs.getInt(userContext, PREF_LOW, 0))
         audioSwitch.isChecked = Prefs.getInt(userContext, PREF_AUDIO, 0) == 1
@@ -263,8 +266,8 @@ class ScreenRecordPermissionContentManager(
         val skipTime = skipTimeSwitch.isChecked
 
         controller.startCountdown(
-            DELAY_MS,
-            INTERVAL_MS,
+            if (skipTime) NO_DELAY else DELAY_MS,
+            if (skipTime) NO_DELAY else INTERVAL_MS,
             {
                 screenRecordingStartStopInteractor.startRecording(
                     ScreenRecordingParameters(
@@ -274,7 +277,6 @@ class ScreenRecordPermissionContentManager(
                         shouldShowTaps = showTaps,
                         lowQuality = lowQuality,
                         hevc = hevc,
-                        skipTime = skipTime,
                     )
                 )
             },
@@ -299,7 +301,7 @@ class ScreenRecordPermissionContentManager(
     }
 
     public fun savePreferences() {
-        val userContext = userContextProvider.userContext
+        val userContext = containerView.context
         Prefs.putInt(userContext, PREF_TAPS, if (tapsSwitch.isChecked) 1 else 0)
         Prefs.putInt(userContext, PREF_LOW, lowQualitySpinner.selectedItemPosition)
         Prefs.putInt(userContext, PREF_AUDIO, if (audioSwitch.isChecked) 1 else 0)

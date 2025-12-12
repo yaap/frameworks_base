@@ -119,7 +119,22 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
             ScreenRecordingAudioSource audioSource,
             MediaProjectionCaptureTarget captureRegion,
             int displayId,
-            ScreenMediaRecorderListener listener) {
+            ScreenMediaRecorderListener listener)
+    {
+        this(context, handler, uid, audioSource, captureRegion,
+                displayId, listener, 0, true);
+    }
+
+    public ScreenMediaRecorder(
+            Context context,
+            Handler handler,
+            int uid,
+            ScreenRecordingAudioSource audioSource,
+            MediaProjectionCaptureTarget captureRegion,
+            int displayId,
+            ScreenMediaRecorderListener listener,
+            int lowQuality,
+            boolean hevc) {
         mContext = context;
         mHandler = handler;
         mUid = uid;
@@ -127,6 +142,9 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
         mListener = listener;
         mAudioSource = audioSource;
         mDisplayId = displayId;
+
+        mLowQuality = lowQuality;
+        mHEVC = hevc;
 
         mMaxRefreshRate = mContext.getResources().getInteger(
                 R.integer.config_screenRecorderMaxFramerate);

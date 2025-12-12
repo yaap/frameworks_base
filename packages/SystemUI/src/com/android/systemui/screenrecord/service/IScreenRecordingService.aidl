@@ -27,6 +27,8 @@ interface IScreenRecordingService {
         in MediaProjectionCaptureTarget captureTarget,
         int audioSource,
         int displayId,
-        boolean shouldShowTaps
+        boolean shouldShowTaps,
+        int lowQuality,
+        boolean hevc
     );
 }

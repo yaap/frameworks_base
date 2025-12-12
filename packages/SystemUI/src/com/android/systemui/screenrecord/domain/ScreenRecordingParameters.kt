@@ -25,6 +25,5 @@ data class ScreenRecordingParameters(
     val displayId: Int,
     val shouldShowTaps: Boolean,
     val lowQuality: Int,
-    val hevc: Boolean,
-    val skipTime: Boolean
+    val hevc: Boolean
 )
