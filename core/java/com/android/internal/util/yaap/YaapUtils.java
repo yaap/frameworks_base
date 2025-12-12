@@ -19,6 +19,7 @@ package com.android.internal.util.yaap;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.input.InputManager;
+import android.hardware.input.InputManagerGlobal;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.os.Handler;
@@ -65,14 +66,14 @@ public class YaapUtils {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                InputManager.getInstance().injectInputEvent(evDown,
+                InputManagerGlobal.getInstance().injectInputEvent(evDown,
                         InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
             }
         });
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                InputManager.getInstance().injectInputEvent(evUp,
+                InputManagerGlobal.getInstance().injectInputEvent(evUp,
                         InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
             }
         }, 20);
