@@ -1,2 +1,0 @@
-rule kotlin.** com.libremobileos.server.jarjar.@0
-rule kotlinx.** com.libremobileos.server.jarjar.@0
