@@ -402,6 +402,8 @@ constructor(
             mView.requireViewById<ViewGroup>(R.id.hover_system_icons_container).apply {
                 addView(batteryComposeView, -1)
             }
+
+            batteryComposeView.setOnClickListener { launchBatteryActivity() }
         }
 
         carrierIconSlots =
