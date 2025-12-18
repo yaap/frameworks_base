@@ -453,7 +453,7 @@ final class KeyGestureController {
                     @Override
                     public boolean preCondition() {
                         switch (mPowerVolUpBehavior) {
-                            case POWER_VOLUME_UP_BEHAVIOR_MUTE:
+                            case POWER_VOLUME_UP_BEHAVIOR_GLOBAL_ACTIONS:
                                 return !mRingerToggleChord.equals(Settings.Secure.VOLUME_HUSH_OFF);
                             default:
                                 return true;
@@ -484,10 +484,10 @@ final class KeyGestureController {
                     @KeyGestureEvent.KeyGestureType
                     private int getGestureType() {
                         switch (mPowerVolUpBehavior) {
-                            case POWER_VOLUME_UP_BEHAVIOR_MUTE -> {
+                            case POWER_VOLUME_UP_BEHAVIOR_GLOBAL_ACTIONS -> {
                                 return KeyGestureEvent.KEY_GESTURE_TYPE_RINGER_TOGGLE_CHORD;
                             }
-                            case POWER_VOLUME_UP_BEHAVIOR_GLOBAL_ACTIONS -> {
+                            case POWER_VOLUME_UP_BEHAVIOR_MUTE -> {
                                 return KeyGestureEvent.KEY_GESTURE_TYPE_GLOBAL_ACTIONS;
                             }
                             default -> {
