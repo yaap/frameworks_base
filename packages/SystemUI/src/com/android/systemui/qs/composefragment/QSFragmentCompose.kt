@@ -1624,6 +1624,9 @@ fun QuickSettingsLayout(
                 Box(modifier = Modifier.weight(1f)) { tiles() }
                 Box(modifier = Modifier.weight(1f)) { media() }
             }
+            if (showSlider != 0 && !sliderAtTop) {
+                brightness()
+            }
         } else {
             tiles()
             if (showSlider != 0 && !sliderAtTop) {
