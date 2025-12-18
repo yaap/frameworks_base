@@ -763,10 +763,6 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 addIfShouldShowAction(tempActions, restartAction);
             } else if (GLOBAL_ACTION_KEY_SCREENSHOT.equals(actionKey)) {
                 addIfShouldShowAction(tempActions, new ScreenshotAction());
-            } else if (GLOBAL_ACTION_KEY_LOGOUT.equals(actionKey)) {
-                if (mLogoutInteractor.isLogoutEnabled().getValue()) {
-                    addIfShouldShowAction(tempActions, new LogoutAction());
-                }
             } else if (GLOBAL_ACTION_KEY_EMERGENCY.equals(actionKey)) {
                 if (shouldDisplayEmergency()) {
                     addIfShouldShowAction(tempActions, new EmergencyDialerAction());
