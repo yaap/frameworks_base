@@ -97,8 +97,13 @@ fun OngoingActivityChip(
                 }
             is OngoingActivityChipModel.ClickBehavior.None -> null
         }
+    val onLongClick: ((Expandable) -> Unit)? =
+        model.onLongClickListener?.let { listener -> { expandable: Expandable ->
+            listener.onLongClick(null)
+        }
+    }
     val onClickLabel = model.clickBehavior.customOnClickLabel?.let { stringResource(it) }
-    val isClickable = onClick != null
+    val isClickable = onClick != null || onLongClick != null
 
     val chipSidePaddingTotal = 20.dp
     val minWidth =
@@ -149,6 +154,7 @@ fun OngoingActivityChip(
                 ),
         borderStroke = borderStroke,
         onClick = onClick,
+        onLongClick = onLongClick,
         onClickLabel = onClickLabel,
         useModifierBasedImplementation = StatusBarChipsReturnAnimations.isEnabled,
         // Some chips like the 3-2-1 countdown chip should be very small, smaller than a
