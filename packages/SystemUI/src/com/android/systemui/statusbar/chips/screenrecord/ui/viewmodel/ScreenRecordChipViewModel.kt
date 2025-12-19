@@ -18,7 +18,6 @@ package com.android.systemui.statusbar.chips.screenrecord.ui.viewmodel
 
 import android.app.ActivityManager
 import android.content.Context
-import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.annotation.DrawableRes
 import com.android.internal.jank.Cuj
@@ -123,7 +122,6 @@ constructor(
                                     tag = TAG,
                                 ),
                             onLongClickListener = View.OnLongClickListener { view ->
-                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                                 stopRecordingFromDialog()
                                 true
                             },

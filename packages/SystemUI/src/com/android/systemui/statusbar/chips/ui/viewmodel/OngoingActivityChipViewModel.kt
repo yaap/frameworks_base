@@ -65,7 +65,7 @@ interface OngoingActivityChipViewModel {
                 StatusBarChipsModernization.assertInLegacyMode()
 
                 logger.log(tag, LogLevel.INFO, {}, { "Chip clicked" })
-                Toast.makeText(view.getContext(), R.string.chip_longpress_hint, Toast.LENGTH_SHORT).show()
+                Toast.makeText(view.context, R.string.chip_longpress_hint, Toast.LENGTH_SHORT).show()
                 uiEventLogger.logChipTapToShow(key, instanceId)
 
                 val dialog = dialogDelegateCreator(view.context).createDialog()
@@ -99,6 +99,7 @@ interface OngoingActivityChipViewModel {
 
                 val controller = expandable.dialogTransitionController(cuj)
                 val viewContext = controller?.viewRoot?.view?.context
+                Toast.makeText(viewContext, R.string.chip_longpress_hint, Toast.LENGTH_SHORT).show()
                 if (viewContext != null) {
                     val dialog = dialogDelegateCreator(viewContext).createDialog()
                     dialogTransitionAnimator.show(dialog, controller)
