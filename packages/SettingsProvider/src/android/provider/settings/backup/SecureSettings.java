@@ -369,5 +369,6 @@ public class SecureSettings {
         Settings.Secure.SCREENSHOT_KEY_GESTURE_ENABLED,
         Settings.Secure.VOLUME_UP_DOWN_MUTE_GESTURE,
         Settings.Secure.WAKE_ON_CHARGE,
+        Settings.Secure.SCREENSHOT_SOUNDS,
     };
 }

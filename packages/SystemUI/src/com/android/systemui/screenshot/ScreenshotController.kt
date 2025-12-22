@@ -452,8 +452,10 @@ internal constructor(
      * failure).
      */
     private fun saveScreenshotAndToast(screenshot: ScreenshotData, finisher: Consumer<Uri?>) {
-        // Play the shutter sound to notify that we've taken a screenshot
-        screenshotSoundController.playScreenshotSoundAsync()
+        if (shouldPlaySound(Process.myUserHandle())) {
+            // Play the shutter sound to notify that we've taken a screenshot
+            screenshotSoundController.playScreenshotSoundAsync()
+        }
 
         saveScreenshotInBackground(screenshot, UUID.randomUUID(), finisher) {
             result: ImageExporter.Result ->
@@ -481,8 +483,10 @@ internal constructor(
         screenshotAnimation =
             viewProxy.createScreenshotDropInAnimation(screenRect, showFlash).apply {
                 doOnEnd { onAnimationComplete?.run() }
-                // Play the shutter sound to notify that we've taken a screenshot
-                screenshotSoundController.playScreenshotSoundAsync()
+                if (shouldPlaySound(Process.myUserHandle())) {
+                    // Play the shutter sound to notify that we've taken a screenshot
+                    screenshotSoundController.playScreenshotSoundAsync()
+                }
                 if (LogConfig.DEBUG_ANIM) {
                     Log.d(TAG, "starting post-screenshot animation")
                 }
@@ -558,6 +562,14 @@ internal constructor(
             context.createContextAsUser(owner, 0).contentResolver,
             SETTINGS_SECURE_USER_SETUP_COMPLETE,
             0,
+        ) == 1
+    }
+
+    private fun shouldPlaySound(owner: UserHandle): Boolean {
+        return Settings.Secure.getInt(
+            context.createContextAsUser(owner, 0).contentResolver,
+            Settings.Secure.SCREENSHOT_SOUNDS,
+            1,
         ) == 1
     }
 

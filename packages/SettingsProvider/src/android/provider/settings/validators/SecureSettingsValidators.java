@@ -604,5 +604,6 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.VOLUME_UP_DOWN_MUTE_GESTURE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.VOLUME_UP_DOWN_MUTE_GESTURE_LAST_VOLUME, ANY_INTEGER_VALIDATOR);
         VALIDATORS.put(Secure.WAKE_ON_CHARGE, new InclusiveIntegerRangeValidator(0, 2));
+        VALIDATORS.put(Secure.SCREENSHOT_SOUNDS, BOOLEAN_VALIDATOR);
     }
 }
