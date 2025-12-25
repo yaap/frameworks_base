@@ -169,7 +169,7 @@ constructor(
     fun onDoubleTapEvent(): Boolean {
         // React to the [MotionEvent.ACTION_UP] event after double tap is detected. Falsing
         // checks MUST be on the ACTION_UP event.
-        val enabled = (doubleTapEnabled || singleTapEnabled || doubleTapEnabledNative)
+        val enabled = (doubleTapEnabled || doubleTapEnabledNative)
         val allowed = usesLegacy || (!doubleTapAmbientEnabled && doubleTapAmbientAllowed)
         if (
             statusBarStateController.isDozing &&
