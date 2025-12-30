@@ -29,6 +29,7 @@ import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.development.data.repository.DevelopmentSettingRepository
 import com.android.systemui.development.shared.model.BuildNumber
 import com.android.systemui.res.R as SystemUIR
+import com.android.systemui.statusbar.phone.SystemUIDialog
 import com.android.systemui.user.data.repository.UserRepository
 import com.android.systemui.user.utils.UserScopedService
 import javax.inject.Inject
@@ -51,6 +52,7 @@ constructor(
     private val clipboardManagerProvider: UserScopedService<ClipboardManager>,
     @Background private val backgroundDispatcher: CoroutineDispatcher,
     @Application private val applicationScope: CoroutineScope,
+    private val systemUIDialogFactory: SystemUIDialog.Factory,
 ) {
 
     /**
@@ -89,5 +91,9 @@ constructor(
                 .forUser(currentUserHandle)
                 .setPrimaryClip(ClipData.newPlainText(clipLabel, buildText.value))
         }
+    }
+
+    public fun getSystemUIDialogFactory(): SystemUIDialog.Factory {
+        return systemUIDialogFactory
     }
 }

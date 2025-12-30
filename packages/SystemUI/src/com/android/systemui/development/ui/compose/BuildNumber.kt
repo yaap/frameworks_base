@@ -16,7 +16,20 @@
 
 package com.android.systemui.development.ui.compose
 
+import android.content.Context
+import android.database.ContentObserver
+import android.os.UserHandle
+import android.provider.Settings
+import android.text.InputType
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -25,10 +38,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.onLongClick
@@ -39,6 +58,7 @@ import com.android.systemui.development.ui.viewmodel.BuildNumberViewModel
 import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.qs.ui.compose.borderOnFocus
 import com.android.systemui.res.R
+import com.android.systemui.statusbar.phone.SystemUIDialog
 
 @Composable
 fun BuildNumber(
@@ -57,14 +77,99 @@ fun BuildNumber(
     modifier: Modifier,
     textColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
-    val buildNumber = viewModel.buildNumber
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
 
-    if (buildNumber != null) {
-        val haptics = LocalHapticFeedback.current
-        val copyToClipboardActionLabel = stringResource(id = R.string.copy_to_clipboard_a11y_action)
+    var shouldShowBuildText by remember {
+        mutableStateOf(
+            try {
+                Settings.System.getIntForUser(
+                    context.contentResolver,
+                    Settings.System.QS_FOOTER_TEXT_SHOW, 0,
+                    UserHandle.USER_CURRENT
+                ) == 1
+            } catch (_: Throwable) {
+                false
+            }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        val toggleObserver = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                context.mainExecutor.execute {
+                    shouldShowBuildText = try {
+                        Settings.System.getIntForUser(
+                            context.contentResolver,
+                            Settings.System.QS_FOOTER_TEXT_SHOW, 0,
+                            UserHandle.USER_CURRENT
+                        ) != 0
+                    } catch (_: Throwable) {
+                        false
+                    }
+                }
+            }
+        }
+
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_SHOW),
+            false, toggleObserver, UserHandle.USER_ALL)
+
+        onDispose {
+            context.contentResolver.unregisterContentObserver(toggleObserver)
+        }
+    }
+
+    var text by remember {
+        mutableStateOf(
+            try {
+                Settings.System.getStringForUser(
+                    context.contentResolver,
+                    Settings.System.QS_FOOTER_TEXT_STRING,
+                    UserHandle.USER_CURRENT
+                )
+            } catch (_: Throwable) {
+                ""
+            }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        val textObserver = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                context.mainExecutor.execute {
+                    text = try {
+                        Settings.System.getStringForUser(
+                            context.contentResolver,
+                            Settings.System.QS_FOOTER_TEXT_STRING,
+                            UserHandle.USER_CURRENT
+                        )
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                }
+            }
+        }
+
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.QS_FOOTER_TEXT_STRING),
+            false, textObserver, UserHandle.USER_ALL)
+
+        onDispose {
+            context.contentResolver.unregisterContentObserver(textObserver)
+        }
+    }
+
+    if (text != null)
+    {
+        var textToUse = ""
+        if (shouldShowBuildText) {
+            textToUse = text
+            if (textToUse.isEmpty()) textToUse = "YAAP"
+        }
 
         Text(
-            text = buildNumber.value,
+            text = textToUse,
             style = MaterialTheme.typography.bodySmall,
             modifier =
                 modifier
@@ -74,20 +179,18 @@ fun BuildNumber(
                     )
                     .focusable()
                     .wrapContentWidth()
-                    // Using this instead of combinedClickable because this node should not support
-                    // single click
-                    .pointerInput(Unit) {
-                        detectLongPressGesture {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.onBuildNumberLongPress()
+                    .combinedClickable(
+                        onClick = {
+                            Toast.makeText(context, R.string.qs_footer_dialog_toast,
+                                Toast.LENGTH_SHORT).show()
+                        },
+                        onLongClick = {
+                            if (shouldShowBuildText) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showFooterEditDialog(context, viewModel)
+                            }
                         }
-                    }
-                    .semantics {
-                        onLongClick(copyToClipboardActionLabel) {
-                            viewModel.onBuildNumberLongPress()
-                            true
-                        }
-                    }
+                    )
                     .basicMarquee(iterations = 1, initialDelayMillis = 2000)
                     .minimumInteractiveComponentSize(),
             color = textColor,
@@ -96,4 +199,66 @@ fun BuildNumber(
     } else {
         Spacer(modifier)
     }
+}
+
+private fun setFooterText(context: Context, text: String) {
+    Settings.System.putStringForUser(
+        context.contentResolver,
+        Settings.System.QS_FOOTER_TEXT_STRING, text,
+        UserHandle.USER_CURRENT
+    )
+}
+
+private fun showFooterEditDialog(context: Context, viewModel: BuildNumberViewModel) {
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val dialog = viewModel.getSystemUIDialogFactory().create()
+    val editText = EditText(context)
+    var text = try {
+        Settings.System.getStringForUser(
+            context.contentResolver,
+            Settings.System.QS_FOOTER_TEXT_STRING,
+            UserHandle.USER_CURRENT
+        )
+    } catch (_: Throwable) {
+        ""
+    }
+    if (text.isEmpty()) text = "YAAP"
+
+    val lp = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.MATCH_PARENT)
+    editText.layoutParams = lp
+    editText.hint = "YAAP"
+    editText.setText(text, TextView.BufferType.EDITABLE)
+    editText.setSelectAllOnFocus(true)
+    editText.setSingleLine(true)
+    editText.imeOptions = EditorInfo.IME_ACTION_DONE
+    editText.setRawInputType(InputType.TYPE_CLASS_TEXT)
+    editText.setOnEditorActionListener { view, actionId, event ->
+        if (actionId == EditorInfo.IME_ACTION_DONE) {
+            setFooterText(context, editText.text.toString())
+            dialog.dismiss()
+        }
+        true
+    }
+
+    dialog.setTitle(R.string.qs_footer_dialog_title)
+    dialog.setPositiveButton(com.android.internal.R.string.ok) { d, w ->
+        setFooterText(context, editText.text.toString())
+    }
+    dialog.setOnShowListener { d ->
+        editText.requestFocus()
+    }
+    SystemUIDialog.registerDismissListener(dialog) {
+        imm?.hideSoftInputFromWindow(editText.windowToken, 0)
+    }
+    dialog.setNegativeButton(R.string.cancel, null)
+    dialog.setCanceledOnTouchOutside(true)
+    dialog.setView(editText)
+    dialog.window?.clearFlags(
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+        WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+    dialog.window?.setSoftInputMode(
+        WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+    dialog.show()
 }

@@ -21,6 +21,7 @@ import com.android.systemui.development.domain.interactor.BuildNumberInteractor
 import com.android.systemui.development.shared.model.BuildNumber
 import com.android.systemui.lifecycle.ExclusiveActivatable
 import com.android.systemui.lifecycle.Hydrator
+import com.android.systemui.statusbar.phone.SystemUIDialog
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.awaitCancellation
@@ -46,6 +47,10 @@ constructor(private val buildNumberInteractor: BuildNumberInteractor) : Exclusiv
 
     fun onBuildNumberLongPress() {
         copyRequests.trySend(Unit)
+    }
+
+    fun getSystemUIDialogFactory(): SystemUIDialog.Factory {
+        return buildNumberInteractor.getSystemUIDialogFactory()
     }
 
     override suspend fun onActivated(): Nothing {
