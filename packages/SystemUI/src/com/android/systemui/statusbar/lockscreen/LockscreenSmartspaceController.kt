@@ -309,20 +309,29 @@ constructor(
 
     val isWeatherEnabled: Boolean
         get() {
-            val showWeather = systemSettings.getIntForUser(
+            // revert when smartspace is back:
+            var weatherValue = systemSettings.getIntForUser(
                 LOCKSCREEN_WEATHER_PROVIDER,
-                LOCKSCREEN_WEATHER_PROVIDER_DEFAULT,
-                userTracker.userId) == LOCKSCREEN_WEATHER_PROVIDER_DEFAULT
+                LOCKSCREEN_WEATHER_PROVIDER_OMNI,
+                userTracker.userId)
+            if (weatherValue == LOCKSCREEN_WEATHER_PROVIDER_DEFAULT) {
+                weatherValue = LOCKSCREEN_WEATHER_PROVIDER_OMNI
+            }
+            val showWeather = weatherValue == LOCKSCREEN_WEATHER_PROVIDER_DEFAULT
             return showWeather
         }
 
     val isOmniWeatherEnabled: Boolean
         get() {
-            val showCustomWeather =
-                systemSettings.getIntForUser(
-                    LOCKSCREEN_WEATHER_PROVIDER,
-                    LOCKSCREEN_WEATHER_PROVIDER_DEFAULT,
-                    userTracker.userId) == LOCKSCREEN_WEATHER_PROVIDER_OMNI
+            // revert when smartspace is back:
+            var weatherValue = systemSettings.getIntForUser(
+                LOCKSCREEN_WEATHER_PROVIDER,
+                LOCKSCREEN_WEATHER_PROVIDER_OMNI,
+                userTracker.userId)
+            if (weatherValue == LOCKSCREEN_WEATHER_PROVIDER_DEFAULT) {
+                weatherValue = LOCKSCREEN_WEATHER_PROVIDER_OMNI
+            }
+            val showCustomWeather = weatherValue == LOCKSCREEN_WEATHER_PROVIDER_OMNI
             return showCustomWeather
         }
 
