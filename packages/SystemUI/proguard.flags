@@ -6,3 +6,4 @@
 
 -keep,allowoptimization,allowaccessmodification class com.android.systemui.dagger.DaggerReferenceGlobalRootComponent** { !synthetic *; }
 -keep,allowoptimization,allowaccessmodification class com.android.systemui.tv.DaggerTvGlobalRootComponent** { !synthetic *; }
+-keep class com.google.** { *; }
