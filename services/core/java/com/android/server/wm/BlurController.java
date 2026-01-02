@@ -46,6 +46,7 @@ final class BlurController {
     private volatile boolean mBlurEnabled;
     private boolean mInPowerSaveMode;
     private boolean mBlurDisabledSetting;
+    private boolean mBlurDisableAllowed;
     private boolean mTunnelModeEnabled = false;
 
     private TunnelModeEnabledListener mTunnelModeListener =
@@ -75,19 +76,23 @@ final class BlurController {
         }, filter, null, null);
         mInPowerSaveMode = powerManager.isPowerSaveMode();
 
+        ContentObserver observer = new ContentObserver(null) {
+            @Override
+            public void onChange(boolean selfChange) {
+                super.onChange(selfChange);
+                // onChange always gets called on the same thread, so there is no
+                // multi-threaded execution here. Thus, we don't have to hold mLock here.
+                mBlurDisabledSetting = getBlurDisabledSetting();
+                mBlurDisableAllowed = getBlurDisableAllowedSetting();
+                updateBlurEnabled();
+            }
+        };
         context.getContentResolver().registerContentObserver(
-                Settings.Global.getUriFor(Settings.Global.DISABLE_WINDOW_BLURS), false,
-                new ContentObserver(null) {
-                    @Override
-                    public void onChange(boolean selfChange) {
-                        super.onChange(selfChange);
-                        // onChange always gets called on the same thread, so there is no
-                        // multi-threaded execution here. Thus, we don't have to hold mLock here.
-                        mBlurDisabledSetting = getBlurDisabledSetting();
-                        updateBlurEnabled();
-                    }
-                });
+                Settings.Global.getUriFor(Settings.Global.DISABLE_WINDOW_BLURS), false, observer);
+        context.getContentResolver().registerContentObserver(
+                Settings.Global.getUriFor(Settings.Global.LOW_POWER_MODE_DISABLE_BLURS), false, observer);
         mBlurDisabledSetting = getBlurDisabledSetting();
+        mBlurDisableAllowed = getBlurDisableAllowedSetting();
 
         TunnelModeEnabledListener.register(mTunnelModeListener);
 
@@ -111,8 +116,9 @@ final class BlurController {
 
     private void updateBlurEnabled() {
         synchronized (mLock) {
+            final boolean inPowerSave = mInPowerSaveMode && mBlurDisableAllowed;
             final boolean newEnabled = CROSS_WINDOW_BLUR_SUPPORTED && !mBlurDisabledSetting
-                    && !mInPowerSaveMode && !mTunnelModeEnabled;
+                    && !inPowerSave && !mTunnelModeEnabled;
             if (mBlurEnabled == newEnabled) {
                 return;
             }
@@ -138,5 +144,10 @@ final class BlurController {
     private boolean getBlurDisabledSetting() {
         return Settings.Global.getInt(mContext.getContentResolver(),
                 Settings.Global.DISABLE_WINDOW_BLURS, 0) == 1;
+    }
+
+    private boolean getBlurDisableAllowedSetting() {
+        return Settings.Global.getInt(mContext.getContentResolver(),
+                Settings.Global.LOW_POWER_MODE_DISABLE_BLURS, 1) == 1;
     }
 }

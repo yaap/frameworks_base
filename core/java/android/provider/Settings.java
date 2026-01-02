@@ -21594,6 +21594,15 @@ public final class Settings {
         public static final String LOW_POWER_MODE_DMD = "low_power_mode_dmd";
 
         /**
+         * Whether {@link #LOW_POWER_MODE} affects {@link #DISABLE_WINDOW_BLURS}
+         * <p>
+         * Set to 1 for true (default) and 0 for false.
+         *
+         * @hide
+         */
+        public static final String LOW_POWER_MODE_DISABLE_BLURS = "low_power_mode_disable_blurs";
+
+        /**
          * The amount of time in milliseconds before bluetooth is turned off
          * @hide
          */
