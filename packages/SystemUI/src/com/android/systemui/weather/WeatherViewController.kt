@@ -113,23 +113,16 @@ class WeatherViewController(
         return condition.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercaseChar() } }
     }
 
-    private fun getWeatherSettings(): WeatherSettings {
-        // revert when smartspace is back:
-        var weatherValue = getSystemSettingValue(
-            LOCKSCREEN_WEATHER_PROVIDER, LOCKSCREEN_WEATHER_PROVIDER_OMNI
-        )
-        if (weatherValue == LOCKSCREEN_WEATHER_PROVIDER_DEFAULT) {
-            weatherValue = LOCKSCREEN_WEATHER_PROVIDER_OMNI
-        }
-        return WeatherSettings(
-            weatherEnabled = weatherValue == LOCKSCREEN_WEATHER_PROVIDER_OMNI,
-            showWeatherLocation = getSystemSetting(LOCKSCREEN_WEATHER_LOCATION),
-            showWeatherText = getSystemSetting(LOCKSCREEN_WEATHER_TEXT, 1),
-            showWindInfo = getSystemSetting(LOCKSCREEN_WEATHER_WIND_INFO),
-            showHumidityInfo = getSystemSetting(LOCKSCREEN_WEATHER_HUMIDITY_INFO),
-            clickUpdates = getSystemSetting(LOCKSCREEN_WEATHER_CLICK_UPDATES)
-        )
-    }
+    private fun getWeatherSettings() = WeatherSettings(
+        weatherEnabled = getSystemSettingValue(
+            LOCKSCREEN_WEATHER_PROVIDER, LOCKSCREEN_WEATHER_PROVIDER_DEFAULT
+        ) == LOCKSCREEN_WEATHER_PROVIDER_OMNI,
+        showWeatherLocation = getSystemSetting(LOCKSCREEN_WEATHER_LOCATION),
+        showWeatherText = getSystemSetting(LOCKSCREEN_WEATHER_TEXT, 1),
+        showWindInfo = getSystemSetting(LOCKSCREEN_WEATHER_WIND_INFO),
+        showHumidityInfo = getSystemSetting(LOCKSCREEN_WEATHER_HUMIDITY_INFO),
+        clickUpdates = getSystemSetting(LOCKSCREEN_WEATHER_CLICK_UPDATES)
+    )
 
     private fun getSystemSettingValue(setting: String, defaultValue: Int = 0) =
         Settings.System.getIntForUser(context.contentResolver, setting, defaultValue, UserHandle.USER_CURRENT)
