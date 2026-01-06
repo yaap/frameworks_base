@@ -18033,6 +18033,15 @@ public final class Settings {
         public static final String BATTERY_SAVER_CONSTANTS = "battery_saver_constants";
 
         /**
+         * @see {@link #BATTERY_SAVER_CONSTANTS}
+         * platform actively uses this setting instead
+         * because the original one is getting overwritten by gms
+         * @hide
+         */
+        @Readable
+        public static final String BATTERY_SAVER_CONSTANTS_YAAP = "battery_saver_constants_yaap";
+
+        /**
          * Battery Saver device specific settings
          * This is encoded as a key=value list, separated by commas.
          *

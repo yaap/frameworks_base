@@ -291,7 +291,7 @@ class SettingsProtoDumpUtil {
                 Settings.Global.BATTERY_DISCHARGE_THRESHOLD,
                 GlobalSettingsProto.Battery.DISCHARGE_THRESHOLD);
         dumpSetting(s, p,
-                Settings.Global.BATTERY_SAVER_CONSTANTS,
+                Settings.Global.BATTERY_SAVER_CONSTANTS_YAAP,
                 GlobalSettingsProto.Battery.SAVER_CONSTANTS);
         dumpSetting(s, p,
                 Settings.Global.BATTERY_SAVER_DEVICE_SPECIFIC_CONSTANTS,

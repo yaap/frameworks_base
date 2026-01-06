@@ -288,7 +288,7 @@ public class BatterySaverPolicy extends ContentObserver implements
         ConcurrentUtils.wtfIfLockHeld(TAG, mLock);
 
         mContentResolver.registerContentObserver(Settings.Global.getUriFor(
-                Settings.Global.BATTERY_SAVER_CONSTANTS), false, this);
+                Settings.Global.BATTERY_SAVER_CONSTANTS_YAAP), false, this);
         mContentResolver.registerContentObserver(Settings.Global.getUriFor(
                 Settings.Global.BATTERY_SAVER_DEVICE_SPECIFIC_CONSTANTS), false, this);
 
@@ -411,7 +411,7 @@ public class BatterySaverPolicy extends ContentObserver implements
     private void refreshSettings() {
         synchronized (mLock) {
             // Load the non-device-specific setting.
-            final String setting = getGlobalSetting(Settings.Global.BATTERY_SAVER_CONSTANTS);
+            final String setting = getGlobalSetting(Settings.Global.BATTERY_SAVER_CONSTANTS_YAAP);
 
             // Load the device specific setting.
             // We first check the global setting, and if it's empty or the string "null" is set,
@@ -1162,7 +1162,7 @@ public class BatterySaverPolicy extends ContentObserver implements
             ipw.println();
             ipw.println("Battery saver policy (*NOTE* they only apply when battery saver is ON):");
             ipw.increaseIndent();
-            ipw.println("Settings: " + Settings.Global.BATTERY_SAVER_CONSTANTS);
+            ipw.println("Settings: " + Settings.Global.BATTERY_SAVER_CONSTANTS_YAAP);
             ipw.increaseIndent();
             ipw.println("value: " + mSettings);
             ipw.decreaseIndent();

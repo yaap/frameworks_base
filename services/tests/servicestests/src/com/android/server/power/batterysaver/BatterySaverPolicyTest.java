@@ -590,7 +590,7 @@ public class BatterySaverPolicyTest extends AndroidTestCase {
 
     public void testSetFullPolicy_overridesSettingsAndDeviceConfig_clearOnFullExit() {
         mDeviceSpecificConfigResId = R.string.config_batterySaverDeviceSpecificConfig_1;
-        mMockGlobalSettings.put(Global.BATTERY_SAVER_CONSTANTS,
+        mMockGlobalSettings.put(Global.BATTERY_SAVER_CONSTANTS_YAAP,
                 "location_mode=" + PowerManager.LOCATION_MODE_ALL_DISABLED_WHEN_SCREEN_OFF);
         mMockGlobalSettings.put(Global.BATTERY_SAVER_DEVICE_SPECIFIC_CONSTANTS, "");
 
