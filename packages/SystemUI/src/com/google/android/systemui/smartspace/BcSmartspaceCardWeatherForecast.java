@@ -5,6 +5,8 @@ import android.app.smartspace.SmartspaceTarget;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -67,6 +69,12 @@ public class BcSmartspaceCardWeatherForecast extends BcSmartspaceCardSecondary {
 
     @Override
     public final boolean setSmartspaceActions(SmartspaceTarget target, BcSmartspaceDataPlugin.SmartspaceEventNotifier eventNotifier, BcSmartspaceCardLoggingInfo loggingInfo) {
+        final int provider = Settings.System.getIntForUser(getContext().getContentResolver(),
+                Settings.System.LOCKSCREEN_WEATHER_PROVIDER,
+                Settings.System.LOCKSCREEN_WEATHER_PROVIDER_DEFAULT,
+                UserHandle.USER_CURRENT);
+        if (provider != Settings.System.LOCKSCREEN_WEATHER_PROVIDER_DEFAULT)
+            return false;
         boolean z;
         SmartspaceAction baseAction = target.getBaseAction();
         Bundle extras = baseAction == null ? null : baseAction.getExtras();
