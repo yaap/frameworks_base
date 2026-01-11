@@ -72,6 +72,7 @@ import java.io.PrintWriter
 import java.util.Optional
 import javax.inject.Inject
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sign
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -275,17 +276,19 @@ constructor(
         }
 
     private fun updateMaxBlurRadius() {
+        val metrics = context.resources.displayMetrics
+        val dps = maxBlurRadiusPx / metrics.density
         val radiusDpSetting = Settings.System.getIntForUser(
             context.contentResolver,
             Settings.System.SHADE_BLUR_RADIUS,
-            48,
+            dps.roundToInt(),
             UserHandle.USER_CURRENT
         )
 
         userDefinedMaxBlurRadius = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             radiusDpSetting.toFloat(),
-            context.resources.displayMetrics
+            metrics
         ).toInt()
         scheduleUpdate()
     }
@@ -533,7 +536,8 @@ constructor(
             }
         }
         context.contentResolver.registerContentObserver(
-            Settings.System.getUriFor("shade_blur_radius"), false, settingsObserver, UserHandle.USER_ALL
+            Settings.System.getUriFor(Settings.System.SHADE_BLUR_RADIUS),
+            false, settingsObserver, UserHandle.USER_ALL
         )
         updateMaxBlurRadius()
 
