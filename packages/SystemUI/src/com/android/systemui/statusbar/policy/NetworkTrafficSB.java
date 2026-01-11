@@ -16,6 +16,7 @@
 
 package com.android.systemui.statusbar.policy;
 
+import android.content.res.Configuration;
 import android.content.Context;
 import android.graphics.Rect;
 import android.util.AttributeSet;
@@ -48,6 +49,11 @@ public class NetworkTrafficSB extends NetworkTraffic implements DarkReceiver {
     @Override
     public void onDarkChanged(ArrayList<Rect> area, float darkIntensity, int tint) {
         setTintColor(DarkIconDispatcher.getTint(area, this, tint));
+    }
+
+    @Override
+    protected void onConfigChanged(Configuration newConfig) {
+        // do nothing
     }
 
     @Override

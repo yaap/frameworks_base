@@ -22,7 +22,9 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
 import android.database.ContentObserver;
+import android.graphics.Color;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.graphics.PorterDuff.Mode;
@@ -88,6 +90,7 @@ public class NetworkTraffic extends TextView {
     private int mTrafficType;
     private int mAutoHideThreshold;
     private int mFontSize;
+    private int mCurrentNightMode;
     private boolean mTextEnabled;
     private boolean mShowArrow;
     private boolean mAttached;
@@ -345,6 +348,8 @@ public class NetworkTraffic extends TextView {
             mTrafficHandler = new Handler(mLooper, mTrafficHandlerCallback);
             mDisplayMetrics = getResources().getDisplayMetrics();
             mIsConnected = mConnectivityManager.getActiveNetwork() != null;
+            mCurrentNightMode = getResources()
+                    .getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
             IntentFilter filter = new IntentFilter();
             filter.addAction(Intent.ACTION_SCREEN_OFF);
             filter.addAction(Intent.ACTION_SCREEN_ON);
@@ -367,6 +372,28 @@ public class NetworkTraffic extends TextView {
             mSettingsObserver.stop();
             mHandlerThread.quit();
             mAttached = false;
+        }
+    }
+
+    @Override
+    protected void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        onConfigChanged(newConfig);
+    }
+
+    protected void onConfigChanged(Configuration newConfig) {
+        int currentNightMode = newConfig.uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        if (currentNightMode == mCurrentNightMode) {
+            return;
+        }
+        mCurrentNightMode = currentNightMode;
+        switch (currentNightMode) {
+            case Configuration.UI_MODE_NIGHT_NO:
+                setTintColor(Color.BLACK);
+                break;
+            case Configuration.UI_MODE_NIGHT_YES:
+                setTintColor(Color.WHITE);
+                break;
         }
     }
 
