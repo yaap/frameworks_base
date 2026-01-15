@@ -114,13 +114,21 @@ public class NetworkTraffic extends TextView {
 
         @Override
         public boolean handleMessage(Message msg) {
-            final boolean isUpdate = msg.what == 1;
-            long timeDelta = SystemClock.elapsedRealtime() - mLastUpdateTime;
+            final boolean isUpdate = msg.what == MSG_UPDATE;
+            final long now = SystemClock.elapsedRealtime();
+            long timeDelta = now - mLastUpdateTime;
+            timeDelta = Math.max(timeDelta, 1);
 
-            if ((timeDelta < INTERVAL * .95 && timeDelta < 1) || isUpdate) {
-                timeDelta = Long.MAX_VALUE;
+            if (!isUpdate && timeDelta < INTERVAL * .95f) {
+                // Too soon → skip this sample
+                mTrafficHandler.removeCallbacksAndMessages(null);
+                if (!isDisabled() && mScreenOn) {
+                    final long delay = Math.max(INTERVAL - timeDelta, 1);
+                    mTrafficHandler.sendEmptyMessageDelayed(MSG_PERIODIC, delay);
+                }
+                return true;
             }
-            mLastUpdateTime = SystemClock.elapsedRealtime();
+            mLastUpdateTime = now;
 
             long newTotalRxBytes = TrafficStats.getTotalRxBytes();
             long newTotalTxBytes = TrafficStats.getTotalTxBytes();
@@ -142,8 +150,10 @@ public class NetworkTraffic extends TextView {
 
             if (shouldHide(rxData, txData, timeDelta) || mIsObscured) {
                 getHandler().post(() -> {
-                    setText("");
-                    setVisibility(View.INVISIBLE);
+                    synchronized(NetworkTraffic.this) {
+                        setText("");
+                        setVisibility(View.INVISIBLE);
+                    }
                 });
             } else if (!isUpdate) {
                 String output;
@@ -180,15 +190,21 @@ public class NetworkTraffic extends TextView {
                 // Update view if there's anything new to show
                 final String out = mTextEnabled ? output : "";
                 getHandler().post(() -> {
-                    if (!out.contentEquals(getText()))
-                        setText(out);
-                    final boolean isTextOnly = !mTextEnabled && mShowArrow;
-                    final boolean isValidOut = !out.isEmpty() && sizeCheck();
-                    final boolean visible = (isTextOnly || isValidOut) && !mIsObscured;
-                    setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                    synchronized(NetworkTraffic.this) {
+                        if (!out.contentEquals(getText()))
+                            setText(out);
+                        final boolean isTextOnly = !mTextEnabled && mShowArrow;
+                        final boolean isValidOut = !out.isEmpty() && sizeCheck();
+                        final boolean visible = (isTextOnly || isValidOut) && !mIsObscured;
+                        setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                    }
                 });
             }
-            getHandler().post(NetworkTraffic.this::updateTrafficDrawable);
+            getHandler().post(() -> {
+                synchronized(NetworkTraffic.this) {
+                    updateTrafficDrawable();
+                }
+            });
 
             // Post delayed message to refresh in ~1000ms
             totalRxBytes = newTotalRxBytes;
@@ -199,8 +215,10 @@ public class NetworkTraffic extends TextView {
                         isUpdate ? 0 : INTERVAL);
             } else {
                 getHandler().post(() -> {
-                    setText("");
-                    setVisibility(View.INVISIBLE);
+                    synchronized(NetworkTraffic.this) {
+                        setText("");
+                        setVisibility(View.INVISIBLE);
+                    }
                 });
             }
 
@@ -275,7 +293,11 @@ public class NetworkTraffic extends TextView {
         @Override
         public void onDisplayChanged(int displayId) {
             if (getDisplay().getDisplayId() != displayId) return;
-            mDisplayMetrics = getResources().getDisplayMetrics();
+            final DisplayMetrics metrics = getResources().getDisplayMetrics();
+            if (metrics.equals(mDisplayMetrics)) {
+                return;
+            }
+            mDisplayMetrics = metrics;
             if (mScreenOn) getHandler().post(NetworkTraffic.this::updateSettings);
         }
     };
@@ -370,7 +392,7 @@ public class NetworkTraffic extends TextView {
             mDisplayManager.unregisterDisplayListener(mDisplayListener);
             mConnectivityManager.unregisterNetworkCallback(mNetworkCallback);
             mSettingsObserver.stop();
-            mHandlerThread.quit();
+            mHandlerThread.quitSafely();
             mAttached = false;
         }
     }
@@ -397,16 +419,17 @@ public class NetworkTraffic extends TextView {
         }
     }
 
-    private void updateSettings() {
+    private synchronized void updateSettings() {
         if (!mAttached) return;
-        setText("");
-        setVisibility(View.INVISIBLE);
         updateTextSize();
         updateTrafficDrawable();
         mTrafficHandler.removeCallbacksAndMessages(null);
         if (mIsEnabled && mAttached && !isDisabled()) {
             mLastUpdateTime = SystemClock.elapsedRealtime();
             mTrafficHandler.sendEmptyMessage(MSG_UPDATE);
+        } else {
+            setText("");
+            setVisibility(View.INVISIBLE);
         }
     }
 
