@@ -90,7 +90,7 @@ public class NetworkTraffic extends TextView {
     private int mTrafficType;
     private int mAutoHideThreshold;
     private int mFontSize;
-    private int mCurrentNightMode;
+    private int mCurrentNightMode = -1;
     private boolean mTextEnabled;
     private boolean mShowArrow;
     private boolean mAttached;
@@ -370,8 +370,7 @@ public class NetworkTraffic extends TextView {
             mTrafficHandler = new Handler(mLooper, mTrafficHandlerCallback);
             mDisplayMetrics = getResources().getDisplayMetrics();
             mIsConnected = mConnectivityManager.getActiveNetwork() != null;
-            mCurrentNightMode = getResources()
-                    .getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+            onConfigChanged(getResources().getConfiguration());
             IntentFilter filter = new IntentFilter();
             filter.addAction(Intent.ACTION_SCREEN_OFF);
             filter.addAction(Intent.ACTION_SCREEN_ON);
