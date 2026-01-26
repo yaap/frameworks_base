@@ -1487,7 +1487,7 @@ status_t compileResourceFile(Bundle* bundle,
                 for (size_t i = 0; i < n; i++) {
                     size_t length;
                     const char16_t* attr = block.getAttributeName(i, &length);
-                    if (strcmp16(attr, name16.string()) == 0) {
+                    if (strcmp16(attr, name16.c_str()) == 0) {
                         name.setTo(block.getAttributeStringValue(i, &length));
                     } else if (strcmp16(attr, formatted16.c_str()) == 0) {
                         const char16_t* value = block.getAttributeStringValue(i, &length);
@@ -1503,8 +1503,8 @@ status_t compileResourceFile(Bundle* bundle,
                             if (locale.size() > 0) {
                                 SourcePos(in->getPrintableSource(), block.getLineNumber()).warning(
                                         "string-array '%s' marked untranslatable but exists"
-                                        " in locale '%s'\n", String8(name).string(),
-                                        locale.string());
+                                        " in locale '%s'\n", String8(name).c_str(),
+                                        locale.c_str());
                                 // hasErrors = localHasErrors = true;
                             }
                         }
