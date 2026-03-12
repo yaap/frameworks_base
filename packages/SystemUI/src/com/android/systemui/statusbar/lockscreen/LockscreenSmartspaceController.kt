@@ -36,6 +36,7 @@ import android.provider.Settings.Secure.LOCK_SCREEN_SHOW_NOTIFICATIONS
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_PROVIDER
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_PROVIDER_DEFAULT
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_PROVIDER_OMNI
+import android.provider.Settings.System.LOCKSCREEN_WEATHER_STYLE
 import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.View
@@ -334,6 +335,12 @@ constructor(
                     userTracker.userId) == LOCKSCREEN_WEATHER_PROVIDER_OMNI
             return showCustomWeather
         }
+
+    val isOmniWeatherModern: Boolean
+        get() = isOmniWeatherEnabled &&
+            systemSettings.getIntForUser(
+                LOCKSCREEN_WEATHER_STYLE, 0, userTracker.userId,
+            ) == 1
 
     private fun updateBypassEnabled() {
         val bypassEnabled = bypassController.bypassEnabled

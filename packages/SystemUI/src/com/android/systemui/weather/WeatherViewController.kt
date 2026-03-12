@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2025 the AxionAOSP Project
+ * Copyright (C) 2026 VoltageOS
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +28,7 @@ import android.provider.Settings.System.LOCKSCREEN_WEATHER_TEXT
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_WIND_INFO
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_HUMIDITY_INFO
 import android.provider.Settings.System.LOCKSCREEN_WEATHER_CLICK_UPDATES
+import android.graphics.drawable.Drawable
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
@@ -39,21 +41,27 @@ import com.android.systemui.res.R
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlin.coroutines.cancellation.CancellationException
 
 class WeatherViewController(
     private val context: Context,
-    private val weatherIcon: ImageView,
-    private val weatherTemp: TextView,
-    private val weatherInfoView: View,
+    private val weatherIcon: ImageView?,
+    private val weatherTemp: TextView?,
+    private val weatherInfoView: View?,
+    private val weatherInlineView: TextView? = null,
 ) : OmniJawsClient.OmniJawsObserver {
 
     private var weatherInfo: OmniJawsClient.WeatherInfo? = null
     private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+    private var bootRetryCount = 0
+    private val maxBootRetries = 6
+    @Volatile private var destroyed = false
 
     private var mDozing = false
     private val statusBarStateController: StatusBarStateController = Dependency.get(StatusBarStateController::class.java)
 
     private var activityStarter: ActivityStarter? = null
+    private fun isInlineMode() = weatherInlineView != null
 
     private val statusBarStateListener = object : StatusBarStateController.StateListener {
         override fun onStateChanged(newState: Int) {}
@@ -88,6 +96,7 @@ class WeatherViewController(
     }.stateIn(scope, SharingStarted.Eagerly, getWeatherSettings())
 
     fun init() {
+        if (destroyed) return
         scope.launch {
             weatherSettingsFlow.collectLatest { applyWeatherSettings(it) }
         }
@@ -144,6 +153,7 @@ class WeatherViewController(
     override fun weatherUpdated() = updateWeather()
 
     private fun updateWeather() {
+        if (destroyed) return
         if (!weatherSettingsFlow.value.weatherEnabled) {
             hideAllViews()
             return
@@ -153,18 +163,39 @@ class WeatherViewController(
             OmniJawsClient.get().queryWeather(context)
             weatherInfo = OmniJawsClient.get().weatherInfo
             weatherInfo?.let { info ->
-                weatherIcon.setImageDrawable(
-                    OmniJawsClient.get().getWeatherConditionImage(context, 
-                    info.conditionCode))
-                weatherTemp.text = buildWeatherText(info)
-                weatherTemp.isSelected = true
+                bootRetryCount = 0
+                if (isInlineMode()) {
+                    updateInlineWeather(info)
+                } else {
+                    weatherIcon?.setImageDrawable(
+                        OmniJawsClient.get().getWeatherConditionImage(context, info.conditionCode))
+                    weatherTemp?.text = buildWeatherText(info)
+                    weatherTemp?.isSelected = true
+                }
+            } ?: run {
+                if (bootRetryCount < maxBootRetries) {
+                    bootRetryCount++
+                    scope.launch {
+                        try {
+                            delay(10000)
+                        } catch (_: CancellationException) {
+                            return@launch
+                        }
+                        if (!destroyed && weatherSettingsFlow.value.weatherEnabled) {
+                            updateWeather()
+                        }
+                    }
+                }
             }
+        } catch (_: CancellationException) {
+            return
         } catch (e: Exception) {}
 
         val clickUpdatesEnabled = weatherSettingsFlow.value.clickUpdates
         scope.launch {
-            listOf(weatherInfoView, weatherIcon, weatherTemp).forEach { view ->
+            listOfNotNull(weatherInfoView, weatherIcon, weatherTemp).forEach { view ->
                 view.setOnClickListener {
+                    if (destroyed) return@setOnClickListener
                     if (clickUpdatesEnabled) {
                         context.sendBroadcast(OmniJawsClient.getForceUpdateIntent())
                     } else {
@@ -176,17 +207,57 @@ class WeatherViewController(
         }
     }
 
+    private fun updateInlineWeather(info: OmniJawsClient.WeatherInfo) {
+        val view = weatherInlineView ?: return
+        if (destroyed) return
+        val icon: Drawable? =
+            OmniJawsClient.get().getWeatherConditionImage(context, info.conditionCode)
+       val text = buildInlineWeatherText(info)
+        scope.launch(Dispatchers.Main) {
+            if (destroyed) return@launch
+            view.text = text
+            if (icon != null) {
+                val size = (view.textSize * 1.15f).toInt()
+                icon.setBounds(0, 0, size, size)
+                view.setCompoundDrawablesRelative(icon, null, null, null)
+            } else {
+                view.setCompoundDrawablesRelative(null, null, null, null)
+            }
+            view.visibility = View.VISIBLE
+        }
+    }
+
+    private fun buildInlineWeatherText(info: OmniJawsClient.WeatherInfo): String {
+        return "${info.temp}${info.tempUnits}"
+    }
+
     private fun hideAllViews() {
+        if (destroyed) {
+            weatherInlineView?.visibility = View.GONE
+        }
         scope.launch {
-            listOf(weatherInfoView, weatherIcon, weatherTemp).forEach {
+            if (destroyed) {
+                weatherInlineView?.apply {
+                    text = ""
+                    setCompoundDrawablesRelative(null, null, null, null)
+                    visibility = View.GONE
+                }
+            }
+            listOfNotNull(weatherInfoView, weatherIcon, weatherTemp).forEach {
                 updateViewVisibility(it, false)
             }
+            weatherInlineView?.let { updateViewVisibility(it, false) }
         }
     }
 
     private fun showAllViews() {
+        if (destroyed) return
+        if (isInlineMode()) {
+            weatherInfo?.let { if (!destroyed) updateInlineWeather(it) }
+            return
+        }
         scope.launch {
-            listOf(weatherInfoView, weatherIcon, weatherTemp).forEach {
+            listOfNotNull(weatherInfoView, weatherIcon, weatherTemp).forEach {
                 updateViewVisibility(it, true)
             }
         }
@@ -207,13 +278,37 @@ class WeatherViewController(
     override fun weatherError(errorReason: Int) {
         if (errorReason == OmniJawsClient.EXTRA_ERROR_DISABLED) {
             weatherInfo = null
-            weatherIcon.setImageDrawable(null)
-            weatherTemp.text = ""
+            weatherIcon?.setImageDrawable(null)
+            weatherTemp?.text = ""
+            weatherInlineView?.apply {
+                text = ""
+                setCompoundDrawablesRelative(null, null, null, null)
+            }
             hideAllViews()
         }
     }
 
+    fun destroy() {
+        if (destroyed) return
+        destroyed = true
+        weatherIcon?.setImageDrawable(null)
+        weatherTemp?.text = ""
+        weatherTemp?.isSelected = false
+        try {
+            OmniJawsClient.get().removeObserver(context, this)
+        } catch (_: Exception) {}
+        statusBarStateController.removeCallback(statusBarStateListener)
+        scope.coroutineContext.cancelChildren()
+        listOfNotNull(weatherInfoView, weatherIcon, weatherTemp, weatherInlineView).forEach {
+            it.setOnClickListener(null)
+        }
+        hideAllViews()
+    }
+
     fun removeObserver() {
+        weatherIcon?.setImageDrawable(null)
+        weatherTemp?.text = ""
+        weatherTemp?.isSelected = false
         scope.cancel()
         OmniJawsClient.get().removeObserver(context, this)
         statusBarStateController.removeCallback(statusBarStateListener)

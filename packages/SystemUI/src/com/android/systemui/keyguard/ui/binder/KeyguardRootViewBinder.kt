@@ -202,6 +202,7 @@ object KeyguardRootViewBinder {
                             childViews[burnInLayerId]?.alpha = alpha
                             childViews[sliceViewId]?.alpha = alpha
                             childViews[weatherAreaId]?.alpha = alpha
+                            childViews[weatherAreaInlineId]?.alpha = alpha
                         }
                     }
 
@@ -238,6 +239,7 @@ object KeyguardRootViewBinder {
                             childViews[aodNotificationIconContainerId]?.translationY = y
                             childViews[sliceViewId]?.translationY = y
                             childViews[weatherAreaId]?.translationY = y
+                            childViews[weatherAreaInlineId]?.translationY = y
                         }
                     }
 
@@ -252,6 +254,7 @@ object KeyguardRootViewBinder {
                                     childViews[aodNotificationIconContainerId]?.translationX = px
                                     childViews[sliceViewId]?.translationX = px
                                     childViews[weatherAreaId]?.translationX = px
+                                    childViews[weatherAreaInlineId]?.translationX = px
                                 }
 
                                 state.isToOrFrom(KeyguardState.GLANCEABLE_HUB) -> {
@@ -300,6 +303,7 @@ object KeyguardRootViewBinder {
                             childViews[burnInLayerId]?.visibility = visibility
                             childViews[sliceViewId]?.visibility = visibility
                             childViews[weatherAreaId]?.visibility = visibility
+                            childViews[weatherAreaInlineId]?.visibility = visibility
                         }
                     }
 
@@ -588,6 +592,7 @@ object KeyguardRootViewBinder {
     private val burnInLayerId = R.id.burn_in_layer
     private val sliceViewId = R.id.keyguard_slice_view
     private val weatherAreaId = R.id.keyguard_weather_area
+    private val weatherAreaInlineId = R.id.weather_inline_text
     private val aodPromotedNotificationId = AodPromotedNotificationSection.viewId
     private val aodNotificationIconContainerId = R.id.aod_notification_icon_container
     private val largeClockId = ClockViewIds.LOCKSCREEN_CLOCK_VIEW_LARGE
