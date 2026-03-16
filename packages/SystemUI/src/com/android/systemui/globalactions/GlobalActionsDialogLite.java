@@ -780,9 +780,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             } else if (GLOBAL_ACTION_KEY_REBOOT_SYSUI.equals(actionKey)) {
                 addIfShouldShowAction(tempActions, rebootSystemUIAction);
             } else if (GLOBAL_ACTION_KEY_PANIC.equals(actionKey)) {
-                if (Settings.Secure.getIntForUser(mContext.getContentResolver(),
-                        Settings.Secure.PANIC_IN_POWER_MENU, 0, getCurrentUser().id) != 0
-                        && isPanicAvailable()) {
+                if (panicButtonEnabled() && isPanicAvailable()) {
                     addIfShouldShowAction(tempActions, new PanicAction());
                 }
             } else {
@@ -803,7 +801,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mPowerItems.add(shutdownAction);
             mPowerItems.add(restartAction);
 
-            if (advancedRebootEnabled(mContext)) {
+            if (advancedRebootEnabled()) {
                 tempActions.remove(rebootRecoveryAction);
                 tempActions.remove(rebootBootloaderAction);
                 tempActions.remove(rebootFastbootAction);
@@ -907,10 +905,14 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         return dialog;
     }
 
-    private boolean advancedRebootEnabled(Context context) {
-        boolean advancedRebootEnabled = Settings.System.getIntForUser(context.getContentResolver(),
+    private boolean advancedRebootEnabled() {
+        return Settings.System.getIntForUser(mContext.getContentResolver(),
                 Settings.System.OMNI_ADVANCED_REBOOT, 0, UserHandle.USER_CURRENT) == 1;
-        return advancedRebootEnabled;
+    }
+
+    private boolean panicButtonEnabled() {
+       return Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                Settings.Secure.PANIC_IN_POWER_MENU, 0, UserHandle.USER_CURRENT) != 0;
     }
 
     @VisibleForTesting
@@ -1174,7 +1176,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                     R.string.global_action_restart);
             if (mRebootMenu) {
                 mMessageResId = com.android.systemui.res.R.string.global_action_reboot_sub;
-            } else if (advancedRebootEnabled(mContext)) {
+            } else if (advancedRebootEnabled()) {
                 mMessageResId = com.android.systemui.res.R.string.global_action_reboot_more;
             }
         }
@@ -1189,7 +1191,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_LONG_PRESS);
             // reboot to system when advanced reboot is enabled
             // keep safe mode long pressing the "system" option 
-            if (!mRebootMenu && advancedRebootEnabled(mContext)) {
+            if (!mRebootMenu && advancedRebootEnabled()) {
                 doReboot();
                 return true;
             }
@@ -1219,7 +1221,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 return;
             }
             mUiEventLogger.log(GlobalActionsEvent.GA_REBOOT_PRESS);
-            if (!mRebootMenu && advancedRebootEnabled(mContext)) {
+            if (!mRebootMenu && advancedRebootEnabled()) {
                 mRebootMenu = true;
                 mCurrentMenuActions = mRebootMenuActions;
                 createActionItems();
