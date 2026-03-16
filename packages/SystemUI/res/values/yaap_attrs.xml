@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <attr format="dimension" name="remoteViewsCardCornerRadius" />
+    <attr format="dimension" name="backgroundCornerRadius" />
     <attr format="dimension" name="smartspaceSubtitleTextSize" />
     <attr format="dimension" name="smartspaceTitleTextSize" />
     <declare-styleable
