@@ -64,6 +64,20 @@ sealed class BatteryViewModel(
     val level by
         hydrator.hydratedStateOf(traceName = "level", initialValue = 0, source = interactor.level)
 
+    val batteryPercentText: String by
+        hydrator.hydratedStateOf(
+            traceName = "batteryPercentText",
+            initialValue = "?",
+            source =
+                combine(interactor.level, interactor.isCharging) { level, isCharging ->
+                    if (level == null) {
+                        "?"
+                    } else {
+                        NumberFormat.getPercentInstance().format(level / 100f)
+                    }
+                },
+        )
+
     val isFull by
         hydrator.hydratedStateOf(
             traceName = "isFull",
@@ -83,6 +97,13 @@ sealed class BatteryViewModel(
             traceName = "isBatteryPercentSettingEnabled",
             initialValue = interactor.isBatteryPercentSettingEnabled.value,
             source = interactor.isBatteryPercentSettingEnabled,
+        )
+
+    val isBatteryTextOnlySettingEnabled: Boolean by
+        hydrator.hydratedStateOf(
+            traceName = "isBatteryTextOnlySettingEnabled",
+            initialValue = interactor.isBatteryTextOnlySettingEnabled.value,
+            source = interactor.isBatteryTextOnlySettingEnabled,
         )
 
     /** A [List<BatteryGlyph>] representation of the current [level] */

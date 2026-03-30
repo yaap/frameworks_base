@@ -18,13 +18,21 @@ package com.android.systemui.statusbar.pipeline.battery.ui.composable
 
 import android.graphics.Rect
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
@@ -46,9 +54,12 @@ import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onLayoutRectChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastFirst
 import androidx.compose.ui.util.fastFirstOrNull
 import com.android.systemui.common.ui.compose.load
@@ -177,6 +188,22 @@ fun UnifiedBattery(
         }
     }
 
+    if (viewModel.isBatteryTextOnlySettingEnabled) {
+        BatteryPercentTextOnly(
+            attribution = viewModel.attribution,
+            colorsProvider = colorProvider,
+            batteryTextProvider = { viewModel.batteryPercentText },
+            isDarkProvider = isDarkProvider,
+            modifier =
+                modifier.sysuiResTag(BatteryViewModel.TEST_TAG).onLayoutRectChanged {
+                    relativeLayoutBounds ->
+                    bounds =
+                        with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                },
+        )
+        return
+    }
+
     BatteryLayout(
         attribution = viewModel.attribution,
         levelProvider = { viewModel.level },
@@ -253,7 +280,10 @@ class BatteryMeasurePolicy : MeasurePolicy {
         measurables: List<Measurable>,
         constraints: Constraints,
     ): MeasureResult {
-        val batteryFrame = measurables.fastFirst { it.layoutId == LayoutId.Frame }
+        val batteryFrame =
+            measurables.fastFirstOrNull {
+                it.layoutId == LayoutId.Frame
+            } ?: return layout(0, 0) {}
 
         // We will scale the entire battery icon based on the given height
         val scale = constraints.maxHeight / BatteryFrame.innerHeight
@@ -498,6 +528,73 @@ fun BatteryAttribution(
                 blendMode = BlendMode.Clear,
             )
             drawPath(attr.path, color = colors.attribution)
+        }
+    }
+}
+
+@Composable
+fun BatteryPercentTextOnly(
+    attribution: BatteryGlyph?,
+    colorsProvider: () -> BatteryColors,
+    batteryTextProvider: () -> String,
+    isDarkProvider: () -> IsAreaDark,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+
+    val batteryHeight =
+        with(density) {
+            BatteryViewModel.getStatusBarBatteryHeight(LocalContext.current).toDp()
+        }
+
+    val textStyle = BatteryViewModel.getStatusBarBatteryTextStyle(LocalContext.current)
+
+    var bounds by remember { mutableStateOf(Rect()) }
+
+    val colorProducer = {
+        if (isDarkProvider().isDarkTheme(bounds)) {
+            BatteryColors.DarkTheme.Default.fill
+        } else {
+            BatteryColors.LightTheme.Default.fill
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .height(batteryHeight)
+            .wrapContentWidth()
+            .offset(y = (-1).dp)
+            .onLayoutRectChanged { relativeLayoutBounds ->
+                bounds =
+                    with(relativeLayoutBounds.boundsInScreen) {
+                        Rect(left, top, right, bottom)
+                    }
+            },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicText(
+            text = batteryTextProvider(),
+            color = colorProducer,
+            style = textStyle,
+            maxLines = 1,
+        )
+
+        if (attribution != null) {
+            val scale = with(density) {
+                batteryHeight.toPx() / BatteryFrame.innerHeight
+            }
+            val size = attribution.scaledSize(scale)
+
+            Spacer(modifier = Modifier.width(1.dp))
+
+            BatteryAttribution(
+                attr = attribution,
+                colorsProvider = colorsProvider,
+                modifier = Modifier
+                    .offset(y = (+1).dp)
+                    .height(with(density) { size.width.toDp() })
+                    .width(with(density) { size.width.toDp() })
+            )
         }
     }
 }

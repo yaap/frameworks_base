@@ -28,6 +28,7 @@ import com.android.systemui.shared.settings.data.repository.SystemSettingsReposi
 import com.android.systemui.statusbar.pipeline.dagger.BatteryTableLog
 import com.android.systemui.statusbar.policy.BatteryController
 import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
+import java.text.NumberFormat
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.minutes
@@ -78,6 +79,12 @@ interface BatteryRepository {
      * battery percentage in the home screen status bar
      */
     val isShowBatteryPercentSettingEnabled: StateFlow<Boolean>
+
+    /**
+     * [Settings.System.BATTERY_TEXT_ONLY]. A user setting to indicate whether we should show the
+     * battery as text only instead of an icon
+     */
+    val isBatteryTextOnlySettingEnabled: StateFlow<Boolean>
 
     /**
      * If available, this flow yields a string that describes the approximate time remaining for the
@@ -272,6 +279,19 @@ constructor(
             .stateIn(scope, SharingStarted.Lazily, default)
     }
 
+    override val isBatteryTextOnlySettingEnabled = run {
+        settingsRepository
+            .boolSetting(name = Settings.System.BATTERY_TEXT_ONLY, defaultValue = false)
+            .flowOn(bgDispatcher)
+            .distinctUntilChanged()
+            .logDiffsForTable(
+                tableLogBuffer = tableLog,
+                columnName = COL_BATTERY_TEXT_ONLY_SETTING,
+                initialValue = false,
+            )
+            .stateIn(scope, SharingStarted.Lazily, false)
+    }
+
     /** Get and re-fetch the estimate every 2 minutes while active */
     private val estimate: Flow<String?> = flow {
         while (true) {
@@ -308,6 +328,7 @@ constructor(
         private const val COL_LEVEL = "level"
         private const val COL_UNKNOWN = "unknown"
         private const val COL_SHOW_PERCENT_SETTING = "showPercentSetting"
+        private const val COL_BATTERY_TEXT_ONLY_SETTING = "textOnlySetting"
         private const val COL_TIME_REMAINING_EST = "timeRemainingEstimate"
     }
 }

@@ -42,10 +42,12 @@ import com.android.systemui.res.R
 import com.android.systemui.statusbar.core.NewStatusBarIcons
 import com.android.systemui.statusbar.core.RudimentaryBattery
 import com.android.systemui.statusbar.events.BackgroundAnimatableView
+import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark
 import com.android.systemui.statusbar.pipeline.battery.domain.interactor.BatteryInteractor
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryColors
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryGlyph
 import com.android.systemui.statusbar.pipeline.battery.ui.composable.BatteryLayout
+import com.android.systemui.statusbar.pipeline.battery.ui.composable.BatteryPercentTextOnly
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel.Companion.glyphRepresentation
 import java.text.NumberFormat
@@ -59,7 +61,12 @@ import java.text.NumberFormat
 @SuppressLint("ViewConstructor")
 class BatteryStatusEventComposeChip
 @JvmOverloads
-constructor(level: Int, context: Context, attrs: AttributeSet? = null) :
+constructor(
+    level: Int,
+    context: Context,
+    attrs: AttributeSet?,
+    isText: Boolean,
+) :
     FrameLayout(context, attrs), BackgroundAnimatableView {
     private val roundedContainer: LinearLayout
     private val composeInner: ComposeView
@@ -76,9 +83,9 @@ constructor(level: Int, context: Context, attrs: AttributeSet? = null) :
             setContent {
                 PlatformTheme {
                     if (RudimentaryBattery.isEnabled) {
-                        BatteryAndPercentChip(level)
+                        BatteryAndPercentChip(level, isText)
                     } else {
-                        UnifiedBatteryChip(level)
+                        UnifiedBatteryChip(level, isText)
                     }
                 }
             }
@@ -102,7 +109,17 @@ constructor(level: Int, context: Context, attrs: AttributeSet? = null) :
 }
 
 @Composable
-private fun UnifiedBatteryChip(level: Int) {
+private fun UnifiedBatteryChip(level: Int, isText: Boolean) {
+    if (isText) {
+        BatteryPercentTextOnly(
+            attribution = BatteryGlyph.Bolt, // Always charging
+            colorsProvider = { BatteryColors.DarkTheme.Charging },
+            batteryTextProvider = { NumberFormat.getPercentInstance().format(level / 100f) },
+            isDarkProvider = { IsAreaDark { true } },
+        )
+        return
+    }
+
     val isFull = BatteryInteractor.isBatteryFull(level)
     val height =
         with(LocalDensity.current) {
@@ -122,23 +139,25 @@ private fun UnifiedBatteryChip(level: Int) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun BatteryAndPercentChip(level: Int) {
+private fun BatteryAndPercentChip(level: Int, isText: Boolean) {
     val isFull = BatteryInteractor.isBatteryFull(level)
     val height =
         with(LocalDensity.current) {
             BatteryViewModel.getStatusBarBatteryHeight(LocalContext.current).toDp()
         }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        BatteryLayout(
-            attribution = BatteryGlyph.Bolt, // Always charging
-            levelProvider = { level },
-            isFullProvider = { isFull },
-            glyphsProvider = { emptyList() },
-            colorsProvider = { BatteryColors.DarkTheme.Charging },
-            modifier = Modifier.height(height).wrapContentWidth(),
-            contentDescription = "",
-        )
-        Spacer(modifier = Modifier.width(4.dp))
+        if (!isText) {
+            BatteryLayout(
+                attribution = BatteryGlyph.Bolt, // Always charging
+                levelProvider = { level },
+                isFullProvider = { isFull },
+                glyphsProvider = { emptyList() },
+                colorsProvider = { BatteryColors.DarkTheme.Charging },
+                modifier = Modifier.height(height).wrapContentWidth(),
+                contentDescription = "",
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+        }
         Text(
             text = NumberFormat.getPercentInstance().format(level / 100f),
             color = BatteryColors.DarkTheme.Default.fill,
