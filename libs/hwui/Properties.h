@@ -103,15 +103,6 @@ enum DebugLevel {
 #define PROPERTY_DEBUG_SHOW_DIRTY_REGIONS "debug.hwui.show_dirty_regions"
 
 /**
- * Turn on to enable Ultra HDR gainmap
- *
- * Possible values:
- * "true", to enable UHDR gore
- * "false", to disable UHDR gore (default)
- */
-#define PROPERTY_ENABLE_UHDR_GORE "debug.hwui.enable_uhdr_gore"
-
-/**
  * Setting this property will enable or disable the dropping of frames with
  * empty damage. Default is "true".
  */
@@ -367,8 +358,6 @@ public:
     static bool skipTelemetry;
 
     static int timeoutMultiplier;
-
-    static bool enableUhdrGore;
 
     static StretchEffectBehavior getStretchEffectBehavior() {
         return stretchEffectBehavior;
