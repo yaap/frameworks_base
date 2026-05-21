@@ -7188,8 +7188,8 @@ public final class Settings {
          * value should not exceed 5
          * @hide 
          */
-        @Readable
-        public static final String BACK_GESTURE_HEIGHT = "back_gesture_height";
+         @Readable
+         public static final String BACK_GESTURE_HEIGHT = "back_gesture_height";
 
         /**
          * Whether to show volume panel on the left side
@@ -13714,6 +13714,15 @@ public final class Settings {
         @Readable
         public static final String BACK_GESTURE_INSET_SCALE_RIGHT =
                 "back_gesture_inset_scale_right";
+
+        /**
+         * Whether to hide the navigation handle in gesture navigation mode.
+         *   0 = show handle (default)
+         *   1 = hide handle
+         * @hide
+         */
+        @Readable
+        public static final String NAVIGATION_HANDLE_HIDDEN = "navigation_handle_hidden";
 
         /**
          * Current provider of proximity-based sharing services.

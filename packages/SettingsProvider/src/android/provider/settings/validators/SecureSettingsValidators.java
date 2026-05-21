@@ -351,6 +351,7 @@ public class SecureSettingsValidators {
                 new InclusiveFloatRangeValidator(0.0f, Float.MAX_VALUE));
         VALIDATORS.put(Secure.BACK_GESTURE_INSET_SCALE_RIGHT,
                 new InclusiveFloatRangeValidator(0.0f, Float.MAX_VALUE));
+        VALIDATORS.put(Secure.NAVIGATION_HANDLE_HIDDEN, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.AWARE_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.SKIP_GESTURE_COUNT, NON_NEGATIVE_INTEGER_VALIDATOR);
         VALIDATORS.put(Secure.SKIP_TOUCH_COUNT, NON_NEGATIVE_INTEGER_VALIDATOR);

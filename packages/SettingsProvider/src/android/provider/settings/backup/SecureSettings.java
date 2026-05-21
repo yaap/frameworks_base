@@ -203,6 +203,7 @@ public class SecureSettings {
         Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
         Settings.Secure.BACK_GESTURE_INSET_SCALE_LEFT,
         Settings.Secure.BACK_GESTURE_INSET_SCALE_RIGHT,
+        Settings.Secure.NAVIGATION_HANDLE_HIDDEN,
         Settings.Secure.NAVIGATION_MODE,
         Settings.Secure.SKIP_GESTURE_COUNT,
         Settings.Secure.SKIP_TOUCH_COUNT,
