@@ -40,6 +40,16 @@ namespace android::uirenderer {
 
 using namespace renderthread;
 
+static float getEffectiveTargetHdrSdrRatio(float targetSdrHdrRatio,
+                                           const SkGainmapInfo& gainmapInfo) {
+    // Force whichever ratio is highest, to allow providing additional headroom
+    if (gainmapInfo.fBaseImageType == SkGainmapInfo::BaseImageType::kSDR) {
+        return std::max(targetSdrHdrRatio, gainmapInfo.fDisplayRatioHdr);
+    }
+
+    return targetSdrHdrRatio;
+}
+
 float getTargetHdrSdrRatio(const SkColorSpace* destColorspace) {
     // We should always have a known destination colorspace. If we don't we must be in some
     // legacy mode where we're lost and also definitely not going to HDR
@@ -72,10 +82,10 @@ void DrawGainmapBitmap(SkCanvas* c, const sk_sp<const SkImage>& image, const SkR
     ATRACE_CALL();
 #ifdef __ANDROID__
     float targetSdrHdrRatio = getTargetHdrSdrRatio(c->imageInfo().colorSpace());
-    const bool baseImageHdr = gainmapInfo.fBaseImageType == SkGainmapInfo::BaseImageType::kHDR;
-    if (gainmapImage && ((baseImageHdr && targetSdrHdrRatio < gainmapInfo.fDisplayRatioHdr) ||
-                         (!baseImageHdr && targetSdrHdrRatio > gainmapInfo.fDisplayRatioSdr))) {
+    if (gainmapImage) {
         SkPaint gainmapPaint = *paint;
+        const float effectiveTargetSdrHdrRatio =
+                getEffectiveTargetHdrSdrRatio(targetSdrHdrRatio, gainmapInfo);
         float sX = gainmapImage->width() / (float)image->width();
         float sY = gainmapImage->height() / (float)image->height();
         SkRect gainmapSrc = src;
@@ -86,7 +96,7 @@ void DrawGainmapBitmap(SkCanvas* c, const sk_sp<const SkImage>& image, const SkR
         gainmapSrc.fBottom *= sY;
         auto shader =
                 SkGainmapShader::Make(image, src, sampling, gainmapImage, gainmapSrc, sampling,
-                                      gainmapInfo, dst, targetSdrHdrRatio);
+                                      gainmapInfo, dst, effectiveTargetSdrHdrRatio);
         gainmapPaint.setShader(shader);
         c->drawRect(dst, gainmapPaint);
     } else
