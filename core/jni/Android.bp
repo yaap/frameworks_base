@@ -52,7 +52,10 @@ cc_defaults_for_libandroid_runtime {
         "-Wno-unused-parameter",
         "-Wunused",
         "-Wunreachable-code",
-    ],
+    ] + select(soong_config_variable("camera", "target_ships_oplus_cam"), {
+        any @ value: ["-DTARGET_SHIPS_OPLUS_CAM"],
+        default: [],
+    }),
 
     cppflags: ["-Wno-conversion-null"],
     header_libs: [
