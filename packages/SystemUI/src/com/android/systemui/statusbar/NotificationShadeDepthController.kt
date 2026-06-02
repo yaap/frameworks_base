@@ -20,7 +20,6 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
-import android.database.ContentObserver
 import android.os.Handler
 import android.app.WindowConfiguration
 import android.os.SystemClock
@@ -64,6 +63,8 @@ import com.android.systemui.statusbar.phone.ScrimController
 import com.android.systemui.statusbar.policy.KeyguardStateController
 import com.android.systemui.util.WallpaperController
 import com.android.systemui.wallpapers.domain.interactor.WallpaperInteractor
+import com.android.systemui.util.settings.SettingsProxyExt.observerFlow
+import com.android.systemui.util.settings.SystemSettings
 import com.android.systemui.window.domain.interactor.WindowRootViewBlurInteractor
 import com.android.wm.shell.appzoomout.AppZoomOut
 import com.android.wm.shell.desktopmode.DesktopMode
@@ -103,6 +104,7 @@ constructor(
     private val shadeDisplaysRepository: Lazy<ShadeDisplaysRepository>,
     private val focusedDisplayRepository: FocusedDisplayRepository,
     @Application private val applicationScope: CoroutineScope,
+    private val systemSettings: SystemSettings,
     private val desktopMode: Optional<DesktopMode>,
     dumpManager: DumpManager,
 ) : ShadeExpansionListener, Dumpable {
@@ -526,19 +528,15 @@ constructor(
             blurUtils.blurRadiusOfRatioForAod(ratio)
         }
     }
-    private val settingsObserver: ContentObserver
-
     init {
-
-        settingsObserver = object : ContentObserver(mainHandler) {
-            override fun onChange(selfChange: Boolean) {
+        applicationScope.launch {
+            systemSettings.observerFlow(
+                UserHandle.USER_CURRENT,
+                Settings.System.SHADE_BLUR_RADIUS
+            ).collect {
                 updateMaxBlurRadius()
             }
         }
-        context.contentResolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.SHADE_BLUR_RADIUS),
-            false, settingsObserver, UserHandle.USER_ALL
-        )
         updateMaxBlurRadius()
 
         dumpManager.registerCriticalDumpable(javaClass.name, this)

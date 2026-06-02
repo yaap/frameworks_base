@@ -31,9 +31,13 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.annotation.IntDef;
 import android.annotation.SuppressLint;
+import android.content.ContentResolver;
 import android.content.Context;
+
 import android.graphics.Color;
 import android.os.Handler;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.Log;
 import android.util.MathUtils;
 import android.util.Pair;
@@ -181,6 +185,13 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     private float mBouncerHiddenFraction = KeyguardBouncerConstants.EXPANSION_HIDDEN;
 
     private float getDefaultScrimAlpha(boolean ignoreCurrentState) {
+        // TODO: add a toggle for affecting ScrimState.DREAMING and
+        // ScrimState.GLANCEABLE_HUB_OVER_DREAM as well?
+        float scrimAlpha = getShadeScrimAlpha();
+        if (!Float.isNaN(scrimAlpha)
+                && (mState == ScrimState.UNLOCKED || mState == ScrimState.SHADE_LOCKED)) {
+            return scrimAlpha;
+        }
         if (Flags.bouncerUiRevamp() && isBlurCurrentlySupported()) {
             // Hack to not make the shade transparent when shade blur is not enabled.
             if (!Flags.notificationShadeBlur() && !ignoreCurrentState) {
@@ -287,6 +298,9 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     private Callback mCallback;
     private boolean mScreenOn;
     private boolean mTransparentScrimBackground;
+
+    // User-defined scrim alpha override (0.0-1.0, NaN = use system default)
+
 
     // Scrim blanking callbacks
     private Runnable mPendingFrameCallback;
@@ -591,6 +605,18 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
             }
         }
         applyAndDispatchState();
+    }
+
+    private float getShadeScrimAlpha() {
+        int scrimAlpha = Settings.System.getIntForUser(
+                mContext.getContentResolver(),
+                Settings.System.SHADE_SCRIM_ALPHA,
+                -1,
+                UserHandle.USER_CURRENT);
+        if (scrimAlpha < 0 || scrimAlpha > 100) {
+            return Float.NaN;
+        }
+        return scrimAlpha / 100.0f;
     }
 
     // TODO(b/270984686) recompute scrim height accurately, based on shade contents.
@@ -1076,9 +1102,14 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                     if (Flags.notificationShadeBlur() && isBlurCurrentlySupported()) {
                         // TODO (b/390730594): match any spec for controlling alpha based on shade
                         //  expansion fraction.
-                        mBehindAlpha = mState.getBehindAlpha() * mPanelExpansionFraction;
+                        float alpha = getShadeScrimAlpha();
+                        float behindAlpha = Float.isNaN(alpha)
+                                ? mState.getBehindAlpha() : alpha;
+                        float notifAlpha = Float.isNaN(alpha)
+                                ? mState.getNotifAlpha() : alpha;
+                        mBehindAlpha = behindAlpha * mPanelExpansionFraction;
                         mBehindTint = mState.getBehindTint();
-                        mNotificationsAlpha = mState.getNotifAlpha() * mPanelExpansionFraction;
+                        mNotificationsAlpha = notifAlpha * mPanelExpansionFraction;
                         mNotificationsTint = mState.getNotifTint();
                     } else {
                         mBehindAlpha = mLargeScreenShadeInterpolator.getBehindScrimAlpha(
@@ -1136,7 +1167,10 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                 } else if (mState == ScrimState.SHADE_LOCKED) {
                     // going from KEYGUARD to SHADE_LOCKED state
                     if (Flags.notificationShadeBlur()) {
-                        mNotificationsAlpha = mState.getNotifAlpha() * getInterpolatedFraction();
+                        float alpha = getShadeScrimAlpha();
+                        float notifAlpha = Float.isNaN(alpha)
+                                ? mState.getNotifAlpha() : alpha;
+                        mNotificationsAlpha = notifAlpha * getInterpolatedFraction();
                     } else {
                         mNotificationsAlpha = getInterpolatedFraction();
                     }
@@ -1739,6 +1773,9 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
 
         pw.print("  mDefaultScrimAlpha=");
         pw.println(getDefaultScrimAlpha());
+        pw.print("  mShadeScrimAlpha=");
+        float shadeScrimAlpha = getShadeScrimAlpha();
+        pw.println(Float.isNaN(shadeScrimAlpha) ? "default" : shadeScrimAlpha);
         pw.print("  mPanelExpansionFraction=");
         pw.println(mPanelExpansionFraction);
         pw.print("  mExpansionAffectsAlpha=");

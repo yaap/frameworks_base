@@ -7511,6 +7511,12 @@ public final class Settings {
         public static final String SHADE_BLUR_RADIUS = "shade_blur_radius";
 
         /**
+         * Customizable notification shade scrim alpha (0-100).
+         * @hide
+         */
+        public static final String SHADE_SCRIM_ALPHA = "shade_scrim_alpha";
+
+        /**
          * Whether to show the battery as text only instead of an icon
          * @hide
          */

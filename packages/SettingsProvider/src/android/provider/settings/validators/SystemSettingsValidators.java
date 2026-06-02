@@ -372,6 +372,7 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.NOTIFICATION_SOUND_VIB_SCREEN_ON, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.DC_DIM_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.SHADE_BLUR_RADIUS, new InclusiveIntegerRangeValidator(5, 80));
+        VALIDATORS.put(System.SHADE_SCRIM_ALPHA, new InclusiveIntegerRangeValidator(0, 100));
         VALIDATORS.put(System.BATTERY_TEXT_ONLY, BOOLEAN_VALIDATOR);
     }
 }
