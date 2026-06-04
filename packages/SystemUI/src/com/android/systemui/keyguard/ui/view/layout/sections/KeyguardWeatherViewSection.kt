@@ -217,7 +217,7 @@ constructor(
                 constrainWidth(R.id.weather_inline_text, ConstraintSet.WRAP_CONTENT)
 
                 if (!isLargeClock) {
-                    weatherInlineView?.setPaddingRelative(smallClockGap, 0, 0, 0)
+                    weatherInlineView?.setPaddingRelative(0, 0, 0, 0)
 
                     clear(R.id.weather_inline_text, ConstraintSet.START)
                     clear(R.id.weather_inline_text, ConstraintSet.END)
@@ -227,7 +227,7 @@ constructor(
                     connect(
                         R.id.weather_inline_text, ConstraintSet.START,
                         ClockViewIds.LOCKSCREEN_CLOCK_VIEW_SMALL, ConstraintSet.END,
-                        0,
+                        smallClockGap,
                     )
                     connect(
                         R.id.weather_inline_text, ConstraintSet.END,
@@ -238,7 +238,8 @@ constructor(
 
                     connect(
                         R.id.weather_inline_text, ConstraintSet.TOP,
-                        R.id.keyguard_slice_view, ConstraintSet.BOTTOM,
+                        R.id.keyguard_date_view, ConstraintSet.BOTTOM,
+                        0,
                     )
                     connect(
                         R.id.weather_inline_text, ConstraintSet.BOTTOM,
@@ -253,7 +254,7 @@ constructor(
 
                     connect(
                         R.id.weather_inline_text, ConstraintSet.START,
-                        R.id.keyguard_slice_view, ConstraintSet.END,
+                        R.id.keyguard_date_view, ConstraintSet.END,
                         weatherGap,
                     )
                     connect(
@@ -261,14 +262,14 @@ constructor(
                         ConstraintSet.PARENT_ID, ConstraintSet.END,
                     )
                     setHorizontalBias(R.id.weather_inline_text, 0.5f)
-                    
+
                     connect(
                         R.id.weather_inline_text, ConstraintSet.TOP,
-                        R.id.keyguard_slice_view, ConstraintSet.TOP,
+                        R.id.keyguard_date_view, ConstraintSet.TOP,
                     )
                     connect(
                         R.id.weather_inline_text, ConstraintSet.BOTTOM,
-                        R.id.keyguard_slice_view, ConstraintSet.BOTTOM,
+                        R.id.keyguard_date_view, ConstraintSet.BOTTOM,
                     )
                 }
             }

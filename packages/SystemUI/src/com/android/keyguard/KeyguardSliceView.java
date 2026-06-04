@@ -80,6 +80,7 @@ public class KeyguardSliceView extends LinearLayout {
      */
     private Runnable mContentChangeListener;
     private boolean mHasHeader;
+    private boolean mForceTitleHidden = false;
     private View.OnClickListener mOnClickListener;
 
     public KeyguardSliceView(Context context, AttributeSet attrs) {
@@ -122,6 +123,20 @@ public class KeyguardSliceView extends LinearLayout {
         return mHasHeader;
     }
 
+    /**
+     * Force-hides the title/header text. When hidden, the title will remain GONE
+     * even after subsequent {@link #showSlice} calls, until this is called with
+     * {@code true} again.
+     */
+    public void setTitleVisible(boolean visible) {
+        mForceTitleHidden = !visible;
+        if (mForceTitleHidden && mTitle != null) {
+            mTitle.setVisibility(GONE);
+        } else if (mTitle != null) {
+            mTitle.setVisibility(mHasHeader ? VISIBLE : GONE);
+        }
+    }
+
     void hideSlice() {
         mTitle.setVisibility(GONE);
         mRow.setVisibility(GONE);
@@ -148,6 +163,10 @@ public class KeyguardSliceView extends LinearLayout {
                     && header.getPrimaryAction().getAction() != null) {
                 clickActions.put(mTitle, header.getPrimaryAction().getAction());
             }
+        }
+
+        if (mForceTitleHidden) {
+            mTitle.setVisibility(GONE);
         }
 
         final int subItemsCount = subItems.size();

@@ -203,6 +203,7 @@ object KeyguardRootViewBinder {
                             childViews[sliceViewId]?.alpha = alpha
                             childViews[weatherAreaId]?.alpha = alpha
                             childViews[weatherAreaInlineId]?.alpha = alpha
+                            childViews[dateViewId]?.alpha = alpha
                         }
                     }
 
@@ -240,6 +241,7 @@ object KeyguardRootViewBinder {
                             childViews[sliceViewId]?.translationY = y
                             childViews[weatherAreaId]?.translationY = y
                             childViews[weatherAreaInlineId]?.translationY = y
+                            childViews[dateViewId]?.translationY = y
                         }
                     }
 
@@ -255,6 +257,7 @@ object KeyguardRootViewBinder {
                                     childViews[sliceViewId]?.translationX = px
                                     childViews[weatherAreaId]?.translationX = px
                                     childViews[weatherAreaInlineId]?.translationX = px
+                                    childViews[dateViewId]?.translationX = px
                                 }
 
                                 state.isToOrFrom(KeyguardState.GLANCEABLE_HUB) -> {
@@ -304,6 +307,7 @@ object KeyguardRootViewBinder {
                             childViews[sliceViewId]?.visibility = visibility
                             childViews[weatherAreaId]?.visibility = visibility
                             childViews[weatherAreaInlineId]?.visibility = visibility
+                            childViews[dateViewId]?.visibility = visibility
                         }
                     }
 
@@ -593,6 +597,7 @@ object KeyguardRootViewBinder {
     private val sliceViewId = R.id.keyguard_slice_view
     private val weatherAreaId = R.id.keyguard_weather_area
     private val weatherAreaInlineId = R.id.weather_inline_text
+    private val dateViewId = R.id.keyguard_date_view
     private val aodPromotedNotificationId = AodPromotedNotificationSection.viewId
     private val aodNotificationIconContainerId = R.id.aod_notification_icon_container
     private val largeClockId = ClockViewIds.LOCKSCREEN_CLOCK_VIEW_LARGE
