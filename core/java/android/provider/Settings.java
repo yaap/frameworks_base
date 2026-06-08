@@ -7244,6 +7244,15 @@ public final class Settings {
         public static final String FLASHLIGHT_ON_CALL_RATE = "flashlight_on_call_rate";
 
         /**
+         * Whether to show the persistent battery stats notification.
+         * Shows realtime current draw, temperature, time remaining, and
+         * cumulative screen-on/off discharge stats since last charge.
+         * 0 = disabled (default), 1 = enabled
+         * @hide
+         */
+        public static final String BATTERY_INFO_NOTIFICATION = "battery_info_notification";
+
+        /**
          * Provider for lockscreen weather
          * Currently supported values:
          * {@link #LOCKSCREEN_WEATHER_PROVIDER_NONE}

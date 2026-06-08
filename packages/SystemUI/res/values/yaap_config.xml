@@ -81,4 +81,12 @@
     <bool name="config_systemBarBurnInProtection">@*android:bool/config_enableBurnInProtection</bool>
     <!-- Interval between subsequent shifting of statusbar and navbar contents, in seconds -->
     <integer name="config_systemBarBurnInProtectionShiftInterval">60</integer>
+
+    <!-- Sign applied to BATTERY_PROPERTY_CURRENT_NOW before unit conversion.
+         1  = kernel uses Android convention (positive = charging).
+         -1 = kernel inverts the sign (positive = discharging). -->
+    <integer name="config_batteryCurrentNowSign" translatable="false">1</integer>
+
+    <!-- Charging info current divider, if needed -->
+    <integer name="config_currentInfoDivider" translatable="false">1</integer>
 </resources>
