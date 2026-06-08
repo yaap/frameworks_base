@@ -58,13 +58,6 @@ import java.util.function.BooleanSupplier;
 public class PhoneStatusBarView extends FrameLayout {
     private static final String TAG = "PhoneStatusBarView";
 
-    private int mBasePaddingBottom;
-    private int mBasePaddingLeft;
-    private int mBasePaddingRight;
-    private int mBasePaddingTop;
-
-    private ViewGroup mStatusBarContents;
-
     private DarkReceiver mBattery;
     private DarkReceiver mClock;
     private DarkReceiver mNetworkTraffic;
@@ -138,20 +131,6 @@ public class PhoneStatusBarView extends FrameLayout {
         getViewRootImpl().setTouchableRegion(touchableRegion);
     }
 
-    public void shiftStatusBarItems(int horizontalShift, int verticalShift) {
-        if (mStatusBarContents == null) {
-            return;
-        }
-
-        mStatusBarContents.setPaddingRelative(
-            mBasePaddingLeft + horizontalShift,
-            mBasePaddingTop + verticalShift,
-            mBasePaddingRight + horizontalShift,
-            mBasePaddingBottom - verticalShift
-        );
-        invalidate();
-    }
-
     @Override
     public void onFinishInflate() {
         super.onFinishInflate();
@@ -159,12 +138,6 @@ public class PhoneStatusBarView extends FrameLayout {
         mClock = findViewById(R.id.clock);
         mNetworkTraffic = findViewById(R.id.networkTraffic);
         mCutoutSpace = findViewById(R.id.cutout_space_view);
-        mStatusBarContents = (ViewGroup) findViewById(R.id.status_bar_contents);
-
-        mBasePaddingLeft = mStatusBarContents.getPaddingStart();
-        mBasePaddingTop = mStatusBarContents.getPaddingTop();
-        mBasePaddingRight = mStatusBarContents.getPaddingEnd();
-        mBasePaddingBottom = mStatusBarContents.getPaddingBottom();
 
         updateResources();
     }

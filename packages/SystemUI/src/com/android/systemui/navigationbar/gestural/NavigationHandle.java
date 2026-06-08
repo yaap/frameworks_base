@@ -48,7 +48,6 @@ public class NavigationHandle extends View implements ButtonInterface {
     private final float mAdditionalWidthForAnimation;
     private final float mAdditionalHeightForAnimation;
     private final float mShrinkWidthForAnimation;
-    private float mVerticalShift;
     private boolean mIsDreaming = false;
     private boolean mIsKeyguard = false;
     private boolean mRequiresInvalidate;
@@ -151,7 +150,7 @@ public class NavigationHandle extends View implements ButtonInterface {
         float height = mRadius * 2 + additionalHeight;
         float width = getWidth() + additionalWidth;
         float x = -additionalWidth;
-        float y = navHeight - mBottom - height + (additionalHeight / 2) + mVerticalShift;
+        float y = (navHeight - mBottom - height);
         float adjustedRadius = height / 2;
         canvas.drawRoundRect(x, y, width, y + height, adjustedRadius, adjustedRadius, mPaint);
     }
@@ -236,10 +235,5 @@ public class NavigationHandle extends View implements ButtonInterface {
     public void onDetachedFromWindow() {
         mUpdateMonitor.removeCallback(mMonitorCallback);
         super.onDetachedFromWindow();
-    }
-
-    public void shiftHandle(int verticalShift) {
-        mVerticalShift = verticalShift;
-        invalidate();
     }
 }
