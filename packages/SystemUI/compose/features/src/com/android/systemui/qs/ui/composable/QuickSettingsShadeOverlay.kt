@@ -396,7 +396,7 @@ private fun ContentScope.QuickSettingsLayout(
                     containerColors =
                         ContainerColors(
                             idleColor = Color.Transparent,
-                            mirrorColor = OverlayShade.Colors.panelBackground(isTransparencyEnabled),
+                            mirrorColor = OverlayShade.Colors.panelBackground(false),
                         ),
                     modifier = Modifier.fillMaxWidth(),
                 )

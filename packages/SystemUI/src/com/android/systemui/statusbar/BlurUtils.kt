@@ -229,10 +229,9 @@ constructor(
     }
 
     private fun shouldBlur(radius: Int): Boolean {
-        return supportsBlursOnWindows() ||
+        return (supportsBlursOnWindows() && (radius > 0 || lastAppliedBlur > 0)) ||
             ((Flags.notificationShadeBlur() || Flags.bouncerUiRevamp()) &&
                 supportsBlursOnWindowsBase() &&
-                lastAppliedBlur > 0 &&
                 radius == 0)
     }
 

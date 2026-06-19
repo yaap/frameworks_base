@@ -409,8 +409,10 @@ constructor(
             val opaque = shouldBlurBeOpaque
             val blurScale = zoomOutAsScale(zoomOutFromShadeRadius)
             TrackTracer.instantForGroup("shade", "shade_blur_radius", blur)
-            blurUtils.applyBlur(root.viewRootImpl, blur, opaque, blurScale)
-            onBlurApplied(blur, zoomOutFromShadeRadius)
+            if (!brightnessMirrorVisible) {
+                blurUtils.applyBlur(root.viewRootImpl, blur, opaque, blurScale)
+                onBlurApplied(blur, zoomOutFromShadeRadius)
+            }
         }
 
     private fun onBlurApplied(appliedBlurRadius: Int, zoomOutFromShadeRadius: Float) {
