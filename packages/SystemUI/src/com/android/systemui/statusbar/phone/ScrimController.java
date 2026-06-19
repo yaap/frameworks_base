@@ -90,6 +90,9 @@ import com.android.systemui.shade.ui.ShadeColors;
 import com.android.systemui.statusbar.notification.stack.ViewState;
 import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.KeyguardStateController;
+import com.android.systemui.dagger.qualifiers.Application;
+import com.android.systemui.util.settings.SettingsProxyExt;
+import com.android.systemui.util.settings.SystemSettings;
 import com.android.systemui.util.wakelock.DelayedWakeLock;
 import com.android.systemui.util.wakelock.WakeLock;
 import com.android.systemui.window.domain.interactor.WindowRootViewBlurInteractor;
@@ -99,6 +102,7 @@ import dagger.Lazy;
 import kotlin.Deprecated;
 
 import kotlinx.coroutines.CoroutineDispatcher;
+import kotlinx.coroutines.CoroutineScope;
 import kotlinx.coroutines.ExperimentalCoroutinesApi;
 
 import java.io.PrintWriter;
@@ -300,7 +304,7 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     private boolean mTransparentScrimBackground;
 
     // User-defined scrim alpha override (0.0-1.0, NaN = use system default)
-
+    private float mShadeScrimAlpha = Float.NaN;
 
     // Scrim blanking callbacks
     private Runnable mPendingFrameCallback;
@@ -415,7 +419,9 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
             LargeScreenShadeInterpolator largeScreenShadeInterpolator,
             BlurConfig blurConfig,
             @Main Context context,
-            Lazy<WindowRootViewBlurInteractor> windowRootViewBlurInteractor) {
+            Lazy<WindowRootViewBlurInteractor> windowRootViewBlurInteractor,
+            @Application CoroutineScope applicationScope,
+            SystemSettings systemSettings) {
         SceneContainerFlag.assertInLegacyMode();
         mContext = context;
         mScrimStateListener = lightBarController::setScrimState;
@@ -462,6 +468,13 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         mKeyguardTransitionInteractor = keyguardTransitionInteractor;
         mKeyguardInteractor = keyguardInteractor;
         mMainDispatcher = mainDispatcher;
+        mShadeScrimAlpha = readShadeScrimAlpha();
+        collectFlow(applicationScope,
+                SettingsProxyExt.INSTANCE.observerFlow(
+                        systemSettings,
+                        UserHandle.USER_CURRENT,
+                        Settings.System.SHADE_SCRIM_ALPHA),
+                (Consumer<Object>) unit -> mShadeScrimAlpha = readShadeScrimAlpha());
     }
 
     /**
@@ -608,6 +621,10 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     }
 
     private float getShadeScrimAlpha() {
+        return mShadeScrimAlpha;
+    }
+
+    private float readShadeScrimAlpha() {
         int scrimAlpha = Settings.System.getIntForUser(
                 mContext.getContentResolver(),
                 Settings.System.SHADE_SCRIM_ALPHA,
