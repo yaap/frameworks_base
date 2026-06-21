@@ -16,9 +16,6 @@
 
 package com.android.server.notification;
 
-import static android.os.VibrationEffect.VibrationParameter.targetAmplitude;
-import static android.os.VibrationEffect.VibrationParameter.targetFrequency;
-
 import android.annotation.Nullable;
 import android.content.Context;
 import android.content.res.Resources;
@@ -37,7 +34,6 @@ import android.util.Slog;
 import com.android.internal.R;
 import com.android.server.pm.PackageManagerService;
 
-import java.time.Duration;
 import java.util.Arrays;
 
 /**
@@ -58,8 +54,6 @@ public final class VibratorHelper {
     private final long[] mDefaultPattern;
     private final long[] mFallbackPattern;
     @Nullable private final long[] mCustomPattern;
-    @Nullable private final float[] mDefaultPwlePattern;
-    @Nullable private final float[] mFallbackPwlePattern;
     private final int mDefaultVibrationAmplitude;
     private final Context mContext;
 
@@ -73,10 +67,6 @@ public final class VibratorHelper {
                 R.array.config_notificationFallbackVibePattern,
                 VIBRATE_PATTERN_MAXLEN,
                 DEFAULT_VIBRATE_PATTERN);
-        mDefaultPwlePattern = getFloatArray(context.getResources(),
-                com.android.internal.R.array.config_defaultNotificationVibeWaveform);
-        mFallbackPwlePattern = getFloatArray(context.getResources(),
-                com.android.internal.R.array.config_notificationFallbackVibeWaveform);
         mDefaultVibrationAmplitude = context.getResources().getInteger(
                 com.android.internal.R.integer.config_defaultVibrationAmplitude);
         mContext = context;
@@ -143,103 +133,7 @@ public final class VibratorHelper {
             }
         } catch (IllegalArgumentException e) {
             Slog.e(TAG, "Error creating vibration waveform with pattern: "
-                    + Arrays.toString(pattern));
-        }
-        return null;
-    }
-
-    /**
-     * Safely create a {@link VibrationEffect} from given waveform description.
-     *
-     * <p>The waveform is described by a sequence of values for target amplitude and
-     * duration, that are forwarded to {@link VibrationEffect.createWaveform}.
-     *
-     * <p>This method returns {@code null} if the pattern is also {@code null} or invalid.
-     *
-     * @param values The list of values describing the waveform as a sequence of target amplitude
-     *               and duration.
-     * @param insistent {@code true} if the vibration should loop until it is cancelled.
-     */
-    @Nullable
-    public static VibrationEffect createPwleWaveformVibrationFallback(@Nullable float[] values,
-            boolean insistent) {
-        try {
-            if (values == null) {
-                return null;
-            }
-
-            int length = values.length;
-            // The waveform is described by pairs (amplitude, duration)
-            if (length == 0 || length % 2 != 0) {
-                return null;
-            }
-
-            int[] amplitudes = new int[length / 2];
-            long[] timings = new long[length / 2];
-
-            for (int i = 0, j = 0; i < length; i += 2, j++) {
-                amplitudes[j] = (int) values[i];
-                timings[j] = (long) values[i + 1];
-            }
-
-            VibrationEffect effect = VibrationEffect.createWaveform(timings, amplitudes, -1);
-
-            if (insistent) {
-                return VibrationEffect.startComposition()
-                        .repeatEffectIndefinitely(effect)
-                        .compose();
-            }
-            return effect;
-        } catch (IllegalArgumentException e) {
-            Slog.e(TAG, "Error creating vibration PWLE waveform with pattern: "
-                    + Arrays.toString(values));
-        }
-        return null;
-    }
-
-
-    /**
-     * Safely create a {@link VibrationEffect} from given waveform description.
-     *
-     * <p>The waveform is described by a sequence of values for target amplitude, frequency and
-     * duration, that are forwarded to {@link VibrationEffect.WaveformBuilder#addTransition}.
-     *
-     * <p>This method returns {@code null} if the pattern is also {@code null} or invalid.
-     *
-     * @param values The list of values describing the waveform as a sequence of target amplitude,
-     *               frequency and duration.
-     * @param insistent {@code true} if the vibration should loop until it is cancelled.
-     */
-    @Nullable
-    public static VibrationEffect createPwleWaveformVibration(@Nullable float[] values,
-            boolean insistent) {
-        try {
-            if (values == null) {
-                return null;
-            }
-
-            int length = values.length;
-            // The waveform is described by triples (amplitude, frequency, duration)
-            if ((length == 0) || (length % 3 != 0)) {
-                return null;
-            }
-
-            VibrationEffect.WaveformBuilder waveformBuilder = VibrationEffect.startWaveform();
-            for (int i = 0; i < length; i += 3) {
-                waveformBuilder.addTransition(Duration.ofMillis((int) values[i + 2]),
-                        targetAmplitude(values[i]), targetFrequency(values[i + 1]));
-            }
-
-            VibrationEffect effect = waveformBuilder.build();
-            if (insistent) {
-                return VibrationEffect.startComposition()
-                        .repeatEffectIndefinitely(effect)
-                        .compose();
-            }
-            return effect;
-        } catch (IllegalArgumentException e) {
-            Slog.e(TAG, "Error creating vibration PWLE waveform with pattern: "
-                    + Arrays.toString(values));
+                    + Arrays.toString(pattern), e);
         }
         return null;
     }
@@ -275,21 +169,7 @@ public final class VibratorHelper {
      * @param insistent {@code true} if the vibration should loop until it is cancelled.
      */
     public VibrationEffect createFallbackVibration(boolean insistent) {
-        final boolean hasCustom = mCustomPattern != null;
-	if (!hasCustom) {
-            if (mVibrator.hasFrequencyControl()) {
-                VibrationEffect effect = createPwleWaveformVibration(mFallbackPwlePattern, insistent);
-                if (effect != null) {
-                    return effect;
-                }
-            } else {
-                VibrationEffect effect = createPwleWaveformVibrationFallback(mFallbackPwlePattern, insistent);
-                if (effect != null) {
-                    return effect;
-                }
-            }
-        }
-        return createWaveformVibration(hasCustom ? mCustomPattern : mFallbackPattern, insistent);
+        return createWaveformVibration(mCustomPattern != null ? mCustomPattern : mFallbackPattern, insistent);
     }
 
     /**
@@ -302,27 +182,13 @@ public final class VibratorHelper {
             final Uri defaultRingtoneUri = RingtoneManager.getActualDefaultRingtoneUri(mContext,
                     RingtoneManager.TYPE_NOTIFICATION);
             final VibrationEffect vibrationEffectFromSoundUri =
-                    createVibrationEffectFromSoundUri(defaultRingtoneUri);
+                    createVibrationEffectFromSoundUri(defaultRingtoneUri, insistent);
             if (vibrationEffectFromSoundUri != null) {
                 return vibrationEffectFromSoundUri;
             }
         }
 
-        final boolean hasCustom = mCustomPattern != null;
-	    if (!hasCustom) {
-            if (mVibrator.hasFrequencyControl()) {
-                VibrationEffect effect = createPwleWaveformVibration(mDefaultPwlePattern, insistent);
-                if (effect != null) {
-                    return effect;
-                }
-            } else {
-                VibrationEffect effect = createPwleWaveformVibrationFallback(mDefaultPwlePattern, insistent);
-                if (effect != null) {
-                    return effect;
-                }
-            }
-        }
-        return createWaveformVibration(hasCustom ? mCustomPattern : mDefaultPattern, insistent);
+        return createWaveformVibration(mCustomPattern != null ? mCustomPattern : mDefaultPattern, insistent);
     }
 
     /**
@@ -333,14 +199,19 @@ public final class VibratorHelper {
      * vibration_uri represents a valid vibration effect in xml
      *
      * @param uri {@code Uri} an uri including query parameter "vibraiton_uri"
+     * @param insistent {@code true} if the vibration should loop until it is cancelled.
      */
-    public @Nullable VibrationEffect createVibrationEffectFromSoundUri(Uri uri) {
+    public @Nullable VibrationEffect createVibrationEffectFromSoundUri(Uri uri, boolean insistent) {
         if (uri == null || uri.isOpaque()) {
             return null;
         }
 
         try {
-            return Utils.parseVibrationEffect(mVibrator, Utils.getVibrationUri(uri));
+            final VibrationEffect effect =
+                    Utils.parseVibrationEffect(mVibrator, Utils.getVibrationUri(uri));
+            return effect != null
+                    ? effect.applyRepeatingIndefinitely(insistent, /* loopDelayMs= */ 0)
+                    : null;
         } catch (Exception e) {
             Slog.e(TAG, "Failed to get vibration effect: ", e);
         }

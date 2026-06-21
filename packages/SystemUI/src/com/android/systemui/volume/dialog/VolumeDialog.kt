@@ -38,23 +38,27 @@ import com.android.systemui.res.R
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.volume.Events
 import com.android.systemui.volume.dialog.dagger.factory.VolumeDialogComponentFactory
-import com.android.systemui.volume.dialog.domain.interactor.DesktopAudioTileDetailsFeatureInteractor
 import com.android.systemui.volume.dialog.domain.interactor.VolumeDialogVisibilityInteractor
-import javax.inject.Inject
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.awaitCancellation
 
 class VolumeDialog
-@Inject
+@AssistedInject
 constructor(
     @Application context: Context,
     private val componentFactory: VolumeDialogComponentFactory,
     private val visibilityInteractor: VolumeDialogVisibilityInteractor,
     private val configurationController: ConfigurationController,
-    desktopAudioTileDetailsFeatureInteractor: DesktopAudioTileDetailsFeatureInteractor,
+    @Assisted private val isVolumeDialogVertical: Boolean,
 ) : ComponentDialog(context, R.style.Theme_SystemUI_Dialog_Volume),
     ConfigurationController.ConfigurationListener {
-    // Use horizontal volume dialog if the audio tile details view is enabled
-    private val isVolumeDialogVertical = !desktopAudioTileDetailsFeatureInteractor.isEnabled()
+
+    @AssistedFactory
+    interface Factory {
+        fun create(isVolumeDialogVertical: Boolean): VolumeDialog
+    }
 
     private val onLeftDefault: Boolean = context.resources.getBoolean(
         R.bool.config_audioPanelOnLeftSide);

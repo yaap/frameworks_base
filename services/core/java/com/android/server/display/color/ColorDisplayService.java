@@ -166,6 +166,10 @@ public final class ColorDisplayService extends SystemService {
             1f, 1f, 1f, 1f
     };
 
+    private static final int RESTORED_SETTINGS_ENABLED = -1;
+    private static final int SETTINGS_ENABLED_VALUE = 1;
+    private static final int SETTINGS_DISABLED_VALUE = 0;
+
     private final DisplayManagerFlags mDisplayManagerFlags = new DisplayManagerFlags();
 
     @VisibleForTesting
@@ -190,6 +194,8 @@ public final class ColorDisplayService extends SystemService {
     private boolean mBootCompleted;
 
     private ContentObserver mContentObserver;
+    private boolean mColorInversionObserverRegistered;
+    private boolean mColorDaltonizerObserverRegistered;
 
     private DisplayWhiteBalanceListener mDisplayWhiteBalanceListener;
     private ReduceBrightColorsListener mReduceBrightColorsListener;
@@ -290,7 +296,21 @@ public final class ColorDisplayService extends SystemService {
         mCurrentUser = userHandle;
 
         if (mCurrentUser != UserHandle.USER_NULL) {
+            // Reset mColorInversionObserverRegistered and mColorDaltonizerObserverRegistered to
+            // false when user switch happens.
+            mColorInversionObserverRegistered = false;
+            mColorDaltonizerObserverRegistered = false;
             if (!isUserSetupCompleted(cr, mCurrentUser)) {
+                if (isColorInversionInSetupWizardEnabled()) {
+                    createContentObserver();
+                    setUpColorInversionAccessibility();
+                    onAccessibilityInversionChanged();
+                }
+                if (isColorDaltonizerInSetupWizardEnabled()) {
+                    createContentObserver();
+                    setUpDaltonizerAccessibility();
+                    onAccessibilityDaltonizerChanged();
+                }
                 mUserSetupObserver = new ContentObserver(mHandler) {
                     @Override
                     public void onChange(boolean selfChange, Uri uri) {
@@ -298,6 +318,14 @@ public final class ColorDisplayService extends SystemService {
                             cr.unregisterContentObserver(this);
                             mUserSetupObserver = null;
 
+                            // If the user setup is completed, set up the color inversion and
+                            // daltonizer accessibility.
+                            if (isColorInversionInSetupWizardEnabled()) {
+                                convertRestoredColorInversionSettings();
+                            }
+                            if (isColorDaltonizerInSetupWizardEnabled()) {
+                                convertRestoredColorDaltonizerSettings();
+                            }
                             if (mBootCompleted) {
                                 setUp();
                             }
@@ -310,6 +338,67 @@ public final class ColorDisplayService extends SystemService {
                 setUp();
             }
         }
+    }
+
+    private boolean isColorInversionInSetupWizardEnabled() {
+        return getContext().getResources()
+               .getBoolean(R.bool.config_enableColorInversionInSetupWizard)
+               && Flags.enableColorInversionInSuw();
+    }
+
+    private boolean isColorDaltonizerInSetupWizardEnabled() {
+        return getContext().getResources()
+               .getBoolean(R.bool.config_enableColorDaltonizerInSetupWizard)
+               && Flags.enableColorDaltonizerInSuw();
+    }
+
+    private void convertRestoredColorInversionSettings() {
+        Slog.d(TAG, "convertRestoredColorInversionSettings");
+        final ContentResolver cr = getContext().getContentResolver();
+        final int restoredColorInversion =
+                Secure.getIntForUser(cr, Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED,
+                        /* default= */ SETTINGS_DISABLED_VALUE, mCurrentUser);
+
+        final int newInversionValue = (restoredColorInversion == RESTORED_SETTINGS_ENABLED
+                || restoredColorInversion == SETTINGS_ENABLED_VALUE)
+                  ? SETTINGS_ENABLED_VALUE
+                  : SETTINGS_DISABLED_VALUE;
+
+        Slog.d(TAG, "convertRestoredSettings: restoredColorInversion is "
+                + (newInversionValue == SETTINGS_ENABLED_VALUE ? "enabled" : "disabled"));
+        Secure.putIntForUser(cr, Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED, newInversionValue,
+                mCurrentUser);
+    }
+
+    /**
+     * Restored settings have a different value to avoid color correction being applied during
+     * setup. This method maps the restored value to the correct value.
+     */
+    private void convertRestoredColorDaltonizerSettings() {
+        Slog.d(TAG, "convertRestoredColorDaltonizerSettings");
+        final ContentResolver cr = getContext().getContentResolver();
+        final int restoredColorDaltonizerEnabled =
+                Secure.getIntForUser(
+                        cr,
+                        Secure.ACCESSIBILITY_DISPLAY_DALTONIZER_ENABLED,
+                        /* default= */ SETTINGS_DISABLED_VALUE,
+                        mCurrentUser);
+        final int newDaltonizerEnabled =
+                (restoredColorDaltonizerEnabled == RESTORED_SETTINGS_ENABLED
+                                || restoredColorDaltonizerEnabled == SETTINGS_ENABLED_VALUE)
+                        ? SETTINGS_ENABLED_VALUE
+                        : SETTINGS_DISABLED_VALUE;
+        Slog.d(
+                TAG,
+                "convertRestoredSettings: restoredColorDaltonizerEnabled is "
+                        + (newDaltonizerEnabled == SETTINGS_ENABLED_VALUE
+                                ? "enabled"
+                                : "disabled"));
+        Secure.putIntForUser(
+                cr,
+                Secure.ACCESSIBILITY_DISPLAY_DALTONIZER_ENABLED,
+                newDaltonizerEnabled,
+                mCurrentUser);
     }
 
     private static boolean isUserSetupCompleted(ContentResolver cr, int userHandle) {
@@ -340,8 +429,8 @@ public final class ColorDisplayService extends SystemService {
         }
     }
 
-    private void setUp() {
-        Slog.d(TAG, "setUp: currentUser=" + mCurrentUser);
+    private void createContentObserver() {
+        Slog.d(TAG, "createContentObserver: currentUser=" + mCurrentUser);
 
         // Listen for external changes to any of the settings.
         if (mContentObserver == null) {
@@ -436,6 +525,13 @@ public final class ColorDisplayService extends SystemService {
                 }
             };
         }
+   }
+
+    private void setUp() {
+        Slog.d(TAG, "setUp: currentUser=" + mCurrentUser);
+
+        // Listen for external changes to any of the settings.
+        createContentObserver();
         final ContentResolver cr = getContext().getContentResolver();
         cr.registerContentObserver(Secure.getUriFor(Secure.NIGHT_DISPLAY_ACTIVATED),
                 false /* notifyForDescendants */, mContentObserver, mCurrentUser);
@@ -448,15 +544,6 @@ public final class ColorDisplayService extends SystemService {
         cr.registerContentObserver(Secure.getUriFor(Secure.NIGHT_DISPLAY_CUSTOM_END_TIME),
                 false /* notifyForDescendants */, mContentObserver, mCurrentUser);
         cr.registerContentObserver(System.getUriFor(System.DISPLAY_COLOR_MODE),
-                false /* notifyForDescendants */, mContentObserver, mCurrentUser);
-        if (isAccessibilityInversionAvailable()) {
-            cr.registerContentObserver(Secure.getUriFor(Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED),
-                    false /* notifyForDescendants */, mContentObserver, mCurrentUser);
-        }
-        cr.registerContentObserver(
-                Secure.getUriFor(Secure.ACCESSIBILITY_DISPLAY_DALTONIZER_ENABLED),
-                false /* notifyForDescendants */, mContentObserver, mCurrentUser);
-        cr.registerContentObserver(Secure.getUriFor(Secure.ACCESSIBILITY_DISPLAY_DALTONIZER),
                 false /* notifyForDescendants */, mContentObserver, mCurrentUser);
         cr.registerContentObserver(Secure.getUriFor(Secure.DISPLAY_COLOR_BALANCE_RED),
                 false /* notifyForDescendants */, mContentObserver, mCurrentUser);
@@ -489,6 +576,8 @@ public final class ColorDisplayService extends SystemService {
                 Secure.UI_NIGHT_LIGHT_DIM_WALL_ACTIVATED, 0, mCurrentUser) == 1;
 
         // Apply the accessibility settings first, since they override most other settings.
+        setUpColorInversionAccessibility();
+        setUpDaltonizerAccessibility();
         onAccessibilityInversionChanged();
         onAccessibilityDaltonizerChanged();
 
@@ -540,6 +629,38 @@ public final class ColorDisplayService extends SystemService {
         }
     }
 
+    private void setUpColorInversionAccessibility() {
+        if (mColorInversionObserverRegistered) {
+            return;
+        }
+        final ContentResolver cr = getContext().getContentResolver();
+        cr.registerContentObserver(
+                Secure.getUriFor(Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED),
+                false /* notifyForDescendants */,
+                mContentObserver,
+                mCurrentUser);
+        mColorInversionObserverRegistered = true;
+    }
+
+    private void setUpDaltonizerAccessibility() {
+        if (mColorDaltonizerObserverRegistered) {
+            return;
+        }
+        final ContentResolver cr = getContext().getContentResolver();
+        cr.registerContentObserver(
+                Secure.getUriFor(Secure.ACCESSIBILITY_DISPLAY_DALTONIZER_ENABLED),
+                false /* notifyForDescendants */,
+                mContentObserver,
+                mCurrentUser);
+        cr.registerContentObserver(
+                Secure.getUriFor(Secure.ACCESSIBILITY_DISPLAY_DALTONIZER),
+                false /* notifyForDescendants */,
+                mContentObserver,
+                mCurrentUser);
+        mColorDaltonizerObserverRegistered = true;
+
+    }
+
     private void tearDown() {
         Slog.d(TAG, "tearDown: currentUser=" + mCurrentUser);
 
@@ -583,13 +704,18 @@ public final class ColorDisplayService extends SystemService {
         }
 
         final boolean isSettingActivated = Secure.getIntForUser(getContext().getContentResolver(),
-                Secure.REDUCE_BRIGHT_COLORS_ACTIVATED, 0, mCurrentUser) == 1;
+                Secure.REDUCE_BRIGHT_COLORS_ACTIVATED,
+                /* default= */ SETTINGS_DISABLED_VALUE, mCurrentUser)
+                == SETTINGS_ENABLED_VALUE;
         final boolean shouldResetOnReboot = Secure.getIntForUser(getContext().getContentResolver(),
-                Secure.REDUCE_BRIGHT_COLORS_PERSIST_ACROSS_REBOOTS, 0, mCurrentUser) == 0;
+                Secure.REDUCE_BRIGHT_COLORS_PERSIST_ACROSS_REBOOTS,
+                /* default= */ SETTINGS_DISABLED_VALUE,
+                mCurrentUser) == SETTINGS_DISABLED_VALUE;
         if (isSettingActivated && mReduceBrightColorsTintController.isActivatedStateNotSet()
                 && shouldResetOnReboot) {
             return Secure.putIntForUser(getContext().getContentResolver(),
-                    Secure.REDUCE_BRIGHT_COLORS_ACTIVATED, 0, mCurrentUser);
+                    Secure.REDUCE_BRIGHT_COLORS_ACTIVATED,
+                    /* default= */ SETTINGS_DISABLED_VALUE, mCurrentUser);
         }
         return false;
     }
@@ -681,18 +807,15 @@ public final class ColorDisplayService extends SystemService {
 
     private boolean isAccessiblityDaltonizerEnabled() {
         return Secure.getIntForUser(getContext().getContentResolver(),
-            Secure.ACCESSIBILITY_DISPLAY_DALTONIZER_ENABLED, 0, mCurrentUser) != 0;
+            Secure.ACCESSIBILITY_DISPLAY_DALTONIZER_ENABLED,
+            /* default= */ SETTINGS_DISABLED_VALUE, mCurrentUser) != SETTINGS_DISABLED_VALUE;
     }
 
     private boolean isAccessiblityInversionEnabled() {
         return Secure.getIntForUser(getContext().getContentResolver(),
-            Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED, 0, mCurrentUser) != 0
-            && isAccessibilityInversionAvailable();
-    }
-
-    private boolean isAccessibilityInversionAvailable() {
-        return getContext().getResources().getBoolean(
-                com.android.internal.R.bool.config_displayInversionAvailable);
+            Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED,
+            /* default= */ SETTINGS_DISABLED_VALUE,
+            mCurrentUser) == SETTINGS_ENABLED_VALUE;
     }
 
     private boolean isAccessibilityEnabled() {
@@ -751,7 +874,8 @@ public final class ColorDisplayService extends SystemService {
             return;
         }
         final boolean activated = Secure.getIntForUser(getContext().getContentResolver(),
-                Secure.REDUCE_BRIGHT_COLORS_ACTIVATED, 0, mCurrentUser) == 1;
+                Secure.REDUCE_BRIGHT_COLORS_ACTIVATED,
+                /* default= */ SETTINGS_DISABLED_VALUE, mCurrentUser) == SETTINGS_ENABLED_VALUE;
         mReduceBrightColorsTintController.setActivated(activated);
         if (mReduceBrightColorsListener != null) {
             mReduceBrightColorsListener.onReduceBrightColorsActivationChanged(activated,
@@ -1024,7 +1148,7 @@ public final class ColorDisplayService extends SystemService {
         }
         return Secure.putIntForUser(getContext().getContentResolver(),
                 Secure.DISPLAY_WHITE_BALANCE_ENABLED,
-                enabled ? 1 : 0, mCurrentUser);
+                enabled ? SETTINGS_ENABLED_VALUE : SETTINGS_DISABLED_VALUE, mCurrentUser);
     }
 
     private boolean isDisplayWhiteBalanceSettingEnabled() {
@@ -1034,9 +1158,10 @@ public final class ColorDisplayService extends SystemService {
         return Secure.getIntForUser(getContext().getContentResolver(),
                 Secure.DISPLAY_WHITE_BALANCE_ENABLED,
                 getContext().getResources()
-                        .getBoolean(R.bool.config_displayWhiteBalanceEnabledDefault) ? 1
-                        : 0,
-                mCurrentUser) == 1;
+                        .getBoolean(R.bool.config_displayWhiteBalanceEnabledDefault)
+                        ? SETTINGS_ENABLED_VALUE
+                        : SETTINGS_DISABLED_VALUE,
+                mCurrentUser) == SETTINGS_ENABLED_VALUE;
     }
 
     private boolean setReduceBrightColorsActivatedInternal(boolean activated) {
@@ -1044,7 +1169,8 @@ public final class ColorDisplayService extends SystemService {
             return false;
         }
         return Secure.putIntForUser(getContext().getContentResolver(),
-                Secure.REDUCE_BRIGHT_COLORS_ACTIVATED, activated ? 1 : 0, mCurrentUser);
+                Secure.REDUCE_BRIGHT_COLORS_ACTIVATED,
+                activated ? SETTINGS_ENABLED_VALUE : SETTINGS_DISABLED_VALUE, mCurrentUser);
     }
 
     private boolean setReduceBrightColorsStrengthInternal(int strength) {
@@ -1150,7 +1276,7 @@ public final class ColorDisplayService extends SystemService {
     private LocalDateTime getNightDisplayLastActivatedTimeSetting() {
         final ContentResolver cr = getContext().getContentResolver();
         final String lastActivatedTime = Secure.getStringForUser(
-                cr, Secure.NIGHT_DISPLAY_LAST_ACTIVATED_TIME, getContext().getUserId());
+                cr, Secure.NIGHT_DISPLAY_LAST_ACTIVATED_TIME, mCurrentUser);
         if (lastActivatedTime != null) {
             try {
                 return LocalDateTime.parse(lastActivatedTime);
@@ -1645,7 +1771,8 @@ public final class ColorDisplayService extends SystemService {
                 if (isActivatedSetting() != activated) {
                     Secure.putIntForUser(getContext().getContentResolver(),
                             Secure.NIGHT_DISPLAY_ACTIVATED,
-                            activated ? 1 : 0, mCurrentUser);
+                            activated ? SETTINGS_ENABLED_VALUE : SETTINGS_DISABLED_VALUE,
+                            mCurrentUser);
                 }
                 onActivated(activated);
             }
@@ -1702,7 +1829,8 @@ public final class ColorDisplayService extends SystemService {
                 return false;
             }
             return Secure.getIntForUser(getContext().getContentResolver(),
-                    Secure.NIGHT_DISPLAY_ACTIVATED, 0, mCurrentUser) == 1;
+                    Secure.NIGHT_DISPLAY_ACTIVATED, /* default= */ SETTINGS_DISABLED_VALUE,
+                    mCurrentUser) == SETTINGS_ENABLED_VALUE;
         }
 
         int getColorTemperatureSetting() {

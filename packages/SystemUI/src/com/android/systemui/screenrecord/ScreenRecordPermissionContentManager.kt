@@ -44,14 +44,15 @@ import com.android.systemui.mediaprojection.MediaProjectionMetricsLogger
 import com.android.systemui.mediaprojection.appselector.MediaProjectionAppSelectorActivity
 import com.android.systemui.mediaprojection.permission.BaseMediaProjectionPermissionContentManager
 import com.android.systemui.mediaprojection.permission.ENTIRE_SCREEN
+import com.android.systemui.mediaprojection.permission.ENTIRE_SCREEN_EXTERNAL
 import com.android.systemui.mediaprojection.permission.MediaProjectionPermissionUtils.getConnectedDisplays
 import com.android.systemui.mediaprojection.permission.SINGLE_APP
 import com.android.systemui.mediaprojection.permission.ScreenShareMode
 import com.android.systemui.mediaprojection.permission.ScreenShareOption
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
-import com.android.systemui.screenrecord.domain.ScreenRecordingParameters
-import com.android.systemui.screenrecord.domain.interactor.ScreenRecordingStartStopInteractor
+import com.android.systemui.screenrecord.data.repository.ScreenRecordingStartStopRepository
+import com.android.systemui.screenrecord.shared.model.ScreenRecordingParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -65,7 +66,7 @@ class ScreenRecordPermissionContentManager(
     private val controller: ScreenRecordUxController,
     private val activityStarter: ActivityStarter,
     private val onStartRecordingClicked: Runnable?,
-    private val screenRecordingStartStopInteractor: ScreenRecordingStartStopInteractor,
+    private val screenRecordingStartStopRepository: ScreenRecordingStartStopRepository,
 ) :
     BaseMediaProjectionPermissionContentManager(
         createOptionList(displayManager),
@@ -83,7 +84,7 @@ class ScreenRecordPermissionContentManager(
         @Assisted controller: ScreenRecordUxController,
         activityStarter: ActivityStarter,
         @Assisted onStartRecordingClicked: Runnable?,
-        screenRecordingStartStopInteractor: ScreenRecordingStartStopInteractor,
+        screenRecordingStartStopRepository: ScreenRecordingStartStopRepository,
     ) : this(
         hostUserHandle,
         hostUid,
@@ -93,7 +94,7 @@ class ScreenRecordPermissionContentManager(
         controller,
         activityStarter,
         onStartRecordingClicked,
-        screenRecordingStartStopInteractor,
+        screenRecordingStartStopRepository,
     )
 
     @AssistedFactory
@@ -125,7 +126,10 @@ class ScreenRecordPermissionContentManager(
 
     fun startButtonOnClicked() {
         onStartRecordingClicked?.run()
-        if (selectedScreenShareOption.mode == ENTIRE_SCREEN) {
+        if (
+            selectedScreenShareOption.mode == ENTIRE_SCREEN ||
+                selectedScreenShareOption.mode == ENTIRE_SCREEN_EXTERNAL
+        ) {
             requestScreenCapture(
                 captureTarget = null,
                 displayId = selectedScreenShareOption.displayId,
@@ -269,7 +273,7 @@ class ScreenRecordPermissionContentManager(
             if (skipTime) NO_DELAY else DELAY_MS,
             if (skipTime) NO_DELAY else INTERVAL_MS,
             {
-                screenRecordingStartStopInteractor.startRecording(
+                screenRecordingStartStopRepository.startRecording(
                     ScreenRecordingParameters(
                         captureTarget = captureTarget,
                         audioSource = audioMode,
@@ -280,7 +284,7 @@ class ScreenRecordPermissionContentManager(
                     )
                 )
             },
-            { screenRecordingStartStopInteractor.stopRecording(StopReason.STOP_UNKNOWN) },
+            { screenRecordingStartStopRepository.stopRecording(StopReason.STOP_UNKNOWN) },
         )
     }
 
@@ -345,7 +349,12 @@ class ScreenRecordPermissionContentManager(
                     ),
                     ScreenShareOption(
                         ENTIRE_SCREEN,
-                        R.string.screenrecord_permission_dialog_option_text_entire_screen,
+                        if (connectedDisplays.isEmpty()) {
+                            R.string.screenrecord_permission_dialog_option_text_entire_screen
+                        } else {
+                            R.string
+                                .screenrecord_permission_dialog_option_text_entire_screen_for_display
+                        },
                         R.string.screenrecord_permission_dialog_warning_entire_screen,
                         startButtonText =
                             R.string.screenrecord_permission_dialog_continue_entire_screen,
@@ -358,7 +367,7 @@ class ScreenRecordPermissionContentManager(
                 options +=
                     connectedDisplays.map {
                         ScreenShareOption(
-                            ENTIRE_SCREEN,
+                            ENTIRE_SCREEN_EXTERNAL,
                             R.string
                                 .screenrecord_permission_dialog_option_text_entire_screen_for_display,
                             warningText =

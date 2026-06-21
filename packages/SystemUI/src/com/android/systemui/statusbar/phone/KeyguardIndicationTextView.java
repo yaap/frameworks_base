@@ -26,6 +26,7 @@ import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.View;
+import android.view.animation.PathInterpolator;
 
 import androidx.annotation.StyleRes;
 import androidx.core.graphics.ColorUtils;
@@ -43,7 +44,7 @@ import com.android.systemui.shared.shadow.DoubleShadowTextView;
 public class KeyguardIndicationTextView extends DoubleShadowTextView {
     // Minimum luminance for texts to receive shadows.
     private static final float MIN_TEXT_SHADOW_LUMINANCE = 0.5f;
-    public static final long Y_IN_DURATION = 600L;
+    public static final long Y_TRANSLATE_DURATION = 1000L;
 
     @StyleRes
     private static int sStyleId = R.style.TextAppearance_Keyguard_BottomArea;
@@ -147,9 +148,9 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
                         }
                     }
                 });
-                animator.playSequentially(getOutAnimator(), inAnimator);
+                animator = getOutAnimator(inAnimator);
             } else {
-                Animator outAnimator = getOutAnimator();
+                Animator outAnimator = getOutAnimator(null);
                 outAnimator.addListener(new AnimatorListenerAdapter() {
                     @Override
                     public void onAnimationEnd(Animator animation) {
@@ -188,11 +189,16 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
         return mMessage;
     }
 
-    private AnimatorSet getOutAnimator() {
-        AnimatorSet animatorSet = new AnimatorSet();
+    private AnimatorSet getOutAnimator(Animator inAnimator) {
         Animator fadeOut = ObjectAnimator.ofFloat(this, View.ALPHA, 0f);
         fadeOut.setDuration(getFadeOutDuration());
-        fadeOut.setInterpolator(Interpolators.FAST_OUT_LINEAR_IN);
+        fadeOut.setInterpolator(new PathInterpolator(0f, 0f, .5f, 1f));
+
+        Animator yTranslate =
+                ObjectAnimator.ofFloat(this, View.TRANSLATION_Y, 0, -getYTranslationPixels());
+        yTranslate.setDuration(getYTranslateDuration());
+        yTranslate.setInterpolator(Interpolators.EMPHASIZED);
+
         fadeOut.addListener(new AnimatorListenerAdapter() {
             private boolean mCancelled = false;
             @Override
@@ -201,6 +207,7 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
                 if (!mCancelled) {
                     setNextIndication();
                 }
+                yTranslate.end(); // After fading out, no need to finish y-translation
             }
 
             @Override
@@ -211,10 +218,14 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
             }
         });
 
-        Animator yTranslate =
-                ObjectAnimator.ofFloat(this, View.TRANSLATION_Y, 0, -getYTranslationPixels());
-        yTranslate.setDuration(getFadeOutDuration());
-        animatorSet.playTogether(fadeOut, yTranslate);
+        AnimatorSet animatorSet = new AnimatorSet();
+        if (inAnimator != null) {
+            AnimatorSet alphaAnimators = new AnimatorSet();
+            alphaAnimators.playSequentially(fadeOut, inAnimator);
+            animatorSet.playTogether(alphaAnimators, yTranslate);
+        } else {
+            animatorSet.playTogether(fadeOut, yTranslate);
+        }
 
         return animatorSet;
     }
@@ -269,7 +280,8 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
 
         Animator yTranslate =
                 ObjectAnimator.ofFloat(this, View.TRANSLATION_Y, getYTranslationPixels(), 0);
-        yTranslate.setDuration(getYInDuration());
+        yTranslate.setDuration(getYTranslateDuration());
+        yTranslate.setInterpolator(Interpolators.EMPHASIZED);
         yTranslate.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationCancel(Animator animation) {
@@ -290,22 +302,22 @@ public class KeyguardIndicationTextView extends DoubleShadowTextView {
 
     private long getFadeInDelay() {
         if (!mAnimationsEnabled) return 0L;
-        return 150L;
+        return 166L;
     }
 
     private long getFadeInDuration() {
         if (!mAnimationsEnabled) return 0L;
-        return 317L;
+        return 833L;
     }
 
-    private long getYInDuration() {
+    private long getYTranslateDuration() {
         if (!mAnimationsEnabled) return 0L;
-        return Y_IN_DURATION;
+        return Y_TRANSLATE_DURATION;
     }
 
     private long getFadeOutDuration() {
         if (!mAnimationsEnabled) return 0L;
-        return 167L;
+        return 216L;
     }
 
     private int getYTranslationPixels() {

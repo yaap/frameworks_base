@@ -31,6 +31,7 @@ import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.plugins.qs.QSTile
+import com.android.systemui.plugins.qs.TileDetailsViewModel
 import com.android.systemui.plugins.statusbar.StatusBarStateController
 import com.android.systemui.qs.QSHost
 import com.android.systemui.qs.QsEventLogger
@@ -39,10 +40,12 @@ import com.android.systemui.qs.logging.QSLogger
 import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.tiles.base.shared.model.QSTileConfigProvider
 import com.android.systemui.qs.tiles.base.shared.model.QSTileState
+import com.android.systemui.qs.tiles.dialog.InternetDetailsViewModel
 import com.android.systemui.qs.tiles.impl.cell.domain.interactor.MobileDataTileDataInteractor
 import com.android.systemui.qs.tiles.impl.cell.domain.interactor.MobileDataTileUserActionInteractor
 import com.android.systemui.qs.tiles.impl.cell.domain.model.MobileDataTileModel
 import com.android.systemui.qs.tiles.impl.cell.ui.mapper.MobileDataTileMapper
+import com.android.systemui.user.data.repository.UserRepository
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 
@@ -54,6 +57,7 @@ constructor(
     private val uiEventLogger: QsEventLogger,
     @Background private val backgroundLooper: Looper,
     @Main private val mainHandler: Handler,
+    private val userRepository: UserRepository,
     private val falsingManager: FalsingManager,
     private val metricsLogger: MetricsLogger,
     private val statusBarStateController: StatusBarStateController,
@@ -63,6 +67,7 @@ constructor(
     private val dataInteractor: MobileDataTileDataInteractor,
     private val tileMapper: MobileDataTileMapper,
     private val userActionInteractor: MobileDataTileUserActionInteractor,
+    private val internetDetailsViewModelFactory: InternetDetailsViewModel.Factory,
 ) :
     QSTileImpl<QSTile.State?>(
         host,
@@ -98,7 +103,7 @@ constructor(
     }
 
     override fun handleSecondaryClick(expandable: Expandable?) {
-        userActionInteractor.handleSecondaryClick(expandable)
+        lifecycle.coroutineScope.launch { userActionInteractor.handleSecondaryClick(expandable) }
     }
 
     override fun getLongClickIntent(): Intent = userActionInteractor.longClickIntent
@@ -119,6 +124,7 @@ constructor(
                         DrawableIcon(signalDrawableInstance)
                     }
             label = tileState.label
+            secondaryLabel = tileState.secondaryLabel
             contentDescription = tileState.contentDescription
             expandedAccessibilityClassName = tileState.expandedAccessibilityClassName
             handlesSecondaryClick =
@@ -128,8 +134,12 @@ constructor(
         }
     }
 
+    override fun getDetailsViewModel(): TileDetailsViewModel {
+        return internetDetailsViewModelFactory.create()
+    }
+
     override fun isAvailable(): Boolean {
-        return dataInteractor.isAvailable()
+        return dataInteractor.isTileSupported() && currentTileUser == userRepository.mainUserId
     }
 
     companion object {

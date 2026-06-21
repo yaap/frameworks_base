@@ -87,7 +87,8 @@ import javax.crypto.Mac;
 
 /**
  * A class that coordinates access to the fingerprint hardware.
- * @deprecated See {@link BiometricPrompt} which shows a system-provided dialog upon starting
+ *
+ * @removed See {@link BiometricPrompt} which shows a system-provided dialog upon starting
  * authentication. In a world where devices may have different types of biometric authentication,
  * it's much more realistic to have a system-provided authentication dialog since the method may
  * vary by vendor/device.
@@ -171,6 +172,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
 
     /**
      * Retrieves a test session for FingerprintManager.
+     *
      * @hide
      */
     @TestApi
@@ -229,9 +231,10 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     }
 
     /**
-     * A wrapper class for the crypto objects supported by FingerprintManager. Currently the
+     * A wrapper class for the crypto objects supported by FingerprintManager. Currently, the
      * framework supports {@link Signature}, {@link Cipher} and {@link Mac} objects.
-     * @deprecated See {@link android.hardware.biometrics.BiometricPrompt.CryptoObject}
+     *
+     * @removed See {@link android.hardware.biometrics.BiometricPrompt.CryptoObject}
      */
     @Deprecated
     public static final class CryptoObject extends android.hardware.biometrics.CryptoObject {
@@ -305,7 +308,8 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Container for callback data from {@link FingerprintManager#authenticate(CryptoObject,
      *     CancellationSignal, int, AuthenticationCallback, Handler)}.
-     * @deprecated See {@link android.hardware.biometrics.BiometricPrompt.AuthenticationResult}
+     *
+     * @removed See {@link android.hardware.biometrics.BiometricPrompt.AuthenticationResult}
      */
     @Deprecated
     public static class AuthenticationResult {
@@ -367,7 +371,8 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
      * FingerprintManager#authenticate(CryptoObject, CancellationSignal,
      * int, AuthenticationCallback, Handler) } must provide an implementation of this for listening to
      * fingerprint events.
-     * @deprecated See {@link android.hardware.biometrics.BiometricPrompt.AuthenticationCallback}
+     *
+     * @removed See {@link android.hardware.biometrics.BiometricPrompt.AuthenticationCallback}
      */
     @Deprecated
     public abstract static class AuthenticationCallback
@@ -430,6 +435,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Callback structure provided for {@link #detectFingerprint(CancellationSignal,
      * FingerprintDetectionCallback, int, Surface)}.
+     *
      * @hide
      */
     public interface FingerprintDetectionCallback {
@@ -585,7 +591,8 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
      *         by <a href="{@docRoot}training/articles/keystore.html">Android Keystore
      *         facility</a>.
      * @throws IllegalStateException if the crypto primitive is not initialized.
-     * @deprecated See {@link BiometricPrompt#authenticate(CancellationSignal, Executor,
+     *
+     * @removed See {@link BiometricPrompt#authenticate(CancellationSignal, Executor,
      * BiometricPrompt.AuthenticationCallback)} and {@link BiometricPrompt#authenticate(
      * BiometricPrompt.CryptoObject, CancellationSignal, Executor,
      * BiometricPrompt.AuthenticationCallback)}
@@ -600,6 +607,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Per-user version of authenticate.
      * @deprecated use {@link #authenticate(CryptoObject, CancellationSignal, AuthenticationCallback, Handler, FingerprintAuthenticateOptions)}.
+     *
      * @hide
      */
     @Deprecated
@@ -612,6 +620,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Per-user and per-sensor version of authenticate.
      * @deprecated use {@link #authenticate(CryptoObject, CancellationSignal, AuthenticationCallback, Handler, FingerprintAuthenticateOptions)}.
+     *
      * @hide
      */
     @Deprecated
@@ -628,6 +637,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
 
     /**
      * Version of authenticate with additional options.
+     *
      * @hide
      */
     @RequiresPermission(anyOf = {USE_BIOMETRIC, USE_FINGERPRINT})
@@ -676,6 +686,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Uses the fingerprint hardware to detect for the presence of a finger, without giving details
      * about accept/reject/lockout.
+     *
      * @hide
      */
     @RequiresPermission(USE_BIOMETRIC_INTERNAL)
@@ -738,6 +749,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
      * @param callback an object to receive enrollment events
      * @param shouldLogMetrics a flag that indicates if enrollment failure/success metrics
      * should be logged.
+     *
      * @hide
      */
     @RequiresPermission(MANAGE_FINGERPRINT)
@@ -810,6 +822,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Same as {@link #generateChallenge(int, GenerateChallengeCallback)}, but assumes the first
      * enumerated sensor.
+     *
      * @hide
      */
     @RequiresPermission(MANAGE_FINGERPRINT)
@@ -824,6 +837,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
 
     /**
      * Revokes the specified challenge.
+     *
      * @hide
      */
     @RequiresPermission(MANAGE_FINGERPRINT)
@@ -849,6 +863,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
      * @param sensorId Sensor ID that this operation takes effect for
      * @param userId User ID that this operation takes effect for.
      * @param hardwareAuthToken An opaque token returned by password confirmation.
+     *
      * @hide
      */
     @RequiresPermission(RESET_FINGERPRINT_LOCKOUT)
@@ -887,6 +902,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
 
     /**
      * Removes all fingerprint templates for the given user.
+     *
      * @hide
      */
     @RequiresPermission(MANAGE_FINGERPRINT)
@@ -990,6 +1006,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Forwards BiometricStateListener to FingerprintService
      * @param listener new BiometricStateListener being added
+     *
      * @hide
      */
     public void registerBiometricStateListener(@NonNull BiometricStateListener listener) {
@@ -1141,7 +1158,8 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     }
 
     /**
-     * This is triggered by SideFpsEventHandler
+     * This is triggered by SideFpsEventHandler.
+     *
      * @hide
      */
     @RequiresPermission(USE_BIOMETRIC_INTERNAL)
@@ -1154,7 +1172,8 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
      * Determine if there is at least one fingerprint enrolled.
      *
      * @return true if at least one fingerprint is enrolled, false otherwise
-     * @deprecated See {@link BiometricPrompt} and
+     *
+     * @removed See {@link BiometricPrompt} and
      * {@link FingerprintManager#FINGERPRINT_ERROR_NO_FINGERPRINTS}
      */
     @Deprecated
@@ -1188,7 +1207,8 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
      * Determine if fingerprint hardware is present and functional.
      *
      * @return true if hardware is present and functional, false otherwise.
-     * @deprecated See {@link BiometricPrompt} and
+     *
+     * @removed See {@link BiometricPrompt} and
      * {@link FingerprintManager#FINGERPRINT_ERROR_HW_UNAVAILABLE}
      */
     @Deprecated
@@ -1218,6 +1238,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
      * {@link FingerprintManager#addAuthenticatorsRegisteredCallback} API instead.
      * In most cases this method will work as expected, but during early boot up, it will be
      * null/empty and there is no way for the caller to know when it's actual value is ready.
+     *
      * @hide
      */
     @RequiresPermission(USE_BIOMETRIC_INTERNAL)
@@ -1236,6 +1257,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
     /**
      * Returns whether the device has a power button fingerprint sensor.
      * @return boolean indicating whether power button is fingerprint sensor
+     *
      * @hide
      */
     public boolean isPowerbuttonFps() {

@@ -22,7 +22,6 @@ import android.view.VelocityTracker
 import android.view.animation.AccelerateInterpolator
 import androidx.annotation.FloatRange
 import androidx.annotation.VisibleForTesting
-import com.android.systemui.Flags
 import com.android.systemui.statusbar.VibratorHelper
 import com.google.android.msdl.data.model.MSDLToken
 import com.google.android.msdl.domain.InteractionProperties
@@ -97,7 +96,7 @@ class SliderHapticFeedbackProvider(
             val properties =
                 InteractionProperties.DynamicVibrationScale(
                     powerScale,
-                    VIBRATION_ATTRIBUTES_PIPELINING,
+                    vibrationAttributes = VIBRATION_ATTRIBUTES_PIPELINING,
                 )
             msdlPlayer.playToken(MSDLToken.DRAG_THRESHOLD_INDICATOR_LIMIT, properties)
         } else {
@@ -123,7 +122,7 @@ class SliderHapticFeedbackProvider(
             )
         val bookendScaleRange = config.upperBookendScale - config.lowerBookendScale
         val bookendsHitScale = bookendScaleRange * velocityInterpolated + config.lowerBookendScale
-        return bookendsHitScale.pow(config.exponent)
+        return bookendsHitScale.pow(config.exponent).coerceIn(minimumValue = 0f, maximumValue = 1f)
     }
 
     /**
@@ -137,31 +136,20 @@ class SliderHapticFeedbackProvider(
         absoluteVelocity: Float,
         @FloatRange(from = 0.0, to = 1.0) normalizedSliderProgress: Float,
     ) {
-        // Check if its time to vibrate
+        // Check if it is time to vibrate
         val currentTime = clock.elapsedRealtime()
-        val elapsedSinceLastDrag = currentTime - dragTextureLastTime
-        if (elapsedSinceLastDrag < thresholdUntilNextDragCallMillis) return
-
-        val deltaProgress = abs(normalizedSliderProgress - dragTextureLastProgress)
-        if (deltaProgress < config.deltaProgressForDragThreshold) return
-
-        // Check if the progress is a discrete step so haptics can be delivered
-        if (
-            config.sliderStepSize > 0 &&
-                !normalizedSliderProgress.isDiscreteStep(config.sliderStepSize)
-        ) {
-            return
-        }
-
-        val powerScale = scaleOnDragTexture(absoluteVelocity, normalizedSliderProgress)
+        val canVibrate = canVibrateOnDragTexture(currentTime, normalizedSliderProgress)
+        if (!canVibrate) return
 
         if (isPrimitiveTickSupported) {
             // Deliver haptic feedback
+            val powerScale = scaleOnDragTexture(absoluteVelocity, normalizedSliderProgress)
             when {
                 config.sliderStepSize == 0f -> performContinuousSliderDragVibration(powerScale)
                 config.sliderStepSize > 0f -> performDiscreteSliderDragVibration(powerScale)
             }
         } else if (maxDurationFallback > 0) {
+            val powerScale = scaleOnDragTexture(absoluteVelocity, normalizedSliderProgress)
             val duration = powerToDuration(powerScale, maxDurationFallback)
             var effect = VibrationEffect.createOneShot(duration, VibrationEffect.MAX_AMPLITUDE)
             if (waveformFallback) {
@@ -177,6 +165,32 @@ class SliderHapticFeedbackProvider(
         dragTextureLastProgress = normalizedSliderProgress
     }
 
+    private fun canVibrateOnDragTexture(
+        currentTime: Long,
+        @FloatRange(from = 0.0, to = 1.0) normalizedSliderProgress: Float,
+    ): Boolean {
+        val isComingFromBookend = hasVibratedAtUpperBookend || hasVibratedAtLowerBookend
+
+        // Drag threshold conditions
+        val timeThresholdPassed =
+            currentTime - dragTextureLastTime >= thresholdUntilNextDragCallMillis
+        val progressThresholdPassed =
+            abs(normalizedSliderProgress - dragTextureLastProgress) >=
+                config.deltaProgressForDragThreshold
+
+        // Slider step conditions
+        val discreteStepPassed =
+            config.sliderStepSize > 0 &&
+                normalizedSliderProgress.isDiscreteStep(config.sliderStepSize)
+        val shouldStepVibrate = config.sliderStepSize == 0f || discreteStepPassed
+
+        return if (isComingFromBookend) {
+            shouldStepVibrate
+        } else {
+            timeThresholdPassed && progressThresholdPassed && shouldStepVibrate
+        }
+    }
+
     private fun Float.isDiscreteStep(stepSize: Float, epsilon: Float = 0.001f): Boolean {
         if (stepSize <= 0f) return false
         val division = this / stepSize
@@ -184,31 +198,21 @@ class SliderHapticFeedbackProvider(
     }
 
     private fun performDiscreteSliderDragVibration(scale: Float) {
-        if (Flags.msdlFeedback()) {
-            val properties =
-                InteractionProperties.DynamicVibrationScale(scale, VIBRATION_ATTRIBUTES_PIPELINING)
-            msdlPlayer.playToken(MSDLToken.DRAG_INDICATOR_DISCRETE, properties)
-        } else {
-            val effect =
-                VibrationEffect.startComposition()
-                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, scale)
-                    .compose()
-            vibratorHelper.vibrate(effect, VIBRATION_ATTRIBUTES_PIPELINING)
-        }
+        val properties =
+            InteractionProperties.DynamicVibrationScale(
+                scale,
+                vibrationAttributes = VIBRATION_ATTRIBUTES_PIPELINING,
+            )
+        msdlPlayer.playToken(MSDLToken.DRAG_INDICATOR_DISCRETE, properties)
     }
 
     private fun performContinuousSliderDragVibration(scale: Float) {
-        if (Flags.msdlFeedback()) {
-            val properties =
-                InteractionProperties.DynamicVibrationScale(scale, VIBRATION_ATTRIBUTES_PIPELINING)
-            msdlPlayer.playToken(MSDLToken.DRAG_INDICATOR_CONTINUOUS, properties)
-        } else {
-            val composition = VibrationEffect.startComposition()
-            repeat(config.numberOfLowTicks) {
-                composition.addPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, scale)
-            }
-            vibratorHelper.vibrate(composition.compose(), VIBRATION_ATTRIBUTES_PIPELINING)
-        }
+        val properties =
+            InteractionProperties.DynamicVibrationScale(
+                scale,
+                vibrationAttributes = VIBRATION_ATTRIBUTES_PIPELINING,
+            )
+        msdlPlayer.playToken(MSDLToken.DRAG_INDICATOR_CONTINUOUS, properties)
     }
 
     /**
@@ -241,7 +245,7 @@ class SliderHapticFeedbackProvider(
 
         // Total scale
         val scale = positionBasedScale + velocityBasedScale
-        return scale.pow(config.exponent)
+        return scale.pow(config.exponent).coerceIn(minimumValue = 0f, maximumValue = 1f)
     }
 
     override fun onHandleAcquiredByTouch() {}

@@ -33,14 +33,17 @@ import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.os.Trace;
 import android.os.UserHandle;
+import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Display;
 
+import androidx.annotation.Nullable;
 import androidx.concurrent.futures.CallbackToFutureAdapter;
 import androidx.exifinterface.media.ExifInterface;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.systemui.Flags;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -206,8 +209,10 @@ public class ImageExporter {
                         bitmap,
                         ZonedDateTime.now(ZoneId.systemDefault()),
                         format,
-                        mQuality, owner,
-                        createSystemFileDisplayName(fileName, format)));
+                        mQuality,
+                        owner,
+                        createSystemFileDisplayName(fileName, format),
+                        true /* allowOverwrite */, null));
     }
 
     /**
@@ -232,7 +237,7 @@ public class ImageExporter {
                         format,
                         mQuality, owner,
                         createSystemFileDisplayName(fileName, format, pkgName),
-                        false, pkgName));
+                        false, null, pkgName));
     }
 
     /**
@@ -279,6 +284,23 @@ public class ImageExporter {
     /**
      * Export the image to MediaStore and publish.
      *
+     * @param executor      the thread for execution
+     * @param bitmap        the bitmap to export
+     * @param customSaveUri A specific Uri to save the image to, must be a DocumentsContract URI
+     * @return a listenable future result
+     */
+    public ListenableFuture<Result> export(Executor executor, UUID requestId, Bitmap bitmap,
+            UserHandle owner, int displayId, @Nullable Uri customSaveUri) {
+        ZonedDateTime captureTime = ZonedDateTime.now(ZoneId.systemDefault());
+        return export(executor,
+                new Task(mResolver, requestId, bitmap, captureTime, mCompressFormat,
+                        mQuality, owner, createFilename(captureTime, mCompressFormat, displayId),
+                        false, customSaveUri));
+    }
+
+    /**
+     * Export the image to MediaStore and publish.
+     *
      * @param executor the thread for execution
      * @param bitmap   the bitmap to export
      * @param pkgName the name of app running in foreground
@@ -307,7 +329,8 @@ public class ImageExporter {
                         Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
                         try {
                             completer.set(task.execute());
-                        } catch (ImageExportException | InterruptedException e) {
+                        } catch (ImageExportException | InterruptedException
+                                 | FileNotFoundException e) {
                             completer.setException(e);
                         }
                     });
@@ -346,6 +369,7 @@ public class ImageExporter {
         private final int mQuality;
         private final UserHandle mOwner;
         private final String mFileName;
+        private final Uri mCustomSaveUri;
 
         /**
          * This variable specifies the behavior when a file to be exported has a same name and
@@ -359,19 +383,19 @@ public class ImageExporter {
         Task(ContentResolver resolver, UUID requestId, Bitmap bitmap, ZonedDateTime captureTime,
                 CompressFormat format, int quality, UserHandle owner, String fileName) {
             this(resolver, requestId, bitmap, captureTime, format, quality, owner, fileName,
-                    false /* allowOverwrite */);
+                    false /* allowOverwrite */, null /* customSaveUri */);
         }
 
         Task(ContentResolver resolver, UUID requestId, Bitmap bitmap, ZonedDateTime captureTime,
                 CompressFormat format, int quality, UserHandle owner,
-                String fileName, boolean allowOverwrite) {
+                String fileName, boolean allowOverwrite, Uri customSaveUri) {
             this(resolver, requestId, bitmap, captureTime, format, quality, owner,
-                    fileName, allowOverwrite, null /* pkgName */);
+                    fileName, allowOverwrite, customSaveUri, null /* pkgName */);
         }
 
         Task(ContentResolver resolver, UUID requestId, Bitmap bitmap, ZonedDateTime captureTime,
                 CompressFormat format, int quality, UserHandle owner,
-                String fileName, boolean allowOverwrite, String pkgName) {
+                String fileName, boolean allowOverwrite, Uri customSaveUri, String pkgName) {
             mResolver = resolver;
             mRequestId = requestId;
             mBitmap = bitmap;
@@ -381,21 +405,64 @@ public class ImageExporter {
             mOwner = owner;
             mFileName = createFilename(mCaptureTime, mFormat, Display.DEFAULT_DISPLAY, pkgName);
             mAllowOverwrite = allowOverwrite;
+            mCustomSaveUri = customSaveUri;
         }
 
-        public Result execute() throws ImageExportException, InterruptedException {
+        /**
+         * Executes image export task, handling process of saving a bitmap image to device's storage
+         * Note that if trying to save to a custom URI, it MUST be a DocumentsContract URI,
+         * not a MediaStore URI. If no custom URI is provided, then it will use MediaStore.
+         *
+         * @return a Result object containing info about the saved image, such as its URI
+         * @throws ImageExportException if any part of the image export process fails
+         * @throws InterruptedException if the thread is interrupted during export process
+         * @throws FileNotFoundException if the custom URI for writing the image doesn't exist
+         */
+        public Result execute()
+                throws ImageExportException, InterruptedException, FileNotFoundException {
             Trace.beginSection("ImageExporter_execute");
             Uri uri = null;
             Instant start = null;
             Result result = new Result();
+
+            if (LogConfig.DEBUG_STORAGE) {
+                Log.d(TAG, "image export started");
+                start = Instant.now();
+            }
+
             try {
-                if (LogConfig.DEBUG_STORAGE) {
-                    Log.d(TAG, "image export started");
-                    start = Instant.now();
+                // For now, only limiting saving to custom save URI to large screen screenshots,
+                // where URI will a DocumentsContract URI coming from the SAF picker
+                if (mCustomSaveUri != null && Flags.largeScreenScreenshotSaveLocation()) {
+                    try {
+                        // If using custom URI from SAF, use DocumentsContract to prepare file path.
+                        String mimeType = getMimeType(mFormat);
+                        Uri customDocumentsContractUri =
+                                DocumentsContract.buildDocumentUriUsingTree(
+                                        mCustomSaveUri,
+                                        DocumentsContract.getTreeDocumentId(mCustomSaveUri));
+                        uri = DocumentsContract.createDocument(mResolver,
+                                customDocumentsContractUri,
+                                mimeType, mFileName);
+                        if (uri == null) {
+                            Log.w(TAG, "DocumentsContract.createDocument returned null. "
+                                    + "Falling back to default save location.");
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "Custom save failed. Falling back to default save location.", e);
+                    }
                 }
 
-                uri = createEntry(mResolver, mFormat, mCaptureTime, mFileName, mOwner,
-                        mAllowOverwrite);
+                boolean customUriSaveFailed = false;
+
+                // If not saving to a valid custom uri, we create using MediaStore
+                if (uri == null) {
+                    if (mCustomSaveUri != null) {
+                        customUriSaveFailed = true;
+                    }
+                    uri = createEntry(mResolver, mFormat, mCaptureTime, mFileName, mOwner,
+                            mAllowOverwrite);
+                }
                 throwIfInterrupted();
 
                 writeImage(mResolver, mBitmap, mFormat, mQuality, uri);
@@ -406,7 +473,9 @@ public class ImageExporter {
                 writeExif(mResolver, uri, mRequestId, width, height, mCaptureTime);
                 throwIfInterrupted();
 
-                publishEntry(mResolver, uri);
+                if (mCustomSaveUri == null || customUriSaveFailed) {
+                    publishEntry(mResolver, uri);
+                }
 
                 result.timestamp = mCaptureTime.toInstant().toEpochMilli();
                 result.requestId = mRequestId;
@@ -473,8 +542,16 @@ public class ImageExporter {
             if (resultUri == null) {
                 // If file overwriting is disabled or there is no existing file to overwrite, create
                 // and insert a new entry.
-                resultUri = resolver.insert(uriWithUserId, values);
-                Log.d(TAG, "Inserted new URI: " + resultUri);
+                try {
+                    resultUri = resolver.insert(uriWithUserId, values);
+                    Log.d(TAG, "Inserted new URI: " + resultUri);
+                } catch (IllegalStateException e) {
+                    // A race on the screenshots directory may cause
+                    // this transaction to fail. Catch and eat the
+                    // exception and defer to the error handling
+                    // below.
+                    Log.w(TAG, "Failed to create new entry", e);
+                }
             }
 
             if (resultUri == null) {

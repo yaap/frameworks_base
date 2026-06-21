@@ -16,6 +16,9 @@
 
 package com.android.systemui.privacy
 
+import android.Manifest.permission.PACKAGE_USAGE_STATS
+import android.annotation.RequiresPermission
+import android.annotation.WorkerThread
 import android.app.ActivityManager
 import android.app.AppOpsManager
 import android.content.Context
@@ -61,6 +64,7 @@ constructor(
     private val activityManager: ActivityManager,
     private val context: Context,
     private val uiEventLogger: UiEventLogger,
+    private val locationAccumulatedLogger: LocationAccumulatedLogger,
 ) : PrivacyItemMonitor {
 
     @VisibleForTesting
@@ -140,16 +144,10 @@ constructor(
                         logger.logUpdatedItemFromAppOps(code, uid, packageName, active)
 
                         if (code in OPS_LOCATION) {
-                            val procInfo =
-                                (activityManager.runningAppProcesses ?: emptyList()).find {
-                                    it.uid == uid
-                                }
-                            val importance =
-                                procInfo?.importance ?: -1 // Use -1 if process not found
                             logger.logLocationAppOps(
                                 uid,
                                 packageName,
-                                importance,
+                                getUidImportance(uid),
                                 !isBackgroundApp(uid),
                                 isSystemApp(code, uid, packageName),
                             )
@@ -229,6 +227,7 @@ constructor(
 
         listening = shouldListen
         if (shouldListen) {
+            locationAccumulatedLogger.startLogging()
             appOpsController.addCallback(OPS, appOpsCallback)
             userTracker.addCallback(userTrackerCallback, bgExecutor)
             onCurrentProfilesChanged()
@@ -307,6 +306,7 @@ constructor(
                 currentState = hasNonSystemForegroundLocationAccess,
                 onEvent = LocationIndicatorEvent.LOCATION_INDICATOR_NON_SYSTEM_APP,
                 offEvent = LocationIndicatorEvent.LOCATION_INDICATOR_NON_SYSTEM_APP_OFF,
+                logType = LocationAccumulatedLogger.LocationLogType.NON_SYSTEM_FG,
             )
 
             // No background access
@@ -316,6 +316,7 @@ constructor(
                 currentState = hasSystemAccess,
                 onEvent = LocationIndicatorEvent.LOCATION_INDICATOR_SYSTEM_APP,
                 offEvent = LocationIndicatorEvent.LOCATION_INDICATOR_SYSTEM_APP_OFF,
+                logType = LocationAccumulatedLogger.LocationLogType.SYSTEM,
             )
 
             // No system access
@@ -326,6 +327,7 @@ constructor(
                 currentState = hasBackgroundAccess,
                 onEvent = LocationIndicatorEvent.LOCATION_INDICATOR_BACKGROUND_APP,
                 offEvent = LocationIndicatorEvent.LOCATION_INDICATOR_BACKGROUND_APP_OFF,
+                logType = LocationAccumulatedLogger.LocationLogType.BACKGROUND,
             )
 
             val hasAllAccess =
@@ -337,6 +339,7 @@ constructor(
                 hasAllAccess,
                 LocationIndicatorEvent.LOCATION_INDICATOR_ALL_APP,
                 LocationIndicatorEvent.LOCATION_INDICATOR_ALL_APP_OFF,
+                LocationAccumulatedLogger.LocationLogType.ALL,
             )
 
             hasHighPowerLocationAccess = false
@@ -351,9 +354,13 @@ constructor(
         currentState: Boolean,
         onEvent: LocationIndicatorEvent,
         offEvent: LocationIndicatorEvent,
+        logType: LocationAccumulatedLogger.LocationLogType? = null,
     ) {
         if (lastState != currentState) {
             uiEventLogger.log(if (currentState) onEvent else offEvent)
+            if (logType == null) return
+
+            locationAccumulatedLogger.logForType(logType, currentState)
         }
     }
 
@@ -449,6 +456,7 @@ constructor(
     private fun isSystemApp(item: AppOpItem): Boolean {
         return isSystemApp(item.code, item.uid, item.packageName)
     }
+
     private fun isSystemApp(code: Int, uid: Int, packageName: String): Boolean {
         val user = UserHandle.getUserHandleForUid(uid)
 
@@ -464,8 +472,7 @@ constructor(
         }
 
         val permission = AppOpsManager.opToPermission(code)
-        val permissionFlags: Int =
-            packageManager.getPermissionFlags(permission, packageName, user)
+        val permissionFlags: Int = packageManager.getPermissionFlags(permission, packageName, user)
         val isSystem =
             if (
                 PermissionChecker.checkPermissionForPreflight(
@@ -490,14 +497,24 @@ constructor(
      * <p>TODO(b/422799135): refactor isSystemApp() and isBackgroundApp(). Before this is fixed,
      * make sure to update PermissionUsageHelper when changing this method.
      */
+    @WorkerThread
+    @RequiresPermission(PACKAGE_USAGE_STATS)
     private fun isBackgroundApp(uid: Int): Boolean {
+        return getUidImportance(uid) >
+            ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
+    }
+
+    @WorkerThread
+    @RequiresPermission(PACKAGE_USAGE_STATS)
+    private fun getUidImportance(uid: Int): Int {
         for (processInfo in activityManager.runningAppProcesses) {
             if (processInfo.uid == uid) {
-                return (processInfo.importance >
-                    ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE)
+                return processInfo.importance
             }
         }
-        return false
+
+        // In case a uid is not found because runningAppProcesses might return stale results
+        return activityManager.getUidImportance(uid)
     }
 
     override fun dump(pw: PrintWriter, args: Array<out String>) {
@@ -509,6 +526,7 @@ constructor(
                 ipw.println("micCameraAvailable: $micCameraAvailable")
                 ipw.println("locationAvailable: $locationAvailable")
                 ipw.println("Callback: $callback")
+                locationAccumulatedLogger.writeToPrintWriter(ipw)
             }
             ipw.println("Current user ids: ${userTracker.userProfiles.map { it.id }}")
         }

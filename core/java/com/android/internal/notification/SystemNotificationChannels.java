@@ -15,6 +15,7 @@
 package com.android.internal.notification;
 
 import static android.app.admin.DevicePolicyResources.Strings.Core.NOTIFICATION_CHANNEL_DEVICE_ADMIN;
+import static android.app.supervision.flags.Flags.enableSupervisionManagerPolicyApis;
 
 import android.app.INotificationManager;
 import android.app.NotificationChannel;
@@ -73,6 +74,7 @@ public class SystemNotificationChannels {
     public static final String ACCESSIBILITY_HEARING_DEVICE = "ACCESSIBILITY_HEARING_DEVICE";
     public static final String ACCESSIBILITY_SECURITY_POLICY = "ACCESSIBILITY_SECURITY_POLICY";
     public static final String ABUSIVE_BACKGROUND_APPS = "ABUSIVE_BACKGROUND_APPS";
+    public static final String PARENTAL_CONTROLS = "PARENTAL_CONTROLS";
 
     @VisibleForTesting
     static final String OBSOLETE_DO_NOT_DISTURB = "DO_NOT_DISTURB";
@@ -231,6 +233,15 @@ public class SystemNotificationChannels {
                 context.getString(R.string.notification_channel_abusive_bg_apps),
                 NotificationManager.IMPORTANCE_LOW);
         channelsList.add(abusiveBackgroundAppsChannel);
+
+        if (enableSupervisionManagerPolicyApis()) {
+            final NotificationChannel parentalControlsChannel =
+                    new NotificationChannel(
+                            PARENTAL_CONTROLS,
+                            context.getString(R.string.notification_channel_parental_controls),
+                            NotificationManager.IMPORTANCE_HIGH);
+            channelsList.add(parentalControlsChannel);
+        }
 
         extraChannels(context, channelsList);
 

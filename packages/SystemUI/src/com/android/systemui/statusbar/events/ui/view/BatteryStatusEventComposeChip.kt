@@ -22,25 +22,16 @@ import android.util.AttributeSet
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import com.android.compose.theme.PlatformTheme
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.core.NewStatusBarIcons
-import com.android.systemui.statusbar.core.RudimentaryBattery
 import com.android.systemui.statusbar.events.BackgroundAnimatableView
 import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark
 import com.android.systemui.statusbar.pipeline.battery.domain.interactor.BatteryInteractor
@@ -50,7 +41,6 @@ import com.android.systemui.statusbar.pipeline.battery.ui.composable.BatteryLayo
 import com.android.systemui.statusbar.pipeline.battery.ui.composable.BatteryPercentTextOnly
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel.Companion.glyphRepresentation
-import java.text.NumberFormat
 
 /**
  * [StatusEvent] chip for the battery plugged in status event. Shows the current battery level and
@@ -79,17 +69,7 @@ constructor(
         inflate(context, R.layout.status_bar_event_chip_compose, this)
         roundedContainer = requireViewById(R.id.rounded_container)
         composeInner = requireViewById(R.id.compose_view)
-        composeInner.apply {
-            setContent {
-                PlatformTheme {
-                    if (RudimentaryBattery.isEnabled) {
-                        BatteryAndPercentChip(level, isText)
-                    } else {
-                        UnifiedBatteryChip(level, isText)
-                    }
-                }
-            }
-        }
+        composeInner.apply { setContent { PlatformTheme { UnifiedBatteryChip(level, isText) } } }
         updateResources()
     }
 
@@ -135,33 +115,4 @@ private fun UnifiedBatteryChip(level: Int, isText: Boolean) {
         // TODO(b/394659067): get a content description for this chip
         contentDescription = "",
     )
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun BatteryAndPercentChip(level: Int, isText: Boolean) {
-    val isFull = BatteryInteractor.isBatteryFull(level)
-    val height =
-        with(LocalDensity.current) {
-            BatteryViewModel.getStatusBarBatteryHeight(LocalContext.current).toDp()
-        }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (!isText) {
-            BatteryLayout(
-                attribution = BatteryGlyph.Bolt, // Always charging
-                levelProvider = { level },
-                isFullProvider = { isFull },
-                glyphsProvider = { emptyList() },
-                colorsProvider = { BatteryColors.DarkTheme.Charging },
-                modifier = Modifier.height(height).wrapContentWidth(),
-                contentDescription = "",
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-        }
-        Text(
-            text = NumberFormat.getPercentInstance().format(level / 100f),
-            color = BatteryColors.DarkTheme.Default.fill,
-            style = MaterialTheme.typography.labelLargeEmphasized,
-        )
-    }
 }

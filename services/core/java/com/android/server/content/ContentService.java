@@ -28,6 +28,7 @@ import android.annotation.SpecialUsers.CanBeALL;
 import android.annotation.SpecialUsers.CanBeCURRENT;
 import android.annotation.UserIdInt;
 import android.app.ActivityManager;
+import android.app.ActivityManager.ProcessState;
 import android.app.ActivityManager.RestrictionLevel;
 import android.app.ActivityManagerInternal;
 import android.app.AppGlobals;
@@ -1602,7 +1603,7 @@ public final class ContentService extends IContentService.Stub {
         if (ami == null) {
             return ContentResolver.SYNC_EXEMPTION_NONE;
         }
-        final int procState = ami.getUidProcessState(callingUid);
+        @ProcessState final int procState = ami.getUidProcessState(callingUid);
         final boolean isUidActive = ami.isUidActive(callingUid);
 
         // Providers bound by a TOP app will get PROCESS_STATE_BOUND_TOP, so include those as well
@@ -1619,7 +1620,7 @@ public final class ContentService extends IContentService.Stub {
         return ContentResolver.SYNC_EXEMPTION_NONE;
     }
 
-    private int getProcStateForStatsd(int procState) {
+    private int getProcStateForStatsd(@ProcessState int procState) {
         switch (procState) {
             case ActivityManager.PROCESS_STATE_UNKNOWN:
                 return FrameworkStatsLog.SYNC_EXEMPTION_OCCURRED__PROC_STATE__UNKNOWN;

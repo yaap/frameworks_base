@@ -17,6 +17,7 @@
 
 package com.android.systemui.keyguard.ui.viewmodel
 
+import android.annotation.SuppressLint
 import android.graphics.Point
 import android.util.MathUtils
 import android.view.View.VISIBLE
@@ -43,6 +44,7 @@ import com.android.systemui.keyguard.shared.model.TransitionState.RUNNING
 import com.android.systemui.keyguard.shared.model.TransitionState.STARTED
 import com.android.systemui.keyguard.ui.StateToValue
 import com.android.systemui.minmode.MinModeManager
+import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.shared.model.Scenes
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
@@ -55,7 +57,6 @@ import com.android.systemui.statusbar.phone.ScreenOffAnimationController
 import com.android.systemui.util.kotlin.BooleanFlowOperators.anyOf
 import com.android.systemui.util.kotlin.FlowDumperImpl
 import com.android.systemui.util.kotlin.pairwise
-import com.android.systemui.util.kotlin.sample
 import com.android.systemui.util.ui.AnimatableEvent
 import com.android.systemui.util.ui.AnimatedValue
 import com.android.systemui.util.ui.toAnimatedValueFlow
@@ -81,6 +82,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 
+@SuppressLint("FlowExposedFromViewModel")
 @SysUISingleton
 class KeyguardRootViewModel
 @Inject
@@ -152,6 +154,9 @@ constructor(
     private val alternateBouncerToDozingTransitionViewModel:
         AlternateBouncerToDozingTransitionViewModel,
     private val glanceableHubToDozingTransitionViewModel: GlanceableHubToDozingTransitionViewModel,
+    private val toLockscreenEndStateTransitionViewModel: ToLockscreenEndStateTransitionViewModel,
+    private val toAodEndStateTransitionViewModel: ToAodEndStateTransitionViewModel,
+    private val toDozingEndStateTransitionViewModel: ToDozingEndStateTransitionViewModel,
     private val screenOffAnimationController: ScreenOffAnimationController,
     private val aodBurnInViewModel: AodBurnInViewModel,
     shadeInteractor: ShadeInteractor,
@@ -251,6 +256,8 @@ constructor(
                                 glanceableHubToLockscreenTransitionViewModel.zoomOut,
                                 aodToGlanceableHubTransitionViewModel.zoomOut,
                                 glanceableHubToAodTransitionViewModel.zoomOut,
+                                toLockscreenEndStateTransitionViewModel.zoomOut,
+                                toAodEndStateTransitionViewModel.zoomOut,
                             )
                             .map {
                                 // rate limit the zoom out by 5% step to avoid jank
@@ -266,17 +273,13 @@ constructor(
         alphaOnShadeExpansion
             .map { it < 1f }
             .distinctUntilChanged()
-            .onStart { emit(false) }.flatMapLatest { isExpanding ->
-                if (Flags.deferDozeTransitionOnShadeDrag() && isExpanding) {
+            .onStart { emit(false) }
+            .flatMapLatest { isExpanding ->
+                if (isExpanding) {
                     // If shade is expanding, switch to a flow that never emits.
                     emptyFlow()
                 } else {
-                    // Otherwise, use the original flow.
-                    if (Flags.newDozingKeyguardStates()) {
-                        dozingToLockscreenTransitionViewModel.lockscreenAlpha(viewState)
-                    } else {
-                        dozingToLockscreenTransitionViewModel.lockscreenAlpha
-                    }
+                    dozingToLockscreenTransitionViewModel.lockscreenAlpha(viewState)
                 }
             }
 
@@ -357,8 +360,8 @@ constructor(
                         lockscreenToDreamingTransitionViewModel.lockscreenAlpha,
                         lockscreenToGlanceableHubTransitionViewModel.keyguardAlpha,
                         lockscreenToGoneTransitionViewModel.lockscreenAlpha(viewState),
-                        lockscreenToOccludedTransitionViewModel.lockscreenAlpha,
-                        lockscreenToPrimaryBouncerTransitionViewModel.lockscreenAlpha,
+                        lockscreenToOccludedTransitionViewModel.lockscreenAlpha(viewState),
+                        lockscreenToPrimaryBouncerTransitionViewModel.lockscreenAlpha(viewState),
                         occludedToAlternateBouncerTransitionViewModel.lockscreenAlpha,
                         occludedToAodTransitionViewModel.lockscreenAlpha,
                         occludedToDozingTransitionViewModel.lockscreenAlpha,
@@ -369,6 +372,9 @@ constructor(
                         primaryBouncerToDozingTransitionViewModel.lockscreenAlpha,
                         primaryBouncerToGoneTransitionViewModel.lockscreenAlpha,
                         primaryBouncerToLockscreenTransitionViewModel.lockscreenAlpha(viewState),
+                        toLockscreenEndStateTransitionViewModel.lockscreenAlpha,
+                        toAodEndStateTransitionViewModel.lockscreenAlpha,
+                        toDozingEndStateTransitionViewModel.lockscreenAlpha,
                     )
                     .onStart { emit(0f) },
             ) { hideKeyguard, alpha ->
@@ -442,19 +448,26 @@ constructor(
     val isNotifIconContainerVisible: StateFlow<AnimatedValue<Boolean>> =
         combine(
                 goneToAodTransitionRunning,
+                keyguardTransitionInteractor
+                    .transitionValue(LOCKSCREEN)
+                    .map { it > 0f }
+                    .onStart { emit(true) },
                 keyguardTransitionInteractor.isFinishedIn(
                     content = Scenes.Gone,
                     stateWithoutSceneContainer = GONE,
                 ),
+                deviceEntryBypassInteractor.isBypassEnabled,
                 areNotifsFullyHiddenAnimated(),
                 isPulseExpandingAnimated(),
                 aodNotificationIconViewModel.icons.map { it.visibleIcons.isNotEmpty() },
             ) { flows ->
                 val goneToAodTransitionRunning = flows[0] as Boolean
-                val isOnGone = flows[1] as Boolean
-                val notifsFullyHidden = flows[2] as AnimatedValue<Boolean>
-                val pulseExpanding = flows[3] as AnimatedValue<Boolean>
-                val hasAodIcons = flows[4] as Boolean
+                val isOnLockscreen = flows[1] as Boolean
+                val isOnGone = flows[2] as Boolean
+                val isBypassEnabled = flows[3] as Boolean
+                val notifsFullyHidden = flows[4] as AnimatedValue<Boolean>
+                val pulseExpanding = flows[5] as AnimatedValue<Boolean>
+                val hasAodIcons = flows[6] as Boolean
 
                 when {
                     // Hide the AOD icons if we're not in the KEYGUARD state unless the screen off
@@ -470,8 +483,12 @@ constructor(
                             when {
                                 // If there are no notification icons to show, then it can be hidden
                                 !hasAodIcons -> false
+                                // If we're bypassing, then we're visible
+                                SceneContainerFlag.isEnabled && isBypassEnabled -> true
                                 // If we are pulsing (and not bypassing), then we are hidden
                                 isPulseExpanding -> false
+                                // Besides bypass above, they should not be visible on lockscreen
+                                SceneContainerFlag.isEnabled && isOnLockscreen -> false
                                 // If notifs are fully gone, then we're visible
                                 areNotifsFullyHidden -> true
                                 // Otherwise, we're hidden
@@ -500,21 +517,20 @@ constructor(
             // If pulsing changes, start animating, unless it's the first emission
             .map { (prev, expanding) -> AnimatableEvent(expanding, startAnimating = prev != null) }
             .toAnimatedValueFlow()
+            .onStart { emit(AnimatedValue.NotAnimating(value = false)) }
     }
 
     /** Are notifications completely hidden from view, are we animating in response? */
     private fun areNotifsFullyHiddenAnimated(): Flow<AnimatedValue<Boolean>> {
         return notificationsKeyguardInteractor.areNotificationsFullyHidden
             .pairwise(initialValue = null)
-            .sample(deviceEntryBypassInteractor.isBypassEnabled) {
-                (prev, fullyHidden),
-                bypassEnabled ->
+            .map { (prev, fullyHidden) ->
                 val animate =
                     when {
                         // Don't animate for the first value
                         prev == null -> false
                         // Always animate if bypass is enabled.
-                        bypassEnabled -> true
+                        deviceEntryBypassInteractor.isBypassEnabled.value -> true
                         // If we're not bypassing and we're not going to AOD, then we're not
                         // animating.
                         !dozeParameters.alwaysOn -> false
@@ -525,6 +541,7 @@ constructor(
                 AnimatableEvent(fullyHidden, animate)
             }
             .toAnimatedValueFlow()
+            .onStart { emit(AnimatedValue.NotAnimating(value = false)) }
     }
 
     fun setRootViewLastTapPosition(point: Point) {

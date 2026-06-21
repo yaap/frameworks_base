@@ -18,12 +18,12 @@ package com.android.systemui.statusbar.lockscreen
 
 import android.app.ActivityOptions
 import android.app.PendingIntent
+import android.app.WallpaperManager
 import android.app.smartspace.SmartspaceConfig
 import android.app.smartspace.SmartspaceManager
 import android.app.smartspace.SmartspaceSession
 import android.app.smartspace.SmartspaceTarget
 import android.app.smartspace.SmartspaceTargetEvent
-import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
@@ -41,10 +41,12 @@ import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.View
 import androidx.annotation.VisibleForTesting
+import com.android.internal.colorextraction.ColorExtractor
 import com.android.keyguard.KeyguardUpdateMonitor
 import com.android.keyguard.KeyguardUpdateMonitorCallback
 import com.android.settingslib.Utils
 import com.android.systemui.Dumpable
+import com.android.systemui.colorextraction.SysuiColorExtractor
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.dagger.qualifiers.Main
@@ -61,6 +63,7 @@ import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.plugins.keyguard.data.model.WeatherData
 import com.android.systemui.plugins.statusbar.StatusBarStateController
 import com.android.systemui.res.R
+import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.settings.UserTracker
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.shared.regionsampling.RegionSampler
@@ -99,7 +102,7 @@ constructor(
     private val secureSettings: SecureSettings,
     private val systemSettings: SystemSettings,
     private val userTracker: UserTracker,
-    private val contentResolver: ContentResolver,
+    private val sysuiColorExtractor: SysuiColorExtractor,
     @ShadeDisplayAware private val configurationController: ConfigurationController,
     private val statusBarStateController: StatusBarStateController,
     private val deviceProvisionedController: DeviceProvisionedController,
@@ -145,6 +148,7 @@ constructor(
     // Smartspace can be used on multiple displays, such as when the user casts their screen
     @VisibleForTesting var smartspaceViews = mutableSetOf<SmartspaceView>()
     private var regionSamplers = mutableMapOf<SmartspaceView, RegionSampler>()
+    private var dataListeners = mutableSetOf<SmartspaceTargetListener>()
 
     private val regionSamplingEnabled = featureFlags.isEnabled(Flags.REGION_SAMPLING)
     private var showNotifications = false
@@ -152,6 +156,8 @@ constructor(
     private var showSensitiveContentForManagedUser = false
     private var managedUserHandle: UserHandle? = null
     private var mSplitShadeEnabled = false
+    var mediaTarget: SmartspaceTarget? = null
+        private set
 
     private val refreshInvoker: () -> Unit = { session?.requestSmartspaceUpdate() }
 
@@ -169,10 +175,12 @@ constructor(
         object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 (v as SmartspaceView).setSplitShadeEnabled(mSplitShadeEnabled)
+                (v as SmartspaceView).setMediaTarget(mediaTarget)
                 smartspaceViews.add(v as SmartspaceView)
 
                 connectSession()
 
+                updateBackgroundColorFromWallpaper()
                 updateTextColorFromWallpaper()
                 statusBarStateListener.onDozeAmountChanged(0f, statusBarStateController.dozeAmount)
 
@@ -265,6 +273,9 @@ constructor(
         object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
                 execution.assertIsMainThread()
+                if (session == null) {
+                    return
+                }
                 reloadSmartspace()
             }
         }
@@ -308,14 +319,19 @@ constructor(
             }
         }
 
+    private val onColorsChangedListener =
+        ColorExtractor.OnColorsChangedListener { _, which ->
+            if (which == WallpaperManager.FLAG_LOCK) {
+                updateBackgroundColorFromWallpaper()
+            }
+        }
+
     init {
         deviceProvisionedController.addCallback(deviceProvisionedListener)
         dumpManager.registerDumpable(this)
     }
 
     val isEnabled: Boolean = plugin != null && isWeatherEnabled
-
-    val isDateWeatherDecoupled: Boolean = datePlugin != null && weatherPlugin != null
 
     val isWeatherEnabled: Boolean
         get() {
@@ -466,7 +482,7 @@ constructor(
         }
         if (userSmartspaceManager == null) return
         if (datePlugin == null && weatherPlugin == null && plugin == null) return
-        if (session != null || smartspaceViews.isEmpty()) {
+        if (session != null || (smartspaceViews.isEmpty() && dataListeners.isEmpty())) {
             return
         }
 
@@ -496,18 +512,19 @@ constructor(
 
         deviceProvisionedController.removeCallback(deviceProvisionedListener)
         userTracker.addCallback(userTrackerCallback, uiExecutor)
-        contentResolver.registerContentObserver(
+        secureSettings.registerContentObserverForUserAsync(
             secureSettings.getUriFor(LOCK_SCREEN_ALLOW_PRIVATE_NOTIFICATIONS),
             true,
             settingsObserver,
             UserHandle.USER_ALL,
         )
-        contentResolver.registerContentObserver(
+        secureSettings.registerContentObserverForUserAsync(
             secureSettings.getUriFor(LOCK_SCREEN_SHOW_NOTIFICATIONS),
             true,
             settingsObserver,
             UserHandle.USER_ALL,
         )
+        sysuiColorExtractor.addOnColorsChangedListener(onColorsChangedListener)
         configurationController.addCallback(configChangeListener)
         statusBarStateController.addCallback(statusBarStateListener)
         bypassController.registerOnBypassStateChangedListener(bypassStateChangedListener)
@@ -531,9 +548,14 @@ constructor(
         session?.requestSmartspaceUpdate()
     }
 
+    fun setMediaTarget(target: SmartspaceTarget?) {
+        mediaTarget = target
+        smartspaceViews.forEach { it.setMediaTarget(target) }
+    }
+
     /** Disconnects the smartspace view from the smartspace service and cleans up any resources. */
     fun disconnect() {
-        if (!smartspaceViews.isEmpty()) return
+        if (!smartspaceViews.isEmpty() || !dataListeners.isEmpty()) return
         if (suppressDisconnects) return
 
         execution.assertIsMainThread()
@@ -547,7 +569,8 @@ constructor(
             it.close()
         }
         userTracker.removeCallback(userTrackerCallback)
-        contentResolver.unregisterContentObserver(settingsObserver)
+        secureSettings.unregisterContentObserverAsync(settingsObserver)
+        sysuiColorExtractor.removeOnColorsChangedListener(onColorsChangedListener)
         configurationController.removeCallback(configChangeListener)
         statusBarStateController.removeCallback(statusBarStateListener)
         bypassController.unregisterOnBypassStateChangedListener(bypassStateChangedListener)
@@ -556,10 +579,14 @@ constructor(
         datePlugin?.setEventDispatcher(null)
 
         weatherPlugin?.setEventDispatcher(null)
-        weatherPlugin?.onTargetsAvailable(emptyList())
+        if (!SceneContainerFlag.isEnabled) {
+            weatherPlugin?.onTargetsAvailable(emptyList())
+        }
 
         plugin?.setEventDispatcher(null)
-        plugin?.onTargetsAvailable(emptyList())
+        if (!SceneContainerFlag.isEnabled) {
+            plugin?.onTargetsAvailable(emptyList())
+        }
 
         Log.d(TAG, "Ended smartspace session for lockscreen")
     }
@@ -567,11 +594,19 @@ constructor(
     fun addListener(listener: SmartspaceTargetListener) {
         execution.assertIsMainThread()
         plugin?.registerListener(listener)
+        if (SceneContainerFlag.isEnabled) {
+            dataListeners.add(listener)
+            connectSession()
+        }
     }
 
     fun removeListener(listener: SmartspaceTargetListener) {
         execution.assertIsMainThread()
         plugin?.unregisterListener(listener)
+        if (SceneContainerFlag.isEnabled) {
+            dataListeners.remove(listener)
+            disconnect()
+        }
     }
 
     fun isWithinSmartspaceBounds(x: Int, y: Int): Boolean {
@@ -589,7 +624,7 @@ constructor(
     }
 
     private fun filterSmartspaceTarget(t: SmartspaceTarget): Boolean {
-        if (isDateWeatherDecoupled && t.featureType == SmartspaceTarget.FEATURE_WEATHER) {
+        if (t.featureType == SmartspaceTarget.FEATURE_WEATHER) {
             return false
         }
         if (!showNotifications) {
@@ -632,6 +667,12 @@ constructor(
                 view.setPrimaryTextColor(textColor)
             }
         }
+    }
+
+    private fun updateBackgroundColorFromWallpaper() {
+        val wallpaperColors =
+            sysuiColorExtractor.getWallpaperColors(WallpaperManager.FLAG_LOCK) ?: return
+        smartspaceViews.forEach { it.setHighContrastBackgroundColor(wallpaperColors.colorHints) }
     }
 
     private fun updateTextColorFromWallpaper() {

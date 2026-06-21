@@ -56,6 +56,7 @@ import android.hardware.biometrics.IIdentityCheckStateListener;
 import android.hardware.biometrics.IInvalidationCallback;
 import android.hardware.biometrics.ITestSession;
 import android.hardware.biometrics.ITestSessionCallback;
+import android.hardware.biometrics.IdentityCheckInfo;
 import android.hardware.biometrics.IdentityCheckStatus;
 import android.hardware.biometrics.PromptInfo;
 import android.hardware.biometrics.SensorPropertiesInternal;
@@ -78,6 +79,7 @@ import android.os.ServiceManager;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.Settings;
+import android.proximity.ProximityResultCode;
 import android.security.GateKeeper;
 import android.security.KeyStoreAuthorization;
 import android.security.authenticationpolicy.AuthenticationPolicyManager;
@@ -94,8 +96,10 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.os.SomeArgs;
 import com.android.internal.statusbar.IStatusBarService;
 import com.android.internal.util.DumpUtils;
+import com.android.server.LocalServices;
 import com.android.server.SystemService;
 import com.android.server.biometrics.log.BiometricContext;
+import com.android.server.companion.virtual.VirtualDeviceManagerInternal;
 import com.android.server.utils.Slogf;
 
 import java.io.FileDescriptor;
@@ -129,6 +133,7 @@ public class BiometricService extends SystemService {
     @NonNull private final Supplier<Long> mRequestCounter;
     @NonNull private final BiometricContext mBiometricContext;
     private final UserManager mUserManager;
+    private final VirtualDeviceManagerInternal mVirtualDeviceManagerInternal;
 
     @VisibleForTesting
     IStatusBarService mStatusBarService;
@@ -587,7 +592,8 @@ public class BiometricService extends SystemService {
             }
         }
 
-        public boolean getMandatoryBiometricsEnabledAndRequirementsSatisfiedForUser(int userId) {
+        public boolean getMandatoryBiometricsEnabledAndRequirementsSatisfiedForUser(
+                PromptInfo promptInfo, int userId) {
             if (!mMandatoryBiometricsEnabled.containsKey(userId)) {
                 updateMandatoryBiometricsForAllProfiles(userId);
             }
@@ -595,11 +601,25 @@ public class BiometricService extends SystemService {
                 updateMandatoryBiometricsRequirementsForAllProfiles(userId);
             }
 
-            return mMandatoryBiometricsEnabled.getOrDefault(userId,
-                    DEFAULT_MANDATORY_BIOMETRICS_STATUS)
-                    && mMandatoryBiometricsRequirementsSatisfied.getOrDefault(userId,
-                    DEFAULT_MANDATORY_BIOMETRICS_REQUIREMENTS_SATISFIED_STATUS)
-                    && getBiometricStatusForIdentityCheck(userId);
+            final boolean toggleEnabled = mMandatoryBiometricsEnabled.getOrDefault(userId,
+                    DEFAULT_MANDATORY_BIOMETRICS_STATUS);
+            final boolean requirementsSatisfied =
+                    mMandatoryBiometricsRequirementsSatisfied.getOrDefault(userId,
+                            DEFAULT_MANDATORY_BIOMETRICS_REQUIREMENTS_SATISFIED_STATUS);
+            final boolean strongBiometricsEnrolled = getBiometricStatusForIdentityCheck(userId);
+
+            if (!toggleEnabled) {
+                promptInfo.setIdentityCheckInactiveReason(
+                        IdentityCheckInfo.IDENTITY_CHECK_TOGGLE_DISABLED);
+            } else if (!requirementsSatisfied) {
+                promptInfo.setIdentityCheckInactiveReason(
+                        IdentityCheckInfo.IDENTITY_CHECK_REQUIREMENTS_NOT_SATISFIED);
+            } else if (!strongBiometricsEnrolled) {
+                promptInfo.setIdentityCheckInactiveReason(
+                        IdentityCheckInfo.IDENTITY_CHECK_STRONG_BIOMETRICS_NOT_ENROLLED);
+            }
+
+            return toggleEnabled && requirementsSatisfied && strongBiometricsEnrolled;
         }
 
         private boolean getBiometricStatusForIdentityCheck(int userId) {
@@ -628,16 +648,22 @@ public class BiometricService extends SystemService {
         /**
          * Returns if Identity Check is active or not for the given @param userId.
          */
-        public boolean isIdentityCheckActive(int userId) {
+        public boolean isIdentityCheckActive(PromptInfo promptInfo, int userId) {
             if (mIdentityCheckStatus != null
                     && mIdentityCheckStatus.isIdentityCheckValueForTestAvailable()) {
                 return mIdentityCheckStatus.isIdentityCheckActive();
             }
 
-            if (getMandatoryBiometricsEnabledAndRequirementsSatisfiedForUser(userId)) {
+            if (getMandatoryBiometricsEnabledAndRequirementsSatisfiedForUser(promptInfo, userId)) {
                 if (mTrustManager != null) {
                     try {
-                        return !mTrustManager.isInSignificantPlace();
+                        final boolean isDeviceOutsideSignificantPlace =
+                                !mTrustManager.isInSignificantPlace();
+                        if (!isDeviceOutsideSignificantPlace) {
+                            promptInfo.setIdentityCheckInactiveReason(
+                                    IdentityCheckInfo.IDENTITY_CHECK_DEVICE_IN_TRUSTED_LOCATION);
+                        }
+                        return isDeviceOutsideSignificantPlace;
                     } catch (RemoteException e) {
                         Slog.e(TAG, "Remote exception while trying to check "
                                 + "if user is in a trusted location.");
@@ -1006,7 +1032,7 @@ public class BiometricService extends SystemService {
         @android.annotation.EnforcePermission(android.Manifest.permission.USE_BIOMETRIC_INTERNAL)
         @Override // Binder call
         public int canAuthenticate(String opPackageName, int userId, int callingUserId,
-                @Authenticators.Types int authenticators) {
+                @Authenticators.Types int authenticators, int displayId) {
 
             super.canAuthenticate_enforcePermission();
 
@@ -1020,7 +1046,7 @@ public class BiometricService extends SystemService {
 
             try {
                 final PreAuthInfo preAuthInfo =
-                        createPreAuthInfo(opPackageName, userId, authenticators);
+                        createPreAuthInfo(opPackageName, userId, authenticators, displayId);
                 return preAuthInfo.getCanAuthenticateResult();
             } catch (RemoteException e) {
                 Slog.e(TAG, "Remote exception", e);
@@ -1298,7 +1324,8 @@ public class BiometricService extends SystemService {
                 String opPackageName,
                 int userId,
                 int callingUserId,
-                @Authenticators.Types int authenticators) {
+                @Authenticators.Types int authenticators,
+                int displayId) {
 
 
             super.getCurrentModality_enforcePermission();
@@ -1312,8 +1339,8 @@ public class BiometricService extends SystemService {
             }
 
             try {
-                final PreAuthInfo preAuthInfo =
-                        createPreAuthInfo(opPackageName, userId, authenticators);
+                final PreAuthInfo preAuthInfo = createPreAuthInfo(opPackageName, userId,
+                        authenticators, displayId);
                 return preAuthInfo.getPreAuthenticateStatus().first;
             } catch (RemoteException e) {
                 Slog.e(TAG, "Remote exception", e);
@@ -1395,14 +1422,16 @@ public class BiometricService extends SystemService {
     private PreAuthInfo createPreAuthInfo(
             @NonNull String opPackageName,
             int userId,
-            @Authenticators.Types int authenticators) throws RemoteException {
+            @Authenticators.Types int authenticators,
+            int displayId) throws RemoteException {
 
         final PromptInfo promptInfo = new PromptInfo();
         promptInfo.setAuthenticators(authenticators);
+        promptInfo.setDisplayId(displayId);
 
         return PreAuthInfo.create(mTrustManager, mDevicePolicyManager, mSettingObserver, mSensors,
                 userId, promptInfo, opPackageName, false /* checkDevicePolicyManager */,
-                getContext(), mBiometricCameraManager, mUserManager);
+                getContext(), mBiometricCameraManager, mUserManager, mVirtualDeviceManagerInternal);
     }
 
     /**
@@ -1514,6 +1543,10 @@ public class BiometricService extends SystemService {
         public AuthenticationPolicyManager getAuthenticationPolicyManager(Context context) {
             return context.getSystemService(AuthenticationPolicyManager.class);
         }
+
+        public VirtualDeviceManagerInternal getVirtualDeviceManagerInternal() {
+            return LocalServices.getService(VirtualDeviceManagerInternal.class);
+        }
     }
 
     /**
@@ -1549,6 +1582,7 @@ public class BiometricService extends SystemService {
         mKeyStoreAuthorization = injector.getKeyStoreAuthorization();
         mGateKeeper = injector.getGateKeeperService();
         mBiometricNotificationLogger = injector.getNotificationLogger();
+        mVirtualDeviceManagerInternal = injector.getVirtualDeviceManagerInternal();
 
         try {
             injector.getActivityManagerService().registerUserSwitchObserver(
@@ -1832,7 +1866,14 @@ public class BiometricService extends SystemService {
                 final PreAuthInfo preAuthInfo = PreAuthInfo.create(mTrustManager,
                         mDevicePolicyManager, mSettingObserver, mSensors, userId,
                         promptInfo, opPackageName, promptInfo.isDisallowBiometricsIfPolicyExists(),
-                        getContext(), mBiometricCameraManager, mUserManager);
+                        getContext(), mBiometricCameraManager, mUserManager,
+                        mVirtualDeviceManagerInternal, true /* authenticationRequested */);
+
+                if (Flags.bpComputerControlled() && mVirtualDeviceManagerInternal != null
+                        && promptInfo.shouldNotifyVdmAuthenticationRequested()) {
+                    mVirtualDeviceManagerInternal.onAuthenticationPrompt(
+                            promptInfo.getDisplayId(), opPackageName);
+                }
 
                 // Set the default title if necessary.
                 if (promptInfo.isUseDefaultTitle()) {
@@ -1841,6 +1882,11 @@ public class BiometricService extends SystemService {
                                 .getString(R.string.biometric_dialog_default_title));
                     }
                 }
+
+                promptInfo.setIsSystemCaller(
+                        Utils.isSystemUI(getContext(), opPackageName) || Utils.isSettings(
+                                getContext(), opPackageName) || Utils.isSystem(getContext(),
+                                opPackageName));
 
                 final int eligible = preAuthInfo.getEligibleModalities();
                 final boolean hasEligibleFingerprintSensor =
@@ -1972,10 +2018,10 @@ public class BiometricService extends SystemService {
         return null;
     }
 
-    private void onWatchRangingStateChange(int state) {
+    private void onWatchRangingStateChange(int state, @ProximityResultCode int errorCode) {
         for (int i = 0; i < mIdentityCheckStateListeners.size(); i++) {
             try {
-                mIdentityCheckStateListeners.get(i).onWatchRangingStateChanged(state);
+                mIdentityCheckStateListeners.get(i).onWatchRangingStateChanged(state, errorCode);
             } catch (RemoteException e) {
                 Slog.e(TAG, "RemoteException", e);
             }
