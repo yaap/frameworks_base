@@ -34,7 +34,7 @@ import static android.content.pm.ActivityInfo.LOCK_TASK_LAUNCH_MODE_ALWAYS;
 import static android.content.pm.ActivityInfo.LOCK_TASK_LAUNCH_MODE_DEFAULT;
 import static android.content.pm.ActivityInfo.LOCK_TASK_LAUNCH_MODE_NEVER;
 import static android.os.Process.SYSTEM_UID;
-import static android.telecom.TelecomManager.EMERGENCY_DIALER_COMPONENT;
+import static android.telephony.TelephonyManager.EMERGENCY_DIALER_COMPONENT;
 
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
@@ -49,6 +49,7 @@ import static com.android.dx.mockito.inline.extended.ExtendedMockito.never;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.reset;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.times;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.verify;
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.verifyNoInteractions;
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.when;
 import static com.android.server.wm.LockTaskController.LOCK_TASK_AUTH_ALLOWLISTED;
 import static com.android.server.wm.LockTaskController.LOCK_TASK_AUTH_DONT_LOCK;
@@ -326,7 +327,7 @@ public class LockTaskControllerTest {
         mLockTaskController.rebuildSystemLockTaskPinnedMode();
 
         // THEN mSupervisor should not be interacted with
-        verify(mSupervisor, never()).mRecentTasks.onLockTaskModeStateChanged(anyInt(), anyInt());
+        verifyNoInteractions(mSupervisor);
     }
 
     @Test
@@ -339,7 +340,7 @@ public class LockTaskControllerTest {
         mLockTaskController.rebuildSystemLockTaskPinnedMode();
 
         // THEN mSupervisor should not be interacted with
-        verify(mSupervisor, never()).mRecentTasks.onLockTaskModeStateChanged(anyInt(), anyInt());
+        verifyNoInteractions(mSupervisor);
     }
 
     @Test
@@ -371,10 +372,10 @@ public class LockTaskControllerTest {
         verify(mWindowManager, times(2)).disableKeyguard(any(IBinder.class), anyString(),
                 eq(TEST_USER_ID));
         // THEN the status bar should have been disabled
-        verify(mStatusBarService, times(2)).disable(eq(STATUS_BAR_MASK_PINNED),
-                any(IBinder.class), eq(mPackageName));
-        verify(mStatusBarService, times(2)).disable2(eq(DISABLE2_NONE), any(IBinder.class),
-                eq(mPackageName));
+        verify(mStatusBarService, times(2)).disableForUser(eq(STATUS_BAR_MASK_PINNED),
+                any(IBinder.class), eq(mPackageName), eq(TEST_USER_ID));
+        verify(mStatusBarService, times(2)).disable2ForUser(eq(DISABLE2_NONE), any(IBinder.class),
+                eq(mPackageName), eq(TEST_USER_ID));
         // THEN recents should have been notified
         verify(mRecentTasks, times(2)).onLockTaskModeStateChanged(anyInt(), eq(TEST_USER_ID));
     }

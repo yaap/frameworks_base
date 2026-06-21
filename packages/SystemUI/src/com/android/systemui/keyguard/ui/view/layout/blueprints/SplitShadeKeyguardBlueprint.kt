@@ -59,6 +59,8 @@ constructor(
     @Named(KeyguardSectionsModule.KEYGUARD_AMBIENT_INDICATION_AREA_SECTION)
     defaultAmbientIndicationAreaSection: Optional<KeyguardSection>,
     defaultSettingsPopupMenuSection: DefaultSettingsPopupMenuSection,
+    @Named(KeyguardSectionsModule.KEYGUARD_BATTERY_CHARGING_SECTION)
+    batteryChargingPopupMenuSection: Optional<KeyguardSection>,
     defaultStatusBarSection: DefaultStatusBarSection,
     splitShadeNotificationStackScrollLayoutSection: SplitShadeNotificationStackScrollLayoutSection,
     splitShadeGuidelines: SplitShadeGuidelines,
@@ -66,10 +68,10 @@ constructor(
     aodNotificationIconsSection: AodNotificationIconsSection,
     aodBurnInSection: AodBurnInSection,
     clockSection: ClockSection,
+    keyguardSliceViewSection: KeyguardSliceViewSection,
     smartspaceSection: SmartspaceSection,
     mediaSection: SplitShadeMediaSection,
     keyguardWeatherViewSection: KeyguardWeatherViewSection,
-    keyguardSliceViewSection: KeyguardSliceViewSection,
 ) : KeyguardBlueprint {
     override val id: String = ID
 
@@ -81,6 +83,7 @@ constructor(
             defaultShortcutsSection,
             defaultAmbientIndicationAreaSection.getOrNull(),
             defaultSettingsPopupMenuSection,
+            batteryChargingPopupMenuSection.getOrNull(),
             defaultStatusBarSection,
             splitShadeNotificationStackScrollLayoutSection,
             splitShadeGuidelines,

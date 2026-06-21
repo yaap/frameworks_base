@@ -25,6 +25,8 @@ import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.accessibility.AccessibilityEvent
 import androidx.compose.ui.util.lerp
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.dynamicanimation.animation.DynamicAnimation
 import androidx.dynamicanimation.animation.FloatValueHolder
@@ -83,10 +85,28 @@ constructor(
     private val mainSliderVerticalMargin: Int by lazy {
         context.resources.getDimensionPixelSize(R.dimen.volume_dialog_slider_vertical_margin)
     }
+    private val mainSliderHorizontalMargin: Int by lazy {
+        context.resources.getDimensionPixelSize(R.dimen.volume_dialog_slider_horizontal_margin)
+    }
 
     private val mainSliderWithCaptionsToggleVerticalMargin: Int by lazy {
         context.resources.getDimensionPixelSize(
             R.dimen.volume_dialog_slider_vertical_margin_with_captions_toggle
+        )
+    }
+    private val mainSliderWithCaptionsToggleHorizontalMargin: Int by lazy {
+        context.resources.getDimensionPixelSize(
+            R.dimen.volume_dialog_slider_horizontal_margin_with_captions_toggle
+        )
+    }
+
+    private val mainSliderWidth: Int by lazy {
+        context.resources.getDimensionPixelSize(R.dimen.volume_dialog_horizontal_slider_width)
+    }
+
+    private val mainSliderWidthWithCaptions: Int by lazy {
+        context.resources.getDimensionPixelSize(
+            R.dimen.volume_dialog_horizontal_slider_width_with_captions
         )
     }
 
@@ -147,9 +167,12 @@ constructor(
                         )
                     } else {
                         mainSliderContainer?.updateMargin(
-                            left = getSliderVerticalMargin() - view.paddingLeft,
-                            right = getSliderVerticalMargin() - view.paddingRight,
+                            left = getSliderHorizontalMargin() - view.paddingLeft,
+                            right = getSliderHorizontalMargin() - view.paddingRight,
                         )
+                        mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                            matchConstraintMaxWidth = getSliderWidth()
+                        }
                     }
                     WindowInsets.CONSUMED
                 }
@@ -252,6 +275,20 @@ constructor(
             mainSliderWithCaptionsToggleVerticalMargin
         } else {
             mainSliderVerticalMargin
+        }
+
+    private fun getSliderHorizontalMargin(): Int =
+        if (Flags.captionsToggleInVolumeDialogV1() && captionsButtonViewModel.isVisible.value) {
+            mainSliderWithCaptionsToggleHorizontalMargin
+        } else {
+            mainSliderHorizontalMargin
+        }
+
+    private fun getSliderWidth(): Int =
+        if (Flags.captionsToggleInVolumeDialogV1() && captionsButtonViewModel.isVisible.value) {
+            mainSliderWidthWithCaptions
+        } else {
+            mainSliderWidth
         }
 
     private class Accessibility(private val viewModel: VolumeDialogViewModel) :

@@ -17,6 +17,7 @@
 package com.android.systemui.plugins;
 
 import android.app.PendingIntent;
+import android.app.WallpaperColors.ColorsHints;
 import android.app.smartspace.SmartspaceAction;
 import android.app.smartspace.SmartspaceTarget;
 import android.app.smartspace.SmartspaceTargetEvent;
@@ -98,12 +99,6 @@ public interface BcSmartspaceDataPlugin extends Plugin {
         throw new UnsupportedOperationException("Not implemented by " + getClass());
     }
 
-    /** Provides Smartspace data to registered listeners. */
-    interface SmartspaceTargetListener {
-        /** Each Parcelable is a SmartspaceTarget that represents a card. */
-        void onSmartspaceTargetsUpdated(List<? extends Parcelable> targets);
-    }
-
     /**
      * Sets {@link BcSmartspaceConfigPlugin}.
      *
@@ -111,6 +106,12 @@ public interface BcSmartspaceDataPlugin extends Plugin {
      */
     default void registerConfigProvider(BcSmartspaceConfigPlugin configProvider) {
         throw new UnsupportedOperationException("Not implemented by " + getClass());
+    }
+
+    /** Provides Smartspace data to registered listeners. */
+    interface SmartspaceTargetListener {
+        /** Each Parcelable is a SmartspaceTarget that represents a card. */
+        void onSmartspaceTargetsUpdated(List<? extends Parcelable> targets);
     }
 
     /** View to which this plugin can be registered, in order to get updates. */
@@ -123,6 +124,11 @@ public interface BcSmartspaceDataPlugin extends Plugin {
         default void registerConfigProvider(BcSmartspaceConfigPlugin configProvider) {
             throw new UnsupportedOperationException("Not implemented by " + getClass());
         }
+
+        /**
+         * Background color for non-RemoteViews cards, when high contrast background is enabled.
+         */
+        default void setHighContrastBackgroundColor(@ColorsHints int wallpaperColorHints) {}
 
         /**
          * Primary color for unprotected text
@@ -191,7 +197,7 @@ public interface BcSmartspaceDataPlugin extends Plugin {
          * Set or clear device media playing
          */
         default void setMediaTarget(@Nullable SmartspaceTarget target) {
-            throw new UnsupportedOperationException("Not implemented by " + getClass());
+            // No-op by default for most view implementations
         }
 
         /**

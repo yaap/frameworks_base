@@ -39,7 +39,7 @@ public class HeadsUpAction extends GamingMacroAction {
     @Override
     public void saveState(SharedPreferences.Editor editor) {
         final int value = Settings.Global.getInt(mResolver,
-                HEADS_UP_NOTIFICATIONS_ENABLED, 0);
+                HEADS_UP_NOTIFICATIONS_ENABLED, 1);
         editor.putInt(PREF_KEY, value);
     }
 

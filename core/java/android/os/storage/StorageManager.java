@@ -2101,7 +2101,6 @@ public class StorageManager {
             MOUNT_MODE_EXTERNAL_ANDROID_WRITABLE
     })
     @Retention(RetentionPolicy.SOURCE)
-    /** @hide */
     public @interface MountMode {
     }
 
@@ -2329,8 +2328,8 @@ public class StorageManager {
      * different apps on external storage.
      *
      * @return {@code MountMode} for the given uid and packageName.
-     * @params uid UID of the application
-     * @params packageName name of the package
+     * @param uid UID of the application
+     * @param packageName name of the package
      * @hide
      */
     @RequiresPermission(android.Manifest.permission.WRITE_MEDIA_STORAGE)

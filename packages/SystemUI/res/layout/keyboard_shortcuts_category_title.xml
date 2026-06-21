@@ -22,7 +22,7 @@
           android:textAppearance="?android:attr/textAppearanceMedium"
           android:textSize="14sp"
           android:fontFamily="@*android:string/config_bodyFontFamilyMedium"
-          android:textColor="@androidprv:color/materialColorPrimary"
+          android:textColor="@color/materialColorPrimary"
           android:importantForAccessibility="yes"
           android:paddingTop="20dp"
           android:paddingBottom="10dp"/>

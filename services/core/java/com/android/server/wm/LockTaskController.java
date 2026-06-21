@@ -30,7 +30,7 @@ import static android.content.pm.ActivityInfo.LOCK_TASK_LAUNCH_MODE_IF_ALLOWLIST
 import static android.content.pm.ActivityInfo.LOCK_TASK_LAUNCH_MODE_NEVER;
 import static android.os.UserHandle.USER_ALL;
 import static android.os.UserHandle.USER_CURRENT;
-import static android.telecom.TelecomManager.EMERGENCY_DIALER_COMPONENT;
+import static android.telephony.TelephonyManager.EMERGENCY_DIALER_COMPONENT;
 
 import static com.android.internal.protolog.WmProtoLogGroups.WM_DEBUG_LOCKTASK;
 import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_LOCKTASK;
@@ -259,6 +259,7 @@ public class LockTaskController {
      */
     boolean activityBlockedFromFinish(ActivityRecord activity) {
         final Task task = activity.getTask();
+        // Launchable priv-apps can finish.
         if (task.mLockTaskAuth == LOCK_TASK_AUTH_LAUNCHABLE_PRIV || !isRootTask(task)) {
             return false;
         }

@@ -21,7 +21,7 @@ import android.database.ContentObserver
 import android.hardware.biometrics.common.AuthenticateReason
 import android.provider.Settings
 import com.android.internal.R.bool.config_performantAuthDefault
-import com.android.systemui.common.coroutine.ConflatedCallbackFlow.conflatedCallbackFlow
+import com.android.app.tracing.FlowTracing.tracedConflatedCallbackFlow
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.user.domain.interactor.SelectedUserInteractor
 import com.android.systemui.util.settings.SecureSettings
@@ -45,7 +45,7 @@ class FingerprintInteractiveToAuthProviderImpl @Inject constructor(
 
     override val enabledForCurrentUser =
         selectedUserInteractor.selectedUser.flatMapLatest { currentUserId ->
-            conflatedCallbackFlow {
+            tracedConflatedCallbackFlow("FingerprintInteractiveToAuthProviderImpl#enabledForCurrentUser") {
                 val callback = object : ContentObserver(null) {
                     override fun onChange(selfChange: Boolean) {
                         trySend(isEnabled(currentUserId))

@@ -67,6 +67,26 @@ public class KeyStoreSecurityLevel {
         }
     }
 
+    private <R> R retryBusyException(CheckedRemoteRequest<R> request) throws KeyStoreException {
+        while (true) {
+            try {
+                return request.execute();
+            } catch (ServiceSpecificException e) {
+                // Retry on backend busy.
+                if (e.errorCode == ResponseCode.BACKEND_BUSY) {
+                    Log.w(TAG, "Backend is busy, retrying");
+                    long backOffHint = (long) (Math.random() * 80 + 20);
+                    interruptedPreservingSleep(backOffHint);
+                } else {
+                    throw KeyStore2.getKeyStoreException(e.errorCode, e.getMessage());
+                }
+            } catch (RemoteException e) {
+                Log.e(TAG, "Could not connect to Keystore.", e);
+                throw new KeyStoreException(ResponseCode.SYSTEM_ERROR, "", e.getMessage());
+            }
+        }
+    }
+
     /**
      * Creates a new keystore operation.
      * @see IKeystoreSecurityLevel#createOperation(KeyDescriptor, KeyParameter[], boolean) for more
@@ -166,7 +186,7 @@ public class KeyStoreSecurityLevel {
             }
         }
 
-        return handleExceptions(() -> mSecurityLevel.generateKey(
+        return retryBusyException(() -> mSecurityLevel.generateKey(
                 descriptor, attestationKey, args.toArray(new KeyParameter[args.size()]),
                 flags, entropy));
     }

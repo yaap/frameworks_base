@@ -160,12 +160,16 @@ class UdfpsHelper(
     }
 
     fun addDimLayer() {
-        brightnessToAlpha()
-        windowManager.addView(view, dimLayoutParams)
+        if (!view.isAttachedToWindow) {
+            brightnessToAlpha()
+            windowManager.addView(view, dimLayoutParams)
+        }
     }
 
     fun removeDimLayer() {
-        windowManager.removeView(view)
+        if (view.isAttachedToWindow) {
+            windowManager.removeView(view)
+        }
     }
 
     init {

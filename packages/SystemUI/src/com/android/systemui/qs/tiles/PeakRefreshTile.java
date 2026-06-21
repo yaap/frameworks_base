@@ -19,7 +19,6 @@ package com.android.systemui.qs.tiles;
 
 import static com.android.internal.display.RefreshRateSettingsUtils.DEFAULT_REFRESH_RATE;
 import static com.android.internal.display.RefreshRateSettingsUtils.findHighestRefreshRateAmongAllDisplays;
-import static com.android.internal.display.RefreshRateSettingsUtils.findHighestRefreshRateForDefaultDisplay;
 
 import android.content.Context;
 import android.content.Intent;
@@ -36,7 +35,6 @@ import androidx.annotation.Nullable;
 
 import com.android.internal.logging.MetricsLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
-import com.android.server.display.feature.flags.Flags;
 import com.android.systemui.animation.Expandable;
 import com.android.systemui.broadcast.BroadcastDispatcher;
 import com.android.systemui.dagger.qualifiers.Background;
@@ -98,9 +96,7 @@ public class PeakRefreshTile extends QSTileImpl<BooleanState> {
                         refreshState();
                     }
                 };
-        mPeakRefreshRate = Math.round(Flags.backUpSmoothDisplayAndForcePeakRefreshRate()
-                ? findHighestRefreshRateAmongAllDisplays(mContext)
-                : findHighestRefreshRateForDefaultDisplay(mContext));
+        mPeakRefreshRate = Math.round(findHighestRefreshRateAmongAllDisplays(mContext));
     }
 
     @Override
@@ -129,8 +125,7 @@ public class PeakRefreshTile extends QSTileImpl<BooleanState> {
     @Override
     public void handleClick(@Nullable Expandable expandable) {
         final boolean newState = !mState.value;
-        final float valueIfChecked = Flags.backUpSmoothDisplayAndForcePeakRefreshRate()
-                ? Float.POSITIVE_INFINITY : mPeakRefreshRate;
+        final float valueIfChecked = Float.POSITIVE_INFINITY;
         final float peakRefreshRate = newState ? valueIfChecked : DEFAULT_REFRESH_RATE;
         Settings.System.putFloat(mContext.getContentResolver(),
                 Settings.System.PEAK_REFRESH_RATE, peakRefreshRate);

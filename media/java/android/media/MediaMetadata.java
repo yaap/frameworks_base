@@ -1019,7 +1019,8 @@ public final class MediaMetadata implements Parcelable {
             int height = (int) (bmp.getHeight() * scale);
             int width = (int) (bmp.getWidth() * scale);
             StrictMode.noteSlowCall("Downscaling oversized MediaMetadata Bitmap");
-            return Bitmap.createScaledBitmap(bmp, width, height, true);
+            // Downscale directly to ashmem in anticipation of parceling.
+            return Bitmap.createScaledAshmemBitmap(bmp, width, height, true);
         }
     }
 }

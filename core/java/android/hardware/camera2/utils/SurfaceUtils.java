@@ -29,8 +29,6 @@ import android.util.Range;
 import android.util.Size;
 import android.view.Surface;
 
-import com.android.internal.camera.flags.Flags;
-
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
@@ -111,6 +109,22 @@ public class SurfaceUtils {
     }
 
     /**
+     * Get the surface object unique id of a surface.
+     *
+     * @param surface The surface to be checked.
+     * @return the native object unique id of the surface, 0 if surface is not backed by a
+     * native object.
+     */
+    public static long getSurfaceUniqueId(Surface surface) {
+        checkNotNull(surface);
+        try {
+            return nativeGetSurfaceUniqueId(surface);
+        } catch (IllegalArgumentException e) {
+            return 0;
+        }
+    }
+
+    /**
      * Get the surface usage bits.
      *
      * @param surface The surface to be queried for usage.
@@ -171,11 +185,6 @@ public class SurfaceUtils {
      */
     public static int getOverrideFormat(int format, long usage) {
         if (format >= PixelFormat.RGBA_8888 && format <= BGRA_8888) {
-            if (!Flags.surfaceFormatFix()) {
-                // Maintain existing behavior
-                return ImageFormat.PRIVATE;
-            }
-
             // Only override to PRIVATE if the usage has only hardware
             // bits.
             if (((usage & USAGE_HW_MASK) != 0)
@@ -336,6 +345,8 @@ public class SurfaceUtils {
             /*out*/int[/*2*/] dimens);
 
     private static native long nativeGetSurfaceId(Surface surface);
+
+    private static native long nativeGetSurfaceUniqueId(Surface surface);
 
     private static boolean isPrivilegedApp() {
         String packageName = ActivityThread.currentOpPackageName();

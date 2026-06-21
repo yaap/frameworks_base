@@ -58,7 +58,6 @@ import org.xmlpull.v1.XmlPullParserException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -114,6 +113,11 @@ public final class InputMethodInfo implements Parcelable {
     @TestApi
     @SuppressLint("MinMaxConstant")
     public static final int MAX_IMES_PER_PACKAGE = 20;
+
+    /**
+     * The maximum number of subtypes per IME.
+     */
+    static final int MAX_SUBTYPES_PER_IME = 1500;
 
     static final String TAG = "InputMethodInfo";
 
@@ -321,10 +325,8 @@ public final class InputMethodInfo implements Parcelable {
                     readTracker)) {
                 settingsActivityComponent = sa.getString(
                         com.android.internal.R.styleable.InputMethod_settingsActivity);
-                if (Flags.imeSwitcherRevampApi()) {
-                    languageSettingsActivityComponent = sa.getString(
-                            com.android.internal.R.styleable.InputMethod_languageSettingsActivity);
-                }
+                languageSettingsActivityComponent = sa.getString(
+                        com.android.internal.R.styleable.InputMethod_languageSettingsActivity);
                 isVrOnly = sa.getBoolean(com.android.internal.R.styleable.InputMethod_isVrOnly,
                         false);
                 isVirtualDeviceOnly = sa.getBoolean(
@@ -380,9 +382,13 @@ public final class InputMethodInfo implements Parcelable {
                             .InputMethod_Subtype_physicalKeyboardHintLanguageTag);
                     String pkLayoutType = a.getString(com.android.internal.R.styleable
                             .InputMethod_Subtype_physicalKeyboardHintLayoutType);
+                    String subtypeShortLabel = a.getString(com.android.internal.R.styleable
+                            .InputMethod_Subtype_shortLabel);
                     subtype = new InputMethodSubtypeBuilder()
                             .setSubtypeNameResId(a.getResourceId(com.android.internal.R.styleable
                                     .InputMethod_Subtype_label, 0))
+                            .setSubtypeShortLabel(
+                                    subtypeShortLabel == null ? "" : subtypeShortLabel)
                             .setSubtypeIconResId(a.getResourceId(com.android.internal.R.styleable
                                     .InputMethod_Subtype_icon, 0))
                             .setPhysicalKeyboardHint(
@@ -507,13 +513,6 @@ public final class InputMethodInfo implements Parcelable {
     /**
      * @hide
      */
-    public InputMethodInfo(InputMethodInfo source) {
-        this(source, Collections.emptyList());
-    }
-
-    /**
-     * @hide
-     */
     public InputMethodInfo(@NonNull InputMethodInfo source,
             @NonNull List<InputMethodSubtype> additionalSubtypes) {
         mId = source.mId;
@@ -551,8 +550,8 @@ public final class InputMethodInfo implements Parcelable {
     }
 
     InputMethodInfo(Parcel source) {
-        mId = source.readString();
-        mSettingsActivityName = source.readString();
+        mId = source.readString8();
+        mSettingsActivityName = source.readString8();
         mLanguageSettingsActivityName = source.readString8();
         mIsDefaultResId = source.readInt();
         mIsAuxIme = source.readInt() == 1;
@@ -587,44 +586,6 @@ public final class InputMethodInfo implements Parcelable {
                 false /* supportConnectionlessStylusHandwriting */,
                 null /* stylusHandwritingSettingsActivityAttr */,
                 false /* inlineSuggestionsEnabled */);
-    }
-
-    /**
-     * Test API for creating a built-in input method to verify stylus handwriting.
-     * @hide
-     */
-    @TestApi
-    public InputMethodInfo(@NonNull String packageName, @NonNull String className,
-            @NonNull CharSequence label, @NonNull String settingsActivity,
-            boolean supportStylusHandwriting,
-            @NonNull String stylusHandwritingSettingsActivityAttr) {
-        this(buildFakeResolveInfo(packageName, className, label), false /* isAuxIme */,
-                settingsActivity, null /* languageSettingsActivity */,
-                null /* subtypes */, 0 /* isDefaultResId */,
-                false /* forceDefault */, true /* supportsSwitchingToNextInputMethod */,
-                false /* inlineSuggestionsEnabled */, false /* isVrOnly */,
-                false /* isVirtualDeviceOnly */, 0 /* handledConfigChanges */,
-                supportStylusHandwriting, false /* supportConnectionlessStylusHandwriting */,
-                stylusHandwritingSettingsActivityAttr, false /* inlineSuggestionsEnabled */);
-    }
-
-    /**
-     * Test API for creating a built-in input method to verify stylus handwriting.
-     * @hide
-     */
-    @TestApi
-    public InputMethodInfo(@NonNull String packageName, @NonNull String className,
-            @NonNull CharSequence label, @NonNull String settingsActivity,
-            @NonNull String languageSettingsActivity, boolean supportStylusHandwriting,
-            @NonNull String stylusHandwritingSettingsActivityAttr) {
-        this(buildFakeResolveInfo(packageName, className, label), false /* isAuxIme */,
-                settingsActivity, languageSettingsActivity, null /* subtypes */,
-                0 /* isDefaultResId */, false /* forceDefault */,
-                true /* supportsSwitchingToNextInputMethod */,
-                false /* inlineSuggestionsEnabled */, false /* isVrOnly */,
-                false /* isVirtualDeviceOnly */, 0 /* handledConfigChanges */,
-                supportStylusHandwriting, false /* supportConnectionlessStylusHandwriting */,
-                stylusHandwritingSettingsActivityAttr, false /* inlineSuggestionsEnabled */);
     }
 
     /**
@@ -678,7 +639,7 @@ public final class InputMethodInfo implements Parcelable {
         this(ri, isAuxIme, settingsActivity, null /* languageSettingsActivity */, subtypes,
                 isDefaultResId, forceDefault,
                 true /* supportsSwitchingToNextInputMethod */, false /* inlineSuggestionsEnabled */,
-                false /* isVrOnly */, false /* isVirtualDeviceOnly */, 0 /* handledconfigChanges */,
+                false /* isVrOnly */, false /* isVirtualDeviceOnly */, 0 /* handledConfigChanges */,
                 false /* supportsStylusHandwriting */,
                 false /* supportConnectionlessStylusHandwriting */,
                 null /* stylusHandwritingSettingsActivityAttr */,
@@ -1098,8 +1059,8 @@ public final class InputMethodInfo implements Parcelable {
      */
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeString(mId);
-        dest.writeString(mSettingsActivityName);
+        dest.writeString8(mId);
+        dest.writeString8(mSettingsActivityName);
         dest.writeString8(mLanguageSettingsActivityName);
         dest.writeInt(mIsDefaultResId);
         dest.writeInt(mIsAuxIme ? 1 : 0);

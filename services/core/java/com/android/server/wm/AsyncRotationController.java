@@ -346,7 +346,7 @@ class AsyncRotationController extends FadeAnimationController implements Consume
             }
             return false;
         }
-        if (mTransitionOp == OP_APP_SWITCH && token.mTransitionController.inTransition()) {
+        if (mTransitionOp == OP_APP_SWITCH && mDisplayContent.inTransition()) {
             final Operation op = mTargetWindowTokens.get(token);
             if (op != null && op.mActions == Operation.ACTION_FADE) {
                 // Defer showing to onTransitionFinished().
@@ -464,11 +464,18 @@ class AsyncRotationController extends FadeAnimationController implements Consume
 
     /** Hides the IME window immediately until it is drawn in new rotation. */
     void hideImeImmediately() {
-        if (mDisplayContent.mInputMethodWindow == null) return;
-        final WindowToken imeWindowToken = mDisplayContent.mInputMethodWindow.mToken;
-        if (isTargetToken(imeWindowToken)) return;
+        final WindowState imeWindow = mDisplayContent.getImeWindow();
+        if (imeWindow == null) {
+            return;
+        }
+        final WindowToken imeWindowToken = imeWindow.mToken;
+        if (isTargetToken(imeWindowToken)) {
+            return;
+        }
         hideImmediately(imeWindowToken, Operation.ACTION_TOGGLE_IME);
-        if (DEBUG) Slog.d(TAG, "hideImeImmediately " + imeWindowToken.getTopChild());
+        if (DEBUG) {
+            Slog.d(TAG, "hideImeImmediately " + imeWindowToken.getTopChild());
+        }
     }
 
     private void hideImmediately(@NonNull WindowToken token, @Operation.Action int action) {

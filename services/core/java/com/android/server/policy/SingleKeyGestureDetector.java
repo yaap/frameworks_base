@@ -32,10 +32,9 @@ import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.Display;
 import android.view.KeyEvent;
 import android.view.ViewConfiguration;
-
-import com.android.hardware.input.Flags;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -59,7 +58,7 @@ public final class SingleKeyGestureDetector {
 
     private int mKeyPressCounter;
     private boolean mBeganFromNonInteractive = false;
-    private boolean mBeganFromDefaultDisplayOn = false;
+    private int mDefaultDisplayStateBeganFrom;
 
     private final ArrayList<SingleKeyRule> mRules = new ArrayList();
     private SingleKeyRule mActiveRule = null;
@@ -92,10 +91,10 @@ public final class SingleKeyGestureDetector {
      *       };
      *  </pre>
      */
-    abstract static class SingleKeyRule {
-        private final int mKeyCode;
+    public abstract static class SingleKeyRule {
+        final int mKeyCode;
 
-        SingleKeyRule(int keyCode) {
+        public SingleKeyRule(int keyCode) {
             mKeyCode = keyCode;
         }
 
@@ -109,14 +108,14 @@ public final class SingleKeyGestureDetector {
         /**
          *  True if the rule support long press.
          */
-        boolean supportLongPress() {
+        public boolean supportLongPress() {
             return false;
         }
 
         /**
          *  True if the rule support very long press.
          */
-        boolean supportVeryLongPress() {
+        public boolean supportVeryLongPress() {
             return false;
         }
 
@@ -126,7 +125,7 @@ public final class SingleKeyGestureDetector {
          *  Otherwise trigger onMultiPress immediately when reach max count when
          *  {@link KeyEvent#ACTION_DOWN}.
          */
-        int getMaxMultiPressCount() {
+        public int getMaxMultiPressCount() {
             return 1;
         }
 
@@ -134,7 +133,7 @@ public final class SingleKeyGestureDetector {
          * Called when a single key gesture is started, is completed or is cancelled.
          * {@link SingleKeyGestureEvent}
          */
-        void onKeyGesture(@NonNull SingleKeyGestureEvent event) {}
+        public void onKeyGesture(@NonNull SingleKeyGestureEvent event) {}
 
         /**
          *  Returns the timeout in milliseconds for a long press.
@@ -143,7 +142,7 @@ public final class SingleKeyGestureDetector {
          *  timeout. If very long press is supported, this should always be less than the very long
          *  press timeout.
          */
-        long getLongPressTimeoutMs() {
+        public long getLongPressTimeoutMs() {
             return sDefaultLongPressTimeout;
         }
 
@@ -152,7 +151,7 @@ public final class SingleKeyGestureDetector {
          *
          *  If long press is supported, this should always be longer than the long press timeout.
          */
-        long getVeryLongPressTimeoutMs() {
+        public long getVeryLongPressTimeoutMs() {
             return sDefaultVeryLongPressTimeout;
         }
 
@@ -161,7 +160,15 @@ public final class SingleKeyGestureDetector {
          *
          * @param pressCount the number of presses detected leading up to this key up event
          */
-        void onKeyUp(int pressCount, KeyEvent event) {}
+        public void onKeyUp(int pressCount, KeyEvent event) {}
+
+        /**
+         * Callback executed when a key down event is unhandled by the focused app.
+         *
+         * @param downTime The time of the initial key down event, in the
+         *                 {@link android.os.SystemClock#uptimeMillis()} time base.
+         */
+        public void onUnhandledKey(long downTime) {}
 
         @Override
         public String toString() {
@@ -218,12 +225,21 @@ public final class SingleKeyGestureDetector {
         mRules.remove(rule);
     }
 
-    void interceptKey(KeyEvent event, boolean interactive, boolean defaultDisplayOn) {
+    void notifyUnhandledKey(int keyCode, long downTime) {
+        for (SingleKeyRule rule : mRules) {
+            if (rule.mKeyCode == keyCode) {
+                rule.onUnhandledKey(downTime);
+                return;
+            }
+        }
+    }
+
+    void interceptKey(KeyEvent event, boolean interactive, int defaultDisplayState) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             // Store the non interactive state and display on state when first down.
             if (mDownKeyCode == KeyEvent.KEYCODE_UNKNOWN || mDownKeyCode != event.getKeyCode()) {
                 mBeganFromNonInteractive = !interactive;
-                mBeganFromDefaultDisplayOn = defaultDisplayOn;
+                mDefaultDisplayStateBeganFrom = defaultDisplayState;
             }
             interceptKeyDown(event);
         } else {
@@ -340,9 +356,8 @@ public final class SingleKeyGestureDetector {
         }
 
         if (event.getKeyCode() == mActiveRule.mKeyCode) {
-            if (Flags.abortSlowMultiPress()
-                    && (event.getEventTime() - mLastDownTime
-                            >= mActiveRule.getLongPressTimeoutMs())) {
+            if (event.getEventTime() - mLastDownTime
+                            >= mActiveRule.getLongPressTimeoutMs()) {
                 // In this case, we are either on a first long press (but long press behavior is not
                 // supported for this rule), or, on a non-first press that is at least as long as
                 // the long-press duration. Thus, we will cancel the multipress gesture.
@@ -419,12 +434,14 @@ public final class SingleKeyGestureDetector {
     }
 
     boolean beganFromDefaultDisplayOn() {
-        return mBeganFromDefaultDisplayOn;
+        return mDefaultDisplayStateBeganFrom == Display.STATE_ON;
     }
 
     private void startLongPress(@NonNull SingleKeyRule rule) {
         rule.onKeyGesture(new SingleKeyGestureEvent.Builder(rule.mKeyCode,
                 SINGLE_KEY_GESTURE_TYPE_LONG_PRESS, ACTION_START)
+                        .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                        .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                         .setStartTime(mLastDownTime)
                         .build());
         // Add delayed complete gesture to handler with long press timeout
@@ -432,6 +449,8 @@ public final class SingleKeyGestureDetector {
         GestureMessage object = new GestureMessage(mActiveRule,
                 new SingleKeyGestureEvent.Builder(rule.mKeyCode, SINGLE_KEY_GESTURE_TYPE_LONG_PRESS,
                         ACTION_COMPLETE)
+                        .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                        .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                         .setStartTime(mLastDownTime)
                         .setEventTime(SystemClock.uptimeMillis() + longPressTimeout)
                         .build());
@@ -445,6 +464,8 @@ public final class SingleKeyGestureDetector {
         GestureMessage object = new GestureMessage(mActiveRule,
                 new SingleKeyGestureEvent.Builder(rule.mKeyCode, SINGLE_KEY_GESTURE_TYPE_LONG_PRESS,
                         ACTION_COMPLETE)
+                        .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                        .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                         .setStartTime(mLastDownTime)
                         .setEventTime(SystemClock.uptimeMillis())
                         .build());
@@ -458,13 +479,18 @@ public final class SingleKeyGestureDetector {
             mHandler.removeMessages(MSG_KEY_LONG_PRESS);
             rule.onKeyGesture(
                     new SingleKeyGestureEvent.Builder(rule.mKeyCode,
-                            SINGLE_KEY_GESTURE_TYPE_LONG_PRESS, ACTION_CANCEL).build());
+                            SINGLE_KEY_GESTURE_TYPE_LONG_PRESS, ACTION_CANCEL)
+                            .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                            .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
+                            .build());
         }
     }
 
     private void startVeryLongPress(@NonNull SingleKeyRule rule) {
         rule.onKeyGesture(new SingleKeyGestureEvent.Builder(rule.mKeyCode,
                 SINGLE_KEY_GESTURE_TYPE_VERY_LONG_PRESS, ACTION_START)
+                .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                 .setStartTime(mLastDownTime)
                 .build());
         // Add delayed complete gesture to handler with very long press timeout
@@ -472,6 +498,8 @@ public final class SingleKeyGestureDetector {
         GestureMessage object = new GestureMessage(mActiveRule,
                 new SingleKeyGestureEvent.Builder(rule.mKeyCode,
                         SINGLE_KEY_GESTURE_TYPE_VERY_LONG_PRESS, ACTION_COMPLETE)
+                        .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                        .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                         .setStartTime(mLastDownTime)
                         .setEventTime(SystemClock.uptimeMillis() + veryLongPressTimeout)
                         .build());
@@ -485,7 +513,10 @@ public final class SingleKeyGestureDetector {
             mHandler.removeMessages(MSG_KEY_VERY_LONG_PRESS);
             rule.onKeyGesture(
                     new SingleKeyGestureEvent.Builder(rule.mKeyCode,
-                            SINGLE_KEY_GESTURE_TYPE_VERY_LONG_PRESS, ACTION_CANCEL).build());
+                            SINGLE_KEY_GESTURE_TYPE_VERY_LONG_PRESS, ACTION_CANCEL)
+                            .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                            .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
+                            .build());
         }
     }
 
@@ -496,6 +527,8 @@ public final class SingleKeyGestureDetector {
     private void startDelayedPress(@NonNull SingleKeyRule rule, int pressCount, int displayId, long timeout) {
         rule.onKeyGesture(new SingleKeyGestureEvent.Builder(rule.mKeyCode,
                 SINGLE_KEY_GESTURE_TYPE_PRESS, ACTION_START)
+                .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                 .setPressCount(pressCount)
                 .setStartTime(mLastDownTime)
                 .setDisplayId(displayId)
@@ -504,6 +537,8 @@ public final class SingleKeyGestureDetector {
         GestureMessage object = new GestureMessage(mActiveRule,
                 new SingleKeyGestureEvent.Builder(rule.mKeyCode,
                         SINGLE_KEY_GESTURE_TYPE_PRESS, ACTION_COMPLETE)
+                        .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                        .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                         .setStartTime(mLastDownTime)
                         .setEventTime(SystemClock.uptimeMillis() + timeout)
                         .setPressCount(pressCount)
@@ -518,6 +553,8 @@ public final class SingleKeyGestureDetector {
         GestureMessage object = new GestureMessage(mActiveRule,
                 new SingleKeyGestureEvent.Builder(rule.mKeyCode, SINGLE_KEY_GESTURE_TYPE_PRESS,
                         ACTION_COMPLETE)
+                        .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                        .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                         .setStartTime(mLastDownTime)
                         .setEventTime(SystemClock.uptimeMillis())
                         .setPressCount(pressCount)
@@ -534,6 +571,8 @@ public final class SingleKeyGestureDetector {
             rule.onKeyGesture(
                     new SingleKeyGestureEvent.Builder(rule.mKeyCode,
                             SINGLE_KEY_GESTURE_TYPE_PRESS, ACTION_CANCEL)
+                            .setBeganFromNonInteractive(mBeganFromNonInteractive)
+                            .setDefaultDisplayStateBeganFrom(mDefaultDisplayStateBeganFrom)
                             .setPressCount(pressCount).build());
         }
     }

@@ -112,6 +112,7 @@ import android.util.SparseBooleanArray;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.WorkerThread;
 
 import com.android.compose.animation.scene.ObservableTransitionState;
 import com.android.internal.annotations.VisibleForTesting;
@@ -126,7 +127,6 @@ import com.android.settingslib.Utils;
 import com.android.settingslib.WirelessUtils;
 import com.android.settingslib.fuelgauge.BatteryStatus;
 import com.android.systemui.CoreStartable;
-import com.android.systemui.Flags;
 import com.android.systemui.ambient.statusbar.shared.flag.OngoingActivityChipsOnDream;
 import com.android.systemui.biometrics.AuthController;
 import com.android.systemui.biometrics.FingerprintInteractiveToAuthProvider;
@@ -138,6 +138,7 @@ import com.android.systemui.dagger.qualifiers.Background;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.deviceentry.data.repository.FaceWakeUpTriggersConfig;
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryFaceAuthInteractor;
+import com.android.systemui.deviceentry.domain.interactor.DeviceUnlockedInteractor;
 import com.android.systemui.deviceentry.domain.interactor.FaceAuthenticationListener;
 import com.android.systemui.deviceentry.shared.model.AcquiredFaceAuthenticationStatus;
 import com.android.systemui.deviceentry.shared.model.ErrorFaceAuthenticationStatus;
@@ -304,6 +305,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private final Provider<CommunalSceneInteractor> mCommunalSceneInteractor;
     private final Provider<KeyguardServiceShowLockscreenInteractor>
             mKeyguardServiceShowLockscreenInteractor;
+    private final Provider<DeviceUnlockedInteractor> mDeviceUnlockedInteractor;
     private final AuthController mAuthController;
     private final UiEventLogger mUiEventLogger;
     private final Set<String> mAllowFingerprintOnOccludingActivitiesFromPackage;
@@ -519,8 +521,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         }
     }
 
-    @Deprecated
-    private final SparseBooleanArray mUserIsUnlocked = new SparseBooleanArray();
     private final SparseBooleanArray mUserHasTrust = new SparseBooleanArray();
     private final SparseBooleanArray mUserTrustIsManaged = new SparseBooleanArray();
     private final SparseBooleanArray mUserTrustIsUsuallyManaged = new SparseBooleanArray();
@@ -720,7 +720,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      * Note that this method will filter out any subscription which is PROFILE_CLASS_PROVISIONING
      * and REMOTE SIMs. REMOTE SIMs use an invalid slot index (-1).
      */
-    public List<SubscriptionInfo> getSubscriptionInfo(boolean forceReload) {
+    @VisibleForTesting
+    @WorkerThread
+    List<SubscriptionInfo> getSubscriptionInfo(boolean forceReload) {
         List<SubscriptionInfo> sil = mSubscriptionInfo;
         if (sil == null || forceReload) {
             mSubscriptionInfo = mSubscriptionManager.getCompleteActiveSubscriptionInfoList()
@@ -2100,8 +2102,8 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      * Updates callbacks when strong auth requirements change.
      */
     public class StrongAuthTracker extends LockPatternUtils.StrongAuthTracker {
-        public StrongAuthTracker(Context context) {
-            super(context);
+        public StrongAuthTracker(Context context, Looper looper) {
+            super(context, looper);
         }
 
         public boolean isUnlockingWithBiometricAllowed(boolean isStrongBiometric) {
@@ -2202,7 +2204,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private void handleUserUnlocked(int userId) {
         Assert.isMainThread();
         mLogger.logUserUnlocked(userId);
-        mUserIsUnlocked.put(userId, true);
         mNeedsSlowUnlockTransition = resolveNeedsSlowUnlockTransition();
         for (int i = 0; i < mCallbacks.size(); i++) {
             KeyguardUpdateMonitorCallback cb = mCallbacks.get(i).get();
@@ -2216,14 +2217,12 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         Assert.isMainThread();
         boolean isUnlocked = mUserManager.isUserUnlocked(userId);
         mLogger.logUserStopped(userId, isUnlocked);
-        mUserIsUnlocked.put(userId, isUnlocked);
     }
 
     @VisibleForTesting
     void handleUserRemoved(int userId) {
         Assert.isMainThread();
         mLogger.logUserRemoved(userId);
-        mUserIsUnlocked.delete(userId);
         mUserTrustIsUsuallyManaged.delete(userId);
     }
 
@@ -2293,13 +2292,14 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
             Provider<SceneInteractor> sceneInteractor,
             Provider<CommunalSceneInteractor> communalSceneInteractor,
             Provider<KeyguardServiceShowLockscreenInteractor>
-                    keyguardServiceShowLockscreenInteractor) {
+                    keyguardServiceShowLockscreenInteractor,
+            Provider<DeviceUnlockedInteractor> deviceUnlockedInteractor) {
         mContext = context;
         mSubscriptionManager = subscriptionManager;
         mUserTracker = userTracker;
         mTelephonyListenerManager = telephonyListenerManager;
         mDeviceProvisioned = isDeviceProvisionedInSettingsDb();
-        mStrongAuthTracker = new StrongAuthTracker(context);
+        mStrongAuthTracker = new StrongAuthTracker(context, mainLooper);
         mBackgroundExecutor = backgroundExecutor;
         mMainExecutor = mainExecutor;
         mBroadcastDispatcher = broadcastDispatcher;
@@ -2347,6 +2347,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         mSceneInteractor = sceneInteractor;
         mCommunalSceneInteractor = communalSceneInteractor;
         mKeyguardServiceShowLockscreenInteractor = keyguardServiceShowLockscreenInteractor;
+        mDeviceUnlockedInteractor = deviceUnlockedInteractor;
 
         mHandler = new Handler(mainLooper) {
             @Override
@@ -2551,7 +2552,8 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         mBroadcastDispatcher.registerReceiverWithHandler(mBroadcastAllReceiver, allUserFilter,
                 mHandler, UserHandle.ALL);
 
-        mSubscriptionManager.addOnSubscriptionsChangedListener(mSubscriptionListener);
+        mSubscriptionManager.addOnSubscriptionsChangedListener(mMainExecutor,
+                mSubscriptionListener);
         mUserTracker.addCallback(mUserChangedCallback, mMainExecutor);
 
         mTrustManager.registerTrustListener(this);
@@ -2617,9 +2619,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
 
         mTaskStackChangeListeners.registerTaskStackListener(mTaskStackListener);
         int user = mSelectedUserInteractor.getSelectedUserId();
-        boolean isUserUnlocked = mUserManager.isUserUnlocked(user);
-        mLogger.logUserUnlockedInitialState(user, isUserUnlocked);
-        mUserIsUnlocked.put(user, isUserUnlocked);
         updateSecondaryLockscreenRequirement(user);
         List<UserInfo> allUsers = mUserManager.getUsers();
         for (UserInfo userInfo : allUsers) {
@@ -2644,7 +2643,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
                     mAlternateBouncerInteractor.get().isVisible(),
                     this::onAlternateBouncerVisibilityChange);
             mJavaAdapter.get().alwaysCollectFlow(
-                    mSceneInteractor.get().getTransitionState(),
+                    mSceneInteractor.get().getTransitionStateFlow(),
                     this::onTransitionStateChanged
             );
         }
@@ -2855,11 +2854,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      * @see Intent#ACTION_USER_UNLOCKED
      */
     public boolean isUserUnlocked(int userId) {
-        if (Flags.userEncryptedSource()) {
-            return mUserManager.isUserUnlocked(userId);
-        } else {
-            return mUserIsUnlocked.get(userId);
-        }
+        return mUserManager.isUserUnlocked(userId);
     }
 
     /**
@@ -3034,7 +3029,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private boolean isPrimaryBouncerShowingOrWillBeShowing() {
         if (SceneContainerFlag.isEnabled()) {
             return isPrimaryBouncerShowingOrWillBeShowing(
-                    mSceneInteractor.get().getTransitionState().getValue());
+                    mSceneInteractor.get().getTransitionStateFlow().getValue());
         } else {
             return mPrimaryBouncerIsOrWillBeShowing;
         }
@@ -3043,7 +3038,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
     private boolean isPrimaryBouncerFullyShown() {
         if (SceneContainerFlag.isEnabled()) {
             return isPrimaryBouncerFullyShown(
-                    mSceneInteractor.get().getTransitionState().getValue());
+                    mSceneInteractor.get().getTransitionStateFlow().getValue());
         } else {
             return mPrimaryBouncerFullyShown;
         }
@@ -3542,6 +3537,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      * Handle (@line #MSG_TIMEZONE_UPDATE}
      */
     private void handleTimeZoneUpdate(String timeZone) {
+        if (timeZone == null) {
+            return;
+        }
         Assert.isMainThread();
         mLogger.d("handleTimeZoneUpdate");
         for (int i = 0; i < mCallbacks.size(); i++) {
@@ -4034,12 +4032,17 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
 
     private void setForceIsDismissibleKeyguard(boolean forceIsDismissible) {
         Assert.isMainThread();
-        if (mKeyguardShowing && forceIsDismissible) {
-            // never keep the device unlocked if the keyguard was already showing
+        // Only force dismissible if the device isn't already locked
+        boolean isAlreadyLocked =
+                SceneContainerFlag.isEnabled()
+                        ? !mDeviceUnlockedInteractor.get().isUnlocked()
+                        : mKeyguardShowing;
+        if (forceIsDismissible && isAlreadyLocked) {
             mLogger.d("Skip setting forceIsDismissibleKeyguard to true. "
-                    + "Keyguard already showing.");
+                    + "Device was already locked.");
             return;
         }
+
         if (mForceIsDismissible != forceIsDismissible) {
             mForceIsDismissible = forceIsDismissible;
             mLogger.logForceIsDismissibleKeyguard(mForceIsDismissible);
@@ -4235,19 +4238,20 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
      * @return subid or {@link SubscriptionManager#INVALID_SUBSCRIPTION_ID} if none found
      */
     public int getNextSubIdForState(int state) {
-        List<SubscriptionInfo> list = getSubscriptionInfo(false /* forceReload */);
-        int resultId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+        int resultSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         int bestSlotId = Integer.MAX_VALUE; // Favor lowest slot first
-        for (int i = 0; i < list.size(); i++) {
-            final SubscriptionInfo info = list.get(i);
-            final int id = info.getSubscriptionId();
-            final int slotId = info.getSimSlotIndex();
-            if (state == getSimStateForSlotId(slotId) && bestSlotId > slotId) {
-                resultId = id;
-                bestSlotId = slotId;
+
+        synchronized (mSimDataLockObject) {
+            for (var simDataBySlotId : mSimDatasBySlotId.entrySet()) {
+                final int subId = simDataBySlotId.getValue().subId;
+                final int slotId = simDataBySlotId.getKey();
+                if (state == getSimStateForSlotId(slotId) && bestSlotId > slotId) {
+                    resultSubId = subId;
+                    bestSlotId = slotId;
+                }
             }
         }
-        return resultId;
+        return resultSubId;
     }
 
     public SubscriptionInfo getSubscriptionInfoForSubId(int subId) {
@@ -4397,7 +4401,7 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
         pw.println("    strongAuthFlags=" + Integer.toHexString(strongAuthFlags));
         pw.println("ActiveUnlockRunning="
                 + mTrustManager.isActiveUnlockRunning(mSelectedUserInteractor.getSelectedUserId()));
-        pw.println("userUnlockedCache[userid=" + userId + "]=" + mUserIsUnlocked.get(userId));
+        pw.println("userUnlockedCache[userid=" + userId + "]=" + isUserUnlocked(userId));
         pw.println("actualUserUnlocked[userid=" + userId + "]="
                 + mUserManager.isUserUnlocked(userId));
         new DumpsysTableLogger(
@@ -4420,5 +4424,39 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, CoreSt
             }
             Trace.endSection();
         });
+    }
+
+    /**
+     * Returns true if the SIM denoted by the subscription ID has its PIN managed by the platform,
+     * false otherwise.
+     *
+     * @param subId Subscription denoting the SIM to check.
+     * @return True if the PIN for the SIM is platform managed, false otherwise.
+     */
+    public boolean isSimPinPlatformManaged(int subId) {
+        if (!SubscriptionManager.isValidSubscriptionId(subId)) {
+            return false;
+        }
+
+        // Return false if the flag is set to false, because flagged API is not supposed to be
+        // called if the flag is not set.
+        // However, there is a risk that the flag has been previously enabled on the device
+        // and a SIM enrolled in automatic PIN management. In that case, the user need to have
+        // kept the PIN out-of-band.
+        if (!android.security.Flags.autoSimPinManagement()) {
+            return false;
+        }
+
+        // NOTE: Instead of querying the TelephonyManager, it is possible to store whether the PIN
+        // is platform-managed or not in the SimData class. The upside of doing so is that no
+        // queries are performed into the TelephonyManager for the check.
+        // The downside is that there are multiple call-sites where the SimData is constructed and
+        // all of them would have to be updated to ensure the state is stored correctly.
+        int simAutoPinManagementEnrollmentStatus = mTelephonyManager.createForSubscriptionId(
+                subId).getSimAutoPinManagementEnrollmentStatus();
+        Log.d(TAG, "Enrollment Status for Subscription " + subId + " is: "
+                + simAutoPinManagementEnrollmentStatus);
+        return simAutoPinManagementEnrollmentStatus
+                == TelephonyManager.SIM_PIN_ENROLLMENT_STATUS_PLATFORM_MANAGED;
     }
 }

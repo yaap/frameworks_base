@@ -16,35 +16,54 @@
 
 package com.android.systemui.screencapture.record.data.repository
 
-import android.view.Display
-import com.android.systemui.screencapture.common.ScreenCaptureUiScope
-import com.android.systemui.screencapture.common.shared.model.ScreenCaptureTarget
-import com.android.systemui.screencapture.record.shared.model.ScreenCaptureRecordParametersModel
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.android.systemui.Prefs
+import com.android.systemui.dagger.qualifiers.Application
+import com.android.systemui.res.R
+import com.android.systemui.screencapture.common.ScreenCaptureScope
+import com.android.systemui.screenrecord.ScreenRecordPermissionContentManager.Companion.PREF_HEVC
+import com.android.systemui.screenrecord.ScreenRecordPermissionContentManager.Companion.PREF_LOW
+import com.android.systemui.screenrecord.ScreenRecordPermissionContentManager.Companion.PREF_SKIP
 import com.android.systemui.screenrecord.ScreenRecordingAudioSource
 import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 
-@ScreenCaptureUiScope
-class ScreenCaptureRecordParametersRepository @Inject constructor() {
+@ScreenCaptureScope
+class ScreenCaptureRecordParametersRepository
+@Inject
+constructor(@Application private val context: Context) {
 
-    private val _parameters =
-        MutableStateFlow(
-            ScreenCaptureRecordParametersModel(
-                target = ScreenCaptureTarget.Fullscreen(Display.DEFAULT_DISPLAY),
-                audioSource = ScreenRecordingAudioSource.NONE,
-                shouldShowTaps = false,
-                shouldShowFrontCamera = false,
-                lowQuality = 0,
-                hevc = false,
-            )
-        )
-    val parameters = _parameters.asStateFlow()
+    val isHevcAllowed: Boolean =
+        context.resources.getBoolean(R.bool.config_screenRecordHEVC)
 
-    fun updateParameters(
-        update: (ScreenCaptureRecordParametersModel) -> ScreenCaptureRecordParametersModel
-    ) {
-        _parameters.update(update)
-    }
+    var audioSource: ScreenRecordingAudioSource by mutableStateOf(ScreenRecordingAudioSource.NONE)
+    var shouldShowTaps: Boolean by mutableStateOf(false)
+    var shouldShowFrontCamera: Boolean by mutableStateOf(false)
+
+    private val lowQualityState = mutableStateOf(Prefs.getInt(context, PREF_LOW, 0))
+    var lowQuality: Int
+        get() = lowQualityState.value
+        set(value) {
+            lowQualityState.value = value
+            Prefs.putInt(context, PREF_LOW, value)
+        }
+
+    private val hevcState =
+        mutableStateOf(isHevcAllowed && Prefs.getInt(context, PREF_HEVC, 1) == 1)
+    var hevc: Boolean
+        get() = hevcState.value
+        set(value) {
+            hevcState.value = value
+            Prefs.putInt(context, PREF_HEVC, if (value) 1 else 0)
+        }
+
+    private val skipTimerState = mutableStateOf(Prefs.getInt(context, PREF_SKIP, 0) == 1)
+    var skipTimer: Boolean
+        get() = skipTimerState.value
+        set(value) {
+            skipTimerState.value = value
+            Prefs.putInt(context, PREF_SKIP, if (value) 1 else 0)
+        }
 }

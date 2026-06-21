@@ -408,7 +408,7 @@ public class NavigationBarView extends FrameLayout
     }
 
     /**
-     * Applies {@param consumer} to each of the nav bar views.
+     * Applies {@code consumer} to each of the nav bar views.
      */
     public void forEachView(Consumer<View> consumer) {
         if (mVertical != null) {
@@ -1216,7 +1216,7 @@ public class NavigationBarView extends FrameLayout
     }
 
     void addPipExclusionBoundsChangeListener(Pip pip) {
-        pip.addPipExclusionBoundsChangeListener(mPipListener);
+        pip.addPipExclusionBoundsChangeListener(getContext().getMainExecutor(), mPipListener);
     }
 
     void removePipExclusionBoundsChangeListener(Pip pip) {

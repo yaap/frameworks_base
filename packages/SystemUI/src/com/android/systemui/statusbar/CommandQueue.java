@@ -28,6 +28,7 @@ import android.app.StatusBarManager.Disable2Flags;
 import android.app.StatusBarManager.DisableFlags;
 import android.app.StatusBarManager.WindowType;
 import android.app.StatusBarManager.WindowVisibleState;
+import android.app.motioncues.MotionCuesSettings;
 import android.content.ComponentName;
 import android.content.Context;
 import android.graphics.drawable.Icon;
@@ -115,7 +116,7 @@ public class CommandQueue extends IStatusBar.Stub implements
     private static final int MSG_EXPAND_SETTINGS                   = 5 << MSG_SHIFT;
     private static final int MSG_SYSTEM_BAR_CHANGED                = 6 << MSG_SHIFT;
     private static final int MSG_DISPLAY_ADD_SYSTEM_DECORATIONS    = 7 << MSG_SHIFT;
-    private static final int MSG_SHOW_IME_BUTTON                   = 8 << MSG_SHIFT;
+    private static final int MSG_SET_IME_WINDOW_STATUS             = 8 << MSG_SHIFT;
     private static final int MSG_TOGGLE_RECENT_APPS                = 9 << MSG_SHIFT;
     private static final int MSG_PRELOAD_RECENT_APPS               = 10 << MSG_SHIFT;
     private static final int MSG_CANCEL_PRELOAD_RECENT_APPS        = 11 << MSG_SHIFT;
@@ -138,7 +139,7 @@ public class CommandQueue extends IStatusBar.Stub implements
     private static final int MSG_APP_TRANSITION_FINISHED           = 31 << MSG_SHIFT;
     private static final int MSG_DISMISS_KEYBOARD_SHORTCUTS        = 32 << MSG_SHIFT;
     private static final int MSG_HANDLE_SYSTEM_KEY                 = 33 << MSG_SHIFT;
-    private static final int MSG_SHOW_GLOBAL_ACTIONS               = 34 << MSG_SHIFT;
+    private static final int MSG_SHOW_OR_HIDE_GLOBAL_ACTIONS       = 34 << MSG_SHIFT;
     private static final int MSG_TOGGLE_NOTIFICATION_PANEL         = 35 << MSG_SHIFT;
     private static final int MSG_SHOW_SHUTDOWN_UI                  = 36 << MSG_SHIFT;
     private static final int MSG_SET_TOP_APP_HIDES_STATUS_BAR      = 37 << MSG_SHIFT;
@@ -189,8 +190,13 @@ public class CommandQueue extends IStatusBar.Stub implements
     private static final int MSG_WALLET_ACTION_LAUNCH_GESTURE = 83 << MSG_SHIFT;
     private static final int MSG_DISPLAY_REMOVE_SYSTEM_DECORATIONS = 85 << MSG_SHIFT;
     private static final int MSG_DISABLE_ALL  = 86 << MSG_SHIFT;
-    private static final int MSG_TOGGLE_CAMERA_FLASH = 87 << MSG_SHIFT;
-    private static final int MSG_UPDATE_AMBIENT_DISPLAY = 88 << MSG_SHIFT;
+    private static final int MSG_SHOW_GLOBAL_ACTIONS = 87 << MSG_SHIFT;
+    private static final int MSG_START_MOTION_CUES = 88 << MSG_SHIFT;
+    private static final int MSG_END_MOTION_CUES = 89 << MSG_SHIFT;
+    private static final int MSG_ON_DISPLAY_INFO_CHANGED = 90 << MSG_SHIFT;
+    private static final int MSG_ON_CONFIGURATION_CHANGED = 91 << MSG_SHIFT;
+    private static final int MSG_TOGGLE_CAMERA_FLASH = 92 << MSG_SHIFT;
+    private static final int MSG_UPDATE_AMBIENT_DISPLAY = 93 << MSG_SHIFT;
 
     public static final int FLAG_EXCLUDE_NONE = 0;
     public static final int FLAG_EXCLUDE_SEARCH_PANEL = 1 << 0;
@@ -281,13 +287,14 @@ public class CommandQueue extends IStatusBar.Stub implements
         /**
          * Sets the new IME window status.
          *
-         * @param displayId The id of the display to which the IME is bound.
-         * @param vis The IME window visibility.
-         * @param backDisposition The IME back disposition mode.
-         * @param showImeSwitcher Whether the IME Switcher button should be shown.
+         * @param displayId             The ID of the display where the IME should be shown.
+         * @param vis                   The IME window visibility.
+         * @param backDisposition       The IME back disposition mode.
+         * @param showImeSwitcherButton Whether the IME Switcher button should be shown when the IME
+         *                              is shown.
          */
         default void setImeWindowStatus(int displayId, @ImeWindowVisibility int vis,
-                @BackDispositionMode int backDisposition, boolean showImeSwitcher) { }
+                @BackDispositionMode int backDisposition, boolean showImeSwitcherButton) { }
         default void showRecentApps(boolean triggeredFromAltTab) { }
         default void hideRecentApps(boolean triggeredFromAltTab, boolean triggeredFromHomeKey) { }
         default void toggleTaskbar() { }
@@ -380,6 +387,7 @@ public class CommandQueue extends IStatusBar.Stub implements
         default void showPinningEnterExitToast(boolean entering) { }
         default void showPinningEscapeToast() { }
         default void handleShowGlobalActionsMenu() { }
+        default void handleShowOrHideGlobalActionsMenu() { }
         default void handleShowShutdownUi(boolean isReboot, String reason, boolean rebootCustom) { }
 
         default void showWirelessChargingAnimation(int batteryLevel) {  }
@@ -581,8 +589,8 @@ public class CommandQueue extends IStatusBar.Stub implements
         /**
          * @see IStatusBar#showMediaOutputSwitcher
          */
-        default void showMediaOutputSwitcher(String packageName, UserHandle userHandle,
-                @Nullable MediaSession.Token sessionToken) {}
+        default void showMediaOutputSwitcher(@NonNull String packageName,
+                @NonNull UserHandle userHandle, @Nullable MediaSession.Token sessionToken) {}
 
         /**
          * @see IStatusBar#confirmImmersivePrompt
@@ -599,6 +607,27 @@ public class CommandQueue extends IStatusBar.Stub implements
          * @see IStatusBar#moveFocusedTaskToDesktop(int)
          */
         default void moveFocusedTaskToDesktop(int displayId) {}
+
+        /**
+         * @see IStatusBar#startMotionCuesSession(ComponentName, int, MotionCuesSettings)
+         */
+        default void startMotionCuesSession(
+                ComponentName componentName, int userId, MotionCuesSettings motionCuesSettings) {}
+
+        /**
+         * @see IStatusBar#endMotionCuesSession()
+         */
+        default void endMotionCuesSession() {}
+
+        /**
+         * @see IStatusBar#onDisplayInfoChanged()
+         */
+        default void onDisplayInfoChanged() {}
+
+        /**
+         * @see IStatusBar#onConfigurationChanged()
+         */
+        default void onConfigurationChanged() {}
 
         default void toggleCameraFlash() { }
     }
@@ -799,16 +828,15 @@ public class CommandQueue extends IStatusBar.Stub implements
 
     @Override
     public void setImeWindowStatus(int displayId, @ImeWindowVisibility int vis,
-            @BackDispositionMode int backDisposition, boolean showImeSwitcher) {
+            @BackDispositionMode int backDisposition, boolean showImeSwitcherButton) {
         synchronized (mLock) {
-            mHandler.removeMessages(MSG_SHOW_IME_BUTTON);
-            SomeArgs args = SomeArgs.obtain();
+            mHandler.removeMessages(MSG_SET_IME_WINDOW_STATUS);
+            final SomeArgs args = SomeArgs.obtain();
             args.argi1 = displayId;
             args.argi2 = vis;
             args.argi3 = backDisposition;
-            args.argi4 = showImeSwitcher ? 1 : 0;
-            Message m = mHandler.obtainMessage(MSG_SHOW_IME_BUTTON, args);
-            m.sendToTarget();
+            args.argi4 = showImeSwitcherButton ? 1 : 0;
+            mHandler.obtainMessage(MSG_SET_IME_WINDOW_STATUS, args).sendToTarget();
         }
     }
 
@@ -1088,9 +1116,20 @@ public class CommandQueue extends IStatusBar.Stub implements
 
     @Override
     public void showGlobalActionsMenu() {
+        if (!android.app.Flags.statusbarApiShowPowerMenu()) {
+            return;
+        }
         synchronized (mLock) {
             mHandler.removeMessages(MSG_SHOW_GLOBAL_ACTIONS);
             mHandler.obtainMessage(MSG_SHOW_GLOBAL_ACTIONS).sendToTarget();
+        }
+    }
+
+    @Override
+    public void showOrHideGlobalActionsMenu() {
+        synchronized (mLock) {
+            mHandler.removeMessages(MSG_SHOW_OR_HIDE_GLOBAL_ACTIONS);
+            mHandler.obtainMessage(MSG_SHOW_OR_HIDE_GLOBAL_ACTIONS).sendToTarget();
         }
     }
 
@@ -1274,13 +1313,12 @@ public class CommandQueue extends IStatusBar.Stub implements
         }
     }
 
-    private void handleShowImeButton(int displayId, @ImeWindowVisibility int vis,
-            @BackDispositionMode int backDisposition, boolean showImeSwitcher) {
+    private void handleSetImeWindowStatus(int displayId, @ImeWindowVisibility int vis,
+            @BackDispositionMode int backDisposition, boolean showImeSwitcherButton) {
         if (displayId == INVALID_DISPLAY) return;
 
         boolean isConcurrentMultiUserModeEnabled = UserManager.isVisibleBackgroundUsersEnabled()
-                && mContext.getResources().getBoolean(android.R.bool.config_perDisplayFocusEnabled)
-                && android.view.inputmethod.Flags.concurrentInputMethods();
+                && mContext.getResources().getBoolean(android.R.bool.config_perDisplayFocusEnabled);
 
         if (!isConcurrentMultiUserModeEnabled
                 && mLastUpdatedImeDisplayId != displayId
@@ -1290,7 +1328,7 @@ public class CommandQueue extends IStatusBar.Stub implements
             sendImeNotVisibleStatusForPrevNavBar();
         }
         for (Callbacks callback : mCallbacks) {
-            callback.setImeWindowStatus(displayId, vis, backDisposition, showImeSwitcher);
+            callback.setImeWindowStatus(displayId, vis, backDisposition, showImeSwitcherButton);
         }
         mLastUpdatedImeDisplayId = displayId;
     }
@@ -1298,7 +1336,7 @@ public class CommandQueue extends IStatusBar.Stub implements
     private void sendImeNotVisibleStatusForPrevNavBar() {
         for (Callbacks callback : mCallbacks) {
             callback.setImeWindowStatus(mLastUpdatedImeDisplayId, 0 /* vis */,
-                    BACK_DISPOSITION_DEFAULT, false /* showImeSwitcher */);
+                    BACK_DISPOSITION_DEFAULT, false /* showImeSwitcherButton */);
         }
     }
 
@@ -1471,7 +1509,7 @@ public class CommandQueue extends IStatusBar.Stub implements
         }
     }
     @Override
-    public void showMediaOutputSwitcher(String packageName, UserHandle userHandle,
+    public void showMediaOutputSwitcher(@NonNull String packageName, @NonNull UserHandle userHandle,
             @Nullable MediaSession.Token sessionToken) {
         int callingUid = Binder.getCallingUid();
         if (callingUid != 0 && callingUid != Process.SYSTEM_UID) {
@@ -1563,6 +1601,33 @@ public class CommandQueue extends IStatusBar.Stub implements
         mHandler.obtainMessage(MSG_ENTER_DESKTOP, args).sendToTarget();
     }
 
+    @Override
+    public void startMotionCuesSession(
+            ComponentName componentName, int userId, MotionCuesSettings motionCuesSettings)
+            throws RemoteException {
+        SomeArgs args = SomeArgs.obtain();
+        args.arg1 = componentName;
+        args.arg2 = userId;
+        args.arg3 = motionCuesSettings;
+        mHandler.obtainMessage(MSG_START_MOTION_CUES, args).sendToTarget();
+    }
+
+    @Override
+    public void endMotionCuesSession() throws RemoteException {
+        mHandler.obtainMessage(MSG_END_MOTION_CUES).sendToTarget();
+    }
+
+    @Override
+    public void onDisplayInfoChanged() throws RemoteException {
+        mHandler.obtainMessage(MSG_ON_DISPLAY_INFO_CHANGED).sendToTarget();
+    }
+
+    @Override
+    public void onConfigurationChanged() throws RemoteException {
+        mHandler.obtainMessage(MSG_ON_CONFIGURATION_CHANGED).sendToTarget();
+    }
+
+    @Override
     public void toggleCameraFlash() {
         synchronized (mLock) {
             mHandler.removeMessages(MSG_TOGGLE_CAMERA_FLASH);
@@ -1641,11 +1706,12 @@ public class CommandQueue extends IStatusBar.Stub implements
                         callback.toggleQuickSettingsPanel();
                     }
                     break;
-                case MSG_SHOW_IME_BUTTON:
+                case MSG_SET_IME_WINDOW_STATUS:
                     args = (SomeArgs) msg.obj;
-                    handleShowImeButton(args.argi1 /* displayId */,
+                    handleSetImeWindowStatus(args.argi1 /* displayId */,
                             args.argi2 /* vis */, args.argi3 /* backDisposition */,
-                            args.argi4 != 0 /* showImeSwitcher */);
+                            args.argi4 != 0 /* showImeSwitcherButton */);
+                    args.recycle();
                     break;
                 case MSG_SHOW_RECENT_APPS:
                     for (Callbacks callback : mCallbacks) {
@@ -1786,6 +1852,11 @@ public class CommandQueue extends IStatusBar.Stub implements
                 case MSG_SHOW_GLOBAL_ACTIONS:
                     for (Callbacks callback : mCallbacks) {
                         callback.handleShowGlobalActionsMenu();
+                    }
+                    break;
+                case MSG_SHOW_OR_HIDE_GLOBAL_ACTIONS:
+                    for (Callbacks callback : mCallbacks) {
+                        callback.handleShowOrHideGlobalActionsMenu();
                     }
                     break;
                 case MSG_SHOW_SHUTDOWN_UI:
@@ -2122,6 +2193,31 @@ public class CommandQueue extends IStatusBar.Stub implements
                     }
                     break;
                 }
+                case MSG_START_MOTION_CUES:
+                    args = (SomeArgs) msg.obj;
+                    ComponentName motionCuesComponentName = (ComponentName) args.arg1;
+                    int userId = (int) args.arg2;
+                    MotionCuesSettings motionCuesSettings = (MotionCuesSettings) args.arg3;
+                    for (Callbacks callback : mCallbacks) {
+                        callback.startMotionCuesSession(
+                                motionCuesComponentName, userId, motionCuesSettings);
+                    }
+                    break;
+                case MSG_END_MOTION_CUES:
+                    for (Callbacks callback : mCallbacks) {
+                        callback.endMotionCuesSession();
+                    }
+                    break;
+                case MSG_ON_DISPLAY_INFO_CHANGED:
+                    for (Callbacks callback : mCallbacks) {
+                        callback.onDisplayInfoChanged();
+                    }
+                    break;
+                case MSG_ON_CONFIGURATION_CHANGED:
+                    for (Callbacks callback : mCallbacks) {
+                        callback.onConfigurationChanged();
+                    }
+                    break;
             }
         }
     }
