@@ -57,6 +57,8 @@ interface WifiRepository {
     /** Enables Wi-Fi. See [WifiManager.setWifiEnabled] */
     fun enableWifi()
 
+    fun disableWifi() {}
+
     /**
      * Pauses Wi-Fi by immediately disconnecting and restricting autojoin to all networks except for
      * carrier Wi-Fi networks of the current subscription ID. See
