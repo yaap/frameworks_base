@@ -39,10 +39,9 @@ constructor(
     lateinit var alarmImage: Drawable
     val smartspaceViews = mutableSetOf<BcSmartspaceDataPlugin.SmartspaceView>()
 
-    private val nextAlarmCallback =
-        NextAlarmController.NextAlarmChangeCallback {
-            applicationScope.launch { updateNextAlarm() }
-        }
+    private val nextAlarmCallback = NextAlarmController.NextAlarmChangeCallback {
+        applicationScope.launch { updateNextAlarm() }
+    }
 
     private val showNextAlarm = AlarmManager.OnAlarmListener { showAlarm(null) }
 
@@ -112,13 +111,6 @@ constructor(
                 }
             }
         }
-
-    // private suspend fun getNextAlarmTime(): Long = withContext(bgDispatcher) {
-    //    val zenControllerImpl = zenModeController as? ZenModeControllerImpl ?: return@withContext
-    // 0L
-    //    zenControllerImpl.mAlarmManager.getNextAlarmClock(zenControllerImpl.mUserId)?.triggerTime
-    // ?: 0L
-    // }
 
     private suspend fun getNextAlarmTime(): Long =
         withContext(bgDispatcher) {

@@ -9,7 +9,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import com.android.systemui.res.R;
 
-import com.android.systemui.plugins.BcSmartspaceConfigPlugin;
 import com.android.systemui.plugins.BcSmartspaceDataPlugin;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,7 +27,6 @@ public final class BcSmartspaceDataProvider implements BcSmartspaceDataPlugin {
     public final Set<View> mViews = new HashSet<>();
     public final Set<View.OnAttachStateChangeListener> mAttachListeners = new HashSet<>();
     public final EventNotifierProxy mEventNotifier = new EventNotifierProxy();
-    public BcSmartspaceConfigPlugin mConfigProvider = new DefaultBcSmartspaceConfigProvider();
 
     public final class StateChangeListener implements View.OnAttachStateChangeListener {
         @Override
@@ -70,11 +68,8 @@ public final class BcSmartspaceDataProvider implements BcSmartspaceDataPlugin {
 
     @Override
     public BcSmartspaceDataPlugin.SmartspaceView getView(Context context) {
-        int layoutId = mConfigProvider.isViewPager2Enabled()
-                ? R.layout.smartspace_enhanced2
-                : R.layout.smartspace_enhanced;
-
-        View view = LayoutInflater.from(context).inflate(layoutId, (ViewGroup) null, false);
+        View view =
+                LayoutInflater.from(context).inflate(R.layout.smartspace_enhanced2, null, false);
         view.addOnAttachStateChangeListener(mStateChangeListener);
 
         // Explicitly register data provider.
@@ -99,11 +94,6 @@ public final class BcSmartspaceDataProvider implements BcSmartspaceDataPlugin {
                 .collect(Collectors.toList());
 
         mSmartspaceTargetListeners.forEach(listener -> listener.onSmartspaceTargetsUpdated(mSmartspaceTargets));
-    }
-
-    @Override
-    public void registerConfigProvider(BcSmartspaceConfigPlugin configPlugin) {
-        mConfigProvider = configPlugin;
     }
 
     @Override

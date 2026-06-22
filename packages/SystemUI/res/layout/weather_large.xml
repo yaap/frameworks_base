@@ -3,15 +3,17 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/weather_smartspace_view_large"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:orientation="horizontal">
+    android:layout_height="fill_parent"
+    android:minHeight="@dimen/date_weather_view_height">
+
     <com.google.android.systemui.smartspace.DoubleShadowTextView
+        android:textColor="?android:textColorPrimary"
+        android:gravity="center_vertical"
+        android:layout_gravity="center"
         android:id="@+id/weather_text_view"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
+        android:layout_height="fill_parent"
         android:layout_marginEnd="@dimen/enhanced_smartspace_base_action_icon_margin"
         android:focusable="true"
-        android:textColor="?android:textColorPrimary"
         style="@style/DateWeatherText" />
 </com.google.android.systemui.smartspace.WeatherSmartspaceView>

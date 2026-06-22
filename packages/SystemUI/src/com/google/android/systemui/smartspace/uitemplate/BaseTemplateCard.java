@@ -106,13 +106,6 @@ public class BaseTemplateCard extends ConstraintLayout implements SmartspaceCard
         resetTextView(mSubtitleTextView);
         resetTextView(mSubtitleSupplementalView);
         resetTextView(mSupplementalLineTextView);
-        BcSmartspaceTemplateDataUtils.updateVisibility(mTitleTextView, View.GONE);
-        BcSmartspaceTemplateDataUtils.updateVisibility(mSubtitleGroup, View.GONE);
-        BcSmartspaceTemplateDataUtils.updateVisibility(mSubtitleAqiChipView, View.GONE);
-        BcSmartspaceTemplateDataUtils.updateVisibility(mSubtitleTextView, View.GONE);
-        BcSmartspaceTemplateDataUtils.updateVisibility(mSubtitleSupplementalView, View.GONE);
-        BcSmartspaceTemplateDataUtils.updateVisibility(mSecondaryCardPane, View.GONE);
-        BcSmartspaceTemplateDataUtils.updateVisibility(mExtrasGroup, View.GONE);
         mTarget = target;
         mTemplateData = target.getTemplateData();
         mFeatureType = target.getFeatureType();
@@ -132,7 +125,11 @@ public class BaseTemplateCard extends ConstraintLayout implements SmartspaceCard
             mValidSecondaryCard = mSecondaryCard.setSmartspaceActions(target, eventNotifier, mLoggingInfo);
         }
         if (mSecondaryCardPane != null) {
-            BcSmartspaceTemplateDataUtils.updateVisibility(mSecondaryCardPane, (mDozeAmount == 1.0f || !mValidSecondaryCard) ? View.GONE : View.VISIBLE);
+            BcSmartspaceTemplateDataUtils.updateVisibility(
+                    mSecondaryCardPane,
+                    (mDozeAmount == 1.0f || !mValidSecondaryCard) ? View.GONE : View.VISIBLE);
+        } else {
+            BcSmartspaceTemplateDataUtils.updateVisibility(mSecondaryCardPane, View.GONE);
         }
         if (mDateView == null) {
             Log.d("SsBaseTemplateCard", "No date view can be set up");
@@ -366,24 +363,12 @@ public class BaseTemplateCard extends ConstraintLayout implements SmartspaceCard
             mDateView.rescheduleTicker();
         }
     }
-    public final void setSecondaryCard(BcSmartspaceCardSecondary secondaryCard) {
-        if (mSecondaryCardPane == null) {
-            return;
-        }
-        mSecondaryCard = secondaryCard;
-        BcSmartspaceTemplateDataUtils.updateVisibility(mSecondaryCardPane, View.GONE);
-        mSecondaryCardPane.removeAllViews();
-        if (secondaryCard != null) {
-            ConstraintLayout.LayoutParams params = new ConstraintLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, getResources().getDimensionPixelSize(R.dimen.enhanced_smartspace_card_height));
-            params.setMarginStart(getResources().getDimensionPixelSize(R.dimen.enhanced_smartspace_secondary_card_start_margin));
-            params.startToStart = 0;
-            params.topToTop = 0;
-            params.bottomToBottom = 0;
-            mSecondaryCardPane.addView(secondaryCard, params);
-        }
-    }
 
-    public final void setUpTextView(DoubleShadowTextView textView, BaseTemplateData.SubItemInfo subItemInfo, BcSmartspaceDataPlugin.SmartspaceEventNotifier eventNotifier, boolean z) {
+    public final void setUpTextView(
+            DoubleShadowTextView textView,
+            BaseTemplateData.SubItemInfo subItemInfo,
+            BcSmartspaceDataPlugin.SmartspaceEventNotifier eventNotifier,
+            boolean z) {
         if (textView == null) {
             Log.d("SsBaseTemplateCard", "No text view can be set up");
             return;

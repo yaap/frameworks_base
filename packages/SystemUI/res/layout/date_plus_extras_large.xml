@@ -13,25 +13,27 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <ImageView
-            android:id="@id/dnd_icon"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="@dimen/enhanced_smartspace_base_action_icon_margin"
+            android:id="@+id/dnd_icon"
             android:focusable="true"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="fill_parent"
+            android:layout_marginEnd="@dimen/enhanced_smartspace_base_action_icon_margin" />
+
         <com.google.android.systemui.smartspace.IcuDateTextView
             android:id="@+id/date"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="@dimen/enhanced_smartspace_base_action_icon_margin"
             android:focusable="true"
+            android:layout_width="wrap_content"
+            android:layout_height="fill_parent"
+            android:layout_marginEnd="@dimen/enhanced_smartspace_base_action_icon_margin"
             style="@style/DateWeatherText" />
     </LinearLayout>
+
     <com.google.android.systemui.smartspace.DoubleShadowTextView
+        android:gravity="center_vertical"
         android:id="@+id/alarm_text_view"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="fill_parent"
         android:focusable="true"
-        android:visibility="gone"
         style="@style/DateWeatherText" />
 </com.google.android.systemui.smartspace.DateSmartspaceView>

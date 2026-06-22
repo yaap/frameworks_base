@@ -99,7 +99,15 @@ public final class BcSmartspaceCardLoggingInfo {
             return false;
         }
         BcSmartspaceCardLoggingInfo other = (BcSmartspaceCardLoggingInfo) obj;
-        return mInstanceId == other.mInstanceId && mDisplaySurface == other.mDisplaySurface && mRank == other.mRank && mCardinality == other.mCardinality && mFeatureType == other.mFeatureType && mReceivedLatency == other.mReceivedLatency && mUid == other.mUid && Objects.equals(mSubcardInfo, other.mSubcardInfo) && Objects.equals(mDimensionalInfo, other.mDimensionalInfo);
+        return mInstanceId == other.mInstanceId
+                && mDisplaySurface == other.mDisplaySurface
+                && mRank == other.mRank
+                && mCardinality == other.mCardinality
+                && mFeatureType == other.mFeatureType
+                && mReceivedLatency == other.mReceivedLatency
+                && mUid == other.mUid
+                && Objects.equals(mSubcardInfo, other.mSubcardInfo)
+                && mDimensionalInfo == other.mDimensionalInfo;
     }
 
     public final int hashCode() {
