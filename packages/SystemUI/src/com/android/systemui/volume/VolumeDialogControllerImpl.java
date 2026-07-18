@@ -268,7 +268,11 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
     }
 
     protected void setVolumeController() {
-        mVolumeControllerAdapter.collectToController(mVolumeController);
+        try {
+            mAudio.setVolumeController(mVolumeController);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Unable to set the volume controller", e);
+        }
     }
 
     protected void setAudioManagerStreamVolume(int stream, int level, int flag) {
@@ -471,7 +475,7 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
     }
 
     private void onNotifyVisibleW(boolean visible) {
-        mVolumeControllerAdapter.notifyVolumeControllerVisible(visible);
+        mAudio.notifyVolumeControllerVisible(mVolumeController, visible);
         if (!visible) {
             if (updateActiveStreamW(-1)) {
                 mCallbacks.onStateChanged(mState);

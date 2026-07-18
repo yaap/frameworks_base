@@ -1097,7 +1097,9 @@ constructor(
                     return
                 }
 
-                if (newState == PlaybackState.STATE_STOPPED) {
+                if (newState == PlaybackState.STATE_STOPPED &&
+                        mCurrentState != PlaybackState.STATE_NONE
+                ) {
                     mCallback.onMediaStoppedOrPaused()
                 }
                 mCurrentState = newState

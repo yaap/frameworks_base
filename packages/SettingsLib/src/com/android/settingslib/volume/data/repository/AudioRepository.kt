@@ -130,7 +130,7 @@ class AudioRepositoryImpl(
             AudioStream(AudioManager.STREAM_ASSISTANT) to Settings.System.VOLUME_ASSISTANT,
         )
 
-    override val volumeControllerEvents: Flow<VolumeControllerEvent> = volumeController.events
+    override val volumeControllerEvents: Flow<VolumeControllerEvent> = emptyFlow()
 
     override val mode: StateFlow<Int> =
         callbackFlow {
@@ -174,14 +174,6 @@ class AudioRepositoryImpl(
                     SharingStarted.WhileSubscribed(),
                     audioManager.communicationDevice,
                 )
-
-    init {
-        try {
-            audioManager.volumeController = volumeController
-        } catch (error: SecurityException) {
-            Log.wtf("AudioManager", "Unable to set the volume controller", error)
-        }
-    }
 
     override fun getAudioStream(audioStream: AudioStream): Flow<AudioStreamModel> {
         return merge(
