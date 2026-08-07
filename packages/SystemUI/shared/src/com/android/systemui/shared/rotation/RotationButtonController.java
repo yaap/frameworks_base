@@ -41,6 +41,7 @@ import android.graphics.drawable.AnimatedVectorDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.provider.Settings;

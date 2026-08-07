@@ -1813,7 +1813,7 @@ class TaskFragment extends WindowContainer<WindowContainer> {
 
         if (mAtmService.getToastWindow() == true) {
             // When we have a toast window, that activity will be translucent.
-            prev.translucentWindowLaunch = true;
+            pausing.translucentWindowLaunch = true;
             mAtmService.resetToastWindow();
         }
 

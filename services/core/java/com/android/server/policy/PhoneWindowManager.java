@@ -261,7 +261,6 @@ import com.android.server.input.InputManagerInternal;
 import com.android.server.inputmethod.InputMethodManagerInternal;
 import com.android.server.pm.UserManagerInternal;
 import com.android.server.policy.keyguard.KeyguardServiceDelegate;
-import com.android.server.policy.keyguard.KeyguardStateMonitor.StateCallback;
 import com.android.server.policy.pocket.PocketLock;
 import com.android.server.statusbar.StatusBarManagerInternal;
 import com.android.server.vr.VrManagerInternal;
@@ -1238,7 +1237,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             Slog.d(TAG, "No behavior defined for power press count " + count);
         } else if (count == 1 && interactive &&
                 mUnhandledTorchPower && beganFromNonInteractive && torchActionEnabled) { 
-            wakeUpFromWakeKey(eventTime, KEYCODE_POWER, /* isDown= */ false);
+            wakeUpFromWakeKey(displayId, eventTime, KEYCODE_POWER, /* isDown= */ false,
+                    /* keyEventFlags= */ 0);
             return;
         } else if (count == 1 && shouldHandleShortPressPowerAction(interactive, eventTime)) {
             switch (mShortPressOnPowerBehavior) {
@@ -1340,7 +1340,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
         }
         if (mUnhandledTorchPower && torchActionEnabled && beganFromNonInteractive) {
-            wakeUpFromWakeKey(eventTime, KEYCODE_POWER, /* isDown= */ false);
+            wakeUpFromWakeKey(displayId, eventTime, KEYCODE_POWER, /* isDown= */ false,
+                    /* keyEventFlags= */ 0);
         }
     }
 

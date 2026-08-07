@@ -18,6 +18,7 @@ package com.android.systemui.statusbar.chips.ui.model
 
 import android.annotation.CurrentTimeMillisLong
 import android.annotation.StringRes
+import android.view.View
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import com.android.internal.logging.InstanceId

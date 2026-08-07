@@ -29,11 +29,11 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import org.mockito.Mockito
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.never
-import org.mockito.Mockito.spy
-import org.mockito.Mockito.verify
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.spy
+import org.mockito.kotlin.verify
 
 class BubbleDataRepositoryTest : ShellTestCase() {
 
@@ -162,8 +162,7 @@ class BubbleDataRepositoryTest : ShellTestCase() {
         assertThat(persistedBubbles).isEqualTo(validEntitiesByUser)
 
         // No invalid users, so no persist to disk happened
-        verify(dataRepository, never()).persistToDisk(
-            any(SparseArray<List<BubbleEntity>>()::class.java))
+        verify(dataRepository, never()).persistToDisk(any())
     }
 
     @Test

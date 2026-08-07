@@ -100,9 +100,10 @@ public class InstallStart extends Activity {
         // be PIA.
         int originatingUid = callingUid;
 
+        String intentAction = intent.getAction();
         final boolean isSessionInstall =
-                PackageInstaller.ACTION_CONFIRM_PRE_APPROVAL.equals(intent.getAction())
-                        || PackageInstaller.ACTION_CONFIRM_INSTALL.equals(intent.getAction());
+                PackageInstaller.ACTION_CONFIRM_PRE_APPROVAL.equals(intentAction)
+                || PackageInstaller.ACTION_CONFIRM_INSTALL.equals(intentAction);
 
         // If the activity was started via a PackageInstaller session, we retrieve the originating
         // UID from that session

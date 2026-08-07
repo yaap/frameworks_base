@@ -5229,6 +5229,7 @@ public class ComputerEngine implements Computer {
                 || AURORA_SERVICES.equals(installerPackageName))) {
             return InstallSource.create(PLAY_STORE, PLAY_STORE, PLAY_STORE,
                             installSource.mInstallerPackageUid, // FIXME: likely wrong
+                            installSource.mOriginalInstallerUid,
                             installSource.mUpdateOwnerPackageName,
                             installSource.mInstallerAttributionTag,
                             PackageInstaller.PACKAGE_SOURCE_STORE)

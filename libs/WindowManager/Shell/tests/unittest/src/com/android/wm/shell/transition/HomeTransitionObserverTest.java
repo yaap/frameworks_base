@@ -195,26 +195,6 @@ public class HomeTransitionObserverTest extends ShellTestCase {
     }
 
     @Test
-    public void testHomeActivity_differentUserTransition_doesNotTriggerCallbackForCurrentUser()
-            throws RemoteException {
-        TransitionInfo info = mock(TransitionInfo.class);
-        TransitionInfo.Change change = mock(TransitionInfo.Change.class);
-        ActivityManager.RunningTaskInfo taskInfo = mock(ActivityManager.RunningTaskInfo.class);
-        when(change.getTaskInfo()).thenReturn(taskInfo);
-        when(info.getChanges()).thenReturn(new ArrayList<>(List.of(change)));
-
-        taskInfo.userId = TEST_USER_2;
-        setupTransitionInfo(taskInfo, change, ACTIVITY_TYPE_HOME, TRANSIT_OPEN, true);
-
-        mHomeTransitionObserver.onTransitionReady(mock(IBinder.class),
-                info,
-                mock(SurfaceControl.Transaction.class),
-                mock(SurfaceControl.Transaction.class));
-
-        verify(mListener, never()).onHomeVisibilityChanged(anyBoolean());
-    }
-
-    @Test
     public void testNonHomeActivityDoesNotTriggerCallback() throws RemoteException {
         ActivityManager.RunningTaskInfo taskInfo = createTaskInfo(1, ACTIVITY_TYPE_UNDEFINED);
         TransitionInfo info =

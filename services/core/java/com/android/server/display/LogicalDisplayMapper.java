@@ -1228,7 +1228,7 @@ class LogicalDisplayMapper implements DisplayDeviceRepository.Listener {
                 || hasDeviceDisplayGroup != needsDeviceDisplayGroup
                 || decidedGroupId != Display.INVALID_DISPLAY_GROUP) {
             groupId =
-                    assignDisplayGroupIdLocked(needsOwnDisplayGroup,
+                    assignDisplayGroupIdLocked(needsDeviceDisplayGroup, needsOwnDisplayGroup,
                             display.getLayoutGroupNameLocked(), needsDeviceDisplayGroup,
                             linkedDeviceUniqueId, decidedGroupId);
         }

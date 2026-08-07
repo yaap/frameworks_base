@@ -5319,8 +5319,10 @@ public class ActivityManagerService extends IActivityManager.Stub
         }
 
         if (app.getHostingRecord() != null && app.getHostingRecord().isTopApp()) {
-            if (mLocalPowerManager != null) {
-                mLocalPowerManager.setPowerBoost(
+            PowerManagerInternal localPowerManager =
+                    LocalServices.getService(PowerManagerInternal.class);
+            if (localPowerManager != null) {
+                localPowerManager.setPowerBoost(
                                 PowerManagerInternal.BOOST_INTERACTION, 1000);
             }
         }

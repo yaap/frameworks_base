@@ -4177,6 +4177,12 @@ public class WindowManagerService extends IWindowManager.Stub
 
     // Called by window manager policy.  Not exposed externally.
     @Override
+    public void reboot(String reason, boolean confirm) {
+        ShutdownThread.reboot(ActivityThread.currentActivityThread().getSystemUiContext(), reason, confirm);
+    }
+
+    // Called by window manager policy.  Not exposed externally.
+    @Override
     public void rebootCustom(String reason, boolean confirm) {
         ShutdownThread.rebootCustom(ActivityThread.currentActivityThread().getSystemUiContext(), reason, confirm);
     }
@@ -9327,22 +9333,6 @@ public class WindowManagerService extends IWindowManager.Stub
                         && (imeTargetWindow.mRemoved || imeTargetWindow.mDestroying);
             }
        }
-
-        @Override
-        public boolean isImeInputTargetStaleForUpdate(IBinder windowToken) {
-            synchronized (mGlobalLock) {
-                InputTarget target = getInputTargetFromWindowTokenLocked(windowToken);
-                if (target != null && target.getDisplayContent() != null
-                        && target.getDisplayContent().getImeInputTarget() != null
-                        && target.getDisplayContent().getImeInputTarget() != target) {
-                    WindowState ws = target.getDisplayContent().getImeInputTarget().getWindowState();
-                    if (ws != null && (ws.mRemoved || ws.mDestroying)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
 
         @Override
         public void addTrustedTaskOverlay(int taskId,
