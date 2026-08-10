@@ -300,7 +300,7 @@ fun createFooterActionsViewModel(
     val settings =
         selectedUserInteractor.isCurrentUserHeadlessSystemUser
             .map { isHeadlessSystemUser ->
-                SettingsActionViewModel(qsThemedContext, ::onSettingsButtonClicked
+                SettingsActionViewModel(qsThemedContext, ::onSettingsButtonClicked,
                     ::onSettingsButtonLongClicked).takeUnless {
                     hsuQsChanges() && isHeadlessSystemUser
                 }

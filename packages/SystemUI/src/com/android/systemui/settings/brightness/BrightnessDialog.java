@@ -322,7 +322,7 @@ public class BrightnessDialog extends ComponentActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        MetricsLogger.hidden(this, MetricsEvent.BRIGHTNESS_DIALOG);z
+        MetricsLogger.hidden(this, MetricsEvent.BRIGHTNESS_DIALOG);
         mCustomSettingsObserver.stop();
     }
 

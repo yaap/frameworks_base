@@ -1214,7 +1214,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
                 mRebootMenu = true;
                 mCurrentMenuActions = mRebootMenuActions;
                 createActionItems();
-                mDialog.updateList();
+                mDelegate.updateList();
             } else {
                 doReboot();
             }
@@ -3133,6 +3133,11 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             if (SceneContainerFlag.isEnabled()) {
                 dismissWhenUnlockStatusChanges(mDeviceEntryInteractor.isUnlocked().getValue());
             }
+        }
+
+        /** Refreshes the action list displayed in the global actions layout. */
+        public void updateList() {
+            mGlobalActionsLayout.updateList();
         }
 
         /**

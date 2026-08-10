@@ -36,6 +36,8 @@ constructor(
             canConfigMobileData = accessPointController.canConfigMobileData(),
             canConfigWifi = accessPointController.canConfigWifi(),
             isInDialog = false,
+            isAutoOn = false,
+            isMobileAutoOn = false,
         )
     }
 

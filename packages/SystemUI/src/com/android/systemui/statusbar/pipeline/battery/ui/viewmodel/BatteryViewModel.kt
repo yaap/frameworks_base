@@ -37,6 +37,7 @@ import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryColors
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryGlyph
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import java.text.NumberFormat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -56,33 +57,27 @@ sealed class BatteryViewModel(
     val isFull by interactor.isFull.hydratedStateOf(initialValue = false)
 
     val batteryPercentText: String by
-        hydrator.hydratedStateOf(
-            traceName = "batteryPercentText",
-            initialValue = "?",
-            source =
-                combine(interactor.level, interactor.isCharging) { level, isCharging ->
-                    if (level == null) {
-                        "?"
-                    } else {
-                        NumberFormat.getPercentInstance().format(level / 100f)
-                    }
-                },
-        )
+        combine(interactor.level, interactor.isCharging) { level, isCharging ->
+            if (level == null) {
+                "?"
+            } else {
+                NumberFormat.getPercentInstance().format(level / 100f)
+            }
+        }
+            .hydratedStateOf("batteryPercentText", "?")
 
     val isCharging: Boolean by interactor.isCharging.hydratedStateOf(initialValue = false)
 
     val isBatteryPercentSettingEnabled: Boolean by
-        hydrator.hydratedStateOf(
-            traceName = "isBatteryPercentSettingEnabled",
-            initialValue = interactor.isBatteryPercentSettingEnabled.value,
-            source = interactor.isBatteryPercentSettingEnabled,
+        interactor.isBatteryPercentSettingEnabled.hydratedStateOf(
+            "isBatteryPercentSettingEnabled",
+            interactor.isBatteryPercentSettingEnabled.value,
         )
 
     val isBatteryTextOnlySettingEnabled: Boolean by
-        hydrator.hydratedStateOf(
-            traceName = "isBatteryTextOnlySettingEnabled",
-            initialValue = interactor.isBatteryTextOnlySettingEnabled.value,
-            source = interactor.isBatteryTextOnlySettingEnabled,
+        interactor.isBatteryTextOnlySettingEnabled.hydratedStateOf(
+            "isBatteryTextOnlySettingEnabled",
+            interactor.isBatteryTextOnlySettingEnabled.value,
         )
 
     /** A [List<BatteryGlyph>] representation of the current [level] */

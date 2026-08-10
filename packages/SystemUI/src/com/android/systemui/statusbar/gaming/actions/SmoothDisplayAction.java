@@ -20,15 +20,12 @@ import static android.provider.Settings.System.PEAK_REFRESH_RATE;
 
 import static com.android.internal.display.RefreshRateSettingsUtils.DEFAULT_REFRESH_RATE;
 import static com.android.internal.display.RefreshRateSettingsUtils.findHighestRefreshRateAmongAllDisplays;
-import static com.android.internal.display.RefreshRateSettingsUtils.findHighestRefreshRateForDefaultDisplay;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.display.DisplayManager;
 import android.provider.DeviceConfig;
 import android.provider.Settings;
-
-import com.android.server.display.feature.flags.Flags;
 
 public class SmoothDisplayAction extends GamingMacroAction {
     private static final String PREF_KEY = "gaming_mode_smooth_display";
@@ -38,9 +35,7 @@ public class SmoothDisplayAction extends GamingMacroAction {
 
     public SmoothDisplayAction(Context context, SharedPreferences prefs, String settingKey) {
         super(context, prefs, settingKey);
-        mPeakRefreshRate = Math.round(Flags.backUpSmoothDisplayAndForcePeakRefreshRate()
-                ? findHighestRefreshRateAmongAllDisplays(context)
-                : findHighestRefreshRateForDefaultDisplay(context));
+        mPeakRefreshRate = Math.round(findHighestRefreshRateAmongAllDisplays(context));
     }
 
     @Override
@@ -52,9 +47,7 @@ public class SmoothDisplayAction extends GamingMacroAction {
 
     @Override
     public void apply() {
-        final float peakRefreshRate = Flags.backUpSmoothDisplayAndForcePeakRefreshRate()
-                ? Float.POSITIVE_INFINITY : mPeakRefreshRate;
-        Settings.System.putFloat(mResolver, PEAK_REFRESH_RATE, peakRefreshRate);
+        Settings.System.putFloat(mResolver, PEAK_REFRESH_RATE, Float.POSITIVE_INFINITY);
     }
 
     @Override

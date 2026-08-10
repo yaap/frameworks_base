@@ -59,7 +59,6 @@ import android.view.Surface;
 
 import androidx.annotation.NonNull;
 
-import com.android.internal.R;
 import com.android.systemui.mediaprojection.MediaProjectionCaptureTarget;
 import com.android.systemui.recordissue.ScreenRecordingStartTimeStore;
 import com.android.systemui.res.R;
@@ -543,9 +542,9 @@ public class ScreenMediaRecorder {
      */
     private Size getRequiredThumbnailSize() {
         int thumbnailIconHeight = mContext.getResources().getDimensionPixelSize(
-                R.dimen.notification_big_picture_max_height);
+                com.android.internal.R.dimen.notification_big_picture_max_height);
         int thumbnailIconWidth = mContext.getResources().getDimensionPixelSize(
-                R.dimen.notification_big_picture_max_width);
+                com.android.internal.R.dimen.notification_big_picture_max_width);
         return new Size(thumbnailIconWidth, thumbnailIconHeight);
     }
 

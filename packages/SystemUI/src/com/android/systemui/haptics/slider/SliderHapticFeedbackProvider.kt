@@ -22,6 +22,7 @@ import android.view.VelocityTracker
 import android.view.animation.AccelerateInterpolator
 import androidx.annotation.FloatRange
 import androidx.annotation.VisibleForTesting
+import com.android.systemui.Flags
 import com.android.systemui.statusbar.VibratorHelper
 import com.google.android.msdl.data.model.MSDLToken
 import com.google.android.msdl.domain.InteractionProperties

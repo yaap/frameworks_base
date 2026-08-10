@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.android.compose.theme.PlatformTheme
 import com.android.systemui.res.R
+import java.text.NumberFormat
 import com.android.systemui.statusbar.core.NewStatusBarIcons
 import com.android.systemui.statusbar.events.BackgroundAnimatableView
 import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark

@@ -17,6 +17,7 @@
 package com.android.systemui.globalactions.domain.interactor
 
 import android.app.ActivityManager
+import android.os.PowerManager
 import android.os.UserManager
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Background
@@ -120,7 +121,7 @@ constructor(
                 return@withContext false
             }
 
-            globalActionsManager.reboot(safeMode)
+            globalActionsManager.reboot(safeMode, PowerManager.REBOOT_USERSPACE)
             true
         }
 

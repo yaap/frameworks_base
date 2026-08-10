@@ -73,10 +73,10 @@ constructor(
     override val brightnessOverriddenByWindow: StateFlow<Boolean> =
         screenBrightnessRepository.isBrightnessOverriddenByWindow
 
-    val isAutoBrightnessEnabledFlow: StateFlow<Boolean> =
+    override val isAutoBrightnessEnabledFlow: StateFlow<Boolean> =
         screenBrightnessRepository.isAutoBrightnessEnabledFlow
 
-    fun toggleBrightnessMode() {
+    override fun toggleBrightnessMode() {
         screenBrightnessRepository.toggleBrightnessMode()
     }
 

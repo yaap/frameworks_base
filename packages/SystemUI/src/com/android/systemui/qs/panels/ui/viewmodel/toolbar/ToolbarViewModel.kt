@@ -88,7 +88,7 @@ constructor(
     val settingsButtonViewModel: FooterActionsButtonViewModel? by
         selectedUserInteractor.selectedUser
             .map { selectedUserId ->
-                SettingsActionViewModel(qsThemedContext, ::onSettingsButtonClicked
+                SettingsActionViewModel(qsThemedContext, ::onSettingsButtonClicked,
                     ::onSettingsButtonLongClicked).takeUnless {
                     hsuQsChanges() && hsum.isHeadlessSystemUser(selectedUserId)
                 }

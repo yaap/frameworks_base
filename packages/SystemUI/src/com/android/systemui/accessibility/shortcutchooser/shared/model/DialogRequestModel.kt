@@ -22,7 +22,5 @@ import com.android.internal.accessibility.common.ShortcutConstants.UserShortcutT
 data class DialogRequestModel(
     @param:UserShortcutType val shortcutType: Int,
     val displayId: Int,
-    val shouldShowTaps: Boolean,
-    val lowQuality: Int,
-    val hevc: Boolean
+    val isHeadlessSystemUser: Boolean = false,
 )

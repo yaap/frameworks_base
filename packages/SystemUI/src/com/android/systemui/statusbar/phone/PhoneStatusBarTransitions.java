@@ -114,7 +114,7 @@ public final class PhoneStatusBarTransitions extends BarTransitions {
             anims.playTogether(
                     animateTransitionTo(mStartSide, newStartSideAlpha),
                     animateTransitionTo(mStatusIcons, newStatusIconsAlpha),
-                    animateTransitionTo(mNetworkTraffic, newStatusIconsAlpha),
+                    animateTransitionTo(mNetworkTraffic, newStatusIconsAlpha)
                     );
             if (isLightsOut(mode)) {
                 anims.setDuration(LIGHTS_OUT_DURATION);
@@ -124,7 +124,7 @@ public final class PhoneStatusBarTransitions extends BarTransitions {
         } else {
             mStartSide.setAlpha(newStartSideAlpha);
             mStatusIcons.setAlpha(newStatusIconsAlpha);
-            mNetworkTraffic.setAlpha(newBatteryAlpha);
+            mNetworkTraffic.setAlpha(newStatusIconsAlpha);
         }
     }
 }

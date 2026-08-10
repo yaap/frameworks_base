@@ -187,7 +187,7 @@ public class ImageExporter {
                 new Task(mResolver, requestId, bitmap, captureTime, mCompressFormat,
                         mQuality, owner,
                         createFilename(captureTime, mCompressFormat, displayId, pkgName),
-                        false, pkgName));
+                        false, null));
     }
 
     /**
@@ -237,7 +237,7 @@ public class ImageExporter {
                         format,
                         mQuality, owner,
                         createSystemFileDisplayName(fileName, format, pkgName),
-                        false, null, pkgName));
+                        false, null));
     }
 
     /**
@@ -310,7 +310,7 @@ public class ImageExporter {
             ZonedDateTime captureTime, UserHandle owner, String fileName, String pkgName) {
         return export(executor, new Task(mResolver, requestId, bitmap, captureTime, mCompressFormat,
                 mQuality, owner,
-                createSystemFileDisplayName(fileName, mCompressFormat, pkgName), false, pkgName));
+                createSystemFileDisplayName(fileName, mCompressFormat, pkgName), false, null));
     }
 
     /**
@@ -389,13 +389,6 @@ public class ImageExporter {
         Task(ContentResolver resolver, UUID requestId, Bitmap bitmap, ZonedDateTime captureTime,
                 CompressFormat format, int quality, UserHandle owner,
                 String fileName, boolean allowOverwrite, Uri customSaveUri) {
-            this(resolver, requestId, bitmap, captureTime, format, quality, owner,
-                    fileName, allowOverwrite, customSaveUri, null /* pkgName */);
-        }
-
-        Task(ContentResolver resolver, UUID requestId, Bitmap bitmap, ZonedDateTime captureTime,
-                CompressFormat format, int quality, UserHandle owner,
-                String fileName, boolean allowOverwrite, Uri customSaveUri, String pkgName) {
             mResolver = resolver;
             mRequestId = requestId;
             mBitmap = bitmap;
@@ -403,7 +396,7 @@ public class ImageExporter {
             mFormat = format;
             mQuality = quality;
             mOwner = owner;
-            mFileName = createFilename(mCaptureTime, mFormat, Display.DEFAULT_DISPLAY, pkgName);
+            mFileName = fileName;
             mAllowOverwrite = allowOverwrite;
             mCustomSaveUri = customSaveUri;
         }

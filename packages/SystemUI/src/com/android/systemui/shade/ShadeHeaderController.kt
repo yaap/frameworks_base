@@ -438,7 +438,6 @@ constructor(
         }
         clock.setOnClickListener { launchClockActivity() }
         date.setOnClickListener { launchDateActivity() }
-        batteryIcon.setOnClickListener { launchBatteryActivity() }
 
         dumpManager.registerDumpable(this)
         configurationController.addCallback(configurationControllerListener)

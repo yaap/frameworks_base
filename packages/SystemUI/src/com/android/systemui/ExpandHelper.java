@@ -580,7 +580,6 @@ public class ExpandHelper implements Gefingerpoken {
             if (DEBUG) Log.d(TAG, "working on a non-expandable child");
             mNaturalHeight = mOldHeight;
         }
-        mCallback.setUserLockedChild(v, true);
         if (DEBUG) Log.d(TAG, "got mOldHeight: " + mOldHeight +
                     " mNaturalHeight: " + mNaturalHeight);
         InteractionJankMonitor.getInstance().begin(v, CUJ_NOTIFICATION_SHADE_ROW_EXPAND);

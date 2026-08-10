@@ -94,7 +94,9 @@ import com.android.systemui.user.utils.UserScopedService;
 import com.android.systemui.util.kotlin.JavaAdapter;
 import com.android.systemui.util.settings.SecureSettings;
 
+import com.google.ux.material.libmonet.dynamiccolor.ColorSpec.SpecVersion;
 import com.google.ux.material.libmonet.dynamiccolor.DynamicColor;
+import com.google.ux.material.libmonet.dynamiccolor.DynamicScheme;
 import com.google.ux.material.libmonet.dynamiccolor.MaterialDynamicColors;
 
 import kotlinx.coroutines.flow.Flow;
@@ -711,9 +713,11 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
         final boolean wholePalette = fetchWholePaletteFromSetting();
         final boolean tintBg = fetchTintBackgroundFromSetting();
         final Integer bgColor = fetchBgColorFromSetting();
-        mDarkColorScheme = new ColorScheme(color, true /* isDark */, mThemeStyle, mContrast,
+        mDarkColorScheme = new ColorScheme(List.of(color), true /* isDark */, mThemeStyle, mContrast,
+                SpecVersion.SPEC_2026, DynamicScheme.DEFAULT_PLATFORM,
                 luminanceFactor, chromaFactor, wholePalette, tintBg, bgColor);
-        mLightColorScheme = new ColorScheme(color, false /* isDark */, mThemeStyle, mContrast,
+        mLightColorScheme = new ColorScheme(List.of(color), false /* isDark */, mThemeStyle,
+                mContrast, SpecVersion.SPEC_2026, DynamicScheme.DEFAULT_PLATFORM,
                 luminanceFactor, chromaFactor, wholePalette, tintBg, bgColor);
         mColorScheme = isNightMode() ? mDarkColorScheme : mLightColorScheme;
 

@@ -20,4 +20,13 @@ import com.android.systemui.flags.FeatureFlags
 import com.android.systemui.plugins.BcSmartspaceConfigPlugin
 
 class BcSmartspaceConfigProvider(private val featureFlags: FeatureFlags) :
-    BcSmartspaceConfigPlugin {}
+    BcSmartspaceConfigPlugin {
+    override val isDefaultDateWeatherDisabled: Boolean
+        get() = true
+
+    override val isViewPager2Enabled: Boolean
+        get() = true
+
+    override val isSwipeEventLoggingEnabled: Boolean
+        get() = true
+}

@@ -170,11 +170,19 @@ class StatusOverlayHoverListener(
     private val resources: Resources,
     private val themeFlow: Flow<HoverTheme>,
     private val customHeightPx: Int? = null,
+    private val leftHoverMargin: Int = 0,
+    private val rightHoverMargin: Int = 0,
+    private val topHoverMargin: Int = 0,
+    private val bottomHoverMargin: Int = 0,
 ) : OnHoverListener {
 
     @ColorInt private var darkColor: Int = 0
     @ColorInt private var lightColor: Int = 0
     private var cornerRadius = 0f
+    private var leftHoverMarginInPx: Int = 0
+    private var rightHoverMarginInPx: Int = 0
+    private var topHoverMarginInPx: Int = 0
+    private var bottomHoverMarginInPx: Int = 0
     private var lastTheme = HoverTheme.LIGHT
 
     val backgroundColor
@@ -213,10 +221,10 @@ class StatusOverlayHoverListener(
                 PaintDrawable(backgroundColor).apply {
                     setCornerRadius(cornerRadius)
                     setBounds(
-                        /*left = */ 0,
-                        /*top = */ verticalMarginPx,
-                        /*right = */ v.width,
-                        /*bottom = */ v.height - verticalMarginPx,
+                        /*left = */ leftHoverMarginInPx,
+                        /*top = */ verticalMarginPx + topHoverMarginInPx,
+                        /*right = */ v.width - rightHoverMarginInPx,
+                        /*bottom = */ v.height - verticalMarginPx - bottomHoverMarginInPx,
                     )
                 }
             v.overlay.add(drawable)

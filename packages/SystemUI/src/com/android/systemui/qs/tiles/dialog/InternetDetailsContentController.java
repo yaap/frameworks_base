@@ -350,12 +350,6 @@ public class InternetDetailsContentController implements AccessPointController.A
     void onStart(@NonNull InternetDialogCallback callback,
             boolean canConfigWifi, @NonNull CoroutineScope coroutineScope,
             boolean isAutoOn, boolean isMobileAutoOn) {
-        nStart(callback, canConfigWifi, coroutineScope, false);
-    }
-
-    void onStart(@NonNull InternetDialogCallback callback,
-            boolean canConfigWifi, @NonNull CoroutineScope coroutineScope,
-            boolean isAutoOn, boolean isMobileAutoOn) {
         if (DEBUG) {
             Log.d(TAG, "onStart");
         }

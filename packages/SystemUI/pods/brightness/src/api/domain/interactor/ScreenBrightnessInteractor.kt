@@ -36,6 +36,12 @@ public interface ScreenBrightnessInteractor {
     /** Whether the brightness is overridden by the window and cannot be changed by a user */
     public val brightnessOverriddenByWindow: StateFlow<Boolean>
 
+    /** Whether the auto brightness is enabled. */
+    public val isAutoBrightnessEnabledFlow: StateFlow<Boolean>
+
+    /** Toggles the auto brightness mode. */
+    public fun toggleBrightnessMode()
+
     /** Sets the brightness temporarily, while the user is changing it. */
     public suspend fun setTemporaryBrightness(gammaBrightness: GammaBrightness)
 

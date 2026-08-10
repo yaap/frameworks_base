@@ -176,6 +176,7 @@ constructor(
                     ),
                 displayId =
                     intent.getIntExtra(ShortcutChooserDialogConstants.DISPLAY_ID, INVALID_DISPLAY),
+                isHeadlessSystemUser = isHeadlessSystemUser(),
             )
             .run {
                 if (shortcutType == UserShortcutType.TOP_ROW_KEY && !isCompletedFullUser()) {

@@ -1533,7 +1533,7 @@ fun QuickQuickSettingsLayout(
     showSlider: Int,
     sliderAtTop: Boolean,
 ) {
-    Column(verticalArrangement = spacedBy(QuickSettingsShade.Dimensions.HorizontalPadding) {
+    Column(verticalArrangement = spacedBy(QuickSettingsShade.Dimensions.HorizontalPadding)) {
         if (showSlider == 2 && sliderAtTop) {
             brightness()
         }

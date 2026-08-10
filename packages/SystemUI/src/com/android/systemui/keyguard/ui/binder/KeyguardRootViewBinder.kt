@@ -409,9 +409,7 @@ object KeyguardRootViewBinder {
                                 }
                             }
                         }
-                        if (child.id == largeClockDateId &&
-                            com.android.systemui.shared.Flags.clockReactiveSmartspaceLayout()
-                        ) {
+                        if (child.id == largeClockDateId) {
                             child.translationY = translationY.toFloat()
                         }
                     }

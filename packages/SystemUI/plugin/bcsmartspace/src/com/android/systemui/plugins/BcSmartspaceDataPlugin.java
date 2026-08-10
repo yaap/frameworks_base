@@ -99,6 +99,15 @@ public interface BcSmartspaceDataPlugin extends Plugin {
         throw new UnsupportedOperationException("Not implemented by " + getClass());
     }
 
+    /**
+     * Sets {@link BcSmartspaceConfigPlugin}.
+     *
+     * TODO: b/259566300 - Remove once isViewPager2Enabled is fully rolled out
+     */
+    default void registerConfigProvider(BcSmartspaceConfigPlugin configProvider) {
+        throw new UnsupportedOperationException("Not implemented by " + getClass());
+    }
+
     /** Provides Smartspace data to registered listeners. */
     interface SmartspaceTargetListener {
         /** Each Parcelable is a SmartspaceTarget that represents a card. */

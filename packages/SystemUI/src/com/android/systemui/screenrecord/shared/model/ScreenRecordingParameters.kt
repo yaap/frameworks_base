@@ -30,6 +30,8 @@ constructor(
     val shouldShowTaps: Boolean,
     val shouldShowSeconds: Boolean = false,
     val notificationId: Int = 0,
+    val lowQuality: Int = 0,
+    val hevc: Boolean = false,
 ) : Parcelable {
 
     constructor(
@@ -47,6 +49,8 @@ constructor(
         parcel.readBoolean(),
         parcel.readBoolean(),
         parcel.readInt(),
+        parcel.readInt(),
+        parcel.readBoolean(),
     )
 
     override fun describeContents(): Int = 0
@@ -59,6 +63,8 @@ constructor(
             writeBoolean(shouldShowTaps)
             writeBoolean(shouldShowSeconds)
             writeInt(notificationId)
+            writeInt(lowQuality)
+            writeBoolean(hevc)
         }
 
     companion object CREATOR : Parcelable.Creator<ScreenRecordingParameters> {

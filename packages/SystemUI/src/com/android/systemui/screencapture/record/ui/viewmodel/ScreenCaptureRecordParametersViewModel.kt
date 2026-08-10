@@ -98,15 +98,9 @@ constructor(
                 }
         }
 
-    val lowQuality: Int? by
-        interactor.parameters
-            .map { it.lowQuality }
-            .hydratedStateOf("ScreenCaptureAudioSourceViewModel#lowQuality", null)
+    val lowQuality: Int by derivedStateOf { interactor.lowQuality }
 
-    val hevc: Boolean? by
-        interactor.parameters
-            .map { it.hevc }
-            .hydratedStateOf("ScreenCaptureAudioSourceViewModel#hevc", null)
+    val hevc: Boolean by derivedStateOf { interactor.hevc }
 
     var shouldRecordMicrophone: Boolean
         get() =
@@ -155,11 +149,11 @@ constructor(
     }
 
     fun setLowQuality(lowQuality: Int) {
-        interactor.setLowQuality(lowQuality)
+        interactor.lowQuality = lowQuality
     }
 
     fun setHevc(hevc: Boolean) {
-        interactor.setHevc(hevc)
+        interactor.hevc = hevc
     }
 
     @AssistedFactory
