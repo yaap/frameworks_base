@@ -16,6 +16,7 @@
 
 package com.android.systemui.keyguard.ui.viewmodel
 
+import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryUdfpsInteractor
 import com.android.systemui.keyguard.domain.interactor.FromGoneTransitionInteractor.Companion.TO_DOZING_DURATION
@@ -49,7 +50,17 @@ constructor(
             )
             .setupWithoutSceneContainer(edge = Edge.create(from = GONE, to = DOZING))
 
-    val lockscreenAlpha: Flow<Float> = dozingTransitionFlows.lockscreenAlpha(from = GONE)
+    val lockscreenAlpha: Flow<Float> =
+        if (Flags.newDozingKeyguardStates()) {
+            dozingTransitionFlows.lockscreenAlpha(from = GONE)
+        } else {
+            transitionAnimation.sharedFlow(
+                duration = 500.milliseconds,
+                onStep = { 0f },
+                onCancel = { 1f },
+                onFinish = { 1f },
+            )
+        }
 
     val nonAuthUIAlpha: Flow<Float> = dozingTransitionFlows.nonAuthUIAlpha(from = GONE)
 

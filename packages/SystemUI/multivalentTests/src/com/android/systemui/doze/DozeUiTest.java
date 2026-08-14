@@ -42,6 +42,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.systemui.DejankUtils;
+import com.android.systemui.Flags;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.statusbar.phone.DozeParameters;
 import com.android.systemui.util.concurrency.FakeExecutor;
@@ -151,6 +152,7 @@ public class DozeUiTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void onPulseStarted_quickPickupRequestsPulsingWithoutUI() {
         mDozeUi.transitionTo(UNINITIALIZED, INITIALIZED);
         mDozeUi.transitionTo(INITIALIZED, DOZE_AOD);
@@ -165,6 +167,7 @@ public class DozeUiTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void onPulseStarted_udfpsLongpressRequestsPulsingWithoutUI() {
         mDozeUi.transitionTo(UNINITIALIZED, INITIALIZED);
         mDozeUi.transitionTo(INITIALIZED, DOZE_AOD);
@@ -179,6 +182,7 @@ public class DozeUiTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void onPulseStarted_fingerprintPulseShowAuthUI() {
         mDozeUi.transitionTo(UNINITIALIZED, INITIALIZED);
         mDozeUi.transitionTo(INITIALIZED, DOZE_AOD);
@@ -195,6 +199,7 @@ public class DozeUiTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void onPulseStarted_fingerprintPulseShowFullUI() {
         mDozeUi.transitionTo(UNINITIALIZED, INITIALIZED);
         mDozeUi.transitionTo(INITIALIZED, DOZE_AOD);

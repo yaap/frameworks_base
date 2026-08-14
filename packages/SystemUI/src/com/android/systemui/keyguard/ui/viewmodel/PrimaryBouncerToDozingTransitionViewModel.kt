@@ -16,6 +16,7 @@
 
 package com.android.systemui.keyguard.ui.viewmodel
 
+import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryUdfpsInteractor
 import com.android.systemui.keyguard.domain.interactor.FromPrimaryBouncerTransitionInteractor.Companion.TO_DOZING_DURATION
@@ -82,7 +83,12 @@ constructor(
     override val notificationBlurRadius: Flow<Float> =
         transitionAnimation.immediatelyTransitionTo(0.0f)
 
-    val lockscreenAlpha: Flow<Float> = dozingTransitionFlows.lockscreenAlpha(from = PRIMARY_BOUNCER)
+    val lockscreenAlpha: Flow<Float> =
+        if (Flags.newDozingKeyguardStates()) {
+            dozingTransitionFlows.lockscreenAlpha(from = PRIMARY_BOUNCER)
+        } else {
+            emptyFlow()
+        }
 
     val nonAuthUIAlpha: Flow<Float> = dozingTransitionFlows.nonAuthUIAlpha(from = PRIMARY_BOUNCER)
 }

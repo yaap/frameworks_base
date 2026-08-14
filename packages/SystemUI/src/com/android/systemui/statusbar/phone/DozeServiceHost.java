@@ -209,12 +209,14 @@ public final class DozeServiceHost implements DozeHost {
             callback.onPowerSaveChanged(active);
         }
 
-        if (active) {
-            // listen for screen off fingerprint pulse events when battery saver
-            // is suppressing AOD
-            startCollectingScreenOffFingerprintPulseEvents();
-        } else if (!listenForScreenOffFingerprintPulseEvents()) {
-            stopCollectingUsUdfpsScreenOffPulseEvents();
+        if (com.android.systemui.Flags.newDozingKeyguardStates()) {
+            if (active) {
+                // listen for screen off fingerprint pulse events when battery saver
+                // is suppressing AOD
+                startCollectingScreenOffFingerprintPulseEvents();
+            } else if (!listenForScreenOffFingerprintPulseEvents()) {
+                stopCollectingUsUdfpsScreenOffPulseEvents();
+            }
         }
     }
 
@@ -615,18 +617,21 @@ public final class DozeServiceHost implements DozeHost {
     }
 
     private void startCollectingScreenOffFingerprintPulseEvents() {
-        if (listenForScreenOffFingerprintPulseEvents()) {
-            if (mUdfpsScreenOffFingerprintPulseEventCollectingJob != null) return;
-            mUdfpsScreenOffFingerprintPulseEventCollectingJob = JavaAdapterKt.collectFlow(
-                    mScope,
-                    mScope.getCoroutineContext(),
-                    mDeviceEntryFingerprintAuthInteractor.getFingerprintHelp(),
-                    state -> {
-                        for (Callback callback : mCallbacks) {
-                            callback.onFingerprintPulseWhileScreenOff(state);
+        if (com.android.systemui.Flags.newDozingKeyguardStates()) {
+            if (listenForScreenOffFingerprintPulseEvents()) {
+                if (mUdfpsScreenOffFingerprintPulseEventCollectingJob != null) return;
+                mUdfpsScreenOffFingerprintPulseEventCollectingJob = JavaAdapterKt.collectFlow(
+                        mScope,
+                        mScope.getCoroutineContext(),
+                        mDeviceEntryFingerprintAuthInteractor.getFingerprintHelp(),
+                        state -> {
+                            for (Callback callback : mCallbacks) {
+                                callback.onFingerprintPulseWhileScreenOff(state);
+                            }
                         }
-                    }
-            );
+                );
+            }
+            return;
         }
     }
 

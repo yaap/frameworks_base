@@ -197,11 +197,13 @@ object KeyguardRootViewBinder {
                         }
                     }
 
-                    launch("$TAG#nonAuthUIAlpha") {
-                        viewModel.nonAuthUIAlpha.collect { alpha ->
-                            for (childView in childViews) {
-                                if (!authUiIds.contains(childView.key)) {
-                                    childView.value.alpha = alpha
+                    if (Flags.newDozingKeyguardStates()) {
+                        launch("$TAG#nonAuthUIAlpha") {
+                            viewModel.nonAuthUIAlpha.collect { alpha ->
+                                for (childView in childViews) {
+                                    if (!authUiIds.contains(childView.key)) {
+                                        childView.value.alpha = alpha
+                                    }
                                 }
                             }
                         }

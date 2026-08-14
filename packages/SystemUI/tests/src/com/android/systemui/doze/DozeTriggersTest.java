@@ -46,6 +46,7 @@ import androidx.test.filters.SmallTest;
 
 import com.android.internal.logging.InstanceId;
 import com.android.internal.logging.UiEventLogger;
+import com.android.systemui.Flags;
 import com.android.systemui.SysuiTestCase;
 import com.android.systemui.biometrics.AuthController;
 import com.android.systemui.broadcast.BroadcastDispatcher;
@@ -352,6 +353,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void quickPickup_whileAlreadyPulsing() {
         // GIVEN device is already pulsing
         when(mMachine.getState()).thenReturn(DozeMachine.State.DOZE_PULSING);
@@ -364,6 +366,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void quickPickup_whileAlreadyPulsingWithoutUI() {
         // GIVEN device is already pulsing without UI
         when(mMachine.getState()).thenReturn(DozeMachine.State.DOZE_PULSING_WITHOUT_UI);
@@ -376,6 +379,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void quickPickup_whileAlreadyPulsingAuthUI() {
         // GIVEN device is already pulsing auth UI
         when(mMachine.getState()).thenReturn(DozeMachine.State.DOZE_PULSING_AUTH_UI);
@@ -400,6 +404,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void udfpsLongpress_whileAlreadyPulsingWithoutUI() {
         // GIVEN device is already pulsing auth UI
         when(mMachine.getState()).thenReturn(DozeMachine.State.DOZE_PULSING_WITHOUT_UI);
@@ -412,6 +417,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void udfpsLongpress_whileAlreadyPulsingAuthUI() {
         // GIVEN device is already pulsing auth UI
         when(mMachine.getState()).thenReturn(DozeMachine.State.DOZE_PULSING_AUTH_UI);
@@ -424,6 +430,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void udfpsLongpress_whileAlreadyPulsing() {
         // GIVEN device is already pulsing auth UI
         when(mMachine.getState()).thenReturn(DozeMachine.State.DOZE_PULSING);
@@ -436,6 +443,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void fingerprintPulseShowAuthUI() {
         // GIVEN device is in DOZE
         mTriggers.transitionTo(UNINITIALIZED, DozeMachine.State.INITIALIZED);
@@ -450,6 +458,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void fingerprintPulseShowAuthUI_whileAlreadyPulsingWithoutUI() {
         // GIVEN device is pulsing showing no UI
         mTriggers.transitionTo(UNINITIALIZED, DozeMachine.State.INITIALIZED);
@@ -465,6 +474,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void fingerprintPulseShowAuthUI_whileAlreadyPulsing() {
         // GIVEN device is pulsing showing no UI
         mTriggers.transitionTo(UNINITIALIZED, DozeMachine.State.INITIALIZED);
@@ -479,6 +489,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void fingerprintPulseShowAuthUI_whileAlreadyShowingAuthUI() {
         // GIVEN device is pulsing showing no UI
         mTriggers.transitionTo(UNINITIALIZED, DozeMachine.State.INITIALIZED);
@@ -495,6 +506,7 @@ public class DozeTriggersTest extends SysuiTestCase {
 
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void fingerprintPulseShowFullUI_whileAlreadyPulsingWithoutUI() {
         // GIVEN device is pulsing showing no UI
         mTriggers.transitionTo(UNINITIALIZED, DozeMachine.State.INITIALIZED);
@@ -512,6 +524,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void fingerprintPulseShowFullUI_whileAlreadyPulsing() {
         // GIVEN device is pulsing showing no UI
         mTriggers.transitionTo(UNINITIALIZED, DozeMachine.State.INITIALIZED);
@@ -528,6 +541,7 @@ public class DozeTriggersTest extends SysuiTestCase {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_NEW_DOZING_KEYGUARD_STATES)
     public void fingerprintPulseShowFullUI_whileAlreadyShowingAuthUI() {
         // GIVEN device is pulsing showing auth UI
         mTriggers.transitionTo(UNINITIALIZED, DozeMachine.State.INITIALIZED);

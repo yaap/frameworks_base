@@ -16,6 +16,7 @@
 
 package com.android.systemui.keyguard.ui.viewmodel
 
+import com.android.systemui.Flags
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.deviceentry.domain.interactor.DeviceEntryUdfpsInteractor
 import com.android.systemui.keyguard.domain.interactor.FromOccludedTransitionInteractor
@@ -26,6 +27,7 @@ import com.android.systemui.keyguard.ui.KeyguardTransitionAnimationFlow
 import com.android.systemui.keyguard.ui.transitions.DeviceEntryIconTransition
 import com.android.systemui.scene.shared.model.Scenes
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -50,7 +52,16 @@ constructor(
             .setupWithoutSceneContainer(edge = Edge.create(from = OCCLUDED, to = DOZING))
 
     /** Lockscreen views alpha */
-    val lockscreenAlpha: Flow<Float> = dozingTransitionFlows.lockscreenAlpha(from = OCCLUDED)
+    val lockscreenAlpha: Flow<Float> =
+        if (Flags.newDozingKeyguardStates()) {
+            dozingTransitionFlows.lockscreenAlpha(from = OCCLUDED)
+        } else {
+            transitionAnimation.sharedFlow(
+                startTime = 233.milliseconds,
+                duration = 250.milliseconds,
+                onStep = { it },
+            )
+        }
 
     val nonAuthUIAlpha: Flow<Float> = dozingTransitionFlows.nonAuthUIAlpha(from = OCCLUDED)
 

@@ -46,6 +46,7 @@ import com.android.keyguard.KeyguardUpdateMonitorCallback;
 import com.android.keyguard.KeyguardViewController;
 import com.android.keyguard.logging.BiometricUnlockLogger;
 import com.android.systemui.Dumpable;
+import com.android.systemui.Flags;
 import com.android.systemui.biometrics.AuthController;
 import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.dagger.qualifiers.Main;
@@ -483,7 +484,13 @@ public class BiometricUnlockController extends KeyguardUpdateMonitorCallback imp
                 mKeyguardViewMediator.userActivity();
                 startWakeAndUnlock(biometricSourceType, isStrongBiometric);
             } else {
-                if (SceneContainerFlag.isEnabled()) {
+                if (!com.android.systemui.Flags.newDozingKeyguardStates()
+                        && biometricSourceType == BiometricSourceType.FINGERPRINT
+                        && !mUpdateMonitor.isDeviceInteractive()
+                        && mUpdateMonitor.isUnlockingWithBiometricAllowed(isStrongBiometric)) {
+                    mKeyguardViewMediator.userActivity();
+                    startWakeAndUnlock(biometricSourceType, isStrongBiometric);
+                } else if (SceneContainerFlag.isEnabled()) {
                     // Always unlock with scene container enabled. device unlock state should always
                     // be consistent with auth success event, whether lockscreen gets dismissed or
                     // not is determined later by DeviceEntryInteractor.
@@ -597,11 +604,15 @@ public class BiometricUnlockController extends KeyguardUpdateMonitorCallback imp
                 break;
         }
         onModeChanged(mMode, biometricUnlockSource);
-        // wake up after biometric unlock mode is sent to listeners
-        if ((mMode != MODE_NONE && mMode != MODE_NONE_UNLOCKED) && !wakeInKeyguard) {
-            wakeUp.run();
+        if (!com.android.systemui.Flags.newDozingKeyguardStates()) {
+            if ((mMode != MODE_NONE && mMode != MODE_NONE_UNLOCKED) && !wakeInKeyguard) {
+                wakeUp.run();
+            }
+        } else {
+            if ((mMode != MODE_NONE && mMode != MODE_NONE_UNLOCKED) && !wakeInKeyguard) {
+                wakeUp.run();
+            }
         }
-
         Trace.endSection();
     }
 
@@ -719,7 +730,11 @@ public class BiometricUnlockController extends KeyguardUpdateMonitorCallback imp
             } else if (!isKeyguardShowing) {
                 return bypass ? MODE_WAKE_AND_DISMISS : MODE_ONLY_WAKE_UNLOCKED;
             } else if (mDozeScrimController.isPulsing()) {
-                return MODE_WAKE_AND_DISMISS_PULSING; // always unlock from the pulsing state
+                if (Flags.newDozingKeyguardStates()) {
+                    return MODE_WAKE_AND_DISMISS_PULSING; // always unlock from the pulsing state
+                } else {
+                    return bypass ? MODE_WAKE_AND_DISMISS_PULSING : MODE_ONLY_WAKE;
+                }
             } else {
                 if (bypass) {
                     // Wake-up fading out nicely

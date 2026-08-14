@@ -1661,6 +1661,16 @@ flag {
 }
 
 flag {
+   name: "new_dozing_keyguard_states"
+   namespace: "systemui"
+   description: "Adds new dozing keyguard states for more robust animations to/from dozing."
+   bug: "415704030"
+   metadata {
+        purpose: PURPOSE_BUGFIX
+   }
+}
+
+flag {
     name: "status_bar_always_use_region_sampling"
     namespace: "systemui"
     description: "Have the status bar *always* use region sampling to calculate icon contrast"
