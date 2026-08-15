@@ -35044,6 +35044,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     }
 
     private float convertVelocityToFrameRate(float velocityPps) {
+        /*
         float density = mAttachInfo.mDensity;
 
         if (frameRateMappingApi()) {
@@ -35060,6 +35061,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         if (sFrameRateMappings != null && sFrameRateMappings.length > 0) {
             return getFrameRateByVelocity(sFrameRateMappings, (int) velocityPps);
         }
+        */
         return MAX_FRAME_RATE;
     }
 
