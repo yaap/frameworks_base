@@ -129,11 +129,6 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
         return s;
     }
 
-    private boolean getAutoOn() {
-        return Settings.System.getInt(mContext.getContentResolver(),
-                Settings.System.QS_BT_AUTO_ON, 0) == 1;
-    }
-
     @Override
     protected void handleClick(@Nullable Expandable expandable, boolean keyguardShowing) {
         if (checkKeyguard(expandable, keyguardShowing)) {
@@ -169,9 +164,6 @@ public class BluetoothTile extends SecureQSTile<BooleanState> {
 
     private void handleClickEvent(@Nullable Expandable expandable) {
         if (mFeatureFlags.isEnabled(Flags.BLUETOOTH_QS_TILE_DIALOG)) {
-            if (getAutoOn()) {
-                mController.setBluetoothEnabled(true);
-            }
             mDetailsContentViewModel.get().showDialog(expandable);
         } else {
             // Secondary clicks are header clicks, just toggle.

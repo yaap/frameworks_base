@@ -100,8 +100,6 @@ constructor(
     @Assisted(CAN_CONFIG_MOBILE_DATA) private val canConfigMobileData: Boolean,
     @Assisted(CAN_CONFIG_WIFI) private val canConfigWifi: Boolean,
     @Assisted(IS_IN_DIALOG) private val isInDialog: Boolean,
-    @Assisted(IS_AUTO_ON) private val isAutoOn: Boolean = false,
-    @Assisted(IS_MOBILE_AUTO_ON) private val isMobileAutoOn: Boolean = false,
     private val uiEventLogger: UiEventLogger,
     @Main private val handler: Handler,
     @Background private val backgroundExecutor: Executor,
@@ -181,8 +179,6 @@ constructor(
             @Assisted(CAN_CONFIG_MOBILE_DATA) canConfigMobileData: Boolean,
             @Assisted(CAN_CONFIG_WIFI) canConfigWifi: Boolean,
             @Assisted(IS_IN_DIALOG) isInDialog: Boolean,
-            @Assisted(IS_AUTO_ON) isAutoOn: Boolean,
-            @Assisted(IS_MOBILE_AUTO_ON) isMobileAutoOn: Boolean,
         ): InternetDetailsContentManager
     }
 
@@ -544,8 +540,6 @@ constructor(
             internetDetailsCallback,
             canConfigWifi,
             coroutineScope,
-            isAutoOn,
-            isMobileAutoOn,
         )
         if (!canConfigWifi) {
             hideWifiViews()
@@ -1390,7 +1384,5 @@ constructor(
         const val CAN_CONFIG_MOBILE_DATA = "can_config_mobile_data"
         const val CAN_CONFIG_WIFI = "can_config_wifi"
         const val IS_IN_DIALOG = "is_in_dialog"
-        const val IS_AUTO_ON = "is_auto_on"
-        const val IS_MOBILE_AUTO_ON = "is_mobile_auto_on"
     }
 }

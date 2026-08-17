@@ -102,8 +102,6 @@ constructor(
         canConfigMobileData: Boolean,
         canConfigWifi: Boolean,
         expandable: Expandable?,
-        isAutoOn: Boolean = false,
-        isMobileAutoOn: Boolean = false,
     ) {
         if (shadeModeInteractor.isDualShade && !retailModeInteractor.isInRetailMode) {
             // If `QsDetailedView` is enabled, it should show the details view.
@@ -125,8 +123,6 @@ constructor(
                     canConfigMobileData = canConfigMobileData,
                     canConfigWifi = canConfigWifi,
                     isInDialog = true,
-                    isAutoOn = isAutoOn,
-                    isMobileAutoOn = isMobileAutoOn,
                 )
             delegate = InternetDialogDelegate(contentManager, aboveStatusBar)
         } else {
@@ -136,8 +132,6 @@ constructor(
                     canConfigMobileData,
                     canConfigWifi,
                     coroutineScope,
-                    isAutoOn,
-                    isMobileAutoOn,
                 )
         }
 

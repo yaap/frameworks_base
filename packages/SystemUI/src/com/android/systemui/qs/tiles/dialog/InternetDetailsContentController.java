@@ -348,8 +348,7 @@ public class InternetDetailsContentController implements AccessPointController.A
     }
 
     void onStart(@NonNull InternetDialogCallback callback,
-            boolean canConfigWifi, @NonNull CoroutineScope coroutineScope,
-            boolean isAutoOn, boolean isMobileAutoOn) {
+            boolean canConfigWifi, @NonNull CoroutineScope coroutineScope) {
         if (DEBUG) {
             Log.d(TAG, "onStart");
         }
@@ -382,15 +381,6 @@ public class InternetDetailsContentController implements AccessPointController.A
                         mSatelliteModemStateCallback);
             } catch (IllegalStateException e) {
                 Log.w(TAG, "Unable to register callback for modem state changes : " + e);
-            }
-        }
-
-        if (mCanConfigWifi) {
-            if (isAutoOn && !isWifiEnabled()) {
-                setWifiEnabled(true);
-            }
-            if (isMobileAutoOn && !isMobileDataEnabled()) {
-                setMobileDataEnabled(mContext, getDefaultDataSubscriptionId(), true, false);
             }
         }
 
