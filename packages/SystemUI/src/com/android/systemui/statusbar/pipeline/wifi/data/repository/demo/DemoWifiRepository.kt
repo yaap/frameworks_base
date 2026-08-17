@@ -64,10 +64,6 @@ constructor(
     private val _wifiToggleState = MutableStateFlow<WifiToggleState>(WifiToggleState.Normal)
     override val wifiToggleState: StateFlow<WifiToggleState> = _wifiToggleState
 
-    override fun disableWifi() {
-        // No-op
-    }
-
     override fun enableWifi() {
         // No-op
     }

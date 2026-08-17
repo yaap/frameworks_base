@@ -53,10 +53,6 @@ class DisabledWifiRepository @Inject constructor() : RealWifiRepository {
     override val wifiToggleState: StateFlow<WifiToggleState> =
         MutableStateFlow<WifiToggleState>(WifiToggleState.Normal).asStateFlow()
 
-    override fun disableWifi() {
-        // No-op
-    }
-
     override fun enableWifi() {
         // No-op
     }

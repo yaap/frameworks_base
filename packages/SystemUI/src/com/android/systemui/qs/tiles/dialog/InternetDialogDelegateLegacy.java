@@ -568,8 +568,8 @@ public class InternetDialogDelegateLegacy implements
         if (mMobileTitleText.getText().isEmpty()) {
             mMobileNetworkLayout.setVisibility(View.GONE);
         }
-        if ((!internetContent.mHasActiveSubIdOnDds && (!internetContent.mIsWifiEnabled
-                || !internetContent.mIsCarrierNetworkActive)) || !mCanConfigMobileData) {
+        if (!internetContent.mHasActiveSubIdOnDds && (!internetContent.mIsWifiEnabled
+                || !internetContent.mIsCarrierNetworkActive)) {
             mMobileNetworkLayout.setVisibility(View.GONE);
             if (mSecondaryMobileNetworkLayout != null) {
                 mSecondaryMobileNetworkLayout.setVisibility(View.GONE);
@@ -860,7 +860,7 @@ public class InternetDialogDelegateLegacy implements
     }
 
     CharSequence getDialogTitleText() {
-        return mInternetDetailsContentController.getDialogTitleText(mCanConfigMobileData);
+        return mInternetDetailsContentController.getDialogTitleText();
     }
 
     @Nullable

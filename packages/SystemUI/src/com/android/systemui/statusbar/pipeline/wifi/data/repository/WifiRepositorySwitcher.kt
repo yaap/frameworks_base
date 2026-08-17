@@ -134,10 +134,6 @@ constructor(
             .flatMapLatest { it.wifiToggleState }
             .stateIn(scope, SharingStarted.WhileSubscribed(), realImpl.wifiToggleState.value)
 
-    override fun disableWifi() {
-        activeRepo.value.disableWifi()
-    }
-
     override fun enableWifi() {
         activeRepo.value.enableWifi()
     }
