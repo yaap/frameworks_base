@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import sun.misc.Unsafe;
+
 /**
  * @hide
  */
@@ -38,8 +40,27 @@ public final class PixelPropsUtils {
     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
     private static final String VERSION_PREFIX = "VERSION.";
 
+    private static final Field OFFSET_FIELD;
+    private static final Unsafe UNSAFE;
 
     static {
+        Unsafe unsafe = null;
+        Field offsetField = null;
+
+        try {
+            Field field = Unsafe.class.getDeclaredField("theUnsafe");
+            field.setAccessible(true);
+            unsafe = (Unsafe) field.get(null);
+            field.setAccessible(false);
+
+            offsetField = Field.class.getDeclaredField("offset");
+            offsetField.setAccessible(true);
+        } catch (Exception e) {
+            Logger.e("Unable to initialize Unsafe", e);
+        }
+
+        UNSAFE = unsafe;
+        OFFSET_FIELD = offsetField;
     }
 
     private final HashMap<String, Object> certifiedProps;
@@ -144,20 +165,33 @@ public final class PixelPropsUtils {
     }
 
     private static void setPropValue(String key, Object value) {
+        if (UNSAFE == null || OFFSET_FIELD == null) {
+            Logger.e("Unsafe is unavailable", new IllegalStateException());
+            return;
+        }
+
+        Field field = null;
         try {
             Logger.d("Setting prop " + key + " to " + value);
-            Field field;
+
             if (key.startsWith(VERSION_PREFIX)) {
                 field = Build.VERSION.class.getDeclaredField(
                         key.substring(VERSION_PREFIX.length()));
             } else {
                 field = Build.class.getDeclaredField(key);
             }
+
             field.setAccessible(true);
-            field.set(null, value);
-            field.setAccessible(false);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
+            long offset = OFFSET_FIELD.getInt(field);
+            UNSAFE.putObject(field.getDeclaringClass(), offset, value);
+        } catch (Exception e) {
             Logger.e("Failed to set prop " + key, e);
+        } finally {
+            if (field != null) {
+                try {
+                    field.setAccessible(false);
+                } catch (Exception ignored) {}
+            }
         }
     }
 
