@@ -25,9 +25,9 @@ import android.util.Log;
 import com.android.internal.R;
 
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * @hide
@@ -38,14 +38,17 @@ public final class PixelPropsUtils {
     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
     private static final String VERSION_PREFIX = "VERSION.";
 
+
+    static {
+    }
+
     private final HashMap<String, Object> certifiedProps;
 
-    private static final ArrayList<String> finskyProps = new ArrayList<>();
-    static {
-        finskyProps.add("FINGERPRINT");
-        finskyProps.add(VERSION_PREFIX + "SECURITY_PATCH");
-        finskyProps.add(VERSION_PREFIX + "DEVICE_INITIAL_SDK_INT");
-    }
+    private static final Set<String> finskyProps = Set.of(
+        "FINGERPRINT",
+        VERSION_PREFIX + "SECURITY_PATCH",
+        VERSION_PREFIX + "DEVICE_INITIAL_SDK_INT"
+    );
 
     private static volatile boolean sIsEnabled = false;
 
