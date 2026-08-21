@@ -58,6 +58,10 @@ public class CaffeineTile extends QSTileImpl<BooleanState> {
     public static final String TILE_SPEC = "caffeine";
 
     private final Icon mIcon = ResourceIcon.get(R.drawable.ic_qs_caffeine_on);
+    private final Icon mIcon5m = ResourceIcon.get(R.drawable.ic_qs_caffeine_on_5m);
+    private final Icon mIcon10m = ResourceIcon.get(R.drawable.ic_qs_caffeine_on_10m);
+    private final Icon mIcon30m = ResourceIcon.get(R.drawable.ic_qs_caffeine_on_30m);
+    private final Icon mIconInf = ResourceIcon.get(R.drawable.ic_qs_caffeine_on_inf);
 
     private final PowerManager.WakeLock mWakeLock;
     private int mSecondsRemaining;
@@ -68,7 +72,11 @@ public class CaffeineTile extends QSTileImpl<BooleanState> {
         30 * 60,  // 30 min
         -1,       // infinity
     };
-    private static final int INFINITE_DURATION_INDEX = DURATIONS.length - 1;
+    private static final int FIVE_MIN_INDEX = 0;
+    private static final int TEN_MIN_INDEX = 1;
+    private static final int THIRTY_MIN_INDEX = 2;
+    private static final int INFINITE_DURATION_INDEX = 3;
+
     private CountDownTimer mCountdownTimer = null;
     public long mLastClickTime = -1;
     private final Receiver mReceiver = new Receiver();
@@ -231,6 +239,22 @@ public class CaffeineTile extends QSTileImpl<BooleanState> {
         state.value = mWakeLock.isHeld();
         state.hasLongClickEffect = false;
         if (state.value) {
+            switch(mDuration) {
+                case FIVE_MIN_INDEX:
+                    state.icon = mIcon5m;
+                    break;
+                case TEN_MIN_INDEX:
+                    state.icon = mIcon10m;
+                    break;
+                case THIRTY_MIN_INDEX:
+                    state.icon = mIcon30m;
+                    break;
+                case INFINITE_DURATION_INDEX:
+                    state.icon = mIconInf;
+                    break;
+                default:
+                    break;
+            }
             state.secondaryLabel = formatValueWithRemainingTime();
             state.contentDescription =  mContext.getString(
                     R.string.accessibility_quick_settings_caffeine_on);
