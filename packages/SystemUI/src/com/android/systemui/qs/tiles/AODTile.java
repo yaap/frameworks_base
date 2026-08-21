@@ -50,6 +50,7 @@ import javax.inject.Inject;
 public class AODTile extends QSTileImpl<BooleanState> {
     private boolean mListening;
     private final Icon mIcon = ResourceIcon.get(R.drawable.ic_qs_aod);
+    private final Icon mChargeIcon = ResourceIcon.get(R.drawable.ic_qs_aod_charge);
 
     public static final String TILE_SPEC = "aod";
 
@@ -125,7 +126,11 @@ public class AODTile extends QSTileImpl<BooleanState> {
 
     @Override
     public CharSequence getTileLabel() {
-        switch (getAodState()) {
+        return getTileLabel(getAodState());
+    }
+
+    public CharSequence getTileLabel(int aodState) {
+        switch (aodState) {
             case 1:
                 return mContext.getString(R.string.quick_settings_aod_label);
             case 2:
@@ -137,10 +142,11 @@ public class AODTile extends QSTileImpl<BooleanState> {
 
     @Override
     protected void handleUpdateState(BooleanState state, Object arg) {
-        state.icon = mIcon;
-        state.label = getTileLabel();
+        final int aodState = getAodState();
+        state.icon = aodState == 2 ? mChargeIcon : mIcon;
+        state.label = getTileLabel(aodState);
         state.hasLongClickEffect = false;
-        state.state = getAodState() == 0 ? Tile.STATE_INACTIVE : Tile.STATE_ACTIVE;
+        state.state = aodState == 0 ? Tile.STATE_INACTIVE : Tile.STATE_ACTIVE;
     }
 
     @Override
