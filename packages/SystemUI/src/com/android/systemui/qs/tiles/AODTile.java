@@ -126,13 +126,13 @@ public class AODTile extends QSTileImpl<BooleanState> {
 
     @Override
     public CharSequence getTileLabel() {
-        return getTileLabel(getAodState());
+        return mContext.getString(R.string.quick_settings_aod_label);
     }
 
-    public CharSequence getTileLabel(int aodState) {
+    public CharSequence getSecondaryLabel(int aodState) {
         switch (aodState) {
             case 1:
-                return mContext.getString(R.string.quick_settings_aod_label);
+                return mContext.getString(R.string.quick_settings_aod_label_on);
             case 2:
                 return mContext.getString(R.string.quick_settings_aod_on_charge_label);
             default:
@@ -144,7 +144,8 @@ public class AODTile extends QSTileImpl<BooleanState> {
     protected void handleUpdateState(BooleanState state, Object arg) {
         final int aodState = getAodState();
         state.icon = aodState == 2 ? mChargeIcon : mIcon;
-        state.label = getTileLabel(aodState);
+        state.label = getTileLabel();
+        state.secondaryLabel = getSecondaryLabel(aodState);
         state.hasLongClickEffect = false;
         state.state = aodState == 0 ? Tile.STATE_INACTIVE : Tile.STATE_ACTIVE;
     }

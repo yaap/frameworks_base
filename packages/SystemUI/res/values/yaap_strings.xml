@@ -60,8 +60,9 @@
 
     <!-- AOD QS tile -->
     <string name="quick_settings_aod_label">AOD</string>
-    <string name="quick_settings_aod_on_charge_label">AOD on charge</string>
-    <string name="quick_settings_aod_off_label">AOD off</string>
+    <string name="quick_settings_aod_label_on">On</string>
+    <string name="quick_settings_aod_on_charge_label">On charge</string>
+    <string name="quick_settings_aod_off_label">Off</string>
 
     <!-- PowerShare QS tile -->
     <string name="quick_settings_powershare_label">Wireless PowerShare</string>
