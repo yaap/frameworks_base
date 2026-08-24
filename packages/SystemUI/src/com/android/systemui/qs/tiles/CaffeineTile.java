@@ -164,6 +164,12 @@ public class CaffeineTile extends QSTileImpl<BooleanState> {
     protected void handleLongClick(@Nullable Expandable expandable) {
         if (mWakeLock.isHeld()) {
             if (mDuration == INFINITE_DURATION_INDEX) {
+                // stop if already at infinite
+                mDuration = -1;
+                stopCountDown();
+                mWakeLock.release();
+                mLastClickTime = SystemClock.elapsedRealtime();
+                refreshState();
                 return;
             }
         } else {
