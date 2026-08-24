@@ -73,10 +73,10 @@ constructor(
             .distinctUntilChanged()
 
     private val interactionHapticsState: Flow<TileHapticsState> =
-        combine(tileInteractionState, tileAnimationState) { interactionState, animationState ->
-                when {
-                    interactionState == TileInteractionState.LONG_CLICKED &&
-                        animationState != TileAnimationState.IDLE -> TileHapticsState.LONG_PRESS
+        tileInteractionState
+            .mapDirect { interactionState ->
+                when (interactionState) {
+                    TileInteractionState.LONG_CLICKED -> TileHapticsState.LONG_PRESS
                     else -> TileHapticsState.NO_HAPTICS
                 }
             }
