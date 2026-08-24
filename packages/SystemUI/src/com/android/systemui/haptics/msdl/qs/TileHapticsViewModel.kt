@@ -56,9 +56,11 @@ constructor(
 
     private val toggleHapticsState: Flow<TileHapticsState> =
         tileViewModel.state
-            .mapDirect { it.state }
             .pairwise()
-            .transform { (previous, current) ->
+            .transform { (prev, curr) ->
+                val previous = prev.state
+                val current = curr.state
+
                 val toggleState =
                     when {
                         !canPlayToggleHaptics -> TileHapticsState.NO_HAPTICS
@@ -66,11 +68,13 @@ constructor(
                             TileHapticsState.TOGGLE_ON
                         previous == Tile.STATE_ACTIVE && current == Tile.STATE_INACTIVE ->
                             TileHapticsState.TOGGLE_OFF
+                        previous == Tile.STATE_ACTIVE && current == Tile.STATE_ACTIVE &&
+                            (prev.icon != curr.icon || prev.secondaryLabel != curr.secondaryLabel ||
+                            prev.label != curr.label) -> TileHapticsState.MID_PRESS
                         else -> TileHapticsState.NO_HAPTICS
                     }
                 emit(toggleState)
             }
-            .distinctUntilChanged()
 
     private val interactionHapticsState: Flow<TileHapticsState> =
         tileInteractionState
@@ -92,6 +96,7 @@ constructor(
                     TileHapticsState.TOGGLE_ON -> MSDLToken.SWITCH_ON
                     TileHapticsState.TOGGLE_OFF -> MSDLToken.SWITCH_OFF
                     TileHapticsState.LONG_PRESS -> MSDLToken.LONG_PRESS
+                    TileHapticsState.MID_PRESS -> MSDLToken.TAP_MEDIUM_EMPHASIS
                     TileHapticsState.NO_HAPTICS -> null
                 }
             tokenToPlay?.let {
@@ -143,6 +148,7 @@ constructor(
         TOGGLE_ON,
         TOGGLE_OFF,
         LONG_PRESS,
+        MID_PRESS,
         NO_HAPTICS,
     }
 
