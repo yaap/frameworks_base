@@ -383,13 +383,9 @@ public class CustomTile extends QSTileImpl<State> implements TileChangeListener,
     @Override
     public State newTileState() {
         if (mServiceManager != null && mServiceManager.isToggleableTile()) {
-            BooleanState s = new BooleanState();
-            s.isAppAdded = true;
-            return s;
+            return new BooleanState();
         }
-        State s = new State();
-        s.isAppAdded = true;
-        return s;
+        return new State();
     }
 
     @Override

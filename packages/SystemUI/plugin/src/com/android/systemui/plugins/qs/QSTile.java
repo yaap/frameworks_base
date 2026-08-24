@@ -202,7 +202,6 @@ public interface QSTile {
         public String expandedAccessibilityClassName;
         public boolean handlesLongClick = true;
         public boolean handlesSecondaryClick = false;
-        public boolean isAppAdded = false;
         @Nullable
         public Drawable sideViewCustomDrawable;
         public String spec;
@@ -250,7 +249,6 @@ public interface QSTile {
                     || !Objects.equals(other.dualTarget, dualTarget)
                     || !Objects.equals(other.handlesLongClick, handlesLongClick)
                     || !Objects.equals(other.handlesSecondaryClick, handlesSecondaryClick)
-                    || !Objects.equals(other.isAppAdded, isAppAdded)
                     || !Objects.equals(other.sideViewCustomDrawable, sideViewCustomDrawable);
             other.spec = spec;
             other.icon = icon;
@@ -267,7 +265,6 @@ public interface QSTile {
             other.isTransient = isTransient;
             other.handlesLongClick = handlesLongClick;
             other.handlesSecondaryClick = handlesSecondaryClick;
-            other.isAppAdded = isAppAdded;
             other.sideViewCustomDrawable = sideViewCustomDrawable;
             return changed;
         }
@@ -294,7 +291,6 @@ public interface QSTile {
             sb.append(",dualTarget=").append(dualTarget);
             sb.append(",isTransient=").append(isTransient);
             sb.append(",handlesSecondaryClick=").append(handlesSecondaryClick);
-            sb.append(",isAppAdded=").append(isAppAdded);
             sb.append(",state=").append(state);
             sb.append(",sideViewCustomDrawable=").append(sideViewCustomDrawable);
             return sb.append(']');
