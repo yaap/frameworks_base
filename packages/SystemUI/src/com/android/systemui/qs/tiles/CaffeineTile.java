@@ -243,7 +243,6 @@ public class CaffeineTile extends QSTileImpl<BooleanState> {
         state.label = mContext.getString(R.string.quick_settings_caffeine_label);
         state.icon = mIcon;
         state.value = mWakeLock.isHeld();
-        state.hasLongClickEffect = false;
         if (state.value) {
             switch(mDuration) {
                 case FIVE_MIN_INDEX:

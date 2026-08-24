@@ -146,7 +146,6 @@ public class AODTile extends QSTileImpl<BooleanState> {
         state.icon = aodState == 2 ? mChargeIcon : mIcon;
         state.label = getTileLabel();
         state.secondaryLabel = getSecondaryLabel(aodState);
-        state.hasLongClickEffect = false;
         state.state = aodState == 0 ? Tile.STATE_INACTIVE : Tile.STATE_ACTIVE;
     }
 
