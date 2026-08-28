@@ -31,10 +31,17 @@ import android.view.WindowManager
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.android.systemui.biometrics.ui.viewmodel.DeviceEntryUdfpsTouchOverlayViewModel
+import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
+import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.lifecycle.repeatWhenAttached
 import com.android.systemui.shade.domain.interactor.ShadeInteractor
+import dagger.Lazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 private const val TAG = "UdfpsHelper"
@@ -48,6 +55,8 @@ class UdfpsHelper(
     private val context: Context,
     private val windowManager: WindowManager,
     private val shadeInteractor: ShadeInteractor,
+    private val keyguardTransitionInteractor: KeyguardTransitionInteractor,
+    private val deviceEntryUdfpsTouchOverlayViewModel: Lazy<DeviceEntryUdfpsTouchOverlayViewModel>,
     @RequestReason val requestReason: Int,
     private var view: View = View(context).apply {
         setBackgroundColor(Color.BLACK)
@@ -140,18 +149,22 @@ class UdfpsHelper(
         ).div(255.0f)
     }
 
-    // The current function does not account for Doze state where the brightness can go lower
-    // than what is set on config_screenBrightnessSettingMinimumFloat.
-    // While it's possible to operate with floats, the dimming array was made by referencing
-    // brightness_alpha_lut array from the kernel. This provides a comparable array.
     private fun brightnessToAlpha() {
-        val adjustedBrightness =
+        val isDozingOrAod = try {
+            val state = keyguardTransitionInteractor.currentKeyguardState.value
+            state == KeyguardState.DOZING || state == KeyguardState.AOD || state == KeyguardState.OFF || state == KeyguardState.DREAMING
+        } catch (_: Exception) { false }
+        val rawBrightness = currentBrightness * 4095
+        val adjustedBrightness = if (isDozingOrAod) {
+            rawBrightness.toInt().coerceIn(0, (maxBrightness * 4095).toInt())
+        } else {
             (currentBrightness.coerceIn(minBrightness, maxBrightness) * 4095).toInt()
+        }
 
         val targetAlpha = brightnessAlphaMap[adjustedBrightness]?.div(255.0f)
             ?: interpolateAlpha(adjustedBrightness)
 
-        Log.i(TAG, "Adjusted Brightness: $adjustedBrightness, Alpha: $targetAlpha")
+        Log.i(TAG, "Adjusted Brightness: $adjustedBrightness, Alpha: $targetAlpha isDozingOrAod=$isDozingOrAod")
 
         alphaAnimator.setFloatValues(view.alpha, targetAlpha)
         // Set the dim for both the view and the layout
@@ -182,10 +195,7 @@ class UdfpsHelper(
                 }
             }
         }
-
-        if (!isKeyguard) {
-            view.isVisible = true
-        }
+        view.isVisible = true
     }
 
     // We don't have ways to get temporary brightness when operating the brightness slider.
@@ -209,9 +219,18 @@ class UdfpsHelper(
     }
 
     private suspend fun listenForShadeTouchability(scope: CoroutineScope): Job {
+        val isDozingOrOffOrAod = keyguardTransitionInteractor.currentKeyguardState
+            .map { it == KeyguardState.OFF || it == KeyguardState.AOD || it == KeyguardState.DOZING || it == KeyguardState.DREAMING }
+            .distinctUntilChanged()
         return scope.launch {
-            shadeInteractor.isShadeTouchable.collect {
-                view.isVisible = it
+            combine(
+                shadeInteractor.isShadeTouchable,
+                isDozingOrOffOrAod,
+                deviceEntryUdfpsTouchOverlayViewModel.get().shouldHandleTouches,
+            ) { isTouchable, isDozing, shouldHandle ->
+                (isTouchable || isDozing) && shouldHandle
+            }.distinctUntilChanged().collect { isVisible ->
+                view.isVisible = isVisible
                 if (view.isVisible) {
                     brightnessToAlpha()
                     alphaAnimator.cancel()

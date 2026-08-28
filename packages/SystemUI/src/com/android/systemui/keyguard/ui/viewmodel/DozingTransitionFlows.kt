@@ -152,15 +152,15 @@ constructor(
             DozeStateModel.DOZE -> 0f
             DozeStateModel.DOZE_PULSING_AUTH_UI,
             DozeStateModel.DOZE_PULSING_BRIGHT,
-            DozeStateModel.DOZE_PULSING -> 1f
-            // Unhandled states
-            DozeStateModel.DOZE_AOD_MINMODE,
+            DozeStateModel.DOZE_PULSING,
             DozeStateModel.DOZE_AOD,
             DozeStateModel.DOZE_AOD_DOCKED,
             DozeStateModel.DOZE_AOD_PAUSED,
+            DozeStateModel.DOZE_AOD_PAUSING -> 1f
+            // Unhandled states
+            DozeStateModel.DOZE_AOD_MINMODE,
             DozeStateModel.DOZE_PULSE_DONE,
             DozeStateModel.FINISH,
-            DozeStateModel.DOZE_AOD_PAUSING,
             DozeStateModel.DOZE_REQUEST_PULSE,
             DozeStateModel.UNINITIALIZED,
             DozeStateModel.INITIALIZED -> null
@@ -174,15 +174,15 @@ constructor(
             DozeStateModel.DOZE_PULSING_WITHOUT_UI,
             DozeStateModel.DOZE,
             DozeStateModel.DOZE_PULSING_BRIGHT,
-            DozeStateModel.DOZE_PULSING -> 1f
-            // Unhandled states
-            DozeStateModel.DOZE_AOD_MINMODE,
+            DozeStateModel.DOZE_PULSING,
             DozeStateModel.DOZE_AOD,
             DozeStateModel.DOZE_AOD_DOCKED,
             DozeStateModel.DOZE_AOD_PAUSED,
+            DozeStateModel.DOZE_AOD_PAUSING -> 1f
+            // Unhandled states
+            DozeStateModel.DOZE_AOD_MINMODE,
             DozeStateModel.DOZE_PULSE_DONE,
             DozeStateModel.FINISH,
-            DozeStateModel.DOZE_AOD_PAUSING,
             DozeStateModel.DOZE_REQUEST_PULSE,
             DozeStateModel.UNINITIALIZED,
             DozeStateModel.INITIALIZED -> null

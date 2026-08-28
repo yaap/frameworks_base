@@ -26,6 +26,7 @@ import android.hardware.biometrics.BiometricRequestConstants.REASON_AUTH_KEYGUAR
 import android.hardware.biometrics.BiometricRequestConstants.REASON_ENROLL_ENROLLING
 import android.hardware.biometrics.BiometricRequestConstants.REASON_ENROLL_FIND_SENSOR
 import android.hardware.biometrics.BiometricRequestConstants.RequestReason
+import android.hardware.fingerprint.FingerprintSensorProperties.TYPE_UDFPS_OPTICAL
 import android.hardware.fingerprint.FingerprintSensorProperties.TYPE_UDFPS_ULTRASONIC
 import android.hardware.fingerprint.IUdfpsOverlayControllerCallback
 import android.os.Build
@@ -144,7 +145,10 @@ constructor(
     )
 
     private val udfpsHelper: UdfpsHelper? = if (useFrameworkDimming) {
-        UdfpsHelper(context, windowManager, shadeInteractor, requestReason)
+        UdfpsHelper(
+            context, windowManager, shadeInteractor, transitionInteractor,
+            deviceEntryUdfpsTouchOverlayViewModel, requestReason,
+        )
     } else {
         null
     }
@@ -185,7 +189,9 @@ constructor(
     }
 
     private fun setHandleTouchesDisregardingUdfpsOverlayViewLifecycle(): Boolean {
-        return overlayParams.sensorType == TYPE_UDFPS_ULTRASONIC
+        return requestReason == REASON_AUTH_KEYGUARD &&
+            (overlayParams.sensorType == TYPE_UDFPS_ULTRASONIC ||
+                (overlayParams.sensorType == TYPE_UDFPS_OPTICAL && useFrameworkDimming))
     }
 
     /** Show the overlay or return false and do nothing if it is already showing. */
