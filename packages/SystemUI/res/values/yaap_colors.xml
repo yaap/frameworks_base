@@ -5,4 +5,8 @@
     <color name="key_text_shadow_color">#89000000</color>
     <color name="smartspace_button_background">@android:color/system_accent2_200</color>
     <color name="smartspace_button_text">@android:color/system_accent2_700</color>
+
+    <!-- Mobile data enable confirmation dialog: "Don't ask me again" checkbox row -->
+    <color name="mobile_data_dialog_checkbox_bg">@color/materialColorSurfaceContainerHigh</color>
+    <color name="mobile_data_dialog_checkbox_text">@color/materialColorOnSurface</color>
 </resources>
