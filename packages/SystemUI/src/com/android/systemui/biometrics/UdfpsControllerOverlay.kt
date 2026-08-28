@@ -26,7 +26,6 @@ import android.hardware.biometrics.BiometricRequestConstants.REASON_AUTH_KEYGUAR
 import android.hardware.biometrics.BiometricRequestConstants.REASON_ENROLL_ENROLLING
 import android.hardware.biometrics.BiometricRequestConstants.REASON_ENROLL_FIND_SENSOR
 import android.hardware.biometrics.BiometricRequestConstants.RequestReason
-import android.hardware.fingerprint.FingerprintSensorProperties.TYPE_UDFPS_OPTICAL
 import android.hardware.fingerprint.FingerprintSensorProperties.TYPE_UDFPS_ULTRASONIC
 import android.hardware.fingerprint.IUdfpsOverlayControllerCallback
 import android.os.Build
@@ -186,12 +185,7 @@ constructor(
     }
 
     private fun setHandleTouchesDisregardingUdfpsOverlayViewLifecycle(): Boolean {
-        if (!com.android.systemui.Flags.newDozingKeyguardStates()) {
-            return overlayParams.sensorType == TYPE_UDFPS_OPTICAL ||
-                overlayParams.sensorType == TYPE_UDFPS_ULTRASONIC
-        }
-        return overlayParams.sensorType == TYPE_UDFPS_ULTRASONIC &&
-            com.android.systemui.Flags.newDozingKeyguardStates()
+        return overlayParams.sensorType == TYPE_UDFPS_ULTRASONIC
     }
 
     /** Show the overlay or return false and do nothing if it is already showing. */

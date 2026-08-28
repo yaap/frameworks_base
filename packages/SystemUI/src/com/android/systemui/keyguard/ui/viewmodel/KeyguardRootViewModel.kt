@@ -279,12 +279,7 @@ constructor(
                     // If shade is expanding, switch to a flow that never emits.
                     emptyFlow()
                 } else {
-                    // Otherwise, use the original flow.
-                    if (Flags.newDozingKeyguardStates()) {
-                        dozingToLockscreenTransitionViewModel.lockscreenAlpha(viewState)
-                    } else {
-                        dozingToLockscreenTransitionViewModel.lockscreenAlpha
-                    }
+                    dozingToLockscreenTransitionViewModel.lockscreenAlpha(viewState)
                 }
             }
 
