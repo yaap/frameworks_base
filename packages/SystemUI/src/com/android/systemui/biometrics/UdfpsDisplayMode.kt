@@ -48,6 +48,7 @@ constructor(
         }
         if (authController.udfpsRefreshRateCallback == null) {
             logger.e(TAG, "enable | mDisplayManagerCallback is null")
+            onEnabled?.run()
             return
         }
 

@@ -63,9 +63,21 @@ class UdfpsTouchOverlay(context: Context, attrs: AttributeSet?) : FrameLayout(co
     }
 
     private fun doIlluminate(surface: Surface?, onDisplayConfigured: Runnable?) {
+        if (udfpsDisplayMode == null) {
+            onDisplayConfigured?.run()
+            ghbmView?.drawIlluminationDot(RectF(sensorRect))
+            return
+        }
         udfpsDisplayMode?.enable {
             onDisplayConfigured?.run()
             ghbmView?.drawIlluminationDot(RectF(sensorRect))
+        }
+        if (ghbmView != null && ghbmView!!.visibility == VISIBLE) {
+            ghbmView?.post {
+                if (isDisplayConfigured && ghbmView?.visibility == VISIBLE) {
+                    ghbmView?.drawIlluminationDot(RectF(sensorRect))
+                }
+            }
         }
     }
 

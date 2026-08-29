@@ -164,10 +164,7 @@ class UdfpsHelper(
         val targetAlpha = brightnessAlphaMap[adjustedBrightness]?.div(255.0f)
             ?: interpolateAlpha(adjustedBrightness)
 
-        Log.i(TAG, "Adjusted Brightness: $adjustedBrightness, Alpha: $targetAlpha isDozingOrAod=$isDozingOrAod")
-
         alphaAnimator.setFloatValues(view.alpha, targetAlpha)
-        // Set the dim for both the view and the layout
         view.alpha = targetAlpha
         dimLayoutParams.alpha = targetAlpha
     }
@@ -208,11 +205,15 @@ class UdfpsHelper(
                     displayManager.registerDisplayListener(
                         displayListener, null, DisplayManager.EVENT_TYPE_DISPLAY_BRIGHTNESS
                     )
-                    view.isVisible = false
+                    if (!isKeyguard) {
+                        view.isVisible = false
+                    }
                 } else if (qsExpansion == 0f && newIsQsExpanded) {
                     newIsQsExpanded = false
                     displayManager.unregisterDisplayListener(displayListener)
-                    view.isVisible = true
+                    if (!isKeyguard) {
+                        view.isVisible = true
+                    }
                 }
             }
         }
@@ -222,13 +223,20 @@ class UdfpsHelper(
         val isDozingOrOffOrAod = keyguardTransitionInteractor.currentKeyguardState
             .map { it == KeyguardState.OFF || it == KeyguardState.AOD || it == KeyguardState.DOZING || it == KeyguardState.DREAMING }
             .distinctUntilChanged()
+        val qsFullyExpanded = shadeInteractor.qsExpansion
+            .map { it >= 1f }
+            .distinctUntilChanged()
         return scope.launch {
             combine(
+                qsFullyExpanded,
                 shadeInteractor.isShadeTouchable,
                 isDozingOrOffOrAod,
                 deviceEntryUdfpsTouchOverlayViewModel.get().shouldHandleTouches,
-            ) { isTouchable, isDozing, shouldHandle ->
-                (isTouchable || isDozing) && shouldHandle
+            ) { qsFullscreen, isTouchable, isDozing, shouldHandle ->
+                val baseVisible =
+                    if (isDozing) isTouchable || isDozing
+                    else (isTouchable || isDozing) && shouldHandle
+                !qsFullscreen && baseVisible
             }.distinctUntilChanged().collect { isVisible ->
                 view.isVisible = isVisible
                 if (view.isVisible) {

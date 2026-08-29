@@ -121,6 +121,12 @@ constructor(
             },
         )
 
+    private val addViewTrigger: Flow<Unit> =
+        merge(
+            currentStateUpdatedToOffAodDozingOrDreaming,
+            powerInteractor.detailedWakefulness.filter { it.isAwake() }.map {},
+        )
+
     private var listenForCurrentKeyguardState: Job? = null
     private var addViewRunnable: Runnable? = null
     private var overlayTouchView: UdfpsTouchOverlay? = null
@@ -189,9 +195,15 @@ constructor(
     }
 
     private fun setHandleTouchesDisregardingUdfpsOverlayViewLifecycle(): Boolean {
-        return requestReason == REASON_AUTH_KEYGUARD &&
-            (overlayParams.sensorType == TYPE_UDFPS_ULTRASONIC ||
-                (overlayParams.sensorType == TYPE_UDFPS_OPTICAL && useFrameworkDimming))
+        if (overlayParams.sensorType == TYPE_UDFPS_ULTRASONIC) return true
+        if (useFrameworkDimming && overlayParams.sensorType == TYPE_UDFPS_OPTICAL) return true
+        return false
+    }
+
+    private fun setHandleTouchesDisregardingUdfpsOverlayViewLifecycle(params: UdfpsOverlayParams): Boolean {
+        if (params.sensorType == TYPE_UDFPS_ULTRASONIC) return true
+        if (useFrameworkDimming && params.sensorType == TYPE_UDFPS_OPTICAL) return true
+        return false
     }
 
     /** Show the overlay or return false and do nothing if it is already showing. */
@@ -202,7 +214,7 @@ constructor(
             overlayAttachStateListener = attachListener
             sensorBounds = Rect(params.sensorBounds)
             var udfpsTouchForwarder: UdfpsOverlayInteractor? = udfpsOverlayInteractor
-            if (setHandleTouchesDisregardingUdfpsOverlayViewLifecycle()) {
+            if (setHandleTouchesDisregardingUdfpsOverlayViewLifecycle(params)) {
                 // don't use the overlayTouchView to handle the lifecycle of forwarding
                 // shouldHandleTouches to the HAL
                 udfpsTouchForwarder = null
@@ -297,13 +309,12 @@ constructor(
                 windowManager.addView(view, coreLayoutParams.updateDimensions(animation))
             }
         if (powerInteractor.detailedWakefulness.value.isAwake()) {
-            // Device is awake, so we add the view immediately.
             addViewIfPending()
         } else {
             listenForCurrentKeyguardState?.cancel()
             listenForCurrentKeyguardState =
                 scope.launch {
-                    currentStateUpdatedToOffAodDozingOrDreaming.collect { addViewIfPending() }
+                    addViewTrigger.collect { addViewIfPending() }
                 }
         }
     }
