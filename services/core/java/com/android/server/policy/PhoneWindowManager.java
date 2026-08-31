@@ -2692,7 +2692,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         @Override
         public boolean supportLongPress() {
-            return hasLongPressOnPowerBehavior();
+            return hasLongPressOnPowerBehavior() || mTorchActionMode == TORCH_ACTION_LONG;
         }
 
         @Override
@@ -2763,6 +2763,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         }
 
         void onLongPress(@NonNull SingleKeyGestureEvent event) {
+            if (event.getAction() == ACTION_COMPLETE
+                    && mSingleKeyGestureDetector.beganFromNonInteractive()
+                    && handleTorchPress(true)) {
+                return;
+            }
             // If Assistant mapped to long press, we send start, complete and cancel gesture
             // This is done to allow Assistant launch animation in SysUI. Will extend
             // this to all single key gestures after moving Single key gestures to
@@ -6783,6 +6788,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             statusBar.setCurrentUser(newUserId);
         }
         mModifierShortcutManager.setCurrentUser(UserHandle.of(newUserId));
+        postUpdateSettings();
     }
 
     @Override

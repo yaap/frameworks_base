@@ -89,6 +89,11 @@ public class YaapUtils {
         private static IStatusBarService mStatusBarService = null;
         private static IStatusBarService getStatusBarService() {
             synchronized (FireActions.class) {
+                if (mStatusBarService != null) {
+                    if (!mStatusBarService.asBinder().isBinderAlive()) {
+                        mStatusBarService = null;
+                    }
+                }
                 if (mStatusBarService == null) {
                     mStatusBarService = IStatusBarService.Stub.asInterface(
                             ServiceManager.getService("statusbar"));
@@ -102,8 +107,21 @@ public class YaapUtils {
             if (service != null) {
                 try {
                     service.toggleCameraFlash();
+                    return;
                 } catch (RemoteException e) {
-                    // do nothing.
+                    synchronized (FireActions.class) {
+                        mStatusBarService = null;
+                    }
+                }
+            }
+            service = getStatusBarService();
+            if (service != null) {
+                try {
+                    service.toggleCameraFlash();
+                } catch (RemoteException e) {
+                    synchronized (FireActions.class) {
+                        mStatusBarService = null;
+                    }
                 }
             }
         }

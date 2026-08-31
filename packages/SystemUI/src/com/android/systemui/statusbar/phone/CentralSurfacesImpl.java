@@ -1438,7 +1438,7 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
         if (DEBUG) {
             Log.d(TAG, "Toggling camera flashlight");
         }
-        if (mFlashlightController.isAvailable()) {
+        if (mFlashlightController.hasFlashlight()) {
             mFlashlightController.setFlashlight(!mFlashlightController.isEnabled());
         }
     }
