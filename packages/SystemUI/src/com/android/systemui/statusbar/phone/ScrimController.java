@@ -33,6 +33,7 @@ import android.annotation.IntDef;
 import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.database.ContentObserver;
 
 import android.graphics.Color;
 import android.os.Handler;
@@ -300,7 +301,8 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     private boolean mTransparentScrimBackground;
 
     // User-defined scrim alpha override (0.0-1.0, NaN = use system default)
-
+    private float mShadeScrimAlpha = Float.NaN;
+    private ContentObserver mShadeScrimAlphaObserver;
 
     // Scrim blanking callbacks
     private Runnable mPendingFrameCallback;
@@ -462,6 +464,23 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
         mKeyguardTransitionInteractor = keyguardTransitionInteractor;
         mKeyguardInteractor = keyguardInteractor;
         mMainDispatcher = mainDispatcher;
+
+        mShadeScrimAlphaObserver = new ContentObserver(mHandler) {
+            @Override
+            public void onChange(boolean selfChange) {
+                float newAlpha = readShadeScrimAlphaFromSettings();
+                if (newAlpha != mShadeScrimAlpha) {
+                    mShadeScrimAlpha = newAlpha;
+                    if (mScrimBehind != null) {
+                        applyAndDispatchState();
+                    }
+                }
+            }
+        };
+        mContext.getContentResolver().registerContentObserver(
+                Settings.System.getUriFor(Settings.System.SHADE_SCRIM_ALPHA),
+                false, mShadeScrimAlphaObserver, UserHandle.USER_ALL);
+        mShadeScrimAlpha = readShadeScrimAlphaFromSettings();
     }
 
     /**
@@ -606,6 +625,10 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
     }
 
     private float getShadeScrimAlpha() {
+        return mShadeScrimAlpha;
+    }
+
+    private float readShadeScrimAlphaFromSettings() {
         int scrimAlpha = Settings.System.getIntForUser(
                 mContext.getContentResolver(),
                 Settings.System.SHADE_SCRIM_ALPHA,
