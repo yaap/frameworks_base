@@ -32,6 +32,7 @@ import android.annotation.SuppressLint;
 import android.annotation.TestApi;
 import android.app.ActivityThread;
 import android.app.AppOpsManager;
+import android.app.Application;
 import android.companion.virtual.VirtualDeviceManager;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.AttributionSource.ScopedParcelState;
@@ -302,11 +303,14 @@ public class Camera {
                 SystemProperties.get("vendor.camera.aux.packageblacklist", "").split(",")));
 
         // Append packages from resources
-        Resources res = ActivityThread.currentApplication().getResources();
-        packageList.addAll(Arrays.asList(res.getStringArray(
-                com.android.internal.R.array.config_cameraAuxPackageAllowList)));
-        packageBlacklist.addAll(Arrays.asList(res.getStringArray(
-                com.android.internal.R.array.config_cameraAuxPackageBlackList)));
+        Application application = ActivityThread.currentApplication();
+        if (application != null) {
+            Resources res = application.getResources();
+            packageList.addAll(Arrays.asList(res.getStringArray(
+                    com.android.internal.R.array.config_cameraAuxPackageAllowList)));
+            packageBlacklist.addAll(Arrays.asList(res.getStringArray(
+                    com.android.internal.R.array.config_cameraAuxPackageBlackList)));
+        }
 
         return (packageList.isEmpty() || packageList.contains(packageName)) && !packageBlacklist.contains(packageName);
     }
