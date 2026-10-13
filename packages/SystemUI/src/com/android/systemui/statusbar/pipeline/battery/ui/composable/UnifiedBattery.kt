@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -561,7 +562,7 @@ fun BatteryPercentTextOnly(
 
     Row(
         modifier = modifier
-            .height(batteryHeight)
+            .wrapContentHeight()
             .wrapContentWidth()
             .offset(y = (-1).dp)
             .onLayoutRectChanged { relativeLayoutBounds ->

@@ -379,13 +379,17 @@ private fun QuickSettingsChip(
                     ChipHighlightModel.Transparent -> viewModel.areaDark
                     ChipHighlightModel.Weak -> viewModel.areaDark
                 }
+            val batteryViewModel =
+                rememberViewModel("DesktopStatusBar.BatteryViewModel") {
+                    viewModel.unifiedBatteryViewModel.create()
+                }
             UnifiedBattery(
-                viewModel =
-                    rememberViewModel("DesktopStatusBar.BatteryViewModel") {
-                        viewModel.unifiedBatteryViewModel.create()
-                    },
+                viewModel = batteryViewModel,
                 isDarkProvider = { batteryDarkProvider },
-                modifier = Modifier.height(batteryHeight),
+                modifier =
+                    if (batteryViewModel.isBatteryTextOnlySettingEnabled)
+                        Modifier.wrapContentHeight()
+                    else Modifier.height(batteryHeight),
             )
         }
     }
