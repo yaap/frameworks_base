@@ -89,11 +89,19 @@ void ShaderCache::initShaderDiskCache(const void* identity, ssize_t size) {
     // or snapshot migration. Also, program binaries may not work well on some
     // desktop / laptop GPUs. Thus, disable the shader disk cache for emulator builds.
     if (!Properties::runningInEmulator && mFilename.length() > 0) {
-        std::thread deferredInitThread([this, identity, size]() {
+        // The thread only runs once this function returns and drops mMutex, and identity can
+        // point into the caller's stack (the Vulkan driver version), so copy it first.
+        std::vector<uint8_t> identityCopy;
+        if (identity != nullptr && size > 0) {
+            const uint8_t* bytes = static_cast<const uint8_t*>(identity);
+            identityCopy.assign(bytes, bytes + size);
+        }
+        std::thread deferredInitThread([this, identity, size,
+                                        identityCopy = std::move(identityCopy)]() {
             std::lock_guard lock(mMutex);
             mBlobCache.reset(
                 new FileBlobCache(kMaxKeySize, kMaxValueSize, kMaxTotalSize, mFilename));
-            validateCache(identity, size);
+            validateCache(identityCopy.empty() ? identity : identityCopy.data(), size);
             mInitialized = true;
             if (identity != nullptr && size > 0 && mIDHash.size()) {
                 set(&sIDKey, sizeof(sIDKey), mIDHash.data(), mIDHash.size());
