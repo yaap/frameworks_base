@@ -2404,6 +2404,9 @@ public final class CameraManager {
                         Thread.currentThread().getId(), mDeviceStatus.size()));
 
                 CameraStatus[] cameraStatuses = cameraService.addListener(this);
+
+                mCameraService = cameraService;
+
                 for (CameraStatus cameraStatus : cameraStatuses) {
                     DeviceCameraInfo info = new DeviceCameraInfo(cameraStatus.cameraId,
                             cameraStatus.deviceId);
@@ -2424,14 +2427,16 @@ public final class CameraManager {
                         onCameraOpenedLocked(info, cameraStatus.clientPackage);
                     }
                 }
-                mCameraService = cameraService;
-
                 addDeviceStatusHistoryLocked(TextUtils.formatSimple(
                         "connectCameraServiceLocked(X): tid(%d): mDeviceStatus size %d",
                         Thread.currentThread().getId(), mDeviceStatus.size()));
             } catch (ServiceSpecificException e) {
-                // Unexpected failure
-                throw new IllegalStateException("Failed to register a camera service listener", e);
+                if (e.errorCode == ICameraService.ERROR_ALREADY_EXISTS) {
+                    mCameraService = cameraService;
+                } else {
+                    throw new IllegalStateException(
+                            "Failed to register a camera service listener", e);
+                }
             } catch (RemoteException e) {
                 // Camera service is now down, leave mCameraService as null
             }

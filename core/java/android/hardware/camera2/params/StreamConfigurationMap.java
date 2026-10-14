@@ -74,6 +74,38 @@ public final class StreamConfigurationMap {
     private static final int MAX_DIMEN_FOR_ROUNDING = 1920; // maximum allowed width for rounding
 
     /**
+     *
+     * @hide
+     */
+    public StreamConfigurationMap(
+            StreamConfiguration[] configurations,
+            StreamConfigurationDuration[] minFrameDurations,
+            StreamConfigurationDuration[] stallDurations,
+            StreamConfiguration[] depthConfigurations,
+            StreamConfigurationDuration[] depthMinFrameDurations,
+            StreamConfigurationDuration[] depthStallDurations,
+            StreamConfiguration[] dynamicDepthConfigurations,
+            StreamConfigurationDuration[] dynamicDepthMinFrameDurations,
+            StreamConfigurationDuration[] dynamicDepthStallDurations,
+            StreamConfiguration[] heicConfigurations,
+            StreamConfigurationDuration[] heicMinFrameDurations,
+            StreamConfigurationDuration[] heicStallDurations,
+            HighSpeedVideoConfiguration[] highSpeedVideoConfigurations,
+            ReprocessFormatsMap inputOutputFormatsMap,
+            boolean listHighResolution) {
+        this(configurations, minFrameDurations, stallDurations,
+                depthConfigurations, depthMinFrameDurations, depthStallDurations,
+                dynamicDepthConfigurations, dynamicDepthMinFrameDurations,
+                dynamicDepthStallDurations,
+                heicConfigurations, heicMinFrameDurations, heicStallDurations,
+                /*jpegRConfigurations*/ null, /*jpegRMinFrameDurations*/ null,
+                /*jpegRStallDurations*/ null,
+                /*heicUltraHDRConfigurations*/ null, /*heicUltraHDRMinFrameDurations*/ null,
+                /*heicUltraHDRStallDurations*/ null,
+                highSpeedVideoConfigurations, inputOutputFormatsMap, listHighResolution);
+    }
+
+    /**
      * Create a new {@link StreamConfigurationMap}.
      *
      * <p>The array parameters ownership is passed to this object after creation; do not
