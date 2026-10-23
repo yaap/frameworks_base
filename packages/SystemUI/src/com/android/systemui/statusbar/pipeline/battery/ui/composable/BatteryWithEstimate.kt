@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.android.compose.modifiers.thenIf
 import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel
@@ -58,7 +59,12 @@ fun BatteryWithEstimate(
             UnifiedBattery(
                 viewModel = viewModel,
                 isDarkProvider = isDarkProvider,
-                modifier = Modifier.height(batteryHeight).align(Alignment.CenterVertically),
+                modifier =
+                    Modifier
+                        .thenIf(!viewModel.isBatteryTextOnlySettingEnabled) {
+                            Modifier.height(batteryHeight)
+                        }
+                        .align(Alignment.CenterVertically),
             )
         }
         if (showEstimate) {
