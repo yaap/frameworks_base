@@ -7158,6 +7158,14 @@ public final class Settings {
         public static final String GAMING_MODE_HIGH_TOUCH_RATE = "gaming_mode_high_touch_rate";
 
         /**
+         * Edge grip suppression level used in gaming mode (0 disables, 1-5 width)
+         * @hide
+         */
+        @Readable
+        public static final String GAMING_MODE_EDGE_GRIP_SUPPRESSION =
+                "gaming_mode_edge_grip_suppression";
+
+        /**
          * Whether gaming mode toggles ltpo features
          * @hide
          */
@@ -15090,6 +15098,13 @@ public final class Settings {
          * @hide
          */
         public static final String HIGH_TOUCH_RATE_ENABLED = "high_touch_rate_enabled";
+
+        /**
+         * Edge grip suppression level (0 disables, 1-5 width)
+         * @hide
+         */
+        @Readable
+        public static final String EDGE_GRIP_SUPPRESSION = "edge_grip_suppression";
 
         /**
          * Whether to enable ltpo features

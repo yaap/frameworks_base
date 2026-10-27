@@ -611,6 +611,8 @@ public class SecureSettingsValidators {
                 new DiscreteValueValidator(new String[] {"0", "1", "2", "3", "4", "5"}));
         VALIDATORS.put(Secure.TOUCH_SENSITIVITY_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.HIGH_TOUCH_RATE_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(Secure.EDGE_GRIP_SUPPRESSION,
+                new InclusiveIntegerRangeValidator(0, 5));
         VALIDATORS.put(Secure.LTPO_FEATURES_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.SCREEN_OFF_UDFPS_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.HAPTIC_EFFECTS_PROFILE, ANY_STRING_VALIDATOR);
