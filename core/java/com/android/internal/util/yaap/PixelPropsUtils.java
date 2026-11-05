@@ -181,9 +181,19 @@ public final class PixelPropsUtils {
                 field = Build.class.getDeclaredField(key);
             }
 
+            Object base = field.getDeclaringClass();
             field.setAccessible(true);
             long offset = OFFSET_FIELD.getInt(field);
-            UNSAFE.putObject(field.getDeclaringClass(), offset, value);
+            Class<?> type = field.getType();
+            if (!type.isPrimitive()) {
+                UNSAFE.putObject(base, offset, value);
+            } else if (type == int.class && value instanceof Number) {
+                UNSAFE.putInt(base, offset, ((Number) value).intValue());
+            } else if (type == boolean.class && value instanceof Boolean) {
+                UNSAFE.putBoolean(base, offset, (Boolean) value);
+            } else {
+                Logger.e("Unsupported type " + type.getName(), new IllegalStateException());
+            }
         } catch (Exception e) {
             Logger.e("Failed to set prop " + key, e);
         } finally {
